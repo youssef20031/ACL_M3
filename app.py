@@ -279,17 +279,36 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                         # Ensure required parameters have defaults
                         if "limit" not in params:
                             params["limit"] = 10
+                        if "limit_per_position" not in params:
+                            params["limit_per_position"] = 5
                         
                         # Get the query method and filter params to only those it accepts
                         method = getattr(CypherQueries, query_method)
                         sig = inspect.signature(method)
-                        valid_params = {k: v for k, v in params.items() if k in sig.parameters}
                         
-                        # Execute query
-                        query, query_params = method(**valid_params)
-                        results = st.session_state.graph_conn.execute_query(query, query_params)
-                        cypher_context = PromptBuilder.format_kg_context(results)
-                        executed_query = query
+                        # Check if all required parameters are available
+                        required_params = [
+                            p.name for p in sig.parameters.values() 
+                            if p.default == inspect.Parameter.empty
+                        ]
+                        missing_params = [p for p in required_params if p not in params]
+                        
+                        if missing_params:
+                            # Missing required parameters - use fallback
+                            query, query_params = CypherQueries.get_top_players_all_positions(
+                                limit_per_position=5
+                            )
+                            results = st.session_state.graph_conn.execute_query(query, query_params)
+                            cypher_context = PromptBuilder.format_kg_context(results)
+                            executed_query = query
+                        else:
+                            valid_params = {k: v for k, v in params.items() if k in sig.parameters}
+                            
+                            # Execute query
+                            query, query_params = method(**valid_params)
+                            results = st.session_state.graph_conn.execute_query(query, query_params)
+                            cypher_context = PromptBuilder.format_kg_context(results)
+                            executed_query = query
                     
                     # If no results or no query method, try a fallback
                     if not results:

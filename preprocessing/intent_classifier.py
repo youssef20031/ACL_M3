@@ -111,6 +111,10 @@ class IntentClassifier:
                 r"(?:fpl\s+)?points? leaders?",
                 r"best (?:performing|fpl)?\s+players?",
                 r"top (?:performing\s+)?(?:gk|goalkeeper|def|defender|mid|midfielder|fwd|forward|striker)s?",
+                r"top\s+(?:scoring\s+)?players?\s+(?:by|per|for|in)\s*(?:each\s+)?position",
+                r"best\s+players?\s+(?:by|per|for|in)\s*(?:each\s+)?position",
+                r"top\s+players?\s+(?:all|each|every)\s+positions?",
+                r"(?:get|show|list)\s+top\s+(?:scoring\s+)?players?",
             ],
             
             Intent.BEST_VALUE: [
@@ -276,7 +280,7 @@ class IntentClassifier:
             Intent.PLAYER_SEARCH: "search_players_by_name",
             Intent.TOP_SCORERS: "get_top_scorers_by_season",
             Intent.TOP_ASSISTERS: "get_top_assisters_by_season",
-            Intent.TOP_POINTS: "get_top_points_by_position",
+            Intent.TOP_POINTS: "get_top_players_all_positions",  # Changed to all positions by default
             Intent.BEST_VALUE: "get_best_value_players",
             Intent.TEAM_ANALYSIS: "get_team_top_performers",
             Intent.HEAD_TO_HEAD: "get_head_to_head",
