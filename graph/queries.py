@@ -23,82 +23,117 @@ class CypherQueries:
     # ===========================================
     
     @staticmethod
-    def get_top_scorers_by_season(season: str, limit: int = 10) -> tuple:
+    def get_top_scorers_by_season(season: str = None, limit: int = 10) -> tuple:
         """
-        Query 1: Get top goal scorers in a specific season.
+        Query 1: Get top goal scorers in a specific season or all seasons.
         
         Args:
-            season: Season ID (e.g., '2022-23')
+            season: Season ID (e.g., '2022-23') - if None, returns from all seasons
             limit: Number of results to return
         """
-        query = """
-        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-        WITH p, SUM(r.goals_scored) AS total_goals, SUM(r.total_points) AS total_points
-        WHERE total_goals > 0
-        RETURN p.name AS player_name, total_goals, total_points
-        ORDER BY total_goals DESC
-        LIMIT $limit
-        """
-        return query, {"season": season, "limit": limit}
+        if season:
+            query = """
+            MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            WITH p, SUM(r.goals_scored) AS total_goals, SUM(r.total_points) AS total_points
+            WHERE total_goals > 0
+            RETURN p.name AS player_name, total_goals, total_points
+            ORDER BY total_goals DESC
+            LIMIT $limit
+            """
+            return query, {"season": season, "limit": limit}
+        else:
+            query = """
+            MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+            WITH p, SUM(r.goals_scored) AS total_goals, SUM(r.total_points) AS total_points
+            WHERE total_goals > 0
+            RETURN p.name AS player_name, total_goals, total_points
+            ORDER BY total_goals DESC
+            LIMIT $limit
+            """
+            return query, {"limit": limit}
     
     @staticmethod
-    def get_top_assisters_by_season(season: str, limit: int = 10) -> tuple:
+    def get_top_assisters_by_season(season: str = None, limit: int = 10) -> tuple:
         """
-        Query 2: Get top assist providers in a specific season.
+        Query 2: Get top assist providers in a specific season or all seasons.
         """
-        query = """
-        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-        WITH p, SUM(r.assists) AS total_assists, SUM(r.total_points) AS total_points
-        WHERE total_assists > 0
-        RETURN p.name AS player_name, total_assists, total_points
-        ORDER BY total_assists DESC
-        LIMIT $limit
-        """
-        return query, {"season": season, "limit": limit}
+        if season:
+            query = """
+            MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            WITH p, SUM(r.assists) AS total_assists, SUM(r.total_points) AS total_points
+            WHERE total_assists > 0
+            RETURN p.name AS player_name, total_assists, total_points
+            ORDER BY total_assists DESC
+            LIMIT $limit
+            """
+            return query, {"season": season, "limit": limit}
+        else:
+            query = """
+            MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+            WITH p, SUM(r.assists) AS total_assists, SUM(r.total_points) AS total_points
+            WHERE total_assists > 0
+            RETURN p.name AS player_name, total_assists, total_points
+            ORDER BY total_assists DESC
+            LIMIT $limit
+            """
+            return query, {"limit": limit}
     
     @staticmethod
-    def get_top_points_by_position(position: str = None, season: str = "2022-23", limit: int = 10) -> tuple:
+    def get_top_points_by_position(position: str = None, season: str = None, limit: int = 10) -> tuple:
         """
-        Query 3: Get top scoring players by position in a season.
+        Query 3: Get top scoring players by position in a season or all seasons.
         
         Args:
             position: Position code (GK, DEF, MID, FWD) - if None, returns top 10 overall
-            season: Season ID
+            season: Season ID - if None, returns from all seasons
             limit: Number of results
         """
+        season_filter = "MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})" if season else "MATCH (gw)-[:IN_SEASON]->(s:Season)"
+        
         if position and position.upper() in ['GK', 'DEF', 'MID', 'FWD']:
-            query = """
-            MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: $position})
-            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            query = f"""
+            MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: $position}})
+            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+            {season_filter}
             WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
                  SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
             RETURN p.name AS player_name, pos.code AS position, total_points, goals, assists, bonus
             ORDER BY total_points DESC
             LIMIT $limit
             """
-            return query, {"position": position.upper(), "season": season, "limit": limit}
+            params = {"position": position.upper(), "limit": limit}
+            if season:
+                params["season"] = season
+            return query, params
         else:
             # Return top players overall with their positions
-            query = """
+            query = f"""
             MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
-            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+            {season_filter}
             WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
                  SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
             RETURN pos.code AS position, p.name AS player_name, total_points, goals, assists, bonus
             ORDER BY total_points DESC
             LIMIT $limit
             """
-            return query, {"season": season, "limit": limit}
+            params = {"limit": limit}
+            if season:
+                params["season"] = season
+            return query, params
 
     @staticmethod
-    def get_top_players_all_positions(season: str = "2022-23", limit_per_position: int = 5) -> tuple:
+    def get_top_players_all_positions(season: str = None, limit_per_position: int = 5) -> tuple:
         """
-        Query 3b: Get top scoring players for ALL positions in a season.
+        Query 3b: Get top scoring players for ALL positions in a season or all seasons.
         Uses UNION to combine results from each position.
         """
-        query = """
-        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'GK'})
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+        season_filter = "MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})" if season else "MATCH (gw)-[:IN_SEASON]->(s:Season)"
+        
+        query = f"""
+        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'GK'}})
+        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+        {season_filter}
         WITH 'GK' AS position, p.name AS player_name, 
              SUM(r.total_points) AS total_points, 
              SUM(r.goals_scored) AS goals, 
@@ -110,8 +145,9 @@ class CypherQueries:
         
         UNION ALL
         
-        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'DEF'})
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'DEF'}})
+        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+        {season_filter}
         WITH 'DEF' AS position, p.name AS player_name, 
              SUM(r.total_points) AS total_points, 
              SUM(r.goals_scored) AS goals, 
@@ -123,8 +159,9 @@ class CypherQueries:
         
         UNION ALL
         
-        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'MID'})
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'MID'}})
+        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+        {season_filter}
         WITH 'MID' AS position, p.name AS player_name, 
              SUM(r.total_points) AS total_points, 
              SUM(r.goals_scored) AS goals, 
@@ -136,8 +173,9 @@ class CypherQueries:
         
         UNION ALL
         
-        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'FWD'})
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'FWD'}})
+        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+        {season_filter}
         WITH 'FWD' AS position, p.name AS player_name, 
              SUM(r.total_points) AS total_points, 
              SUM(r.goals_scored) AS goals, 
@@ -147,7 +185,10 @@ class CypherQueries:
         LIMIT $limit_per_position
         RETURN position, player_name, total_points, goals, assists, bonus
         """
-        return query, {"season": season, "limit_per_position": limit_per_position}
+        params = {"limit_per_position": limit_per_position}
+        if season:
+            params["season"] = season
+        return query, params
     
     @staticmethod
     def get_player_season_stats(player_name: str, season: str) -> tuple:
@@ -177,6 +218,35 @@ class CypherQueries:
                max_value, max_selected, games
         """
         return query, {"player_name": player_name, "season": season}
+    
+    @staticmethod
+    def get_player_all_seasons_stats(player_name: str) -> tuple:
+        """
+        Query 4b: Get comprehensive stats for a specific player across all seasons.
+        """
+        query = """
+        MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+        MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+        WITH p, pos, 
+             SUM(r.total_points) AS total_points,
+             SUM(r.goals_scored) AS goals,
+             SUM(r.assists) AS assists,
+             SUM(r.clean_sheets) AS clean_sheets,
+             SUM(r.bonus) AS bonus,
+             SUM(r.minutes) AS minutes,
+             AVG(r.ict_index) AS avg_ict,
+             AVG(r.influence) AS avg_influence,
+             AVG(r.creativity) AS avg_creativity,
+             AVG(r.threat) AS avg_threat,
+             MAX(r.value) AS max_value,
+             MAX(r.selected) AS max_selected,
+             COUNT(f) AS games
+        RETURN p.name AS player_name, pos.code AS position,
+               total_points, goals, assists, clean_sheets, bonus,
+               minutes, avg_ict, avg_influence, avg_creativity, avg_threat,
+               max_value, max_selected, games
+        """
+        return query, {"player_name": player_name}
     
     @staticmethod
     def get_player_gameweek_performance(player_name: str, season: str, gameweek: int) -> tuple:
@@ -389,46 +459,80 @@ class CypherQueries:
     # ===========================================
     
     @staticmethod
-    def compare_players(player1: str, player2: str, season: str) -> tuple:
+    def compare_players(player1: str, player2: str, season: str = None) -> tuple:
         """
         Query 15: Compare two players' season statistics.
         """
-        query = """
-        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-        WHERE p.name IN [$player1, $player2]
-        MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
-        WITH p, pos,
-             SUM(r.total_points) AS total_points,
-             SUM(r.goals_scored) AS goals,
-             SUM(r.assists) AS assists,
-             SUM(r.clean_sheets) AS clean_sheets,
-             SUM(r.bonus) AS bonus,
-             SUM(r.minutes) AS minutes,
-             AVG(r.ict_index) AS avg_ict,
-             AVG(r.value) AS avg_value,
-             COUNT(f) AS games
-        RETURN p.name AS player_name, pos.code AS position,
-               total_points, goals, assists, clean_sheets, bonus, minutes,
-               round(avg_ict, 2) AS avg_ict_index, 
-               round(avg_value / 10.0, 2) AS avg_value_millions,
-               games
-        ORDER BY total_points DESC
-        """
-        return query, {"player1": player1, "player2": player2, "season": season}
+        if season:
+            query = """
+            MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            WHERE p.name IN [$player1, $player2]
+            MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+            WITH p, pos,
+                 SUM(r.total_points) AS total_points,
+                 SUM(r.goals_scored) AS goals,
+                 SUM(r.assists) AS assists,
+                 SUM(r.clean_sheets) AS clean_sheets,
+                 SUM(r.bonus) AS bonus,
+                 SUM(r.minutes) AS minutes,
+                 AVG(r.ict_index) AS avg_ict,
+                 AVG(r.value) AS avg_value,
+                 COUNT(f) AS games
+            RETURN p.name AS player_name, pos.code AS position,
+                   total_points, goals, assists, clean_sheets, bonus, minutes,
+                   round(avg_ict, 2) AS avg_ict_index, 
+                   round(avg_value / 10.0, 2) AS avg_value_millions,
+                   games
+            ORDER BY total_points DESC
+            """
+            return query, {"player1": player1, "player2": player2, "season": season}
+        else:
+            query = """
+            MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+            WHERE p.name IN [$player1, $player2]
+            MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+            WITH p, pos,
+                 SUM(r.total_points) AS total_points,
+                 SUM(r.goals_scored) AS goals,
+                 SUM(r.assists) AS assists,
+                 SUM(r.clean_sheets) AS clean_sheets,
+                 SUM(r.bonus) AS bonus,
+                 SUM(r.minutes) AS minutes,
+                 AVG(r.ict_index) AS avg_ict,
+                 AVG(r.value) AS avg_value,
+                 COUNT(f) AS games
+            RETURN p.name AS player_name, pos.code AS position,
+                   total_points, goals, assists, clean_sheets, bonus, minutes,
+                   round(avg_ict, 2) AS avg_ict_index, 
+                   round(avg_value / 10.0, 2) AS avg_value_millions,
+                   games
+            ORDER BY total_points DESC
+            """
+            return query, {"player1": player1, "player2": player2}
     
     @staticmethod
-    def get_player_form_history(player_name: str, season: str) -> tuple:
+    def get_player_form_history(player_name: str, season: str = None) -> tuple:
         """
-        Query 16: Get a player's form progression throughout the season.
+        Query 16: Get a player's form progression throughout the season(s).
         """
-        query = """
-        MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
-        MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})
-        RETURN gw.number AS gameweek, r.total_points AS points, r.form AS form,
-               r.goals_scored AS goals, r.assists AS assists, r.minutes AS minutes
-        ORDER BY gw.number
-        """
-        return query, {"player_name": player_name, "season": season}
+        if season:
+            query = """
+            MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+            MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})
+            RETURN gw.number AS gameweek, r.total_points AS points, r.form AS form,
+                   r.goals_scored AS goals, r.assists AS assists, r.minutes AS minutes, s.id AS season
+            ORDER BY gw.number
+            """
+            return query, {"player_name": player_name, "season": season}
+        else:
+            query = """
+            MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+            MATCH (gw)-[:IN_SEASON]->(s:Season)
+            RETURN s.id AS season, gw.number AS gameweek, r.total_points AS points, r.form AS form,
+                   r.goals_scored AS goals, r.assists AS assists, r.minutes AS minutes
+            ORDER BY s.id, gw.number
+            """
+            return query, {"player_name": player_name}
     
     # ===========================================
     # SEARCH QUERIES
@@ -492,6 +596,28 @@ class CypherQueries:
                round(total_goals * 1.0 / total_fixtures, 2) AS goals_per_game
         """
         return query, {"season": season}
+    
+    @staticmethod
+    def get_all_seasons_summary() -> tuple:
+        """
+        Query 20b: Get overall summary statistics for all seasons.
+        """
+        query = """
+        MATCH (s:Season)
+        MATCH (gw:Gameweek)-[:IN_SEASON]->(s)
+        WITH s, COUNT(DISTINCT gw) AS total_gameweeks
+        MATCH (f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s)
+        WITH s, total_gameweeks, COUNT(DISTINCT f) AS total_fixtures,
+             SUM(f.home_score + f.away_score) AS total_goals
+        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(:Gameweek)-[:IN_SEASON]->(s)
+        WITH s, total_gameweeks, total_fixtures, total_goals,
+             SUM(r.total_points) AS total_fpl_points, COUNT(DISTINCT p) AS total_players
+        RETURN s.id AS season, total_gameweeks, total_fixtures, total_goals,
+               total_fpl_points, total_players,
+               round(total_goals * 1.0 / total_fixtures, 2) AS goals_per_game
+        ORDER BY s.id
+        """
+        return query, {}
     
     # ===========================================
     # TRIVIA-SPECIFIC QUERIES

@@ -58,6 +58,18 @@ class TriviaGenerator:
         self.conn = graph_connection
         self.question_templates = self._build_templates()
     
+    def _get_random_season(self) -> str:
+        """Get a random season from the database."""
+        query = "MATCH (s:Season) RETURN s.id AS season ORDER BY s.id"
+        try:
+            results = self.conn.execute_query(query, {})
+            if results:
+                seasons = [r["season"] for r in results]
+                return random.choice(seasons)
+            return "2022-23"  # Fallback
+        except:
+            return "2022-23"  # Fallback
+    
     def _build_templates(self) -> Dict[TriviaCategory, List[Dict]]:
         """Build question templates for each category."""
         return {
@@ -289,7 +301,7 @@ class TriviaGenerator:
         self, 
         category: Optional[TriviaCategory] = None,
         difficulty: Optional[Difficulty] = None,
-        season: str = "2022-23"
+        season: str = None
     ) -> Optional[TriviaQuestion]:
         """
         Generate a trivia question.
@@ -297,11 +309,15 @@ class TriviaGenerator:
         Args:
             category: Specific category (random if None)
             difficulty: Specific difficulty (random if None)
-            season: Season to use for questions
+            season: Season to use for questions (auto-selected if None)
             
         Returns:
             Generated TriviaQuestion or None if generation fails
         """
+        # Auto-select season if not provided
+        if season is None:
+            season = self._get_random_season()
+        
         # Select category and difficulty
         if category is None:
             category = random.choice(list(TriviaCategory))

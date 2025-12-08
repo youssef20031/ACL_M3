@@ -218,15 +218,6 @@ def render_sidebar():
     
     st.sidebar.divider()
     
-    # Season selection
-    st.sidebar.subheader("📅 Season")
-    selected_season = st.sidebar.selectbox(
-        "Select Season",
-        options=SEASONS,
-        index=len(SEASONS) - 1,
-        key="selected_season"
-    )
-    
     # Data loading option
     st.sidebar.divider()
     if st.sidebar.button("📥 Load FPL Data", help="Load CSV data into Neo4j"):
@@ -238,11 +229,11 @@ def render_sidebar():
         else:
             st.sidebar.error("Connect to Neo4j first!")
     
-    return selected_model, retrieval_method, selected_season
+    return selected_model, retrieval_method
 
 
 # Main content tabs
-def render_qa_tab(selected_model: str, retrieval_method: str, selected_season: str):
+def render_qa_tab(selected_model: str, retrieval_method: str):
     """Render the Q&A Assistant tab."""
     st.header("💬 FPL Q&A Assistant")
     st.markdown("Ask questions about Fantasy Premier League players, teams, and statistics.")
@@ -271,8 +262,6 @@ def render_qa_tab(selected_model: str, retrieval_method: str, selected_season: s
                 
                 # Step 2: Entity Extraction
                 entities = st.session_state.entity_extractor.extract(prompt)
-                if not entities.seasons:
-                    entities.seasons = [selected_season]
                 
                 # Step 3: Get query parameters
                 params = st.session_state.entity_extractor.get_query_parameters(entities)
@@ -288,8 +277,6 @@ def render_qa_tab(selected_model: str, retrieval_method: str, selected_season: s
                     
                     if query_method:
                         # Ensure required parameters have defaults
-                        if "season" not in params:
-                            params["season"] = selected_season
                         if "limit" not in params:
                             params["limit"] = 10
                         
@@ -308,7 +295,6 @@ def render_qa_tab(selected_model: str, retrieval_method: str, selected_season: s
                     if not results:
                         # Fallback to top players by all positions
                         query, query_params = CypherQueries.get_top_players_all_positions(
-                            season=params.get("season", selected_season),
                             limit_per_position=5
                         )
                         results = st.session_state.graph_conn.execute_query(query, query_params)
@@ -317,9 +303,9 @@ def render_qa_tab(selected_model: str, retrieval_method: str, selected_season: s
                 
                 except Exception as e:
                     st.error(f"Query error: {e}")
-                    # Final fallback - get season summary
+                    # Final fallback - get all seasons summary
                     try:
-                        query, query_params = CypherQueries.get_season_summary(params.get("season", selected_season))
+                        query, query_params = CypherQueries.get_all_seasons_summary()
                         results = st.session_state.graph_conn.execute_query(query, query_params)
                         cypher_context = PromptBuilder.format_kg_context(results)
                         executed_query = query
@@ -331,7 +317,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str, selected_season: s
                 if retrieval_method in ["Embeddings", "Hybrid"] and st.session_state.embedding_manager:
                     try:
                         similar_players = st.session_state.embedding_manager.find_similar_players(
-                            prompt, top_k=5, season_filter=selected_season
+                            prompt, top_k=5
                         )
                         embedding_context = PromptBuilder.format_embedding_context(similar_players)
                     except:
@@ -395,7 +381,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str, selected_season: s
                 st.text(st.session_state.last_query_info["embedding_context"])
 
 
-def render_trivia_tab(selected_season: str):
+def render_trivia_tab():
     """Render the FantasyTrivia tab."""
     st.header("🎯 FPL FantasyTrivia")
     st.markdown("Test your Fantasy Premier League knowledge!")
@@ -437,8 +423,7 @@ def render_trivia_tab(selected_season: str):
                 
                 question = trivia_gen.generate_question(
                     category=cat,
-                    difficulty=diff,
-                    season=selected_season
+                    difficulty=diff
                 )
                 
                 if question:
@@ -507,7 +492,7 @@ def check_trivia_answer(user_answer: str, question):
     st.rerun()
 
 
-def render_player_search_tab(selected_season: str):
+def render_player_search_tab():
     """Render the Player Search tab."""
     st.header("🔎 Player Search & Analysis")
     
@@ -555,16 +540,16 @@ def render_player_search_tab(selected_season: str):
             # Display selected player stats
             if hasattr(st.session_state, 'selected_player') and st.session_state.selected_player:
                 st.divider()
-                display_player_stats(st.session_state.selected_player, selected_season)
+                display_player_stats(st.session_state.selected_player)
         else:
             st.info("No players found matching your search.")
 
 
-def display_player_stats(player_name: str, season: str):
+def display_player_stats(player_name: str):
     """Display detailed stats for a player."""
-    st.subheader(f"📊 {player_name} - {season}")
+    st.subheader(f"📊 {player_name} - All Seasons")
     
-    query, params = CypherQueries.get_player_season_stats(player_name, season)
+    query, params = CypherQueries.get_player_all_seasons_stats(player_name)
     results = st.session_state.graph_conn.execute_query(query, params)
     
     if results:
@@ -597,7 +582,7 @@ def display_player_stats(player_name: str, season: str):
         st.info("No stats found for this player in the selected season.")
 
 
-def render_comparison_tab(selected_model: str, selected_season: str):
+def render_comparison_tab(selected_model: str):
     """Render the Player Comparison tab."""
     st.header("⚖️ Player Comparison")
     
@@ -613,7 +598,7 @@ def render_comparison_tab(selected_model: str, selected_season: str):
         player2 = st.text_input("Player 2", placeholder="e.g., Erling Haaland", key="compare_p2")
     
     if st.button("Compare", type="primary") and player1 and player2:
-        query, params = CypherQueries.compare_players(player1, player2, selected_season)
+        query, params = CypherQueries.compare_players(player1, player2)
         results = st.session_state.graph_conn.execute_query(query, params)
         
         if len(results) >= 2:
@@ -680,8 +665,7 @@ def render_model_comparison_tab():
         # Get context
         if st.session_state.neo4j_connected:
             query, params = CypherQueries.get_top_points_by_position(
-                position="MID", 
-                season=st.session_state.get("selected_season", "2022-23"),
+                position="MID",
                 limit=5
             )
             results = st.session_state.graph_conn.execute_query(query, params)
@@ -720,7 +704,7 @@ def main():
     init_session_state()
     
     # Render sidebar and get settings
-    selected_model, retrieval_method, selected_season = render_sidebar()
+    selected_model, retrieval_method = render_sidebar()
     
     # Main content area
     st.title(f"{APP_ICON} {APP_TITLE}")
@@ -735,16 +719,16 @@ def main():
     ])
     
     with tab1:
-        render_qa_tab(selected_model, retrieval_method, selected_season)
+        render_qa_tab(selected_model, retrieval_method)
     
     with tab2:
-        render_trivia_tab(selected_season)
+        render_trivia_tab()
     
     with tab3:
-        render_player_search_tab(selected_season)
+        render_player_search_tab()
     
     with tab4:
-        render_comparison_tab(selected_model, selected_season)
+        render_comparison_tab(selected_model)
     
     with tab5:
         render_model_comparison_tab()

@@ -302,16 +302,13 @@ class EntityExtractor:
                 elif year == 2023:
                     seasons.append("2022-23")
             elif match[3]:  # last/this/previous season
-                keyword = match[3].lower()
-                if keyword in ["last", "previous"]:
-                    seasons.append("2021-22")
-                elif keyword == "this":
-                    seasons.append("2022-23")
+                # Note: Since we removed season selector, relative terms
+                # are handled by querying all seasons in the app layer
+                # We don't return a specific season here
+                pass
         
-        # Default to most recent season if none found
-        if not seasons:
-            seasons = ["2022-23"]
-        
+        # Return empty list if no specific season mentioned
+        # App will query all seasons by default
         return list(set(seasons))
     
     def _extract_gameweeks(self, query: str) -> List[int]:

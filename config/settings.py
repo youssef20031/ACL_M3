@@ -69,7 +69,7 @@ STAT_COLUMNS = [
 ]
 
 # Data path
-DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "fpl_two_seasons.csv")
+DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cleaned_merged_seasons.csv")
 
 # UI Configuration
 APP_TITLE = "FPL FantasyTrivia"
