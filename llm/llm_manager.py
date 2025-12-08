@@ -459,13 +459,13 @@ Provide a clear recommendation on which player would be the better FPL pick and 
         return prompt
     
     @staticmethod
-    def format_kg_context(results: List[Dict[str, Any]], max_items: int = 10) -> str:
+    def format_kg_context(results: List[Dict[str, Any]], max_items: int = 25) -> str:
         """
         Format Knowledge Graph results into readable context.
         
         Args:
             results: List of result dictionaries from Cypher query
-            max_items: Maximum items to include
+            max_items: Maximum items to include (default 25 for multi-position queries)
             
         Returns:
             Formatted context string
