@@ -59,7 +59,7 @@ POSITION_NAMES = {
     "FWD": "Forward"
 }
 
-SEASONS = ["2021-22", "2022-23"]
+SEASONS = ["2020-21", "2021-22", "2022-23"]
 
 # Stats columns for embeddings
 STAT_COLUMNS = [
@@ -69,7 +69,7 @@ STAT_COLUMNS = [
 ]
 
 # Data path
-DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cleaned_merged_seasons.csv")
+DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cleaned_merged_seasons_cleaned.csv")
 
 # UI Configuration
 APP_TITLE = "FPL FantasyTrivia"

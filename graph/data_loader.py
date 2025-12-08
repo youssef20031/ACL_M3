@@ -37,6 +37,67 @@ class FPLDataLoader:
         logger.info(f"Loading data from {filepath}")
         df = pd.read_csv(filepath)
         logger.info(f"Loaded {len(df)} records with {len(df.columns)} columns")
+        
+        # Transform columns to match expected schema
+        df = self.transform_columns(df)
+        
+        return df
+    
+    def transform_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Transform CSV columns to match expected schema.
+        Handles column renaming and creates home_team/away_team columns.
+        
+        Args:
+            df: Raw DataFrame from CSV
+            
+        Returns:
+            Transformed DataFrame with standardized column names
+        """
+        logger.info("Transforming columns to match expected schema...")
+        
+        # Rename season_x to season if present
+        if 'season_x' in df.columns and 'season' not in df.columns:
+            df = df.rename(columns={'season_x': 'season'})
+            logger.info("Renamed 'season_x' to 'season'")
+        
+        # Create home_team and away_team columns based on team_x, opp_team_name, and was_home
+        # This provides explicit match structure representation
+        if 'team_x' in df.columns and 'opp_team_name' in df.columns and 'was_home' in df.columns:
+            if 'home_team' not in df.columns:
+                # When was_home is True: team_x is home_team, opp_team_name is away_team
+                # When was_home is False: opp_team_name is home_team, team_x is away_team
+                df['home_team'] = df.apply(
+                    lambda row: row['team_x'] if row['was_home'] else row['opp_team_name'], 
+                    axis=1
+                )
+                logger.info("Created 'home_team' column from match structure")
+            
+            if 'away_team' not in df.columns:
+                df['away_team'] = df.apply(
+                    lambda row: row['opp_team_name'] if row['was_home'] else row['team_x'], 
+                    axis=1
+                )
+                logger.info("Created 'away_team' column from match structure")
+        
+        # Add form column if missing (calculate as rolling average of recent points)
+        if 'form' not in df.columns:
+            logger.info("'form' column not found, calculating from recent performance...")
+            # Sort by player and gameweek to calculate rolling form
+            df = df.sort_values(['name', 'season', 'GW'])
+            # Calculate form as rolling mean of last 5 gameweeks' total_points
+            df['form'] = df.groupby(['name', 'season'])['total_points'].transform(
+                lambda x: x.rolling(window=5, min_periods=1).mean()
+            )
+            df['form'] = df['form'].round(1)
+            logger.info("Created 'form' column from rolling average of total_points")
+        
+        # Normalize position codes (e.g., GKP -> GK)
+        if 'position' in df.columns:
+            position_mapping = {'GKP': 'GK'}  # Map alternative codes to standard codes
+            df['position'] = df['position'].replace(position_mapping)
+            logger.info("Normalized position codes")
+        
         return df
     
     def prepare_data(self, df: pd.DataFrame) -> Dict[str, Any]:
@@ -57,10 +118,19 @@ class FPLDataLoader:
         players = players.to_dict('records')
         logger.info(f"Found {len(players)} unique players")
         
-        # Extract unique teams from home_team and away_team columns
-        home_teams = df['home_team'].unique().tolist()
-        away_teams = df['away_team'].unique().tolist()
-        teams = list(set(home_teams + away_teams))
+        # Extract unique teams from home_team and away_team columns (or team_x if available)
+        if 'home_team' in df.columns and 'away_team' in df.columns:
+            home_teams = df['home_team'].unique().tolist()
+            away_teams = df['away_team'].unique().tolist()
+            teams = list(set(home_teams + away_teams))
+        elif 'team_x' in df.columns:
+            # Fallback: use team_x and opp_team_name
+            player_teams = df['team_x'].unique().tolist()
+            opp_teams = df['opp_team_name'].unique().tolist() if 'opp_team_name' in df.columns else []
+            teams = list(set(player_teams + opp_teams))
+        else:
+            teams = []
+            logger.warning("Could not find team columns in data")
         logger.info(f"Found {len(teams)} unique teams")
         
         # Extract unique seasons

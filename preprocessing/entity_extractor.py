@@ -291,11 +291,13 @@ class EntityExtractor:
         for match in matches:
             if match[0] and match[1]:  # 2021-22 format
                 season = f"20{match[0]}-{match[1]}"
-                if season in ["2021-22", "2022-23"]:
+                if season in ["2020-21", "2021-22", "2022-23"]:
                     seasons.append(season)
             elif match[2]:  # Single year
                 year = int(match[2])
-                if year == 2021:
+                if year == 2020:
+                    seasons.append("2020-21")
+                elif year == 2021:
                     seasons.append("2021-22")
                 elif year == 2022:
                     seasons.append("2022-23")
