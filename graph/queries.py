@@ -573,6 +573,73 @@ class CypherQueries:
             """
             return query, {"player_name": player_name}
     
+    @staticmethod
+    def find_similar_players_kg(player_name: str, season: str = None, limit: int = 10) -> tuple:
+        """
+        Query: Find similar players based on knowledge graph data.
+        Matches players in the same position with similar stats.
+        """
+        if season:
+            query = """
+            // First get the reference player's stats
+            MATCH (ref:Player {name: $player_name})-[:PLAYS_POSITION]->(refPos:Position)
+            MATCH (ref)-[rRef:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            WITH ref, refPos, 
+                 SUM(rRef.total_points) AS ref_points,
+                 SUM(rRef.goals_scored) AS ref_goals,
+                 SUM(rRef.assists) AS ref_assists
+            
+            // Find other players in same position with similar stats
+            MATCH (p:Player)-[:PLAYS_POSITION]->(refPos)
+            WHERE p.name <> $player_name
+            MATCH (p)-[r:PLAYED_IN]->(f2:Fixture)-[:PART_OF]->(gw2:Gameweek)-[:IN_SEASON]->(s2:Season {id: $season})
+            WITH ref, ref_points, ref_goals, ref_assists, p, refPos,
+                 SUM(r.total_points) AS total_points,
+                 SUM(r.goals_scored) AS goals,
+                 SUM(r.assists) AS assists,
+                 SUM(r.bonus) AS bonus,
+                 COUNT(r) AS games
+            
+            // Calculate similarity score (lower is more similar)
+            WITH p, refPos.code AS position, total_points, goals, assists, bonus, games,
+                 abs(total_points - ref_points) + abs(goals - ref_goals) * 10 + abs(assists - ref_assists) * 5 AS diff_score
+            
+            RETURN p.name AS player_name, position, total_points, goals, assists, bonus, games, diff_score
+            ORDER BY diff_score ASC
+            LIMIT $limit
+            """
+            return query, {"player_name": player_name, "season": season, "limit": limit}
+        else:
+            query = """
+            // First get the reference player's stats across all seasons
+            MATCH (ref:Player {name: $player_name})-[:PLAYS_POSITION]->(refPos:Position)
+            MATCH (ref)-[rRef:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+            WITH ref, refPos, 
+                 SUM(rRef.total_points) AS ref_points,
+                 SUM(rRef.goals_scored) AS ref_goals,
+                 SUM(rRef.assists) AS ref_assists
+            
+            // Find other players in same position with similar stats
+            MATCH (p:Player)-[:PLAYS_POSITION]->(refPos)
+            WHERE p.name <> $player_name
+            MATCH (p)-[r:PLAYED_IN]->(f2:Fixture)-[:PART_OF]->(gw2:Gameweek)-[:IN_SEASON]->(s2:Season)
+            WITH ref, ref_points, ref_goals, ref_assists, p, refPos,
+                 SUM(r.total_points) AS total_points,
+                 SUM(r.goals_scored) AS goals,
+                 SUM(r.assists) AS assists,
+                 SUM(r.bonus) AS bonus,
+                 COUNT(r) AS games
+            
+            // Calculate similarity score (lower is more similar)
+            WITH p, refPos.code AS position, total_points, goals, assists, bonus, games,
+                 abs(total_points - ref_points) + abs(goals - ref_goals) * 10 + abs(assists - ref_assists) * 5 AS diff_score
+            
+            RETURN p.name AS player_name, position, total_points, goals, assists, bonus, games, diff_score
+            ORDER BY diff_score ASC
+            LIMIT $limit
+            """
+            return query, {"player_name": player_name, "limit": limit}
+    
     # ===========================================
     # SEARCH QUERIES
     # ===========================================
@@ -738,6 +805,38 @@ class CypherQueries:
         LIMIT 5
         """
         return query, {"season": season}
+
+    @staticmethod
+    def get_player_embeddings_data() -> tuple:
+        """
+        Query for building player embeddings: Get aggregated player stats per season.
+        Returns player performance data suitable for embedding generation.
+        """
+        query = """
+        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+        OPTIONAL MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+        WITH p, s, pos,
+             SUM(r.total_points) as total_points,
+             SUM(r.goals_scored) as goals_scored,
+             SUM(r.assists) as assists,
+             SUM(r.clean_sheets) as clean_sheets,
+             SUM(r.bonus) as bonus,
+             SUM(r.minutes) as minutes,
+             AVG(r.ict_index) as ict_index,
+             AVG(r.influence) as influence,
+             AVG(r.creativity) as creativity,
+             AVG(r.threat) as threat,
+             AVG(r.value) as value,
+             MAX(r.selected) as selected,
+             COUNT(r) as games
+        RETURN p.name as name, 
+               COALESCE(s.name, s.id) as season,
+               COALESCE(pos.code, 'Unknown') as position,
+               total_points, goals_scored, assists, clean_sheets,
+               bonus, minutes, ict_index, influence, creativity,
+               threat, value, selected, games
+        """
+        return query, {}
 
 
 class QueryExecutor:

@@ -87,7 +87,11 @@ def init_session_state():
     if "graph_conn" not in st.session_state:
         st.session_state.graph_conn = None
     if "llm_manager" not in st.session_state:
-        st.session_state.llm_manager = None
+        # Auto-initialize if API token is configured
+        if HUGGINGFACE_API_TOKEN:
+            st.session_state.llm_manager = LLMManager(api_token=HUGGINGFACE_API_TOKEN)
+        else:
+            st.session_state.llm_manager = None
     if "embedding_manager" not in st.session_state:
         st.session_state.embedding_manager = None
     if "embeddings_built" not in st.session_state:
@@ -244,33 +248,9 @@ def render_sidebar():
                         count_result = st.session_state.graph_conn.execute_query(count_query)
                         player_count = count_result[0]['count'] if count_result else 0
                         
-                        # PLAYED_IN connects to Fixture, not Season. 
                         # Get aggregated stats per player per season
-                        query = """
-                        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
-                        OPTIONAL MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
-                        WITH p, s, pos,
-                             SUM(r.total_points) as total_points,
-                             SUM(r.goals_scored) as goals_scored,
-                             SUM(r.assists) as assists,
-                             SUM(r.clean_sheets) as clean_sheets,
-                             SUM(r.bonus) as bonus,
-                             SUM(r.minutes) as minutes,
-                             AVG(r.ict_index) as ict_index,
-                             AVG(r.influence) as influence,
-                             AVG(r.creativity) as creativity,
-                             AVG(r.threat) as threat,
-                             AVG(r.value) as value,
-                             MAX(r.selected) as selected,
-                             COUNT(r) as games
-                        RETURN p.name as name, 
-                               COALESCE(s.name, s.id) as season,
-                               COALESCE(pos.code, 'Unknown') as position,
-                               total_points, goals_scored, assists, clean_sheets,
-                               bonus, minutes, ict_index, influence, creativity,
-                               threat, value, selected, games
-                        """
-                        results = st.session_state.graph_conn.execute_query(query)
+                        query, query_params = CypherQueries.get_player_embeddings_data()
+                        results = st.session_state.graph_conn.execute_query(query, query_params)
                         st.sidebar.write(f"Debug: Found {player_count} players, query returned {len(results) if results else 0} results")
                         results = st.session_state.graph_conn.execute_query(query)
                         
@@ -513,38 +493,27 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                             with st.status("🔮 Searching embeddings...", expanded=False) as status:
                                 # Check if this is a player similarity query
                                 if entities.players and len(entities.players) > 0:
-                                    # Use player-to-player similarity
+                                    # Use player-to-player embedding similarity
                                     player_name = entities.players[0]
-                                    season = entities.seasons[0] if entities.seasons else "2022-23"
+                                    season = entities.seasons[0] if entities.seasons else None
                                     
-                                    # Get the player's actual performance profile and create a search query
-                                    # This focuses on stats, not name matching
-                                    query_stats = f"""
-                                    MATCH (p:Player {{name: '{player_name}'}})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {{id: '{season}'}})
-                                    OPTIONAL MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
-                                    WITH p, pos,
-                                         SUM(r.total_points) as total_points,
-                                         SUM(r.goals_scored) as goals,
-                                         SUM(r.assists) as assists,
-                                         AVG(r.ict_index) as ict_index,
-                                         COUNT(r) as games
-                                    RETURN pos.code as position, total_points, goals, assists, ict_index, games
-                                    LIMIT 1
-                                    """
-                                    player_stats = st.session_state.graph_conn.execute_query(query_stats)
+                                    # Use direct player embedding comparison for accurate similarity
+                                    similar_players = st.session_state.embedding_manager.find_similar_to_player(
+                                        player_name, season=season if season else "2022-23", top_k=10, exclude_self=True
+                                    )
                                     
-                                    if player_stats:
-                                        stats = player_stats[0]
-                                        # Create a performance-focused search query
-                                        search_query = f"A {stats.get('position', 'player')} who scored {stats.get('total_points', 0)} points with {stats.get('goals', 0)} goals and {stats.get('assists', 0)} assists"
-                                        similar_players = st.session_state.embedding_manager.find_similar_players(
-                                            search_query, top_k=10
-                                        )
-                                    else:
-                                        # Fallback to direct player comparison
-                                        similar_players = st.session_state.embedding_manager.find_similar_to_player(
-                                            player_name, season=season, top_k=10
-                                        )
+                                    # In Hybrid mode, also get similar players from KG
+                                    if retrieval_method == "Hybrid":
+                                        try:
+                                            query, query_params = CypherQueries.find_similar_players_kg(
+                                                player_name, season=season, limit=10
+                                            )
+                                            kg_similar_results = st.session_state.graph_conn.execute_query(query, query_params)
+                                            if kg_similar_results:
+                                                cypher_context = PromptBuilder.format_kg_context(kg_similar_results)
+                                                executed_query = query
+                                        except Exception as kg_e:
+                                            st.warning(f"KG similarity search failed: {kg_e}")
                                 else:
                                     # Use text-based similarity
                                     similar_players = st.session_state.embedding_manager.find_similar_players(

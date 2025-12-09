@@ -253,7 +253,8 @@ class EmbeddingManager:
         query: str, 
         top_k: int = 5,
         season_filter: Optional[str] = None,
-        position_filter: Optional[str] = None
+        position_filter: Optional[str] = None,
+        exclude_player: Optional[str] = None
     ) -> List[EmbeddingResult]:
         """
         Find players similar to a text query.
@@ -263,6 +264,7 @@ class EmbeddingManager:
             top_k: Number of results to return
             season_filter: Optional season to filter by
             position_filter: Optional position to filter by
+            exclude_player: Optional player name to exclude from results
             
         Returns:
             List of similar players with scores
@@ -279,6 +281,10 @@ class EmbeddingManager:
         
         for key, embedding in self.player_embeddings.items():
             metadata = self.player_metadata[key]
+            
+            # Skip excluded player
+            if exclude_player and metadata.get("name") == exclude_player:
+                continue
             
             # Apply filters
             if season_filter and metadata.get("season") != season_filter:
@@ -334,10 +340,11 @@ class EmbeddingManager:
         similarities = []
         
         for other_key, embedding in self.player_embeddings.items():
-            if exclude_self and other_key == key:
-                continue
-            
             metadata = self.player_metadata[other_key]
+            
+            # Exclude the same player (by name, across all seasons)
+            if exclude_self and metadata.get("name") == player_name:
+                continue
             
             similarity = self.compute_similarity(player_embedding, embedding)
             similarities.append(EmbeddingResult(
