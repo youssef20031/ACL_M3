@@ -592,6 +592,18 @@ class CypherQueries:
         return query, {"name_pattern": name_pattern, "limit": limit}
     
     @staticmethod
+    def get_all_player_names() -> tuple:
+        """
+        Query 17b: Get all player names for fuzzy matching.
+        """
+        query = """
+        MATCH (p:Player)
+        RETURN DISTINCT p.name AS player_name
+        ORDER BY p.name
+        """
+        return query, {}
+    
+    @staticmethod
     def get_all_players_by_position(position: str) -> tuple:
         """
         Query 18: Get all players in a specific position.

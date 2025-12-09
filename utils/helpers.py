@@ -192,3 +192,65 @@ def truncate_text(text: str, max_length: int = 100) -> str:
     if len(text) <= max_length:
         return text
     return text[:max_length - 3] + "..."
+
+
+def fuzzy_match_player(query: str, player_names: List[str], threshold: float = 0.6, limit: int = 5) -> List[tuple]:
+    """
+    Find players that closely match the query using fuzzy matching.
+    
+    Args:
+        query: The search query (possibly misspelled)
+        player_names: List of all player names to search
+        threshold: Minimum similarity score (0-1) to include in results
+        limit: Maximum number of suggestions to return
+        
+    Returns:
+        List of tuples (player_name, similarity_score) sorted by score descending
+    """
+    from difflib import SequenceMatcher
+    
+    query_lower = query.lower().strip()
+    matches = []
+    
+    for name in player_names:
+        name_lower = name.lower()
+        
+        # Exact match
+        if query_lower == name_lower:
+            matches.append((name, 1.0))
+            continue
+        
+        # Check if query is contained in name
+        if query_lower in name_lower:
+            # Score based on how much of the name the query covers
+            score = len(query_lower) / len(name_lower) + 0.3
+            matches.append((name, min(score, 0.99)))
+            continue
+        
+        # Check individual name parts (first/last name)
+        name_parts = name_lower.split()
+        query_parts = query_lower.split()
+        
+        # Try matching query parts against name parts
+        part_scores = []
+        for qp in query_parts:
+            best_part_score = 0
+            for np in name_parts:
+                score = SequenceMatcher(None, qp, np).ratio()
+                best_part_score = max(best_part_score, score)
+            part_scores.append(best_part_score)
+        
+        if part_scores:
+            avg_part_score = sum(part_scores) / len(part_scores)
+            if avg_part_score >= threshold:
+                matches.append((name, avg_part_score))
+                continue
+        
+        # Full string similarity
+        full_score = SequenceMatcher(None, query_lower, name_lower).ratio()
+        if full_score >= threshold:
+            matches.append((name, full_score))
+    
+    # Sort by score descending and limit results
+    matches.sort(key=lambda x: x[1], reverse=True)
+    return matches[:limit]

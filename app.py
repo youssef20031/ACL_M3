@@ -27,6 +27,7 @@ from embeddings.embedding_manager import EmbeddingManager
 from trivia.trivia_generator import TriviaGenerator, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
+from utils.helpers import fuzzy_match_player
 
 # Page configuration
 st.set_page_config(
@@ -694,8 +695,8 @@ def display_player_stats(player_name: str):
         with col4:
             st.metric("Bonus", stats.get("bonus", 0))
         
-        # Form chart
-        form_query, form_params = CypherQueries.get_player_form_history(player_name, season)
+        # Form chart (all seasons)
+        form_query, form_params = CypherQueries.get_player_form_history(player_name)
         form_data = st.session_state.graph_conn.execute_query(form_query, form_params)
         
         if form_data:
@@ -718,6 +719,12 @@ def render_comparison_tab(selected_model: str):
         st.warning("Please connect to Neo4j to compare players.")
         return
     
+    # Cache all player names for fuzzy matching
+    if 'all_player_names' not in st.session_state:
+        query, params = CypherQueries.get_all_player_names()
+        results = st.session_state.graph_conn.execute_query(query, params)
+        st.session_state.all_player_names = [r['player_name'] for r in results] if results else []
+    
     col1, col2 = st.columns(2)
     
     with col1:
@@ -726,7 +733,79 @@ def render_comparison_tab(selected_model: str):
         player2 = st.text_input("Player 2", placeholder="e.g., Erling Haaland", key="compare_p2")
     
     if st.button("Compare", type="primary") and player1 and player2:
-        query, params = CypherQueries.compare_players(player1, player2)
+        # Try to find exact or fuzzy matches for both players
+        player1_match = None
+        player2_match = None
+        player1_suggestions = []
+        player2_suggestions = []
+        
+        all_names = st.session_state.all_player_names
+        
+        # Check player 1
+        if player1.strip() in all_names:
+            player1_match = player1.strip()
+        else:
+            # Try case-insensitive exact match first
+            for name in all_names:
+                if name.lower() == player1.lower().strip():
+                    player1_match = name
+                    break
+            
+            # If no exact match, try fuzzy matching
+            if not player1_match:
+                player1_suggestions = fuzzy_match_player(player1, all_names)
+                if player1_suggestions and player1_suggestions[0][1] >= 0.85:
+                    # High confidence match - use it automatically
+                    player1_match = player1_suggestions[0][0]
+                    st.info(f"🔍 Using '{player1_match}' for '{player1}'")
+        
+        # Check player 2
+        if player2.strip() in all_names:
+            player2_match = player2.strip()
+        else:
+            # Try case-insensitive exact match first
+            for name in all_names:
+                if name.lower() == player2.lower().strip():
+                    player2_match = name
+                    break
+            
+            # If no exact match, try fuzzy matching
+            if not player2_match:
+                player2_suggestions = fuzzy_match_player(player2, all_names)
+                if player2_suggestions and player2_suggestions[0][1] >= 0.85:
+                    # High confidence match - use it automatically
+                    player2_match = player2_suggestions[0][0]
+                    st.info(f"🔍 Using '{player2_match}' for '{player2}'")
+        
+        # Show suggestions if no match found
+        if not player1_match and player1_suggestions:
+            st.warning(f"⚠️ Could not find '{player1}'. Did you mean:")
+            suggestion_cols = st.columns(len(player1_suggestions[:3]))
+            for i, (name, score) in enumerate(player1_suggestions[:3]):
+                with suggestion_cols[i]:
+                    if st.button(f"{name}", key=f"sug_p1_{i}"):
+                        st.session_state.compare_p1 = name
+                        st.rerun()
+        
+        if not player2_match and player2_suggestions:
+            st.warning(f"⚠️ Could not find '{player2}'. Did you mean:")
+            suggestion_cols = st.columns(len(player2_suggestions[:3]))
+            for i, (name, score) in enumerate(player2_suggestions[:3]):
+                with suggestion_cols[i]:
+                    if st.button(f"{name}", key=f"sug_p2_{i}"):
+                        st.session_state.compare_p2 = name
+                        st.rerun()
+        
+        # If we couldn't resolve both players, stop here
+        if not player1_match or not player2_match:
+            if not player1_match and not player1_suggestions:
+                st.error(f"❌ Could not find any player matching '{player1}'")
+            if not player2_match and not player2_suggestions:
+                st.error(f"❌ Could not find any player matching '{player2}'")
+            return
+        
+        # Proceed with comparison
+        query, params = CypherQueries.compare_players(player1_match, player2_match)
         results = st.session_state.graph_conn.execute_query(query, params)
         
         if len(results) >= 2:
@@ -763,7 +842,7 @@ def render_comparison_tab(selected_model: str):
             if st.session_state.llm_manager and st.session_state.llm_manager.client:
                 with st.spinner("Generating analysis..."):
                     context = PromptBuilder.format_kg_context(results)
-                    prompt = PromptTemplates.comparison_template(player1, player2, context)
+                    prompt = PromptTemplates.comparison_template(player1_match, player2_match, context)
                     
                     response = st.session_state.llm_manager.generate(prompt, model_key=selected_model)
                     
