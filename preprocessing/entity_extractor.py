@@ -210,10 +210,11 @@ class EntityExtractor:
         # Number pattern
         self.number_pattern = re.compile(r"\b(\d+)\b")
         
-        # Season pattern
+        # Season pattern - order matters: check full year format first, then short format
         self.season_pattern = re.compile(
-            r"\b20(\d{2})[-/](\d{2})\b|" +
-            r"\b(2021|2022|2023)\b|" +
+            r"\b(20\d{2})[-/](20\d{2})\b|" +  # Full year format: 2021-2022, 2021/2022
+            r"\b20(\d{2})[-/](\d{2})\b|" +     # Short format: 2021-22, 2021/22
+            r"\b(2020|2021|2022|2023)\b|" +    # Single year
             r"\b(last|this|previous)\s+season\b",
             re.IGNORECASE
         )
@@ -289,12 +290,21 @@ class EntityExtractor:
         # Check for explicit season patterns
         matches = self.season_pattern.findall(query)
         for match in matches:
-            if match[0] and match[1]:  # 2021-22 format
-                season = f"20{match[0]}-{match[1]}"
+            # match groups: (full_year1, full_year2, short1, short2, single_year, relative)
+            if match[0] and match[1]:  # Full year format: 2021-2022
+                year1 = int(match[0])
+                year2 = int(match[1])
+                # Convert to season format (e.g., 2021-2022 -> 2021-22)
+                if year2 == year1 + 1:
+                    season = f"{year1}-{str(year2)[2:]}"
+                    if season in ["2020-21", "2021-22", "2022-23"]:
+                        seasons.append(season)
+            elif match[2] and match[3]:  # Short format: 2021-22
+                season = f"20{match[2]}-{match[3]}"
                 if season in ["2020-21", "2021-22", "2022-23"]:
                     seasons.append(season)
-            elif match[2]:  # Single year
-                year = int(match[2])
+            elif match[4]:  # Single year
+                year = int(match[4])
                 if year == 2020:
                     seasons.append("2020-21")
                 elif year == 2021:
@@ -303,7 +313,7 @@ class EntityExtractor:
                     seasons.append("2022-23")
                 elif year == 2023:
                     seasons.append("2022-23")
-            elif match[3]:  # last/this/previous season
+            elif match[5]:  # last/this/previous season
                 # Note: Since we removed season selector, relative terms
                 # are handled by querying all seasons in the app layer
                 # We don't return a specific season here

@@ -297,6 +297,25 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                             # compare_players works without season parameter
                             pass
                         
+                        # Special handling for transfer queries - requires season and gameweek
+                        if query_method == "get_most_transferred_players":
+                            if "season" not in params:
+                                params["season"] = "2022-23"  # Default to latest season
+                            if "gameweek" not in params:
+                                params["gameweek"] = 1  # Default to gameweek 1
+                            # Detect transfer direction from query
+                            if "out" in prompt.lower():
+                                params["direction"] = "out"
+                            else:
+                                params["direction"] = "in"
+                        
+                        # Special handling for most_selected - requires season and gameweek
+                        if query_method == "get_most_selected_players":
+                            if "season" not in params:
+                                params["season"] = "2022-23"
+                            if "gameweek" not in params:
+                                params["gameweek"] = 1
+                        
                         # Get the query method and filter params to only those it accepts
                         method = getattr(CypherQueries, query_method)
                         sig = inspect.signature(method)
@@ -322,7 +341,69 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                             # Execute query
                             query, query_params = method(**valid_params)
                             results = st.session_state.graph_conn.execute_query(query, query_params)
-                            cypher_context = PromptBuilder.format_kg_context(results)
+                            
+                            # For fixture queries with many results, create a summary for LLM but keep full data
+                            if query_method == "get_fixture_results" and len(results) > 60:
+                                # Create summary for LLM
+                                summary_lines = [f"Total fixtures: {len(results)}\n"]
+                                
+                                # Group by season
+                                from collections import defaultdict
+                                season_stats = defaultdict(lambda: {"total": 0, "wins": 0, "draws": 0, "losses": 0, "sample_fixtures": []})
+                                
+                                for idx, r in enumerate(results):
+                                    season = r.get("season", "")
+                                    team_name = params.get("team_name", "")
+                                    
+                                    # Determine result
+                                    is_home = r.get("home_team") == team_name
+                                    home_score = r.get("home_score", 0)
+                                    away_score = r.get("away_score", 0)
+                                    
+                                    if is_home:
+                                        if home_score > away_score:
+                                            result = "win"
+                                        elif home_score < away_score:
+                                            result = "loss"
+                                        else:
+                                            result = "draw"
+                                    else:
+                                        if away_score > home_score:
+                                            result = "win"
+                                        elif away_score < home_score:
+                                            result = "loss"
+                                        else:
+                                            result = "draw"
+                                    
+                                    season_stats[season]["total"] += 1
+                                    if result == "win":
+                                        season_stats[season]["wins"] += 1
+                                    elif result == "draw":
+                                        season_stats[season]["draws"] += 1
+                                    else:
+                                        season_stats[season]["losses"] += 1
+                                    
+                                    # Keep first 3 fixtures as samples per season
+                                    if len(season_stats[season]["sample_fixtures"]) < 3:
+                                        season_stats[season]["sample_fixtures"].append(r)
+                                
+                                # Build summary
+                                for season in sorted(season_stats.keys()):
+                                    stats = season_stats[season]
+                                    summary_lines.append(f"\n{season}: {stats['total']} fixtures - {stats['wins']} wins, {stats['draws']} draws, {stats['losses']} losses")
+                                    summary_lines.append("Sample fixtures:")
+                                    for fixture in stats["sample_fixtures"]:
+                                        summary_lines.append(f"  GW{fixture.get('gameweek')}: {fixture.get('home_team')} {fixture.get('home_score')}-{fixture.get('away_score')} {fixture.get('away_team')}")
+                                
+                                summary_lines.append(f"\n[Full list of all {len(results)} fixtures shown below]")
+                                cypher_context = "\n".join(summary_lines)
+                                
+                                # Store full results for display later
+                                full_context = PromptBuilder.format_kg_context(results, max_items=200)
+                            else:
+                                cypher_context = PromptBuilder.format_kg_context(results)
+                                full_context = cypher_context
+                            
                             executed_query = query
                     
                     # If no results or no query method, try a fallback
@@ -386,11 +467,17 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                 
                 st.markdown(answer)
                 
+                # If we have full fixture data, display it after the LLM response
+                if 'full_context' in locals() and full_context != cypher_context:
+                    with st.expander("📋 Complete Fixture List", expanded=False):
+                        st.text(full_context)
+                
                 # Store query info for display
                 st.session_state.last_query_info = {
                     "intent": intent_result.intent.value,
                     "entities": entities.to_dict(),
                     "cypher_query": executed_query,
+                    "kg_context": full_context if 'full_context' in locals() else cypher_context,
                     "kg_context": cypher_context,
                     "embedding_context": embedding_context
                 }

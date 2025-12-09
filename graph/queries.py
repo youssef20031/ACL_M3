@@ -275,39 +275,75 @@ class CypherQueries:
     # ===========================================
     
     @staticmethod
-    def get_team_top_performers(team_name: str, season: str, limit: int = 5) -> tuple:
+    def get_team_top_performers(team_name: str, season: str = None, limit: int = 5) -> tuple:
         """
-        Query 6: Get top performing players from fixtures involving a team.
+        Query 6: Get top performing players from fixtures involving a team in a season or all seasons.
+        
+        Args:
+            team_name: Team name
+            season: Season ID (e.g., '2022-23') - if None, returns from all seasons
+            limit: Number of results to return
         """
-        query = """
-        MATCH (t:Team {name: $team_name})
-        MATCH (f:Fixture)-[:HOME_TEAM|AWAY_TEAM]->(t)
-        MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-        MATCH (p:Player)-[r:PLAYED_IN]->(f)
-        WITH p, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, SUM(r.assists) AS assists
-        RETURN p.name AS player_name, total_points, goals, assists
-        ORDER BY total_points DESC
-        LIMIT $limit
-        """
-        return query, {"team_name": team_name, "season": season, "limit": limit}
+        if season:
+            query = """
+            MATCH (t:Team {name: $team_name})
+            MATCH (f:Fixture)-[:HOME_TEAM|AWAY_TEAM]->(t)
+            MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            MATCH (p:Player)-[r:PLAYED_IN]->(f)
+            WITH p, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, SUM(r.assists) AS assists
+            RETURN p.name AS player_name, total_points, goals, assists
+            ORDER BY total_points DESC
+            LIMIT $limit
+            """
+            return query, {"team_name": team_name, "season": season, "limit": limit}
+        else:
+            query = """
+            MATCH (t:Team {name: $team_name})
+            MATCH (f:Fixture)-[:HOME_TEAM|AWAY_TEAM]->(t)
+            MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+            MATCH (p:Player)-[r:PLAYED_IN]->(f)
+            WITH p, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, SUM(r.assists) AS assists
+            RETURN p.name AS player_name, total_points, goals, assists
+            ORDER BY total_points DESC
+            LIMIT $limit
+            """
+            return query, {"team_name": team_name, "limit": limit}
     
     @staticmethod
-    def get_fixture_results(team_name: str, season: str) -> tuple:
+    def get_fixture_results(team_name: str, season: str = None) -> tuple:
         """
-        Query 7: Get all fixture results for a team in a season.
+        Query 7: Get all fixture results for a team in a season or all seasons.
+        
+        Args:
+            team_name: Team name
+            season: Season ID (e.g., '2022-23') - if None, returns from all seasons
         """
-        query = """
-        MATCH (t:Team {name: $team_name})
-        MATCH (f:Fixture)-[:HOME_TEAM]->(ht:Team)
-        MATCH (f)-[:AWAY_TEAM]->(at:Team)
-        WHERE ht.name = $team_name OR at.name = $team_name
-        MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-        RETURN gw.number AS gameweek, ht.name AS home_team, at.name AS away_team,
-               f.home_score AS home_score, f.away_score AS away_score,
-               f.kickoff_time AS kickoff_time
-        ORDER BY gw.number
-        """
-        return query, {"team_name": team_name, "season": season}
+        if season:
+            query = """
+            MATCH (t:Team {name: $team_name})
+            MATCH (f:Fixture)-[:HOME_TEAM]->(ht:Team)
+            MATCH (f)-[:AWAY_TEAM]->(at:Team)
+            WHERE ht.name = $team_name OR at.name = $team_name
+            MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            RETURN s.id AS season, gw.number AS gameweek, ht.name AS home_team, at.name AS away_team,
+                   f.home_score AS home_score, f.away_score AS away_score,
+                   f.kickoff_time AS kickoff_time
+            ORDER BY gw.number
+            """
+            return query, {"team_name": team_name, "season": season}
+        else:
+            query = """
+            MATCH (t:Team {name: $team_name})
+            MATCH (f:Fixture)-[:HOME_TEAM]->(ht:Team)
+            MATCH (f)-[:AWAY_TEAM]->(at:Team)
+            WHERE ht.name = $team_name OR at.name = $team_name
+            MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+            RETURN s.id AS season, gw.number AS gameweek, ht.name AS home_team, at.name AS away_team,
+                   f.home_score AS home_score, f.away_score AS away_score,
+                   f.kickoff_time AS kickoff_time
+            ORDER BY s.id, gw.number
+            """
+            return query, {"team_name": team_name}
     
     @staticmethod
     def get_head_to_head(team1: str, team2: str) -> tuple:

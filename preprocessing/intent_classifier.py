@@ -135,9 +135,10 @@ class IntentClassifier:
             ],
             
             Intent.HEAD_TO_HEAD: [
-                r"head\s*(?:to|-)\s*head",
+                r"head[\s-]*to[\s-]*head",
                 r"h2h",
-                r"(\w+)\s+(?:vs?\.?|versus|against)\s+(\w+)\s+(?:results?|matches?|fixtures?)",
+                r"(\w+)\s+(?:vs?\.?|versus|against)\s+(\w+)",
+                r"(?:between|results?\s+(?:for|between))\s+(\w+)\s+(?:and|vs?\.?)\s+(\w+)",
             ],
             
             Intent.FIXTURE_RESULTS: [

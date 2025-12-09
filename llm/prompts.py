@@ -64,11 +64,13 @@ You present data clearly and draw meaningful conclusions."""
 {question}
 
 ### Instructions:
-1. Answer the question using ONLY the data provided above
-2. If the data is insufficient, acknowledge what's missing
-3. Be specific with numbers and statistics
-4. Keep your response concise but informative
-5. If the data scope mentions "all seasons", clearly state that the statistics are aggregated across all available seasons
+**CRITICAL: You MUST use ONLY the exact data provided in "Knowledge Graph Data" above.**
+- The data is NUMBERED and SORTED - entry #1 is the TOP/BEST result
+- When asked "who is the most/top/best", ALWAYS answer with entry #1 from the data
+- DO NOT select a different player because you recognize their name
+- Quote EXACT numbers from the data (e.g., if data shows "795,302", say "795,302")
+- DO NOT hallucinate or use your training knowledge - ONLY use the data above
+- If asked for rankings, follow the exact order shown in the data
 
 ### Answer:"""
         
