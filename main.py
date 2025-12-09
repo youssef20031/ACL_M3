@@ -1,11 +1,23 @@
-from input_processing.intent_classification import IntentClassifier
+from input_processing import IntentClassifier, EntityExtractor
+import os
+from dotenv import load_dotenv
 
-def process_input(input_text):
-    classifier = IntentClassifier()
-    intent = classifier.classify(input_text)
-    return intent
+# Load environment variables from the .env file
+load_dotenv()
 
+# Example usage
 if __name__ == "__main__":
-    user_input = ""
-    result = process_input(user_input)
-    print(f"Classified Intent: {result}")
+    # Test with sample text
+    text = "Get most transferred in players in gameweek 10 2021-22"
+    
+    # Find Intent
+    classifier = IntentClassifier()
+    intent = classifier.classify(text)
+    print(f"Intent: {intent}")  # Output should be "
+    
+    # Extract entities
+    extractor = EntityExtractor(text)
+    entities = extractor.extract_entities()
+    
+    # Print only the entities (not the extra text)
+    print(entities)

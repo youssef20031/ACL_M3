@@ -1,29 +1,35 @@
+import os
+from huggingface_hub import InferenceClient
+
 class IntentClassifier:
     def __init__(self):
-        pass
+        hf_token = os.getenv("HF_TOKEN")
+        if not hf_token:
+            raise ValueError("HF_TOKEN environment variable is not set.")
+
+        self.client = InferenceClient(token=hf_token)
+        self.model_name = "google/gemma-2-2b-it"
+
     def classify(self, question):
-        # Rule-based intent classification for different domains
-        question_lower = question.lower()
+        intents = ["player performance", "general question", "recommendation", "entity search"]
+        content = f"Classify the following question into exactly one of these categories: {intents}\nQuestion: '{question}'\nReturn only the category name."
 
-        # Player performance analysis intents
-        player_keywords = ['player', 'performance', 'stats', 'score', 'goal', 'assist', 'match', 'team', 'season']
-        if any(keyword in question_lower for keyword in player_keywords):
-            return 'player_performance'
+        try:
+            response = self.client.chat_completion(
+                model=self.model_name,
+                messages=[{"role": "user", "content": content}],
+                max_tokens=10,
+                temperature=0.1
+            )
+            
+            predicted_intent = response.choices[0].message.content.strip().lower()
 
-        # General question intents
-        question_keywords = ['what', 'how', 'when', 'where', 'why', 'which', 'who', 'can', 'could', 'should']
-        if any(keyword in question_lower for keyword in question_keywords):
-            return 'general_question'
+            for intent in intents:
+                if intent in predicted_intent:
+                    return intent
+            
+            return "general question"
 
-        # Recommendation intents
-        recommendation_keywords = ['recommend', 'suggest', 'better', 'best', 'top', 'favorite', 'like']
-        if any(keyword in question_lower for keyword in recommendation_keywords):
-            return 'recommendation'
-
-        # Entity search intents
-        entity_keywords = ['who is', 'what is', 'where is', 'tell me about', 'describe', 'information']
-        if any(keyword in question_lower for keyword in entity_keywords):
-            return 'entity_search'
-
-        # Default to general question
-        return 'general_question'
+        except Exception as e:
+            print(f"Error calling Cloud API: {e}")
+            return "general question"
