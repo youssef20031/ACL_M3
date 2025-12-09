@@ -1,9 +1,12 @@
 """
-Entity Extraction for FPL Query Processing
+Entity Extraction for FPL Query Processing using spaCy
 """
-import re
+import spacy
+from spacy.matcher import Matcher
+from spacy.tokens import Doc
 from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, field
+import re
 
 
 @dataclass
@@ -179,45 +182,46 @@ class EntityExtractor:
     
     def __init__(self, known_players: Optional[Set[str]] = None):
         """
-        Initialize entity extractor.
+        Initialize entity extractor with spaCy.
         
         Args:
             known_players: Optional set of known player names for better extraction
         """
         self.known_players = known_players or set()
-        self._compile_patterns()
+        
+        # Load spaCy model
+        try:
+            self.nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            print("Downloading spaCy model 'en_core_web_sm'...")
+            import subprocess
+            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
+            self.nlp = spacy.load("en_core_web_sm")
+        
+        # Initialize matcher for patterns
+        self.matcher = Matcher(self.nlp.vocab)
+        self._add_patterns()
     
-    def _compile_patterns(self):
-        """Compile regex patterns for efficient matching."""
-        # Team pattern (case insensitive)
-        team_names = "|".join(re.escape(t) for t in self.TEAMS.keys())
-        self.team_pattern = re.compile(rf"\b({team_names})\b", re.IGNORECASE)
+    def _add_patterns(self):
+        """Add spaCy matcher patterns for FPL entities."""
+        # Gameweek patterns
+        gameweek_patterns = [
+            [{"LOWER": {"IN": ["gw", "gameweek"]}}, {"IS_DIGIT": True}],
+            [{"LOWER": "game"}, {"LOWER": "week"}, {"IS_DIGIT": True}],
+            [{"LOWER": "week"}, {"IS_DIGIT": True}]
+        ]
+        for pattern in gameweek_patterns:
+            self.matcher.add("GAMEWEEK", [pattern])
         
-        # Position pattern
-        position_names = "|".join(re.escape(p) for p in self.POSITIONS.keys())
-        self.position_pattern = re.compile(rf"\b({position_names})\b", re.IGNORECASE)
-        
-        # Stats pattern
-        stat_names = "|".join(re.escape(s) for s in self.STATS.keys())
-        self.stats_pattern = re.compile(rf"\b({stat_names})\b", re.IGNORECASE)
-        
-        # Gameweek pattern
-        self.gameweek_pattern = re.compile(
-            r"\b(?:gw|gameweek|game week|week)\s*(\d{1,2})\b",
-            re.IGNORECASE
-        )
-        
-        # Number pattern
-        self.number_pattern = re.compile(r"\b(\d+)\b")
-        
-        # Season pattern - order matters: check full year format first, then short format
-        self.season_pattern = re.compile(
-            r"\b(20\d{2})[-/](20\d{2})\b|" +  # Full year format: 2021-2022, 2021/2022
-            r"\b20(\d{2})[-/](\d{2})\b|" +     # Short format: 2021-22, 2021/22
-            r"\b(2020|2021|2022|2023)\b|" +    # Single year
-            r"\b(last|this|previous)\s+season\b",
-            re.IGNORECASE
-        )
+        # Season patterns
+        season_patterns = [
+            [{"SHAPE": "dddd"}, {"TEXT": "-"}, {"SHAPE": "dd"}],  # 2021-22
+            [{"SHAPE": "dddd"}, {"TEXT": "/"}, {"SHAPE": "dd"}],  # 2021/22
+            [{"SHAPE": "dddd"}, {"TEXT": "-"}, {"SHAPE": "dddd"}],  # 2021-2022
+            [{"LOWER": {"IN": ["last", "this", "previous"]}}, {"LOWER": "season"}]
+        ]
+        for pattern in season_patterns:
+            self.matcher.add("SEASON", [pattern])
     
     def set_known_players(self, players: Set[str]):
         """
@@ -230,7 +234,7 @@ class EntityExtractor:
     
     def extract(self, query: str) -> ExtractedEntities:
         """
-        Extract all entities from a query.
+        Extract all entities from a query using spaCy.
         
         Args:
             query: User's input query
@@ -240,71 +244,101 @@ class EntityExtractor:
         """
         entities = ExtractedEntities()
         
+        # Process with spaCy
+        doc = self.nlp(query)
+        
         # Extract teams
-        entities.teams = self._extract_teams(query)
+        entities.teams = self._extract_teams(doc)
         
         # Extract positions
-        entities.positions = self._extract_positions(query)
+        entities.positions = self._extract_positions(doc)
         
         # Extract seasons
-        entities.seasons = self._extract_seasons(query)
+        entities.seasons = self._extract_seasons(doc)
         
         # Extract gameweeks
-        entities.gameweeks = self._extract_gameweeks(query)
+        entities.gameweeks = self._extract_gameweeks(doc)
         
         # Extract stats
-        entities.stats = self._extract_stats(query)
+        entities.stats = self._extract_stats(doc)
         
         # Extract numbers (after gameweeks to avoid duplication)
-        entities.numbers = self._extract_numbers(query, entities.gameweeks)
+        entities.numbers = self._extract_numbers(doc, entities.gameweeks)
         
         # Extract players (do this last, using other entities for context)
-        entities.players = self._extract_players(query, entities)
+        entities.players = self._extract_players(doc, entities)
         
         return entities
     
-    def _extract_teams(self, query: str) -> List[str]:
-        """Extract team names from query."""
-        matches = self.team_pattern.findall(query)
+    def _extract_teams(self, doc: Doc) -> List[str]:
+        """Extract team names from query using spaCy."""
         teams = []
-        for match in matches:
-            normalized = self.TEAMS.get(match.lower())
-            if normalized and normalized not in teams:
-                teams.append(normalized)
+        text_lower = doc.text.lower()
+        
+        # Check for team names using spaCy's ORG entities
+        for ent in doc.ents:
+            if ent.label_ == "ORG":
+                normalized = self.TEAMS.get(ent.text.lower())
+                if normalized and normalized not in teams:
+                    teams.append(normalized)
+        
+        # Also check token sequences for team names
+        for team_key, team_name in self.TEAMS.items():
+            if team_key in text_lower:
+                if team_name not in teams:
+                    teams.append(team_name)
+        
         return teams
     
-    def _extract_positions(self, query: str) -> List[str]:
-        """Extract positions from query."""
-        matches = self.position_pattern.findall(query)
+    def _extract_positions(self, doc: Doc) -> List[str]:
+        """Extract positions from query using spaCy tokens."""
         positions = []
-        for match in matches:
-            normalized = self.POSITIONS.get(match.lower())
+        
+        for token in doc:
+            normalized = self.POSITIONS.get(token.text.lower())
             if normalized and normalized not in positions:
                 positions.append(normalized)
+        
+        # Check for multi-word positions
+        text_lower = doc.text.lower()
+        for pos_key, pos_name in self.POSITIONS.items():
+            if " " in pos_key and pos_key in text_lower:
+                if pos_name not in positions:
+                    positions.append(pos_name)
+        
         return positions
     
-    def _extract_seasons(self, query: str) -> List[str]:
-        """Extract seasons from query."""
+    def _extract_seasons(self, doc: Doc) -> List[str]:
+        """Extract seasons from query using spaCy matcher."""
         seasons = []
+        matches = self.matcher(doc)
         
-        # Check for explicit season patterns
-        matches = self.season_pattern.findall(query)
-        for match in matches:
-            # match groups: (full_year1, full_year2, short1, short2, single_year, relative)
-            if match[0] and match[1]:  # Full year format: 2021-2022
-                year1 = int(match[0])
-                year2 = int(match[1])
-                # Convert to season format (e.g., 2021-2022 -> 2021-22)
-                if year2 == year1 + 1:
-                    season = f"{year1}-{str(year2)[2:]}"
+        for match_id, start, end in matches:
+            if self.nlp.vocab.strings[match_id] == "SEASON":
+                span = doc[start:end]
+                season_text = span.text
+                
+                # Parse season format
+                # Full year format: 2021-2022 or 2021/2022
+                if re.match(r"(20\d{2})[-/](20\d{2})", season_text):
+                    years = re.findall(r"20\d{2}", season_text)
+                    if len(years) == 2:
+                        year1, year2 = int(years[0]), int(years[1])
+                        if year2 == year1 + 1:
+                            season = f"{year1}-{str(year2)[2:]}"
+                            if season in ["2020-21", "2021-22", "2022-23"]:
+                                seasons.append(season)
+                # Short format: 2021-22 or 2021/22
+                elif re.match(r"20(\d{2})[-/](\d{2})", season_text):
+                    match = re.match(r"20(\d{2})[-/](\d{2})", season_text)
+                    season = f"20{match.group(1)}-{match.group(2)}"
                     if season in ["2020-21", "2021-22", "2022-23"]:
                         seasons.append(season)
-            elif match[2] and match[3]:  # Short format: 2021-22
-                season = f"20{match[2]}-{match[3]}"
-                if season in ["2020-21", "2021-22", "2022-23"]:
-                    seasons.append(season)
-            elif match[4]:  # Single year
-                year = int(match[4])
+        
+        # Check for single year mentions using DATE entities
+        for ent in doc.ents:
+            if ent.label_ == "DATE" and ent.text.isdigit():
+                year = int(ent.text)
                 if year == 2020:
                     seasons.append("2020-21")
                 elif year == 2021:
@@ -313,78 +347,77 @@ class EntityExtractor:
                     seasons.append("2022-23")
                 elif year == 2023:
                     seasons.append("2022-23")
-            elif match[5]:  # last/this/previous season
-                # Note: Since we removed season selector, relative terms
-                # are handled by querying all seasons in the app layer
-                # We don't return a specific season here
-                pass
         
-        # Return empty list if no specific season mentioned
-        # App will query all seasons by default
         return list(set(seasons))
     
-    def _extract_gameweeks(self, query: str) -> List[int]:
-        """Extract gameweek numbers from query."""
-        matches = self.gameweek_pattern.findall(query)
+    def _extract_gameweeks(self, doc: Doc) -> List[int]:
+        """Extract gameweek numbers from query using spaCy matcher."""
         gameweeks = []
-        for match in matches:
-            gw = int(match)
-            if 1 <= gw <= 38 and gw not in gameweeks:
-                gameweeks.append(gw)
+        matches = self.matcher(doc)
+        
+        for match_id, start, end in matches:
+            if self.nlp.vocab.strings[match_id] == "GAMEWEEK":
+                span = doc[start:end]
+                # Extract the number from the span
+                for token in span:
+                    if token.like_num:
+                        gw = int(token.text)
+                        if 1 <= gw <= 38 and gw not in gameweeks:
+                            gameweeks.append(gw)
+        
         return gameweeks
     
-    def _extract_stats(self, query: str) -> List[str]:
-        """Extract stat names from query."""
-        matches = self.stats_pattern.findall(query)
+    def _extract_stats(self, doc: Doc) -> List[str]:
+        """Extract stat names from query using spaCy tokens."""
         stats = []
-        for match in matches:
-            normalized = self.STATS.get(match.lower())
-            if normalized and normalized not in stats:
-                stats.append(normalized)
+        text_lower = doc.text.lower()
+        
+        # Check for stats in tokens and multi-word phrases
+        for stat_key, stat_name in self.STATS.items():
+            if stat_key in text_lower:
+                if stat_name not in stats:
+                    stats.append(stat_name)
+        
         return stats
     
-    def _extract_numbers(self, query: str, exclude_gws: List[int]) -> List[int]:
-        """Extract numbers from query (excluding gameweeks)."""
-        matches = self.number_pattern.findall(query)
+    def _extract_numbers(self, doc: Doc, exclude_gws: List[int]) -> List[int]:
+        """Extract numbers from query using spaCy (excluding gameweeks)."""
         numbers = []
-        for match in matches:
-            num = int(match)
-            # Exclude gameweeks and years
-            if num not in exclude_gws and num not in [2021, 2022, 2023]:
-                if num not in numbers:
-                    numbers.append(num)
+        
+        for token in doc:
+            if token.like_num and token.text.isdigit():
+                num = int(token.text)
+                # Exclude gameweeks and years
+                if num not in exclude_gws and num not in [2020, 2021, 2022, 2023]:
+                    if num not in numbers:
+                        numbers.append(num)
+        
+        # Also check CARDINAL entities
+        for ent in doc.ents:
+            if ent.label_ == "CARDINAL" and ent.text.isdigit():
+                num = int(ent.text)
+                if num not in exclude_gws and num not in [2020, 2021, 2022, 2023]:
+                    if num not in numbers:
+                        numbers.append(num)
+        
         return numbers
     
-    def _extract_players(self, query: str, entities: ExtractedEntities) -> List[str]:
+    def _extract_players(self, doc: Doc, entities: ExtractedEntities) -> List[str]:
         """
-        Extract player names from query.
-        Uses known players list and heuristics.
+        Extract player names from query using spaCy NER.
+        Uses known players list and spaCy's PERSON entities.
         """
         players = []
+        text_lower = doc.text.lower()
         
         # First, check against known players
         if self.known_players:
-            query_lower = query.lower()
             for player in self.known_players:
-                if player.lower() in query_lower:
+                if player.lower() in text_lower:
                     players.append(player)
         
-        # If no known players found, try to extract names heuristically
+        # If no known players found, use spaCy's PERSON entity recognition
         if not players:
-            # Remove known entities from query
-            clean_query = query
-            for team in entities.teams:
-                clean_query = re.sub(re.escape(team), "", clean_query, flags=re.IGNORECASE)
-            for pos in self.POSITIONS.keys():
-                clean_query = re.sub(rf"\b{re.escape(pos)}\b", "", clean_query, flags=re.IGNORECASE)
-            for stat in self.STATS.keys():
-                clean_query = re.sub(rf"\b{re.escape(stat)}\b", "", clean_query, flags=re.IGNORECASE)
-            
-            # Look for capitalized words that might be names
-            # Pattern: Two consecutive capitalized words
-            name_pattern = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b")
-            potential_names = name_pattern.findall(query)
-            
             # Filter out common non-name words
             non_names = {
                 "Premier", "League", "Season", "Gameweek", "Week",
@@ -397,9 +430,13 @@ class EntityExtractor:
                 "Player", "Players", "Team", "Teams", "Position", "Positions"
             }
             
-            for name in potential_names:
-                if name not in non_names and len(name) > 2:
-                    players.append(name)
+            for ent in doc.ents:
+                if ent.label_ == "PERSON":
+                    # Check if not a team or common word
+                    if (ent.text not in entities.teams and 
+                        ent.text not in non_names and
+                        len(ent.text) > 2):
+                        players.append(ent.text)
         
         return players[:2]  # Limit to 2 players for comparisons
     
