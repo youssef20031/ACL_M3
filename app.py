@@ -90,6 +90,10 @@ def init_session_state():
         st.session_state.llm_manager = None
     if "embedding_manager" not in st.session_state:
         st.session_state.embedding_manager = None
+    if "embeddings_built" not in st.session_state:
+        st.session_state.embeddings_built = False
+    if "embedding_count" not in st.session_state:
+        st.session_state.embedding_count = 0
     if "intent_classifier" not in st.session_state:
         st.session_state.intent_classifier = IntentClassifier()
     if "entity_extractor" not in st.session_state:
@@ -210,12 +214,83 @@ def render_sidebar():
     
     # Embedding model selection (if using embeddings)
     if retrieval_method in ["Embeddings", "Hybrid"]:
+        st.sidebar.info("🔮 **Embedding Mode Active**")
         embedding_model = st.sidebar.selectbox(
             "Embedding Model",
             options=["minilm", "mpnet"],
             format_func=lambda x: "MiniLM (Fast)" if x == "minilm" else "MPNet (Quality)",
             key="embedding_model"
         )
+        
+        # Embedding status and build button
+        if st.session_state.embeddings_built:
+            st.sidebar.success(f"✅ {st.session_state.embedding_count:,} embeddings loaded")
+        else:
+            st.sidebar.warning("⚠️ Embeddings not built yet")
+        
+        if st.sidebar.button("🔮 Build Embeddings", help="Generate embeddings from Neo4j data"):
+            if st.session_state.neo4j_connected:
+                with st.spinner(f"Building embeddings using {embedding_model.upper()}..."):
+                    try:
+                        # Initialize embedding manager if needed
+                        if not st.session_state.embedding_manager:
+                            init_embedding_manager(embedding_model)
+                        elif st.session_state.embedding_manager.model_key != embedding_model:
+                            st.session_state.embedding_manager.switch_model(embedding_model)
+                        
+                        # Fetch player data from Neo4j
+                        # First check if there's any data
+                        count_query = "MATCH (p:Player) RETURN count(p) as count"
+                        count_result = st.session_state.graph_conn.execute_query(count_query)
+                        player_count = count_result[0]['count'] if count_result else 0
+                        
+                        # PLAYED_IN connects to Fixture, not Season. 
+                        # Get aggregated stats per player per season
+                        query = """
+                        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+                        OPTIONAL MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+                        WITH p, s, pos,
+                             SUM(r.total_points) as total_points,
+                             SUM(r.goals_scored) as goals_scored,
+                             SUM(r.assists) as assists,
+                             SUM(r.clean_sheets) as clean_sheets,
+                             SUM(r.bonus) as bonus,
+                             SUM(r.minutes) as minutes,
+                             AVG(r.ict_index) as ict_index,
+                             AVG(r.influence) as influence,
+                             AVG(r.creativity) as creativity,
+                             AVG(r.threat) as threat,
+                             AVG(r.value) as value,
+                             MAX(r.selected) as selected,
+                             COUNT(r) as games
+                        RETURN p.name as name, s.name as season,
+                               COALESCE(pos.code, 'Unknown') as position,
+                               total_points, goals_scored, assists, clean_sheets,
+                               bonus, minutes, ict_index, influence, creativity,
+                               threat, value, selected, games
+                        """
+                        results = st.session_state.graph_conn.execute_query(query)
+                        st.sidebar.write(f"Debug: Found {player_count} players, query returned {len(results) if results else 0} results")
+                        results = st.session_state.graph_conn.execute_query(query)
+                        
+                        if not results:
+                            st.sidebar.warning("⚠️ No player data found in Neo4j. Please load FPL data first using '📥 Load FPL Data' button below.")
+                        else:
+                            # Build embeddings
+                            st.session_state.embedding_manager.build_player_embeddings(results)
+                            st.session_state.embeddings_built = True
+                            st.session_state.embedding_count = len(st.session_state.embedding_manager.player_embeddings)
+                            
+                            st.sidebar.success(f"✅ Built {st.session_state.embedding_count:,} embeddings!")
+                            st.rerun()
+                    except Exception as e:
+                        st.sidebar.error(f"Error building embeddings: {e}")
+                        import traceback
+                        st.sidebar.text(traceback.format_exc())
+            else:
+                st.sidebar.error("Connect to Neo4j first!")
+    else:
+        st.sidebar.info("📊 **Cypher Query Mode**")
     
     st.sidebar.divider()
     
@@ -430,14 +505,23 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                 
                 # Step 5: Embedding search (if hybrid/embedding mode)
                 embedding_context = ""
+                embedding_used = False
                 if retrieval_method in ["Embeddings", "Hybrid"] and st.session_state.embedding_manager:
-                    try:
-                        similar_players = st.session_state.embedding_manager.find_similar_players(
-                            prompt, top_k=5
-                        )
-                        embedding_context = PromptBuilder.format_embedding_context(similar_players)
-                    except:
-                        embedding_context = "Embedding search not available."
+                    if st.session_state.embeddings_built:
+                        try:
+                            with st.status("🔮 Searching embeddings...", expanded=False) as status:
+                                similar_players = st.session_state.embedding_manager.find_similar_players(
+                                    prompt, top_k=5
+                                )
+                                embedding_context = PromptBuilder.format_embedding_context(similar_players)
+                                embedding_used = True
+                                status.update(label=f"🔮 Found {len(similar_players)} similar players", state="complete")
+                        except Exception as e:
+                            st.warning(f"Embedding search failed: {e}")
+                            embedding_context = "Embedding search not available."
+                    else:
+                        st.warning("⚠️ Embeddings not built. Click 'Build Embeddings' in sidebar.")
+                        embedding_context = "Embedding search not available - embeddings not built."
                 
                 # Determine data scope for LLM context
                 if "season" in params and params["season"]:
@@ -480,7 +564,9 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                     "cypher_query": executed_query,
                     "kg_context": full_context if 'full_context' in locals() else cypher_context,
                     "kg_context": cypher_context,
-                    "embedding_context": embedding_context
+                    "embedding_context": embedding_context,
+                    "embedding_used": embedding_used if 'embedding_used' in locals() else False,
+                    "retrieval_method": retrieval_method
                 }
         
         # Add assistant response to chat history
@@ -489,6 +575,17 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
     # Display query details (collapsible)
     if st.session_state.last_query_info:
         with st.expander("🔍 Query Details", expanded=False):
+            # Show retrieval method used
+            method = st.session_state.last_query_info.get("retrieval_method", "Unknown")
+            embedding_used = st.session_state.last_query_info.get("embedding_used", False)
+            
+            if embedding_used:
+                st.success(f"🔮 **Retrieval Method:** {method} (Embeddings Used)")
+            else:
+                st.info(f"📊 **Retrieval Method:** {method}")
+            
+            st.divider()
+            
             col1, col2 = st.columns(2)
             
             with col1:
@@ -506,7 +603,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
             st.text(st.session_state.last_query_info["kg_context"])
             
             if st.session_state.last_query_info["embedding_context"]:
-                st.subheader("Embedding Search Results")
+                st.subheader("🔮 Embedding Search Results")
                 st.text(st.session_state.last_query_info["embedding_context"])
 
 
