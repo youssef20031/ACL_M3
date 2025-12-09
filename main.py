@@ -9,7 +9,7 @@ load_dotenv()
 # Example usage
 if __name__ == "__main__":
     # Test with sample text
-    text = "Get most transferred in players in gameweek 10 2021-2022"
+    text = "Get all fixture results for arsenal in a 2022-2023"
     
     # Find Intent
     classifier = IntentClassifier()
