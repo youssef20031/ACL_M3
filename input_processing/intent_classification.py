@@ -11,7 +11,29 @@ class IntentClassifier:
         self.model_name = "google/gemma-2-2b-it"
 
     def classify(self, question):
-        intents = ["player performance", "general question", "recommendation", "entity search"]
+        intents = [
+            "player_stats",
+            "player_comparison",
+            "player_search",
+            "top_scorers",
+            "top_assisters",
+            "top_points",
+            "best_value",
+            "team_analysis",
+            "head_to_head",
+            "fixture_results",
+            "clean_sheets",
+            "bonus_points",
+            "ict_index",
+            "transfers",
+            "most_selected",
+            "trivia",
+            "recommendation",
+            "general_question",
+            "season_summary",
+            "unknown"
+        ]
+
         content = f"Classify the following question into exactly one of these categories: {intents}\nQuestion: '{question}'\nReturn only the category name."
 
         try:
