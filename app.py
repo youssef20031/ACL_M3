@@ -282,6 +282,21 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                         if "limit_per_position" not in params:
                             params["limit_per_position"] = 5
                         
+                        # Special handling for gameweek queries - use gameweek-specific query
+                        if query_method == "get_player_season_stats" and "gameweek" in params:
+                            query_method = "get_player_gameweek_performance"
+                            # gameweek query requires season - use latest if not specified
+                            if "season" not in params:
+                                params["season"] = "2022-23"
+                        # Special handling for player stats - use all seasons if no season specified
+                        elif query_method == "get_player_season_stats" and "season" not in params:
+                            query_method = "get_player_all_seasons_stats"
+                        
+                        # Special handling for compare_players - use all seasons if no season specified  
+                        if query_method == "compare_players" and "season" not in params:
+                            # compare_players works without season parameter
+                            pass
+                        
                         # Get the query method and filter params to only those it accepts
                         method = getattr(CypherQueries, query_method)
                         sig = inspect.signature(method)
@@ -342,12 +357,19 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                     except:
                         embedding_context = "Embedding search not available."
                 
+                # Determine data scope for LLM context
+                if "season" in params and params["season"]:
+                    data_scope = f"the {params['season']} season"
+                else:
+                    data_scope = "all seasons (2020-21, 2021-22, 2022-23) - aggregated totals"
+                
                 # Step 6: Generate LLM response
                 if st.session_state.llm_manager and st.session_state.llm_manager.client:
                     full_prompt = PromptTemplates.qa_template(
                         question=prompt,
                         kg_context=cypher_context,
-                        embedding_context=embedding_context if embedding_context else None
+                        embedding_context=embedding_context if embedding_context else None,
+                        data_scope=data_scope
                     )
                     
                     response = st.session_state.llm_manager.generate(

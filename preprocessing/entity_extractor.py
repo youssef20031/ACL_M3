@@ -380,7 +380,11 @@ class EntityExtractor:
                 "Premier", "League", "Season", "Gameweek", "Week",
                 "Top", "Best", "Most", "Points", "Goals", "Assists",
                 "Who", "What", "When", "Where", "How", "Which",
-                "The", "And", "For", "With", "From", "This", "That"
+                "The", "And", "For", "With", "From", "This", "That",
+                "Get", "Show", "Find", "List", "Tell", "Give", "Compare",
+                "Stats", "Statistics", "Performance", "Data", "Info",
+                "Comprehensive", "Detailed", "All", "Seasons", "Overall",
+                "Player", "Players", "Team", "Teams", "Position", "Positions"
             }
             
             for name in potential_names:
@@ -418,10 +422,10 @@ class EntityExtractor:
         if entities.positions:
             params["position"] = entities.positions[0]
         
+        # Only set season if explicitly mentioned - don't set a default
+        # This allows "all seasons" queries to work properly
         if entities.seasons:
             params["season"] = entities.seasons[0]
-        else:
-            params["season"] = "2022-23"  # Default
         
         if entities.gameweeks:
             params["gameweek"] = entities.gameweeks[0]

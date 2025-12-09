@@ -27,7 +27,8 @@ You present data clearly and draw meaningful conclusions."""
         question: str,
         kg_context: str,
         embedding_context: Optional[str] = None,
-        persona: str = "fpl_expert"
+        persona: str = "fpl_expert",
+        data_scope: Optional[str] = None
     ) -> str:
         """
         Template for Q&A responses.
@@ -37,13 +38,19 @@ You present data clearly and draw meaningful conclusions."""
             kg_context: Context from Cypher queries
             embedding_context: Optional context from embedding search
             persona: Persona key
+            data_scope: Description of the data scope (e.g., "all seasons (2020-21, 2021-22, 2022-23)" or "2022-23 season")
         """
         persona_text = PromptTemplates.PERSONAS.get(persona, PromptTemplates.PERSONAS["fpl_expert"])
+        
+        # Add data scope information
+        scope_text = ""
+        if data_scope:
+            scope_text = f"\n**Data Scope**: This data covers {data_scope}.\n"
         
         template = f"""{persona_text}
 
 ### Knowledge Graph Data:
-{kg_context}
+{scope_text}{kg_context}
 """
         
         if embedding_context:
@@ -61,6 +68,7 @@ You present data clearly and draw meaningful conclusions."""
 2. If the data is insufficient, acknowledge what's missing
 3. Be specific with numbers and statistics
 4. Keep your response concise but informative
+5. If the data scope mentions "all seasons", clearly state that the statistics are aggregated across all available seasons
 
 ### Answer:"""
         

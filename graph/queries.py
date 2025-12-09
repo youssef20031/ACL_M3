@@ -223,11 +223,12 @@ class CypherQueries:
     def get_player_all_seasons_stats(player_name: str) -> tuple:
         """
         Query 4b: Get comprehensive stats for a specific player across all seasons.
+        Returns stats broken down by each season.
         """
         query = """
         MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
         MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
-        WITH p, pos, 
+        WITH p, pos, s,
              SUM(r.total_points) AS total_points,
              SUM(r.goals_scored) AS goals,
              SUM(r.assists) AS assists,
@@ -241,10 +242,12 @@ class CypherQueries:
              MAX(r.value) AS max_value,
              MAX(r.selected) AS max_selected,
              COUNT(f) AS games
-        RETURN p.name AS player_name, pos.code AS position,
+        RETURN p.name AS player_name, pos.code AS position, s.id AS season,
                total_points, goals, assists, clean_sheets, bonus,
-               minutes, avg_ict, avg_influence, avg_creativity, avg_threat,
+               minutes, round(avg_ict, 2) AS avg_ict, round(avg_influence, 2) AS avg_influence, 
+               round(avg_creativity, 2) AS avg_creativity, round(avg_threat, 2) AS avg_threat,
                max_value, max_selected, games
+        ORDER BY s.id
         """
         return query, {"player_name": player_name}
     
