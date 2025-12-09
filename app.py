@@ -263,7 +263,8 @@ def render_sidebar():
                              AVG(r.value) as value,
                              MAX(r.selected) as selected,
                              COUNT(r) as games
-                        RETURN p.name as name, s.name as season,
+                        RETURN p.name as name, 
+                               COALESCE(s.name, s.id) as season,
                                COALESCE(pos.code, 'Unknown') as position,
                                total_points, goals_scored, assists, clean_sheets,
                                bonus, minutes, ict_index, influence, creativity,
@@ -510,9 +511,45 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                     if st.session_state.embeddings_built:
                         try:
                             with st.status("🔮 Searching embeddings...", expanded=False) as status:
-                                similar_players = st.session_state.embedding_manager.find_similar_players(
-                                    prompt, top_k=5
-                                )
+                                # Check if this is a player similarity query
+                                if entities.players and len(entities.players) > 0:
+                                    # Use player-to-player similarity
+                                    player_name = entities.players[0]
+                                    season = entities.seasons[0] if entities.seasons else "2022-23"
+                                    
+                                    # Get the player's actual performance profile and create a search query
+                                    # This focuses on stats, not name matching
+                                    query_stats = f"""
+                                    MATCH (p:Player {{name: '{player_name}'}})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {{id: '{season}'}})
+                                    OPTIONAL MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+                                    WITH p, pos,
+                                         SUM(r.total_points) as total_points,
+                                         SUM(r.goals_scored) as goals,
+                                         SUM(r.assists) as assists,
+                                         AVG(r.ict_index) as ict_index,
+                                         COUNT(r) as games
+                                    RETURN pos.code as position, total_points, goals, assists, ict_index, games
+                                    LIMIT 1
+                                    """
+                                    player_stats = st.session_state.graph_conn.execute_query(query_stats)
+                                    
+                                    if player_stats:
+                                        stats = player_stats[0]
+                                        # Create a performance-focused search query
+                                        search_query = f"A {stats.get('position', 'player')} who scored {stats.get('total_points', 0)} points with {stats.get('goals', 0)} goals and {stats.get('assists', 0)} assists"
+                                        similar_players = st.session_state.embedding_manager.find_similar_players(
+                                            search_query, top_k=10
+                                        )
+                                    else:
+                                        # Fallback to direct player comparison
+                                        similar_players = st.session_state.embedding_manager.find_similar_to_player(
+                                            player_name, season=season, top_k=10
+                                        )
+                                else:
+                                    # Use text-based similarity
+                                    similar_players = st.session_state.embedding_manager.find_similar_players(
+                                        prompt, top_k=5
+                                    )
                                 embedding_context = PromptBuilder.format_embedding_context(similar_players)
                                 embedding_used = True
                                 status.update(label=f"🔮 Found {len(similar_players)} similar players", state="complete")
@@ -531,12 +568,21 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                 
                 # Step 6: Generate LLM response
                 if st.session_state.llm_manager and st.session_state.llm_manager.client:
-                    full_prompt = PromptTemplates.qa_template(
-                        question=prompt,
-                        kg_context=cypher_context,
-                        embedding_context=embedding_context if embedding_context else None,
-                        data_scope=data_scope
-                    )
+                    # For Embeddings-only mode, prioritize embedding context
+                    if retrieval_method == "Embeddings" and embedding_used:
+                        full_prompt = PromptTemplates.qa_template(
+                            question=prompt,
+                            kg_context=cypher_context,
+                            embedding_context=embedding_context,
+                            data_scope=data_scope
+                        )
+                    else:
+                        full_prompt = PromptTemplates.qa_template(
+                            question=prompt,
+                            kg_context=cypher_context,
+                            embedding_context=embedding_context if embedding_context else None,
+                            data_scope=data_scope
+                        )
                     
                     response = st.session_state.llm_manager.generate(
                         full_prompt,
@@ -548,9 +594,18 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                     else:
                         answer = f"LLM Error: {response.error}\n\nBased on the data:\n{cypher_context}"
                 else:
-                    answer = f"**Based on Knowledge Graph data:**\n\n{cypher_context}"
+                    # No LLM - show both contexts
+                    if retrieval_method == "Embeddings" and embedding_context:
+                        answer = f"**Based on Embedding Search:**\n\n{embedding_context}\n\n**Knowledge Graph Data:**\n\n{cypher_context}"
+                    else:
+                        answer = f"**Based on Knowledge Graph data:**\n\n{cypher_context}"
                 
                 st.markdown(answer)
+                
+                # Display embedding results prominently if in Embeddings mode
+                if retrieval_method == "Embeddings" and embedding_used and embedding_context:
+                    with st.expander("🔮 Embedding Search Results", expanded=True):
+                        st.text(embedding_context)
                 
                 # If we have full fixture data, display it after the LLM response
                 if 'full_context' in locals() and full_context != cypher_context:
