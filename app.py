@@ -137,6 +137,155 @@ def init_embedding_manager(model_key: str = "minilm"):
     st.session_state.embedding_manager = EmbeddingManager(model_key=model_key)
 
 
+def create_graph_visualization(query_results: List[Dict], entities: Dict = None) -> Optional[go.Figure]:
+    """
+    Create an interactive graph visualization from Cypher query results.
+    
+    Args:
+        query_results: Results from a Cypher query
+        entities: Extracted entities from the query
+        
+    Returns:
+        Plotly figure with graph visualization
+    """
+    if not query_results:
+        return None
+    
+    G = nx.Graph()
+    
+    # Color scheme for different node types
+    colors = {
+        "player": "#1f77b4",      # Blue
+        "team": "#ff7f0e",        # Orange
+        "season": "#2ca02c",      # Green
+        "position": "#d62728",    # Red
+        "gameweek": "#9467bd",    # Purple
+        "stat": "#8c564b",        # Brown
+    }
+    
+    # Analyze results to determine graph structure
+    sample = query_results[0] if query_results else {}
+    
+    # Build nodes and edges based on result structure
+    for i, result in enumerate(query_results[:20]):  # Limit to 20 for clarity
+        # Player node
+        if "player_name" in result:
+            player = result["player_name"]
+            points = result.get("total_points", result.get("points", ""))
+            G.add_node(player, 
+                      node_type="player", 
+                      color=colors["player"],
+                      label=f"{player}\n({points} pts)" if points else player)
+            
+            # Position relationship
+            if "position" in result:
+                pos = result["position"]
+                G.add_node(pos, node_type="position", color=colors["position"], label=pos)
+                G.add_edge(player, pos, relationship="PLAYS_POSITION")
+            
+            # Season relationship
+            if "season" in result:
+                season = result["season"]
+                G.add_node(season, node_type="season", color=colors["season"], label=season)
+                G.add_edge(player, season, relationship="PLAYED_IN")
+        
+        # Team nodes for fixture results
+        if "home_team" in result and "away_team" in result:
+            home = result["home_team"]
+            away = result["away_team"]
+            home_score = result.get("home_score", 0)
+            away_score = result.get("away_score", 0)
+            
+            G.add_node(home, node_type="team", color=colors["team"], label=home)
+            G.add_node(away, node_type="team", color=colors["team"], label=away)
+            
+            # Create fixture node
+            gw = result.get("gameweek", i)
+            fixture_id = f"GW{gw}: {home} vs {away}"
+            G.add_node(fixture_id, node_type="gameweek", color=colors["gameweek"], 
+                      label=f"{home_score}-{away_score}")
+            G.add_edge(home, fixture_id, relationship="HOME")
+            G.add_edge(away, fixture_id, relationship="AWAY")
+    
+    if len(G.nodes()) == 0:
+        return None
+    
+    # Layout
+    pos = nx.spring_layout(G, k=2, iterations=50, seed=42)
+    
+    # Create edge traces
+    edge_x, edge_y = [], []
+    for edge in G.edges():
+        x0, y0 = pos[edge[0]]
+        x1, y1 = pos[edge[1]]
+        edge_x.extend([x0, x1, None])
+        edge_y.extend([y0, y1, None])
+    
+    edge_trace = go.Scatter(
+        x=edge_x, y=edge_y,
+        line=dict(width=1.5, color='#888'),
+        hoverinfo='none',
+        mode='lines'
+    )
+    
+    # Create node traces
+    node_x = [pos[node][0] for node in G.nodes()]
+    node_y = [pos[node][1] for node in G.nodes()]
+    node_colors = [G.nodes[node].get('color', '#1f77b4') for node in G.nodes()]
+    node_labels = [G.nodes[node].get('label', str(node)) for node in G.nodes()]
+    node_types = [G.nodes[node].get('node_type', 'unknown') for node in G.nodes()]
+    
+    # Hover text
+    hover_text = [f"<b>{label}</b><br>Type: {ntype}" 
+                  for label, ntype in zip(node_labels, node_types)]
+    
+    node_trace = go.Scatter(
+        x=node_x, y=node_y,
+        mode='markers+text',
+        hoverinfo='text',
+        hovertext=hover_text,
+        text=[str(node)[:15] + "..." if len(str(node)) > 15 else str(node) for node in G.nodes()],
+        textposition="top center",
+        textfont=dict(size=9),
+        marker=dict(
+            color=node_colors,
+            size=25,
+            line=dict(width=2, color='white'),
+            symbol='circle'
+        )
+    )
+    
+    # Create figure
+    fig = go.Figure(
+        data=[edge_trace, node_trace],
+        layout=go.Layout(
+            title=dict(
+                text="📊 Knowledge Graph Subgraph",
+                font=dict(size=16)
+            ),
+            showlegend=False,
+            hovermode='closest',
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            height=450,
+            margin=dict(l=20, r=20, t=50, b=20),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            annotations=[
+                dict(
+                    text="🔵 Player  🟠 Team  🟢 Season  🔴 Position  🟣 Gameweek",
+                    showarrow=False,
+                    xref="paper", yref="paper",
+                    x=0.5, y=-0.05,
+                    font=dict(size=10)
+                )
+            ]
+        )
+    )
+    
+    return fig
+
+
 # Sidebar
 def render_sidebar():
     """Render the sidebar with configuration options."""
@@ -200,7 +349,7 @@ def render_sidebar():
     # Model selection
     selected_model = st.sidebar.selectbox(
         "Select LLM Model",
-        options=["gemma-2-2b", "mistral-7b", "llama-3-8b", "phi-3-mini", "qwen-2.5-72b"],
+        options=["gemma-2-2b", "mistral-7b", "llama-3-8b", "zephyr-7b", "qwen-2.5-72b"],
         index=0,
         key="selected_model"
     )
@@ -590,7 +739,8 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                     "kg_context": cypher_context,
                     "embedding_context": embedding_context,
                     "embedding_used": embedding_used if 'embedding_used' in locals() else False,
-                    "retrieval_method": retrieval_method
+                    "retrieval_method": retrieval_method,
+                    "results": results  # Store for graph visualization
                 }
         
         # Add assistant response to chat history
@@ -629,6 +779,18 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
             if st.session_state.last_query_info["embedding_context"]:
                 st.subheader("🔮 Embedding Search Results")
                 st.text(st.session_state.last_query_info["embedding_context"])
+            
+            # Graph Visualization
+            st.subheader("🔗 Graph Visualization")
+            results_for_viz = st.session_state.last_query_info.get("results", [])
+            if results_for_viz:
+                fig = create_graph_visualization(results_for_viz)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No graph structure available for this query type.")
+            else:
+                st.info("No results to visualize.")
 
 
 def render_trivia_tab():

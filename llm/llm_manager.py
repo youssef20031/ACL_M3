@@ -42,7 +42,7 @@ class LLMManager:
             "use_chat": True,
         },
         "mistral-7b": {
-            "name": "mistralai/Mistral-7B-Instruct-v0.3",
+            "name": "mistralai/Mistral-7B-Instruct-v0.2",
             "display_name": "Mistral 7B",
             "description": "High-quality open-source model from Mistral AI",
             "max_tokens": 1024,
@@ -57,10 +57,10 @@ class LLMManager:
             "temperature": 0.7,
             "use_chat": True,
         },
-        "phi-3-mini": {
-            "name": "microsoft/Phi-3-mini-4k-instruct",
-            "display_name": "Phi-3 Mini",
-            "description": "Microsoft's compact but powerful model",
+        "zephyr-7b": {
+            "name": "HuggingFaceH4/zephyr-7b-beta",
+            "display_name": "Zephyr 7B",
+            "description": "Fine-tuned Mistral for helpful responses",
             "max_tokens": 1024,
             "temperature": 0.7,
             "use_chat": True,
