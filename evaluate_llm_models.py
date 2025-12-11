@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Non-interactive backend for saving plots
 import numpy as np
+import inspect
 from dotenv import load_dotenv
 
 # Add project root to path
@@ -188,7 +189,7 @@ class LLMEvaluator:
                 category="Similarity (Embedding)",
                 question="Who are similar players to Mohamed Salah?",
                 expected_keywords=["similar", "Salah", "midfielder", "winger", "points"],
-                context_query="find_similar_to_player",
+                context_query="get_player_season_stats",
                 context_params={"player_name": "Mohamed Salah", "season": "2022-23", "top_k": 5},
                 expected_answer_hint="Should list players with similar stats/profile to Salah",
                 retrieval_mode="embedding"
@@ -198,7 +199,7 @@ class LLMEvaluator:
                 category="Similarity (Embedding)",
                 question="Find players similar to Erling Haaland in the 2022-23 season",
                 expected_keywords=["Haaland", "forward", "goals", "similar", "striker"],
-                context_query="find_similar_to_player",
+                context_query="get_player_season_stats",
                 context_params={"player_name": "Erling Haaland", "season": "2022-23", "top_k": 5},
                 expected_answer_hint="Should list forwards with high goal scoring profile",
                 retrieval_mode="embedding"
@@ -208,7 +209,7 @@ class LLMEvaluator:
                 category="Similarity (Embedding)",
                 question="Which defenders are similar to Trent Alexander-Arnold?",
                 expected_keywords=["defender", "Trent", "assists", "similar"],
-                context_query="find_similar_to_player",
+                context_query="get_player_season_stats",
                 context_params={"player_name": "Trent Alexander-Arnold", "season": "2022-23", "top_k": 5},
                 expected_answer_hint="Should list attacking defenders with high assist numbers",
                 retrieval_mode="embedding"
@@ -246,16 +247,28 @@ class LLMEvaluator:
         """
         kg_context = ""
         embedding_context = ""
+        cypher_results = []
         
-        # Get Cypher/KG context if needed
-        if test_case.retrieval_mode in ["cypher", "hybrid"]:
-            try:
-                query_method = getattr(CypherQueries, test_case.context_query)
-                query, params = query_method(**test_case.context_params)
-                results = self.neo4j_conn.execute_query(query, params)
-                kg_context = PromptBuilder.format_kg_context(results)
-            except Exception as e:
-                print(f"Error getting KG context for {test_case.id}: {e}")
+        # ALWAYS Run Cypher first (for all modes) to get results/seed data
+        try:
+            # Get the method
+            query_method = getattr(CypherQueries, test_case.context_query)
+            
+            # Filter parameters to only those accepted by the method
+            sig = inspect.signature(query_method)
+            valid_params = {k: v for k, v in test_case.context_params.items() if k in sig.parameters}
+            
+            # Execute query
+            query, params = query_method(**valid_params)
+            cypher_results = self.neo4j_conn.execute_query(query, params)
+            
+            # Only set kg_context if NOT in embedding-only mode
+            if test_case.retrieval_mode != "embedding":
+                kg_context = PromptBuilder.format_kg_context(cypher_results)
+            
+        except Exception as e:
+            print(f"Error getting KG context for {test_case.id}: {e}")
+            if test_case.retrieval_mode != "embedding":
                 kg_context = f"Error retrieving KG context: {e}"
         
         # Get embedding context if needed
@@ -265,18 +278,37 @@ class LLMEvaluator:
                 season = test_case.context_params.get("season", "2022-23")
                 top_k = test_case.context_params.get("top_k", 5)
                 
-                if player_name:
-                    # Find similar players using embeddings
-                    similar_players = self.embedding_manager.find_similar_to_player(
-                        player_name, season=season, top_k=top_k, exclude_self=True
-                    )
-                    embedding_context = PromptBuilder.format_embedding_context(similar_players)
-                else:
-                    # Use query text for similarity search
-                    similar_players = self.embedding_manager.find_similar_players(
-                        test_case.question, top_k=top_k
-                    )
-                    embedding_context = PromptBuilder.format_embedding_context(similar_players)
+                # Logic: Use Cypher results to find player to seed embeddings if possible
+                similar_players = []
+                
+                # Check if we have players in cypher results
+                found_cypher_player = False
+                if cypher_results:
+                    # Look for player_name in results
+                    candidates = [r.get('player_name') for r in cypher_results if r.get('player_name')]
+                    if candidates:
+                        # Use the first player found in Cypher results
+                        target_player = candidates[0]
+                        similar_players = self.embedding_manager.find_similar_to_player(
+                            target_player, season=season, top_k=top_k, exclude_self=False
+                        )
+                        found_cypher_player = True
+                
+                # Fallback to params or question if no cypher results
+                if not found_cypher_player:
+                    if player_name:
+                        # Find similar players using param
+                        similar_players = self.embedding_manager.find_similar_to_player(
+                            player_name, season=season, top_k=top_k, exclude_self=False
+                        )
+                    else:
+                        # Use query text for similarity search
+                        similar_players = self.embedding_manager.find_similar_players(
+                            test_case.question, top_k=top_k
+                        )
+                
+                embedding_context = PromptBuilder.format_embedding_context(similar_players)
+                
             except Exception as e:
                 print(f"Error getting embedding context for {test_case.id}: {e}")
                 embedding_context = f"Error retrieving embedding context: {e}"

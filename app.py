@@ -121,6 +121,18 @@ def connect_neo4j(uri: str, user: str, password: str) -> bool:
         if conn.test_connection():
             st.session_state.graph_conn = conn
             st.session_state.neo4j_connected = True
+            
+            # Load known players for entity extraction to improve accuracy
+            if "entity_extractor" in st.session_state:
+                try:
+                    query, _ = CypherQueries.get_all_player_names()
+                    results = conn.execute_query(query)
+                    if results:
+                        players = {r['player_name'] for r in results}
+                        st.session_state.entity_extractor.set_known_players(players)
+                except Exception as e:
+                    print(f"Warning: Failed to load player names: {e}")
+            
             return True
     except Exception as e:
         st.error(f"Connection failed: {e}")
@@ -640,27 +652,41 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                     if st.session_state.embeddings_built:
                         try:
                             with st.status("🔮 Searching embeddings...", expanded=False) as status:
-                                # Check if this is a player similarity query
+                                # Check if we have players to use as seed (Cypher results or Entities)
+                                key_player = None
+                                
+                                # Priority 1: Use entity extraction from prompt (explicit user intent)
                                 if entities.players and len(entities.players) > 0:
+                                    key_player = entities.players[0]
+                                
+                                # Priority 2: Use player from Cypher results (implicit context)
+                                if not key_player and results and len(results) > 0:
+                                    # Check first result for player_name
+                                    first_result = results[0]
+                                    if 'player_name' in first_result:
+                                        key_player = first_result['player_name']
+                                
+                                if key_player:
                                     # Use player-to-player embedding similarity
-                                    player_name = entities.players[0]
-                                    season = entities.seasons[0] if entities.seasons else None
+                                    season = entities.seasons[0] if entities.seasons else "2022-23"
                                     
                                     # Use direct player embedding comparison for accurate similarity
+                                    # Include self to ensure we get the player's own stats in the context
                                     similar_players = st.session_state.embedding_manager.find_similar_to_player(
-                                        player_name, season=season if season else "2022-23", top_k=10, exclude_self=True
+                                        key_player, season=season, top_k=10, exclude_self=False
                                     )
                                     
                                     # In Hybrid mode, also get similar players from KG
                                     if retrieval_method == "Hybrid":
                                         try:
                                             query, query_params = CypherQueries.find_similar_players_kg(
-                                                player_name, season=season, limit=10
+                                                key_player, season=season, limit=10
                                             )
                                             kg_similar_results = st.session_state.graph_conn.execute_query(query, query_params)
                                             if kg_similar_results:
-                                                cypher_context = PromptBuilder.format_kg_context(kg_similar_results)
-                                                executed_query = query
+                                                cypher_context_append = PromptBuilder.format_kg_context(kg_similar_results)
+                                                cypher_context += "\n\nAlso found via KG similarity:\n" + cypher_context_append
+                                                # executed_query = query # Keep original query as main
                                         except Exception as kg_e:
                                             st.warning(f"KG similarity search failed: {kg_e}")
                                 else:
@@ -690,7 +716,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                     if retrieval_method == "Embeddings" and embedding_used:
                         full_prompt = PromptTemplates.qa_template(
                             question=prompt,
-                            kg_context=cypher_context,
+                            kg_context="",
                             embedding_context=embedding_context,
                             data_scope=data_scope
                         )
