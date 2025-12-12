@@ -93,6 +93,7 @@ class IntentClassifier:
                 r"leading (?:goal\s*)?scorers?",
                 r"highest (?:goal\s*)?scorers?",
                 r"goals? leaders?",
+                r"top\s+(?:goal\s*)?scoring\s+(?:players?|gk|defenders?|midfielders?|forwards?)",
             ],
             
             Intent.TOP_ASSISTERS: [
@@ -115,6 +116,7 @@ class IntentClassifier:
                 r"best\s+players?\s+(?:by|per|for|in)\s*(?:each\s+)?position",
                 r"top\s+players?\s+(?:all|each|every)\s+positions?",
                 r"(?:get|show|list)\s+top\s+(?:scoring\s+)?players?",
+                r"top\s+(?:scoring\s+)?(?:gk|defenders?|midfielders?|forwards?)\s+(?:by|per|for|in)\s*(?:points|fpl points)?",
             ],
             
             Intent.BEST_VALUE: [
