@@ -955,7 +955,8 @@ def render_player_search_tab():
     with col3:
         season_filter = st.selectbox(
             "Season",
-            options=["All"] + SEASONS,
+            options=SEASONS,
+            index=len(SEASONS)-1,
             key="season_filter"
         )
     
@@ -989,15 +990,11 @@ def render_player_search_tab():
             st.info("No players found matching your search.")
 
 
-def display_player_stats(player_name: str, season: str = "All"):
+def display_player_stats(player_name: str, season: str):
     """Display detailed stats for a player."""
-    title_suffix = f"- {season} Season" if season != "All" else "- All Seasons"
-    st.subheader(f"📊 {player_name} {title_suffix}")
+    st.subheader(f"📊 {player_name} - {season} Season")
     
-    if season != "All":
-        query, params = CypherQueries.get_player_season_stats(player_name, season)
-    else:
-        query, params = CypherQueries.get_player_all_seasons_stats(player_name)
+    query, params = CypherQueries.get_player_season_stats(player_name, season)
     
     results = st.session_state.graph_conn.execute_query(query, params)
     
@@ -1016,8 +1013,7 @@ def display_player_stats(player_name: str, season: str = "All"):
             st.metric("Bonus", stats.get("bonus", 0))
         
         # Form chart
-        chart_season = season if season != "All" else None
-        form_query, form_params = CypherQueries.get_player_form_history(player_name, season=chart_season)
+        form_query, form_params = CypherQueries.get_player_form_history(player_name, season=season)
         form_data = st.session_state.graph_conn.execute_query(form_query, form_params)
         
         if form_data:
