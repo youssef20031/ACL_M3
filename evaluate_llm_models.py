@@ -70,11 +70,15 @@ class EvaluationResult:
 class LLMEvaluator:
     """Evaluates LLM models on FPL Q&A tasks."""
     
-    def __init__(self, neo4j_conn: Neo4jConnection, llm_manager: LLMManager, embedding_manager: Optional[EmbeddingManager] = None, human_evaluation: bool = False):
+    def __init__(self, neo4j_conn: Neo4jConnection, llm_manager: LLMManager, embedding_manager: Optional[EmbeddingManager] = None, human_evaluation: bool = False, llm_judge: bool = False, judge_model: str = "qwen-2.5-72b", quantitative_only: bool = False, rate_limit_delay: float = 3.0):
         self.neo4j_conn = neo4j_conn
         self.llm_manager = llm_manager
         self.embedding_manager = embedding_manager
         self.human_evaluation = human_evaluation
+        self.llm_judge = llm_judge
+        self.judge_model = judge_model
+        self.quantitative_only = quantitative_only
+        self.rate_limit_delay = rate_limit_delay
         self.results: List[EvaluationResult] = []
         self.output_dir = os.path.join(os.path.dirname(__file__), "evaluation_results")
         os.makedirs(self.output_dir, exist_ok=True)
@@ -132,166 +136,246 @@ class LLMEvaluator:
             naturalness=naturalness,
             correctness=correctness
         )
+    
+    def llm_score_qualitative(self, response: str, test_case: TestCase, success: bool) -> QualitativeScore:
+        """
+        Use an LLM as a judge to evaluate the response quality.
+        This implements the LLM-as-a-judge pattern for automated evaluation.
+        """
+        if not success or not response:
+            return QualitativeScore(quality=1, relevance=1, naturalness=1, correctness=1)
+        
+        # Build the evaluation prompt
+        eval_prompt = f"""You are an expert evaluator assessing the quality of an AI assistant's response to a question about Fantasy Premier League (FPL) data.
+
+QUESTION: {test_case.question}
+
+EXPECTED ANSWER HINT: {test_case.expected_answer_hint}
+
+EXPECTED KEYWORDS: {', '.join(test_case.expected_keywords)}
+
+MODEL RESPONSE TO EVALUATE:
+{response[:1500]}
+
+Please evaluate the response on the following criteria, scoring each from 1-5:
+- Quality (1-5): Overall response quality - is it well-structured, complete, and professional?
+- Relevance (1-5): How relevant is the answer to the question asked?
+- Naturalness (1-5): How natural and fluent is the language?
+- Correctness (1-5): Is it factually accurate based on what was expected?
+
+IMPORTANT: You MUST respond with ONLY a JSON object in this exact format, nothing else:
+{{"quality": <1-5>, "relevance": <1-5>, "naturalness": <1-5>, "correctness": <1-5>}}
+
+Do not include any explanation, just the JSON object."""
+
+        try:
+            # Use the judge model to evaluate
+            judge_response = self.llm_manager.generate(eval_prompt, model_key=self.judge_model)
+            
+            if judge_response.success and judge_response.text:
+                # Parse the JSON response
+                import re
+                # Try to find JSON in the response
+                json_match = re.search(r'\{[^}]+\}', judge_response.text)
+                if json_match:
+                    scores = json.loads(json_match.group())
+                    return QualitativeScore(
+                        quality=max(1, min(5, int(scores.get('quality', 3)))),
+                        relevance=max(1, min(5, int(scores.get('relevance', 3)))),
+                        naturalness=max(1, min(5, int(scores.get('naturalness', 3)))),
+                        correctness=max(1, min(5, int(scores.get('correctness', 3))))
+                    )
+        except Exception as e:
+            print(f"    ⚠ LLM judge error: {e}, falling back to auto-scoring")
+        
+        # Fallback to auto-scoring if LLM judge fails
+        return self.auto_score_qualitative(response, test_case, success)
         
     def get_test_cases(self) -> List[TestCase]:
-        """Define test cases that replicate website functionality."""
+        """
+        Define test cases based on numbered queries from notes/queries folder.
+        Excludes Query_18 (All Players By Position) and Query_19 (All Teams) as they are internal.
+        """
         return [
-            # Player Statistics Queries
+            # Query 1: Top Scorers
             TestCase(
-                id="TC01",
+                id="Q01",
                 category="Player Stats",
-                question="Who was the top scorer in the 2022-23 season?",
-                expected_keywords=["goals", "scorer", "season", "2022-23"],
+                question="Who are the top goal scorers in 2022-23?",
+                expected_keywords=["goals", "scorer", "points", "Haaland"],
                 context_query="get_top_scorers_by_season",
                 context_params={"season": "2022-23", "limit": 10},
-                expected_answer_hint="Should mention the player with most goals in 2022-23"
+                expected_answer_hint="Should mention Erling Haaland as top scorer with 36 goals"
             ),
+            # Query 2: Top Assisters
             TestCase(
-                id="TC02",
+                id="Q02",
                 category="Player Stats",
-                question="Who provided the most assists across all seasons?",
-                expected_keywords=["assists", "assist", "provider"],
+                question="Top assisters all time",
+                expected_keywords=["assists", "provider", "De Bruyne"],
                 context_query="get_top_assisters_by_season",
                 context_params={"season": None, "limit": 10},
-                expected_answer_hint="Should mention the player with most assists overall"
+                expected_answer_hint="Should mention Kevin De Bruyne as top assist provider"
             ),
+            # Query 3: Top Players by Position
             TestCase(
-                id="TC03",
+                id="Q03",
                 category="Player Stats",
-                question="Which midfielder scored the most FPL points in 2022-23?",
-                expected_keywords=["midfielder", "MID", "points"],
+                question="Top defenders by points in 2022-23",
+                expected_keywords=["defender", "DEF", "points", "Trippier"],
                 context_query="get_top_points_by_position",
-                context_params={"position": "MID", "season": "2022-23", "limit": 10},
-                expected_answer_hint="Should identify the top scoring midfielder"
+                context_params={"position": "DEF", "season": "2022-23", "limit": 10},
+                expected_answer_hint="Should list top scoring defenders"
             ),
-            
-            # Team Analysis Queries
+            # Query 4: Player Season Stats
             TestCase(
-                id="TC04",
+                id="Q04",
+                category="Player Stats",
+                question="Mohamed Salah 2022-23 stats",
+                expected_keywords=["Salah", "points", "goals", "assists"],
+                context_query="get_player_season_stats",
+                context_params={"player_name": "Mohamed Salah", "season": "2022-23"},
+                expected_answer_hint="Should show Salah's comprehensive stats for 2022-23"
+            ),
+            # Query 5: Player Gameweek Performance
+            TestCase(
+                id="Q05",
+                category="Player Stats",
+                question="How did Haaland perform in gameweek 10 of 2022-23?",
+                expected_keywords=["Haaland", "gameweek", "points", "goals"],
+                context_query="get_player_gameweek_performance",
+                context_params={"player_name": "Erling Haaland", "season": "2022-23", "gameweek": 10},
+                expected_answer_hint="Should show Haaland's performance in GW10"
+            ),
+            # Query 6: Team Top Performers
+            TestCase(
+                id="Q06",
                 category="Team Analysis",
-                question="Who were the top performers for Arsenal in 2022-23?",
-                expected_keywords=["Arsenal", "performer", "points"],
+                question="Arsenal team analysis 2022-23",
+                expected_keywords=["Arsenal", "points", "performer", "Saka"],
                 context_query="get_team_top_performers",
                 context_params={"team_name": "Arsenal", "season": "2022-23", "limit": 5},
                 expected_answer_hint="Should list Arsenal's best FPL performers"
             ),
+            # Query 7: Fixture Results
             TestCase(
-                id="TC05",
+                id="Q07",
                 category="Team Analysis",
-                question="How did Manchester City perform in their fixtures in 2022-23?",
-                expected_keywords=["Manchester City", "fixtures", "score", "match"],
+                question="Liverpool fixture results 2022-23",
+                expected_keywords=["Liverpool", "fixtures", "score", "win", "loss"],
                 context_query="get_fixture_results",
-                context_params={"team_name": "Man City", "season": "2022-23"},
-                expected_answer_hint="Should summarize Man City's results"
+                context_params={"team_name": "Liverpool", "season": "2022-23"},
+                expected_answer_hint="Should summarize Liverpool's match results"
             ),
-            
-            # Player Comparison Queries
+            # Query 8: Head to Head (no embedding search - team query)
             TestCase(
-                id="TC06",
-                category="Comparison",
-                question="Compare Mohamed Salah and Erling Haaland's performance",
-                expected_keywords=["Salah", "Haaland", "goals", "points", "compare"],
-                context_query="compare_players",
-                context_params={"player1": "Mohamed Salah", "player2": "Erling Haaland", "season": None},
-                expected_answer_hint="Should compare stats of both players"
+                id="Q08",
+                category="Team Analysis",
+                question="Arsenal vs Spurs head to head",
+                expected_keywords=["Arsenal", "Spurs", "score", "match"],
+                context_query="get_head_to_head",
+                context_params={"team1": "Arsenal", "team2": "Spurs"},
+                expected_answer_hint="Should show historical results between Arsenal and Spurs"
             ),
+            # Query 9: Best Value Players
             TestCase(
-                id="TC07",
-                category="Comparison",
-                question="Who is a better FPL value pick: Bukayo Saka or Marcus Rashford?",
-                expected_keywords=["Saka", "Rashford", "value", "points"],
-                context_query="compare_players",
-                context_params={"player1": "Bukayo Saka", "player2": "Marcus Rashford", "season": None},
-                expected_answer_hint="Should compare value and recommend one"
-            ),
-            
-            # Value Analysis Queries
-            TestCase(
-                id="TC08",
+                id="Q09",
                 category="Value Analysis",
-                question="Who are the best value forwards in 2022-23?",
-                expected_keywords=["value", "forward", "FWD", "points per million"],
+                question="Best value midfielders in 2022-23",
+                expected_keywords=["value", "midfielder", "MID", "points per million"],
                 context_query="get_best_value_players",
-                context_params={"season": "2022-23", "position": "FWD", "limit": 10},
-                expected_answer_hint="Should list best value forwards"
+                context_params={"season": "2022-23", "position": "MID", "limit": 10},
+                expected_answer_hint="Should list midfielders with best points per million"
             ),
-            
-            # Performance Metrics Queries
+            # Query 10: Most Transferred Players
             TestCase(
-                id="TC09",
+                id="Q10",
+                category="Transfers",
+                question="Most transferred in players gameweek 5 2022-23",
+                expected_keywords=["transfer", "gameweek", "players"],
+                context_query="get_most_transferred_players",
+                context_params={"season": "2022-23", "gameweek": 5, "direction": "in", "limit": 10},
+                expected_answer_hint="Should list most transferred in players for GW5"
+            ),
+            # Query 11: Bonus Point Leaders
+            TestCase(
+                id="Q11",
                 category="Performance",
-                question="Which players earned the most bonus points in 2022-23?",
+                question="Most bonus points 2022-23",
                 expected_keywords=["bonus", "points", "BPS"],
                 context_query="get_bonus_point_leaders",
                 context_params={"season": "2022-23", "limit": 10},
                 expected_answer_hint="Should list top bonus point earners"
             ),
+            # Query 12: Clean Sheet Leaders
             TestCase(
-                id="TC10",
+                id="Q12",
                 category="Performance",
-                question="Which goalkeepers kept the most clean sheets in 2022-23?",
-                expected_keywords=["goalkeeper", "clean sheet", "clean sheets", "GK"],
+                question="Most clean sheets 2022-23",
+                expected_keywords=["clean sheet", "goalkeeper", "defender"],
                 context_query="get_clean_sheet_leaders",
                 context_params={"season": "2022-23", "limit": 10},
-                expected_answer_hint="Should list GKs with most clean sheets"
+                expected_answer_hint="Should list GKs/DEFs with most clean sheets"
             ),
-            
-            # ========================================
-            # EMBEDDING-BASED TEST CASES
-            # ========================================
+            # Query 13: ICT Index Leaders
             TestCase(
-                id="TC11",
-                category="Similarity (Embedding)",
-                question="Who are similar players to Mohamed Salah?",
-                expected_keywords=["similar", "Salah", "midfielder", "winger", "points"],
-                context_query="get_player_season_stats",
-                context_params={"player_name": "Mohamed Salah", "season": "2022-23", "top_k": 5},
-                expected_answer_hint="Should list players with similar stats/profile to Salah",
-                retrieval_mode="embedding"
+                id="Q13",
+                category="Performance",
+                question="Highest ICT index 2022-23",
+                expected_keywords=["ICT", "influence", "creativity", "threat"],
+                context_query="get_ict_index_leaders",
+                context_params={"season": "2022-23", "limit": 10},
+                expected_answer_hint="Should list players with highest ICT index"
             ),
+            # Query 14: Most Selected Players
             TestCase(
-                id="TC12",
-                category="Similarity (Embedding)",
-                question="Find players similar to Erling Haaland in the 2022-23 season",
-                expected_keywords=["Haaland", "forward", "goals", "similar", "striker"],
-                context_query="get_player_season_stats",
-                context_params={"player_name": "Erling Haaland", "season": "2022-23", "top_k": 5},
-                expected_answer_hint="Should list forwards with high goal scoring profile",
-                retrieval_mode="embedding"
+                id="Q14",
+                category="Ownership",
+                question="Most selected players gameweek 1 2022-23",
+                expected_keywords=["selected", "ownership", "players"],
+                context_query="get_most_selected_players",
+                context_params={"season": "2022-23", "gameweek": 1, "limit": 10},
+                expected_answer_hint="Should list most owned players in GW1"
             ),
+            # Query 15: Compare Players
             TestCase(
-                id="TC13",
-                category="Similarity (Embedding)",
-                question="Which defenders are similar to Trent Alexander-Arnold?",
-                expected_keywords=["defender", "Trent", "assists", "similar"],
-                context_query="get_player_season_stats",
-                context_params={"player_name": "Trent Alexander-Arnold", "season": "2022-23", "top_k": 5},
-                expected_answer_hint="Should list attacking defenders with high assist numbers",
-                retrieval_mode="embedding"
+                id="Q15",
+                category="Comparison",
+                question="Compare Mohamed Salah and Harry Kane",
+                expected_keywords=["Salah", "Kane", "goals", "points", "compare"],
+                context_query="compare_players",
+                context_params={"player1": "Mohamed Salah", "player2": "Harry Kane"},
+                expected_answer_hint="Should compare stats of both players"
             ),
-            
-            # ========================================
-            # HYBRID TEST CASES (KG + Embeddings)
-            # ========================================
+            # Query 16: Player Form History
             TestCase(
-                id="TC14",
-                category="Hybrid",
-                question="Compare Kevin De Bruyne's stats and find similar playmakers",
-                expected_keywords=["De Bruyne", "assists", "creativity", "similar", "midfielder"],
-                context_query="get_player_all_seasons_stats",
-                context_params={"player_name": "Kevin De Bruyne"},
-                expected_answer_hint="Should show KDB's stats AND list similar creative midfielders",
-                retrieval_mode="hybrid"
+                id="Q16",
+                category="Player Stats",
+                question="Show me Kevin De Bruyne's form history in 2022-23",
+                expected_keywords=["De Bruyne", "form", "gameweek", "points"],
+                context_query="get_player_form_history",
+                context_params={"player_name": "Kevin De Bruyne", "season": "2022-23"},
+                expected_answer_hint="Should show KDB's performance across gameweeks"
             ),
+            # Query 17: Search Players
             TestCase(
-                id="TC15",
-                category="Hybrid",
-                question="Who is the best budget forward and who plays similarly?",
-                expected_keywords=["value", "forward", "budget", "similar", "points per million"],
-                context_query="get_best_value_players",
-                context_params={"season": "2022-23", "position": "FWD", "limit": 5},
-                expected_answer_hint="Should identify best value forwards and show alternatives",
-                retrieval_mode="hybrid"
+                id="Q17",
+                category="Search",
+                question="Search for player Raya",
+                expected_keywords=["Raya", "player", "position"],
+                context_query="search_players_by_name",
+                context_params={"name_pattern": "Raya", "limit": 10},
+                expected_answer_hint="Should find David Raya and show his position"
+            ),
+            # Query 20: Season Summary
+            TestCase(
+                id="Q20",
+                category="Summary",
+                question="2022-23 season summary",
+                expected_keywords=["season", "fixtures", "goals", "players"],
+                context_query="get_season_summary",
+                context_params={"season": "2022-23"},
+                expected_answer_hint="Should summarize the 2022-23 season stats"
             ),
         ]
     
@@ -446,15 +530,30 @@ class LLMEvaluator:
                 data_scope="2022-23 season" if "2022-23" in test_case.question else "all seasons"
             )
             
-            # Generate response
-            response = self.llm_manager.generate(prompt, model_key=model_key)
+            # Generate response with retry and exponential backoff
+            max_retries = 3
+            response = None
+            for attempt in range(max_retries):
+                response = self.llm_manager.generate(prompt, model_key=model_key)
+                
+                # Check for rate limit errors (402, 429)
+                if response.error and ("402" in str(response.error) or "429" in str(response.error) or "rate" in str(response.error).lower()):
+                    wait_time = self.rate_limit_delay * (2 ** attempt)  # Exponential backoff
+                    print(f"    ⏳ Rate limited. Waiting {wait_time:.0f}s before retry ({attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                else:
+                    break  # Success or non-rate-limit error
             
             # Calculate scores
             keyword_score = self.calculate_keyword_score(response.text, test_case.expected_keywords)
             
-            # Use human evaluation if enabled, otherwise use automatic heuristics
-            if self.human_evaluation:
+            # Use human evaluation, LLM judge, automatic heuristics, or skip qualitative entirely
+            if self.quantitative_only:
+                qualitative = None  # Skip qualitative scoring
+            elif self.human_evaluation:
                 qualitative = self.human_score_qualitative(response.text, test_case, response.success)
+            elif self.llm_judge:
+                qualitative = self.llm_score_qualitative(response.text, test_case, response.success)
             else:
                 qualitative = self.auto_score_qualitative(response.text, test_case, response.success)
             
@@ -475,8 +574,8 @@ class LLMEvaluator:
             status = "✓" if response.success else "✗"
             print(f"  {status} Time: {response.response_time:.2f}s | Tokens: {response.tokens_used} | Keywords: {keyword_score*100:.0f}%")
             
-            # Small delay to avoid rate limiting
-            time.sleep(1)
+            # Rate limiting delay between requests
+            time.sleep(self.rate_limit_delay)
         
         return results
     
@@ -506,10 +605,12 @@ class LLMEvaluator:
         for model_key in self.llm_manager.MODELS.keys():
             model_results = [r for r in self.results if r.model_name == model_key]
             successful = [r for r in model_results if r.success]
+            # Filter for results with qualitative scores (None in quantitative-only mode)
+            with_qual_scores = [r for r in successful if r.qualitative_scores is not None]
             
             if not model_results:
                 continue
-                
+            
             metrics[model_key] = {
                 "display_name": self.llm_manager.MODELS[model_key]["display_name"],
                 "total_tests": len(model_results),
@@ -519,10 +620,10 @@ class LLMEvaluator:
                 "total_tokens": sum(r.tokens_used for r in successful),
                 "avg_tokens": np.mean([r.tokens_used for r in successful]) if successful else 0,
                 "avg_keyword_score": np.mean([r.keyword_match_score for r in model_results]) * 100,
-                "avg_quality": np.mean([r.qualitative_scores.quality for r in successful]) if successful else 0,
-                "avg_relevance": np.mean([r.qualitative_scores.relevance for r in successful]) if successful else 0,
-                "avg_naturalness": np.mean([r.qualitative_scores.naturalness for r in successful]) if successful else 0,
-                "avg_correctness": np.mean([r.qualitative_scores.correctness for r in successful]) if successful else 0,
+                "avg_quality": np.mean([r.qualitative_scores.quality for r in with_qual_scores]) if with_qual_scores else 0,
+                "avg_relevance": np.mean([r.qualitative_scores.relevance for r in with_qual_scores]) if with_qual_scores else 0,
+                "avg_naturalness": np.mean([r.qualitative_scores.naturalness for r in with_qual_scores]) if with_qual_scores else 0,
+                "avg_correctness": np.mean([r.qualitative_scores.correctness for r in with_qual_scores]) if with_qual_scores else 0,
                 # Estimated cost (rough approximation: $0.0001 per token for reference)
                 "estimated_cost": sum(r.tokens_used for r in successful) * 0.0001,
             }
@@ -810,12 +911,38 @@ def main():
     parser = argparse.ArgumentParser(description='FPL Graph-RAG LLM Model Evaluation')
     parser.add_argument('--human', action='store_true', 
                         help='Enable human evaluation mode for qualitative scoring')
+    parser.add_argument('--llm-judge', action='store_true',
+                        help='Use an LLM as a judge to automatically rate responses')
+    parser.add_argument('--judge-model', type=str, default='qwen-2.5-72b',
+                        help='Model to use as judge (default: qwen-2.5-72b)')
+    parser.add_argument('--quantitative-only', action='store_true',
+                        help='Run only quantitative tests (skip qualitative scoring)')
+    parser.add_argument('--rate-limit', type=float, default=3.0,
+                        help='Delay in seconds between API calls (default: 3.0)')
     args = parser.parse_args()
     
     human_mode = args.human
+    llm_judge_mode = args.llm_judge
+    judge_model = args.judge_model
+    quantitative_mode = args.quantitative_only
+    rate_limit = args.rate_limit
+    
+    # Validate mutually exclusive options
+    if sum([human_mode, llm_judge_mode, quantitative_mode]) > 1:
+        print("❌ Error: --human, --llm-judge, and --quantitative-only cannot be used together.")
+        return
     
     print("Initializing FPL Graph-RAG LLM Evaluation...")
-    if human_mode:
+    print(f"Rate limit: {rate_limit}s between requests (with exponential backoff on errors)")
+    
+    if quantitative_mode:
+        print("="*60)
+        print("📊 QUANTITATIVE-ONLY MODE ENABLED")
+        print("="*60)
+        print("Testing: Response Time, Token Usage, Keyword Matching, Success Rate")
+        print("Skipping: Qualitative evaluation (Quality, Relevance, Naturalness, Correctness)")
+        print("="*60)
+    elif human_mode:
         print("="*60)
         print("🧑‍💼 HUMAN EVALUATION MODE ENABLED")
         print("="*60)
@@ -826,6 +953,13 @@ def main():
         print("  - Correctness (1-5): Factual accuracy based on expected answer")
         print("\nPress Enter to continue or Ctrl+C to cancel...")
         input()
+    elif llm_judge_mode:
+        print("="*60)
+        print("🤖 LLM-AS-JUDGE MODE ENABLED")
+        print("="*60)
+        print(f"Using model '{judge_model}' to automatically evaluate responses.")
+        print("The judge will rate each response on Quality, Relevance, Naturalness, and Correctness.")
+        print("="*60)
     
     # Initialize connections
     try:
@@ -869,8 +1003,17 @@ def main():
         print("   Embedding-based tests will be skipped.")
         embedding_manager = None
     
-    # Run evaluation with human_evaluation flag
-    evaluator = LLMEvaluator(neo4j_conn, llm_manager, embedding_manager, human_evaluation=human_mode)
+    # Run evaluation with the appropriate evaluation mode
+    evaluator = LLMEvaluator(
+        neo4j_conn, 
+        llm_manager, 
+        embedding_manager, 
+        human_evaluation=human_mode,
+        llm_judge=llm_judge_mode,
+        judge_model=judge_model,
+        quantitative_only=quantitative_mode,
+        rate_limit_delay=rate_limit
+    )
     
     try:
         # Run all evaluations
