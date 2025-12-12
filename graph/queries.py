@@ -833,12 +833,15 @@ class CypherQueries:
         query = """
         MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
         OPTIONAL MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+        OPTIONAL MATCH (f)-[:HOME_TEAM]->(ht:Team)
+        OPTIONAL MATCH (f)-[:AWAY_TEAM]->(at:Team)
         WITH p, s, pos,
              SUM(r.total_points) as total_points,
              SUM(r.goals_scored) as goals_scored,
              SUM(r.assists) as assists,
              SUM(r.clean_sheets) as clean_sheets,
              SUM(r.bonus) as bonus,
+             SUM(r.bps) as bps,
              SUM(r.minutes) as minutes,
              AVG(r.ict_index) as ict_index,
              AVG(r.influence) as influence,
@@ -846,13 +849,19 @@ class CypherQueries:
              AVG(r.threat) as threat,
              AVG(r.value) as value,
              MAX(r.selected) as selected,
-             COUNT(r) as games
+             SUM(r.saves) as saves,
+             SUM(r.goals_conceded) as goals_conceded,
+             SUM(r.yellow_cards) as yellow_cards,
+             SUM(r.red_cards) as red_cards,
+             COUNT(r) as games,
+             (COLLECT(ht.name) + COLLECT(at.name)) as teams
         RETURN p.name as name, 
                COALESCE(s.name, s.id) as season,
                COALESCE(pos.code, 'Unknown') as position,
                total_points, goals_scored, assists, clean_sheets,
-               bonus, minutes, ict_index, influence, creativity,
-               threat, value, selected, games
+               bonus, bps, minutes, ict_index, influence, creativity,
+               threat, value, selected, saves, goals_conceded,
+               yellow_cards, red_cards, games, teams
         """
         return query, {}
 

@@ -114,6 +114,13 @@ class EmbeddingManager:
         selected = player_data.get("selected", player_data.get("max_selected", 0))
         games = player_data.get("games", player_data.get("games_played", 0))
         
+        # New stats
+        saves = player_data.get("saves", 0)
+        yellow_cards = player_data.get("yellow_cards", 0)
+        red_cards = player_data.get("red_cards", 0)
+        bps = player_data.get("bps", 0)
+        goals_conceded = player_data.get("goals_conceded", 0)
+        
         # Map position codes to names
         position_names = {
             "GK": "goalkeeper",
@@ -123,42 +130,89 @@ class EmbeddingManager:
         }
         pos_name = position_names.get(position, "player")
         
+        
+        # Determine team (most frequent in the list of teams from fixtures)
+        teams = player_data.get("teams", [])
+        team_name = "unknown team"
+        if teams and len(teams) > 0:
+            # Simple mode: find most common team
+            # Filter out None/nulls just in case
+            valid_teams = [t for t in teams if t]
+            if valid_teams:
+                from collections import Counter
+                team_name = Counter(valid_teams).most_common(1)[0][0]
+        
         # Build description
         parts = [f"{name} is a Premier League {pos_name}"]
         
+        if team_name != "unknown team":
+            parts.append(f"playing for {team_name}")
+            
         if season:
-            parts.append(f"playing in the {season} season")
+            parts.append(f"in the {season} season")
         
+        # Points and Qualitative Scoring
         parts.append(f"who scored {total_points} FPL points")
-        
         if games > 0:
             ppg = total_points / games
             parts.append(f"averaging {ppg:.1f} points per game over {games} appearances")
+            if ppg >= 6.0:
+                 parts.append("delivering elite returns")
+            elif ppg >= 4.5:
+                 parts.append("delivering strong returns")
         
         # Position-specific stats
         if position in ["FWD", "MID"]:
             parts.append(f"with {goals} goals and {assists} assists")
-            if threat > 0:
-                parts.append(f"showing high threat ({threat:.1f})")
         elif position == "DEF":
             parts.append(f"keeping {clean_sheets} clean sheets and providing {assists} assists")
+            if goals_conceded > 0:
+                parts.append(f"conceding {goals_conceded} goals")
         elif position == "GK":
-            saves = player_data.get("saves", 0)
             parts.append(f"with {clean_sheets} clean sheets and {saves} saves")
+            if goals_conceded > 0:
+                parts.append(f"conceding {goals_conceded} goals")
         
         # General performance metrics
         if bonus > 0:
             parts.append(f"earning {bonus} bonus points")
+        if bps > 0:
+            parts.append(f"accumulating {bps} BPS")
+            
+        # Discipline
+        if red_cards > 0:
+             parts.append(f"receiving {red_cards} red cards")
+        if yellow_cards >= 5:
+             parts.append(f"receiving {yellow_cards} yellow cards (high disciplinary risk)")
+        elif yellow_cards > 0:
+             parts.append(f"receiving {yellow_cards} yellow cards")
         
+        # ICT Index and Qualitative Stats
         if ict_index > 0:
             parts.append(f"with an ICT index of {ict_index:.1f}")
-            if creativity > 0:
-                parts.append(f"(creativity: {creativity:.1f}, influence: {influence:.1f})")
+            # Add qualitative description for semantic matching
+            if ict_index >= 9.0:
+                parts.append("showing elite underlying stats and high ICT index")
+            elif ict_index >= 6.0:
+                parts.append("showing strong underlying stats")
+            
+            # Include breakdown
+            ict_parts = []
+            if influence > 0: ict_parts.append(f"influence: {influence:.1f}")
+            if creativity > 0: ict_parts.append(f"creativity: {creativity:.1f}")
+            if threat > 0: ict_parts.append(f"threat: {threat:.1f}")
+            
+            if ict_parts:
+                parts.append(f"({', '.join(ict_parts)})")
         
         # Value information
         if value > 0:
             value_mil = value / 10 if value > 10 else value
             parts.append(f"valued at £{value_mil:.1f}m")
+            if value_mil <= 5.0 and total_points > 120:
+                parts.append("representing excellent value (budget gem)")
+            elif value_mil >= 10.0:
+                parts.append("premium priced player")
         
         # Popularity
         if selected > 100000:

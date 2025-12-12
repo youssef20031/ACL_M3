@@ -1,0 +1,186 @@
+\documentclass[11pt, a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{amsmath}
+
+\geometry{a4paper, margin=1in}
+
+% Code listing settings
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+\title{\textbf{FPL FantasyTrivia: A Graph-RAG System for Fantasy Premier League Analytics}}
+\author{Project Report}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report details the architecture and implementation of \textbf{FPL FantasyTrivia}, a specialized Retrieval-Augmented Generation (RAG) system designed for Fantasy Premier League (FPL). The system leverages a Neo4j knowledge graph to store structured football data and integrates it with Large Language Models (LLMs) via a hybrid retrieval strategy. By combining Cypher-based graph queries with semantic embedding search, the system provides accurate, context-aware answers to user queries ranging from statistical analysis to player comparisons and trivia. The application is built with Streamlit, offering an interactive interface for users to explore FPL data through natural language.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Fantasy Premier League (FPL) involves millions of managers who make weekly decisions based on complex player statistics, fixtures, and team form. Traditional tools often present raw data in tables, requiring significant manual analysis.
+
+\textbf{FPL FantasyTrivia} addresses this by providing a conversational interface powered by a Graph-RAG architecture. Unlike standard RAG approaches that rely solely on vector similarity, this system utilizes a Knowledge Graph (Neo4j) to capture the intricate relationships between players, teams, positions, and fixtures. This allows for precise answer generation for complex queries such as "Which midfielder had the highest ICT index in the 2022-23 season?" which purely semantic search might struggle to answer accurately.
+
+\section{System Architecture}
+The system follows a modular architecture comprising a Frontend, a Preprocessing Layer, a Data Layer (Graph & Embeddings), and an LLM Integration Layer.
+
+\subsection{High-Level Overview}
+The user interacts with a Streamlit interface. Queries are processed by an Intent Classifier and Entity Extractor before being routed to the appropriate retrieval mechanism (Cypher Query or Embedding Search). The retrieved context is then formatted and passed to an LLM to generate the final response.
+
+\subsection{Components}
+\begin{enumerate}
+    \item \textbf{Streamlit UI (\texttt{app.py}):} Serves as the main entry point, handling user sessions, chat history, and visualization of the knowledge graph context using Plotly.
+    \item \textbf{Preprocessing Layer:}
+    \begin{itemize}
+        \item \textbf{Intent Classifier:} Determines the user's goal (e.g., Player Stats, Comparison, Transfer Advice).
+        \item \textbf{Entity Extractor:} Identifies key entities like Player Names, Teams, Seasons, and Positions using spaCy.
+    \end{itemize}
+    \item \textbf{Data Layer:}
+    \begin{itemize}
+        \item \textbf{Neo4j Graph Database:} Stores structured FPL data.
+        \item \textbf{Vector Store:} Stores player embeddings for semantic search.
+    \end{itemize}
+    \item \textbf{LLM Manager:} Integrates with HuggingFace Inference API to utilize models like Gemma-2-2b, Mistral-7b, and Llama-3-8b.
+\end{enumerate}
+
+\section{Methodology}
+
+\subsection{Knowledge Graph Construction}
+The core of the system is the Neo4j Knowledge Graph. The schema is designed to represent the FPL domain effectively:
+\begin{itemize}
+    \item \textbf{Nodes:} \texttt{Player}, \texttt{Team}, \texttt{Position}, \texttt{Season}, \texttt{Gameweek}, \texttt{Fixture}.
+    \item \textbf{Relationships:} 
+    \begin{itemize}
+        \item \texttt{(:Player)-[:PLAYS\_FOR]->(:Team)}
+        \item \texttt{(:Player)-[:PLAYS\_POSITION]->(:Position)}
+        \item \texttt{(:Player)-[:PLAYED\_IN \{stats\}]->(:Fixture)}
+        \item \texttt{(:Fixture)-[:PART\_OF]->(:Gameweek)}
+        \item \texttt{(:Gameweek)-[:IN\_SEASON]->(:Season)}
+    \end{itemize}
+\end{itemize}
+This schema allows for rich historical analysis, such as tracking a player's performance across different teams and seasons.
+
+\subsection{Natural Language Understanding (NLU)}
+To accurately translate user queries into database actions, a two-step NLU pipeline is implemented.
+
+\subsubsection{Intent Classification}
+A rule-based \texttt{IntentClassifier} uses regex patterns to categorize queries into specific intents. Supported intents include:
+\begin{itemize}
+    \item \texttt{PLAYER\_STATS}: "How did Salah perform?"
+    \item \texttt{PLAYER\_COMPARISON}: "Compare Haaland and Kane"
+    \item \texttt{TOP\_SCORERS}: "Who scored the most goals?"
+    \item \texttt{TEAM\_ANALYSIS}: "How are Arsenal doing?"
+    \item \texttt{TRIVIA}, \texttt{RECOMMENDATION}, \texttt{BEST\_VALUE}, etc.
+\end{itemize}
+This deterministic approach ensures high precision for known query structures.
+
+\subsubsection{Entity Extraction}
+The \texttt{EntityExtractor} leverages \texttt{spaCy} for Named Entity Recognition (NER). It uses a combination of:
+\begin{itemize}
+    \item \textbf{Custom Patterns:} To identify FPL-specific terms like Gameweeks ("GW34"), Positions ("Midfielder", "DEF"), and Seasons ("2022-23").
+    \item \textbf{Known Entity Lists:} A set of Premier League teams and players (dynamically loaded from Neo4j) to improve recognition accuracy.
+    \item \textbf{Contextual Rules:} To disambiguate between numbers representing gameweeks vs. quantities.
+\end{itemize}
+
+\subsection{Retrieval Strategies}
+The system supports three retrieval modes, selectable via the UI:
+
+\subsubsection{1. Baseline (Cypher)}
+Direct mapping of user intent to parameterized Cypher queries. The \texttt{CypherQueries} class contains over 15 pre-defined templates.
+\\
+\textit{Example Query (Top Scorers):}
+\begin{lstlisting}[language=SQL]
+MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
+MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+WITH p, SUM(r.goals_scored) AS total_goals
+RETURN p.name, total_goals ORDER BY total_goals DESC LIMIT $limit
+\end{lstlisting}
+
+\subsubsection{2. Embeddings (Semantic Search)}
+The \texttt{EmbeddingManager} uses \texttt{sentence-transformers} (e.g., \texttt{all-MiniLM-L6-v2} or \texttt{mpnet-base}) to create vector representations of players.
+\\
+\textbf{Textual Representation:} Player stats are converted into natural language descriptions before embedding. E.g., \textit{"Mohamed Salah is a Premier League midfielder... who scored 232 FPL points... averaging 6.1 points per game."}
+\\
+This allows for queries like "consistent midfielders with high creativity" to return relevant results even without exact keyword matches.
+
+\subsubsection{3. Hybrid Retrieval}
+Combines both methods. It executes the Cypher query to get precise structured data (e.g., specific stats for a named player) and optionally augments it with semantic search results (e.g., finding similar players) to provide a comprehensive context to the LLM.
+
+\subsection{LLM Integration}
+The \texttt{LLMManager} handles the interaction with the HuggingFace API. 
+\\
+\textbf{Prompt Engineering:} The \texttt{PromptBuilder} constructs structured prompts tailored to the retrieval context.
+\begin{itemize}
+    \item \textbf{Context Injection:} Retrieved graph data is formatted into a readable list (e.g., "1. Erling Haaland | Points: 272 | Goals: 36").
+    \item \textbf{Persona:} The LLM is instructed to act as an "FPL Expert" or "Trivia Master".
+    \item \textbf{Fallback:} If retrieval fails or returns empty, the LLM is informed to state it lacks information rather than hallucinating.
+\end{itemize}
+
+\section{Key Features}
+\begin{itemize}
+    \item \textbf{Dynamic Visualization:} Queries returning graph data are automatically visualized using NetworkX and Plotly, showing relationships between players, teams, and matches.
+    \item \textbf{Multi-Model Support:} Users can switch between varying LLMs (Gemma, Mistral, Llama) to compare reasoning capabilities.
+    \item \textbf{Trivia Mode:} A dedicated mode that generates questions (True/False, Multiple Choice) based on the database facts.
+    \item \textbf{Player Comparison:} Side-by-side statistical analysis of two players, facilitating transfer decisions.
+\end{itemize}
+
+\section{Implementation Details}
+\begin{description}
+    \item[Language:] Python 3.9+
+    \item[Database:] Neo4j (Graph), In-memory FAISS-like search (Vectors)
+    \item[Frameworks:] Streamlit (UI), LangChain concepts (RAG flow), HuggingFace (Inference)
+    \item[Project Structure:]
+    \begin{itemize}
+        \item \texttt{graph/}: Database connection and queries.
+        \item \texttt{preprocessing/}: NLU logic.
+        \item \texttt{embeddings/}: Vector management.
+        \item \texttt{llm/}: Model interaction.
+        \item \texttt{utils/}: Helper functions.
+    \end{itemize}
+\end{description}
+
+\section{Conclusion}
+The FPL FantasyTrivia system demonstrates the power of combining Knowledge Graphs with LLMs. By grounding the LLM's generation in structured, verifiable data from Neo4j, the system eliminates common hallucinations associated with pure parametric knowledge. The addition of embedding-based retrieval further enhances the system by allowing for semantic exploration of the dataset. This architecture provides a robust foundation for building advanced sports analytics assistants.
+
+\end{document}

@@ -134,6 +134,8 @@ class IntentClassifier:
                 r"how (?:did|is|was)\s+(arsenal|chelsea|liverpool|man\s*(?:city|utd|united)|spurs|tottenham|\w+)\s+(?:do|doing|perform)",
                 r"(arsenal|chelsea|liverpool|man\s*(?:city|utd|united)|spurs|tottenham|\w+)\s+(?:team\s+)?(?:stats?|analysis)",
                 r"players? (?:from|in|at)\s+(\w+)",
+                r"(arsenal|chelsea|liverpool|man\s*(?:city|utd|united)|spurs|tottenham|\w+)(?:'s)?\s+(?:best|top|leading|highest\s+scoring)\s+players?",
+                r"(?:best|top|leading)\s+players?\s+(?:for|in|from|at)\s+(arsenal|chelsea|liverpool|man\s*(?:city|utd|united)|spurs|tottenham|\w+)",
             ],
             
             Intent.HEAD_TO_HEAD: [
@@ -294,6 +296,8 @@ class IntentClassifier:
             Intent.TRANSFERS: "get_most_transferred_players",
             Intent.MOST_SELECTED: "get_most_selected_players",
             Intent.SEASON_SUMMARY: "get_season_summary",
+            Intent.RECOMMENDATION: "get_best_value_players",  # Default recommendation strategy
+            Intent.TRIVIA: "get_highest_single_gameweek_score", # Default trivia
         }
         
         return intent_to_query.get(intent, "")
