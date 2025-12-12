@@ -82,11 +82,16 @@ class CypherQueries:
     def get_top_points_by_position(position: str = None, season: str = None, sort_by: str = "total_points", limit: int = 10) -> tuple:
         """
         Query 3: Get top scoring players by position in a season or all seasons.
+        Supports dynamic sorting by the following metrics:
+        - 'total_points' / 'points' (default)
+        - 'goals' / 'goals_scored'
+        - 'assists'
+        - 'bonus' / 'bps'
         
         Args:
             position: Position code (GK, DEF, MID, FWD) - if None, returns top 10 overall
             season: Season ID - if None, returns from all seasons
-            sort_by: Metric to sort by (total_points, goals, assists, bonus)
+            sort_by: Metric to sort by (e.g., 'goals', 'assists', 'bonus').
             limit: Number of results
         """
         # Mapping sort_by to Cypher variables

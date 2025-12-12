@@ -482,4 +482,24 @@ class EntityExtractor:
             if entities.numbers[0] <= 50:
                 params["limit"] = entities.numbers[0]
         
+        # Derive sort_by from stats
+        if entities.stats:
+            stat_map = {
+                "goals_scored": "goals",
+                "assists": "assists",
+                "total_points": "total_points",
+                "bonus": "bonus",
+                "ict_index": "ict_index",
+                "clean_sheets": "clean_sheets",
+                "transfers_in": "transfers_in",
+                "transfers_out": "transfers_out",
+                "selected": "selected",
+                "value": "value"
+            }
+            # Use the first relevant stat found
+            for stat in entities.stats:
+                if stat in stat_map:
+                    params["sort_by"] = stat_map[stat]
+                    break
+                    
         return params

@@ -281,9 +281,9 @@ class IntentClassifier:
             Intent.PLAYER_STATS: "get_player_season_stats",
             Intent.PLAYER_COMPARISON: "compare_players",
             Intent.PLAYER_SEARCH: "search_players_by_name",
-            Intent.TOP_SCORERS: "get_top_scorers_by_season",
-            Intent.TOP_ASSISTERS: "get_top_assisters_by_season",
-            Intent.TOP_POINTS: "get_top_players_all_positions",  # Changed to all positions by default
+            Intent.TOP_SCORERS: "get_top_points_by_position",  # Reroute to generic top points/stats query
+            Intent.TOP_ASSISTERS: "get_top_points_by_position", # Reroute to generic top points/stats query
+            Intent.TOP_POINTS: "get_top_points_by_position",
             Intent.BEST_VALUE: "get_best_value_players",
             Intent.TEAM_ANALYSIS: "get_team_top_performers",
             Intent.HEAD_TO_HEAD: "get_head_to_head",

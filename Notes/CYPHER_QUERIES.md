@@ -23,10 +23,12 @@ This document contains all Cypher queries used in the FPL Graph-RAG system. The 
 **Method:** `get_top_scorers_by_season(season, limit)`
 
 **Parameters:**
+
 - `season` (optional): Season ID (e.g., '2022-23') - if None, returns from all seasons
 - `limit`: Number of results to return (default: 10)
 
 **With Season:**
+
 ```cypher
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
 WITH p, SUM(r.goals_scored) AS total_goals, SUM(r.total_points) AS total_points
@@ -37,6 +39,7 @@ LIMIT $limit
 ```
 
 **All Seasons:**
+
 ```cypher
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
 WITH p, SUM(r.goals_scored) AS total_goals, SUM(r.total_points) AS total_points
@@ -53,10 +56,12 @@ LIMIT $limit
 **Method:** `get_top_assisters_by_season(season, limit)`
 
 **Parameters:**
+
 - `season` (optional): Season ID - if None, returns from all seasons
 - `limit`: Number of results (default: 10)
 
 **With Season:**
+
 ```cypher
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
 WITH p, SUM(r.assists) AS total_assists, SUM(r.total_points) AS total_points
@@ -67,6 +72,7 @@ LIMIT $limit
 ```
 
 **All Seasons:**
+
 ```cypher
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
 WITH p, SUM(r.assists) AS total_assists, SUM(r.total_points) AS total_points
@@ -80,34 +86,38 @@ LIMIT $limit
 
 ### Query 3: Get Top Players by Position
 
-**Method:** `get_top_points_by_position(position, season, limit)`
+**Method:** `get_top_points_by_position(position, season, sort_by, limit)`
 
 **Parameters:**
+
 - `position` (optional): Position code (GK, DEF, MID, FWD) - if None, returns top overall
 - `season` (optional): Season ID - if None, returns from all seasons
+- `sort_by` (default: 'total_points'): Metric to sort by (e.g., 'goals', 'assists', 'bonus')
 - `limit`: Number of results (default: 10)
 
-**With Position:**
+**With Position (Sorted by custom metric, e.g., goals):**
+
 ```cypher
 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: $position})
 MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
 MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})
-WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
+WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals,
      SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
 RETURN p.name AS player_name, pos.code AS position, total_points, goals, assists, bonus
-ORDER BY total_points DESC
+ORDER BY {sort_field} DESC
 LIMIT $limit
 ```
 
 **All Positions:**
+
 ```cypher
 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
 MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
 MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})
-WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
+WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals,
      SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
 RETURN pos.code AS position, p.name AS player_name, total_points, goals, assists, bonus
-ORDER BY total_points DESC
+ORDER BY {sort_field} DESC
 LIMIT $limit
 ```
 
@@ -118,6 +128,7 @@ LIMIT $limit
 **Method:** `get_top_players_all_positions(season, limit_per_position)`
 
 **Parameters:**
+
 - `season` (optional): Season ID - if None, returns from all seasons
 - `limit_per_position`: Number of players per position (default: 5)
 
@@ -125,10 +136,10 @@ LIMIT $limit
 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'GK'})
 MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
 MATCH (gw)-[:IN_SEASON]->(s:Season)
-WITH 'GK' AS position, p.name AS player_name, 
-     SUM(r.total_points) AS total_points, 
-     SUM(r.goals_scored) AS goals, 
-     SUM(r.assists) AS assists, 
+WITH 'GK' AS position, p.name AS player_name,
+     SUM(r.total_points) AS total_points,
+     SUM(r.goals_scored) AS goals,
+     SUM(r.assists) AS assists,
      SUM(r.bonus) AS bonus
 ORDER BY total_points DESC
 LIMIT $limit_per_position
@@ -139,10 +150,10 @@ UNION ALL
 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'DEF'})
 MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
 MATCH (gw)-[:IN_SEASON]->(s:Season)
-WITH 'DEF' AS position, p.name AS player_name, 
-     SUM(r.total_points) AS total_points, 
-     SUM(r.goals_scored) AS goals, 
-     SUM(r.assists) AS assists, 
+WITH 'DEF' AS position, p.name AS player_name,
+     SUM(r.total_points) AS total_points,
+     SUM(r.goals_scored) AS goals,
+     SUM(r.assists) AS assists,
      SUM(r.bonus) AS bonus
 ORDER BY total_points DESC
 LIMIT $limit_per_position
@@ -153,10 +164,10 @@ UNION ALL
 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'MID'})
 MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
 MATCH (gw)-[:IN_SEASON]->(s:Season)
-WITH 'MID' AS position, p.name AS player_name, 
-     SUM(r.total_points) AS total_points, 
-     SUM(r.goals_scored) AS goals, 
-     SUM(r.assists) AS assists, 
+WITH 'MID' AS position, p.name AS player_name,
+     SUM(r.total_points) AS total_points,
+     SUM(r.goals_scored) AS goals,
+     SUM(r.assists) AS assists,
      SUM(r.bonus) AS bonus
 ORDER BY total_points DESC
 LIMIT $limit_per_position
@@ -167,10 +178,10 @@ UNION ALL
 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'FWD'})
 MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
 MATCH (gw)-[:IN_SEASON]->(s:Season)
-WITH 'FWD' AS position, p.name AS player_name, 
-     SUM(r.total_points) AS total_points, 
-     SUM(r.goals_scored) AS goals, 
-     SUM(r.assists) AS assists, 
+WITH 'FWD' AS position, p.name AS player_name,
+     SUM(r.total_points) AS total_points,
+     SUM(r.goals_scored) AS goals,
+     SUM(r.assists) AS assists,
      SUM(r.bonus) AS bonus
 ORDER BY total_points DESC
 LIMIT $limit_per_position
@@ -184,13 +195,14 @@ RETURN position, player_name, total_points, goals, assists, bonus
 **Method:** `get_player_season_stats(player_name, season)`
 
 **Parameters:**
+
 - `player_name`: Full player name
 - `season`: Season ID (e.g., '2022-23')
 
 ```cypher
 MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
 MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
-WITH p, pos, 
+WITH p, pos,
      SUM(r.total_points) AS total_points,
      SUM(r.goals_scored) AS goals,
      SUM(r.assists) AS assists,
@@ -217,6 +229,7 @@ RETURN p.name AS player_name, pos.code AS position,
 **Method:** `get_player_all_seasons_stats(player_name)`
 
 **Parameters:**
+
 - `player_name`: Full player name
 
 ```cypher
@@ -238,7 +251,7 @@ WITH p, pos, s,
      COUNT(f) AS games
 RETURN p.name AS player_name, pos.code AS position, s.id AS season,
        total_points, goals, assists, clean_sheets, bonus,
-       minutes, round(avg_ict, 2) AS avg_ict, round(avg_influence, 2) AS avg_influence, 
+       minutes, round(avg_ict, 2) AS avg_ict, round(avg_influence, 2) AS avg_influence,
        round(avg_creativity, 2) AS avg_creativity, round(avg_threat, 2) AS avg_threat,
        max_value, max_selected, games
 ORDER BY s.id
@@ -251,6 +264,7 @@ ORDER BY s.id
 **Method:** `get_player_gameweek_performance(player_name, season, gameweek)`
 
 **Parameters:**
+
 - `player_name`: Full player name
 - `season`: Season ID
 - `gameweek`: Gameweek number (1-38)
@@ -277,11 +291,13 @@ RETURN p.name AS player_name, gw.number AS gameweek,
 **Method:** `get_team_top_performers(team_name, season, limit)`
 
 **Parameters:**
+
 - `team_name`: Team name (e.g., 'Arsenal')
 - `season` (optional): Season ID - if None, returns from all seasons
 - `limit`: Number of results (default: 5)
 
 **With Season:**
+
 ```cypher
 MATCH (t:Team {name: $team_name})
 MATCH (f:Fixture)-[:HOME_TEAM|AWAY_TEAM]->(t)
@@ -294,6 +310,7 @@ LIMIT $limit
 ```
 
 **All Seasons:**
+
 ```cypher
 MATCH (t:Team {name: $team_name})
 MATCH (f:Fixture)-[:HOME_TEAM|AWAY_TEAM]->(t)
@@ -312,10 +329,12 @@ LIMIT $limit
 **Method:** `get_fixture_results(team_name, season)`
 
 **Parameters:**
+
 - `team_name`: Team name
 - `season` (optional): Season ID - if None, returns from all seasons
 
 **With Season:**
+
 ```cypher
 MATCH (t:Team {name: $team_name})
 MATCH (f:Fixture)-[:HOME_TEAM]->(ht:Team)
@@ -329,6 +348,7 @@ ORDER BY gw.number
 ```
 
 **All Seasons:**
+
 ```cypher
 MATCH (t:Team {name: $team_name})
 MATCH (f:Fixture)-[:HOME_TEAM]->(ht:Team)
@@ -348,6 +368,7 @@ ORDER BY s.id, gw.number
 **Method:** `get_head_to_head(team1, team2)`
 
 **Parameters:**
+
 - `team1`: First team name
 - `team2`: Second team name
 
@@ -356,7 +377,7 @@ MATCH (f:Fixture)-[:HOME_TEAM]->(ht:Team)
 MATCH (f)-[:AWAY_TEAM]->(at:Team)
 WHERE (ht.name = $team1 AND at.name = $team2) OR (ht.name = $team2 AND at.name = $team1)
 MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
-RETURN s.id AS season, gw.number AS gameweek, 
+RETURN s.id AS season, gw.number AS gameweek,
        ht.name AS home_team, at.name AS away_team,
        f.home_score AS home_score, f.away_score AS away_score
 ORDER BY s.id, gw.number
@@ -371,24 +392,27 @@ ORDER BY s.id, gw.number
 **Method:** `get_best_value_players(season, position, limit)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 - `position` (optional): Position code (GK, DEF, MID, FWD)
 - `limit`: Number of results (default: 10)
 
 **With Position:**
+
 ```cypher
 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: $position})
 MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
 WITH p, pos, SUM(r.total_points) AS total_points, AVG(r.value) AS avg_value
 WHERE avg_value > 0
 WITH p, pos, total_points, avg_value, (total_points * 10.0 / avg_value) AS points_per_million
-RETURN p.name AS player_name, pos.code AS position, total_points, 
+RETURN p.name AS player_name, pos.code AS position, total_points,
        avg_value / 10.0 AS value_millions, round(points_per_million, 2) AS points_per_million
 ORDER BY points_per_million DESC
 LIMIT $limit
 ```
 
 **All Positions:**
+
 ```cypher
 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
 MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
@@ -408,12 +432,14 @@ LIMIT $limit
 **Method:** `get_most_transferred_players(season, gameweek, direction, limit)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 - `gameweek`: Gameweek number (required)
 - `direction`: 'in' for transfers in, 'out' for transfers out (default: 'in')
 - `limit`: Number of results (default: 10)
 
 **Transfers In:**
+
 ```cypher
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek {number: $gameweek})
 MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})
@@ -423,6 +449,7 @@ LIMIT $limit
 ```
 
 **Transfers Out:**
+
 ```cypher
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek {number: $gameweek})
 MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})
@@ -440,6 +467,7 @@ LIMIT $limit
 **Method:** `get_bonus_point_leaders(season, limit)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 - `limit`: Number of results (default: 10)
 
@@ -460,6 +488,7 @@ LIMIT $limit
 **Method:** `get_clean_sheet_leaders(season, limit)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 - `limit`: Number of results (default: 10)
 
@@ -481,6 +510,7 @@ LIMIT $limit
 **Method:** `get_ict_index_leaders(season, limit)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 - `limit`: Number of results (default: 10)
 
@@ -509,6 +539,7 @@ LIMIT $limit
 **Method:** `get_most_selected_players(season, gameweek, limit)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 - `gameweek`: Gameweek number (required)
 - `limit`: Number of results (default: 10)
@@ -532,11 +563,13 @@ LIMIT $limit
 **Method:** `compare_players(player1, player2, season)`
 
 **Parameters:**
+
 - `player1`: First player name
 - `player2`: Second player name
 - `season` (optional): Season ID - if None, compares across all seasons
 
 **With Season:**
+
 ```cypher
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
 WHERE p.name IN [$player1, $player2]
@@ -553,13 +586,14 @@ WITH p, pos,
      COUNT(f) AS games
 RETURN p.name AS player_name, pos.code AS position,
        total_points, goals, assists, clean_sheets, bonus, minutes,
-       round(avg_ict, 2) AS avg_ict_index, 
+       round(avg_ict, 2) AS avg_ict_index,
        round(avg_value / 10.0, 2) AS avg_value_millions,
        games
 ORDER BY total_points DESC
 ```
 
 **All Seasons:**
+
 ```cypher
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
 WHERE p.name IN [$player1, $player2]
@@ -576,7 +610,7 @@ WITH p, pos,
      COUNT(f) AS games
 RETURN p.name AS player_name, pos.code AS position,
        total_points, goals, assists, clean_sheets, bonus, minutes,
-       round(avg_ict, 2) AS avg_ict_index, 
+       round(avg_ict, 2) AS avg_ict_index,
        round(avg_value / 10.0, 2) AS avg_value_millions,
        games
 ORDER BY total_points DESC
@@ -589,10 +623,12 @@ ORDER BY total_points DESC
 **Method:** `get_player_form_history(player_name, season)`
 
 **Parameters:**
+
 - `player_name`: Full player name
 - `season` (optional): Season ID - if None, returns from all seasons
 
 **With Season:**
+
 ```cypher
 MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
 MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})
@@ -602,6 +638,7 @@ ORDER BY gw.number
 ```
 
 **All Seasons:**
+
 ```cypher
 MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
 MATCH (gw)-[:IN_SEASON]->(s:Season)
@@ -619,6 +656,7 @@ ORDER BY s.id, gw.number
 **Method:** `search_players_by_name(name_pattern, limit)`
 
 **Parameters:**
+
 - `name_pattern`: Search string (case-insensitive partial match)
 - `limit`: Number of results (default: 20)
 
@@ -637,6 +675,7 @@ LIMIT $limit
 **Method:** `get_all_players_by_position(position)`
 
 **Parameters:**
+
 - `position`: Position code (GK, DEF, MID, FWD)
 
 ```cypher
@@ -666,6 +705,7 @@ ORDER BY t.name
 **Method:** `get_season_summary(season)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 
 ```cypher
@@ -716,6 +756,7 @@ ORDER BY s.id
 **Method:** `get_highest_single_gameweek_score(season)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 
 ```cypher
@@ -734,6 +775,7 @@ LIMIT 1
 **Method:** `get_player_with_most_cards(season, card_type)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 - `card_type`: 'yellow' or 'red' (default: 'yellow')
 
@@ -753,6 +795,7 @@ LIMIT 5
 **Method:** `get_goalkeeper_saves_leader(season)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 
 ```cypher
@@ -772,6 +815,7 @@ LIMIT 5
 **Method:** `get_highest_scoring_fixture(season)`
 
 **Parameters:**
+
 - `season`: Season ID (required)
 
 ```cypher
@@ -779,7 +823,7 @@ MATCH (f:Fixture)-[:HOME_TEAM]->(ht:Team)
 MATCH (f)-[:AWAY_TEAM]->(at:Team)
 MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
 WITH f, ht, at, gw, (f.home_score + f.away_score) AS total_goals
-RETURN ht.name AS home_team, at.name AS away_team, 
+RETURN ht.name AS home_team, at.name AS away_team,
        f.home_score AS home_score, f.away_score AS away_score,
        total_goals, gw.number AS gameweek
 ORDER BY total_goals DESC
@@ -791,6 +835,7 @@ LIMIT 5
 ## Graph Schema Reference
 
 ### Node Types
+
 - **Player**: `name`, `element_id`
 - **Team**: `name`
 - **Position**: `code` (GK, DEF, MID, FWD)
@@ -799,6 +844,7 @@ LIMIT 5
 - **Fixture**: `home_score`, `away_score`, `kickoff_time`
 
 ### Relationship Types
+
 - `PLAYS_POSITION`: Player → Position
 - `PLAYED_IN`: Player → Fixture (with performance stats)
 - `HOME_TEAM`: Fixture → Team
@@ -807,6 +853,7 @@ LIMIT 5
 - `IN_SEASON`: Gameweek → Season
 
 ### PLAYED_IN Relationship Properties
+
 - `total_points`, `goals_scored`, `assists`
 - `clean_sheets`, `bonus`, `bps`
 - `minutes`, `saves`
@@ -818,4 +865,4 @@ LIMIT 5
 
 ---
 
-*Generated from `graph/queries.py`*
+_Generated from `graph/queries.py`_
