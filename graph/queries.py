@@ -79,15 +79,28 @@ class CypherQueries:
             return query, {"limit": limit}
     
     @staticmethod
-    def get_top_points_by_position(position: str = None, season: str = None, limit: int = 10) -> tuple:
+    def get_top_points_by_position(position: str = None, season: str = None, sort_by: str = "total_points", limit: int = 10) -> tuple:
         """
         Query 3: Get top scoring players by position in a season or all seasons.
         
         Args:
             position: Position code (GK, DEF, MID, FWD) - if None, returns top 10 overall
             season: Season ID - if None, returns from all seasons
+            sort_by: Metric to sort by (total_points, goals, assists, bonus)
             limit: Number of results
         """
+        # Mapping sort_by to Cypher variables
+        valid_sorts = {
+            "total_points": "total_points",
+            "points": "total_points",
+            "goals": "goals",
+            "goals_scored": "goals",
+            "assists": "assists",
+            "bonus": "bonus",
+            "bps": "bonus"
+        }
+        sort_field = valid_sorts.get(sort_by, "total_points")
+
         season_filter = "MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})" if season else "MATCH (gw)-[:IN_SEASON]->(s:Season)"
         
         if position and position.upper() in ['GK', 'DEF', 'MID', 'FWD']:
@@ -98,7 +111,7 @@ class CypherQueries:
             WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
                  SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
             RETURN p.name AS player_name, pos.code AS position, total_points, goals, assists, bonus
-            ORDER BY total_points DESC
+            ORDER BY {sort_field} DESC
             LIMIT $limit
             """
             params = {"position": position.upper(), "limit": limit}
@@ -114,7 +127,7 @@ class CypherQueries:
             WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
                  SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
             RETURN pos.code AS position, p.name AS player_name, total_points, goals, assists, bonus
-            ORDER BY total_points DESC
+            ORDER BY {sort_field} DESC
             LIMIT $limit
             """
             params = {"limit": limit}
