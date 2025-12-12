@@ -939,7 +939,7 @@ def render_player_search_tab():
         return
     
     # Search input
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([3, 1, 1])
     with col1:
         search_query = st.text_input(
             "Search Player",
@@ -951,6 +951,12 @@ def render_player_search_tab():
             "Position",
             options=["All", "GK", "DEF", "MID", "FWD"],
             key="position_filter"
+        )
+    with col3:
+        season_filter = st.selectbox(
+            "Season",
+            options=["All"] + SEASONS,
+            key="season_filter"
         )
     
     if search_query:
@@ -978,16 +984,21 @@ def render_player_search_tab():
             # Display selected player stats
             if hasattr(st.session_state, 'selected_player') and st.session_state.selected_player:
                 st.divider()
-                display_player_stats(st.session_state.selected_player)
+                display_player_stats(st.session_state.selected_player, season_filter)
         else:
             st.info("No players found matching your search.")
 
 
-def display_player_stats(player_name: str):
+def display_player_stats(player_name: str, season: str = "All"):
     """Display detailed stats for a player."""
-    st.subheader(f"📊 {player_name} - All Seasons")
+    title_suffix = f"- {season} Season" if season != "All" else "- All Seasons"
+    st.subheader(f"📊 {player_name} {title_suffix}")
     
-    query, params = CypherQueries.get_player_all_seasons_stats(player_name)
+    if season != "All":
+        query, params = CypherQueries.get_player_season_stats(player_name, season)
+    else:
+        query, params = CypherQueries.get_player_all_seasons_stats(player_name)
+    
     results = st.session_state.graph_conn.execute_query(query, params)
     
     if results:
@@ -1004,8 +1015,9 @@ def display_player_stats(player_name: str):
         with col4:
             st.metric("Bonus", stats.get("bonus", 0))
         
-        # Form chart (all seasons)
-        form_query, form_params = CypherQueries.get_player_form_history(player_name)
+        # Form chart
+        chart_season = season if season != "All" else None
+        form_query, form_params = CypherQueries.get_player_form_history(player_name, season=chart_season)
         form_data = st.session_state.graph_conn.execute_query(form_query, form_params)
         
         if form_data:
