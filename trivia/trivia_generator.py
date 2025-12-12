@@ -241,7 +241,7 @@ class TriviaGenerator:
                         RETURN ht.name AS home, at.name AS away, f.home_score AS home_score, 
                                f.away_score AS away_score, total_goals
                         ORDER BY total_goals DESC
-                        LIMIT 1
+                        LIMIT 4
                     """,
                     "answer_field": "formatted",
                     "explanation_template": "{home} {home_score} - {away_score} {away} was the highest-scoring game with {total_goals} goals."
@@ -391,7 +391,12 @@ class TriviaGenerator:
                 options = template["options"].copy()
             else:
                 # Use query results as options
-                options = [str(r.get(answer_field, "")) for r in results[:4]]
+                if answer_field == "formatted":
+                    options = []
+                    for r in results[:4]:
+                        options.append(f"{r.get('home', '')} vs {r.get('away', '')}")
+                else:
+                    options = [str(r.get(answer_field, "")) for r in results[:4]]
             random.shuffle(options)
         elif category == TriviaCategory.TRUE_FALSE:
             options = ["True", "False"]
@@ -410,7 +415,12 @@ class TriviaGenerator:
                     options = [correct_answer]
             else:
                 # Use other results as options
-                options = [str(r.get(answer_field, "")) for r in results[:4]]
+                if answer_field == "formatted":
+                    options = []
+                    for r in results[:4]:
+                        options.append(f"{r.get('home', '')} vs {r.get('away', '')}")
+                else:
+                    options = [str(r.get(answer_field, "")) for r in results[:4]]
             
             if correct_answer not in options:
                 options[0] = correct_answer

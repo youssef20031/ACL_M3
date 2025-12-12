@@ -70,13 +70,68 @@ class EvaluationResult:
 class LLMEvaluator:
     """Evaluates LLM models on FPL Q&A tasks."""
     
-    def __init__(self, neo4j_conn: Neo4jConnection, llm_manager: LLMManager, embedding_manager: Optional[EmbeddingManager] = None):
+    def __init__(self, neo4j_conn: Neo4jConnection, llm_manager: LLMManager, embedding_manager: Optional[EmbeddingManager] = None, human_evaluation: bool = False):
         self.neo4j_conn = neo4j_conn
         self.llm_manager = llm_manager
         self.embedding_manager = embedding_manager
+        self.human_evaluation = human_evaluation
         self.results: List[EvaluationResult] = []
         self.output_dir = os.path.join(os.path.dirname(__file__), "evaluation_results")
         os.makedirs(self.output_dir, exist_ok=True)
+    
+    def get_human_score(self, prompt: str, min_val: int = 1, max_val: int = 5) -> int:
+        """Get a score from a human evaluator with validation."""
+        while True:
+            try:
+                score = input(f"  {prompt} ({min_val}-{max_val}): ").strip()
+                if score.lower() == 'q':
+                    raise KeyboardInterrupt("User quit evaluation")
+                score = int(score)
+                if min_val <= score <= max_val:
+                    return score
+                print(f"    ⚠ Please enter a number between {min_val} and {max_val}")
+            except ValueError:
+                print(f"    ⚠ Invalid input. Please enter a number between {min_val}-{max_val}, or 'q' to quit.")
+    
+    def human_score_qualitative(self, response: str, test_case: TestCase, success: bool) -> QualitativeScore:
+        """
+        Prompt a human evaluator to score the response quality.
+        Displays the question, expected answer hint, and the model's response.
+        """
+        if not success or not response:
+            print("  [Response failed or empty - assigning minimum scores]")
+            return QualitativeScore(quality=1, relevance=1, naturalness=1, correctness=1)
+        
+        print("\n" + "="*70)
+        print("🧑‍💼 HUMAN EVALUATION REQUIRED")
+        print("="*70)
+        print(f"\n📋 QUESTION: {test_case.question}")
+        print(f"\n💡 EXPECTED ANSWER HINT: {test_case.expected_answer_hint}")
+        print(f"\n🔑 EXPECTED KEYWORDS: {', '.join(test_case.expected_keywords)}")
+        print(f"\n🤖 MODEL RESPONSE:")
+        print("-"*50)
+        print(response[:1000] if len(response) > 1000 else response)
+        if len(response) > 1000:
+            print(f"\n... [Response truncated, {len(response)} chars total]")
+        print("-"*50)
+        
+        print("\n📊 Please rate the response on the following criteria (1-5 scale):")
+        print("   1 = Very Poor, 2 = Poor, 3 = Average, 4 = Good, 5 = Excellent")
+        print("   Enter 'q' at any time to quit evaluation.\n")
+        
+        quality = self.get_human_score("Quality (overall response quality)")
+        relevance = self.get_human_score("Relevance (how relevant is the answer to the question)")
+        naturalness = self.get_human_score("Naturalness (how natural/fluent is the language)")
+        correctness = self.get_human_score("Correctness (factual accuracy based on expected answer)")
+        
+        print(f"\n✅ Recorded scores: Quality={quality}, Relevance={relevance}, Naturalness={naturalness}, Correctness={correctness}")
+        
+        return QualitativeScore(
+            quality=quality,
+            relevance=relevance,
+            naturalness=naturalness,
+            correctness=correctness
+        )
         
     def get_test_cases(self) -> List[TestCase]:
         """Define test cases that replicate website functionality."""
@@ -396,7 +451,12 @@ class LLMEvaluator:
             
             # Calculate scores
             keyword_score = self.calculate_keyword_score(response.text, test_case.expected_keywords)
-            qualitative = self.auto_score_qualitative(response.text, test_case, response.success)
+            
+            # Use human evaluation if enabled, otherwise use automatic heuristics
+            if self.human_evaluation:
+                qualitative = self.human_score_qualitative(response.text, test_case, response.success)
+            else:
+                qualitative = self.auto_score_qualitative(response.text, test_case, response.success)
             
             result = EvaluationResult(
                 model_name=model_key,
@@ -744,7 +804,28 @@ class LLMEvaluator:
 
 def main():
     """Main function to run the evaluation."""
+    import argparse
+    
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='FPL Graph-RAG LLM Model Evaluation')
+    parser.add_argument('--human', action='store_true', 
+                        help='Enable human evaluation mode for qualitative scoring')
+    args = parser.parse_args()
+    
+    human_mode = args.human
+    
     print("Initializing FPL Graph-RAG LLM Evaluation...")
+    if human_mode:
+        print("="*60)
+        print("🧑‍💼 HUMAN EVALUATION MODE ENABLED")
+        print("="*60)
+        print("You will be prompted to rate each model response on:")
+        print("  - Quality (1-5): Overall response quality")
+        print("  - Relevance (1-5): How relevant is the answer to the question")
+        print("  - Naturalness (1-5): How natural/fluent is the language")
+        print("  - Correctness (1-5): Factual accuracy based on expected answer")
+        print("\nPress Enter to continue or Ctrl+C to cancel...")
+        input()
     
     # Initialize connections
     try:
@@ -788,8 +869,8 @@ def main():
         print("   Embedding-based tests will be skipped.")
         embedding_manager = None
     
-    # Run evaluation
-    evaluator = LLMEvaluator(neo4j_conn, llm_manager, embedding_manager)
+    # Run evaluation with human_evaluation flag
+    evaluator = LLMEvaluator(neo4j_conn, llm_manager, embedding_manager, human_evaluation=human_mode)
     
     try:
         # Run all evaluations
@@ -821,3 +902,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

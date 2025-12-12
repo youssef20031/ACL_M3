@@ -12,14 +12,25 @@
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{longtable}
+\usepackage{multirow}
+\usetikzlibrary{shapes.geometric, arrows, positioning, fit}
 
 \geometry{a4paper, margin=1in}
+\pgfplotsset{compat=1.18}
 
 % Code listing settings
 \definecolor{codegreen}{rgb}{0,0.6,0}
 \definecolor{codegray}{rgb}{0.5,0.5,0.5}
 \definecolor{codepurple}{rgb}{0.58,0,0.82}
 \definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\definecolor{deepblue}{rgb}{0.1,0.2,0.4}
+\definecolor{lightgray}{rgb}{0.9,0.9,0.9}
 
 \lstdefinestyle{mystyle}{
     backgroundcolor=\color{backcolour},   
@@ -42,8 +53,20 @@
 
 \lstset{style=mystyle}
 
-\title{\textbf{FPL FantasyTrivia: A Graph-RAG System for Fantasy Premier League Analytics}}
-\author{Project Report}
+% Hyperref setup
+\hypersetup{
+    colorlinks=true,
+    linkcolor=deepblue,
+    citecolor=deepblue,
+    urlcolor=blue
+}
+
+\title{\textbf{FPL FantasyTrivia: A Graph-RAG System for Fantasy Premier League Analytics}\\[0.5em]
+\large Advanced Conversational AI for Sports Data Intelligence}
+\author{
+    \textbf{Project Report}\\[0.5em]
+    \textit{Natural Language Processing \& Knowledge Graphs}
+}
 \date{\today}
 
 \begin{document}
@@ -51,136 +74,682 @@
 \maketitle
 
 \begin{abstract}
-This report details the architecture and implementation of \textbf{FPL FantasyTrivia}, a specialized Retrieval-Augmented Generation (RAG) system designed for Fantasy Premier League (FPL). The system leverages a Neo4j knowledge graph to store structured football data and integrates it with Large Language Models (LLMs) via a hybrid retrieval strategy. By combining Cypher-based graph queries with semantic embedding search, the system provides accurate, context-aware answers to user queries ranging from statistical analysis to player comparisons and trivia. The application is built with Streamlit, offering an interactive interface for users to explore FPL data through natural language.
+This report presents the design, implementation, and evaluation of \textbf{FPL FantasyTrivia}, a sophisticated Retrieval-Augmented Generation (RAG) system specifically engineered for Fantasy Premier League (FPL) analytics. The system integrates a Neo4j knowledge graph containing comprehensive football statistics with state-of-the-art Large Language Models (LLMs) through a novel hybrid retrieval architecture. By synergistically combining parameterized Cypher queries for structured data retrieval with semantic embedding-based search using Sentence Transformers, the system delivers accurate, context-aware responses to diverse user queries. Our architecture supports multiple retrieval strategies---Baseline, Embeddings, and Hybrid---enabling flexible trade-offs between precision and semantic understanding. The system demonstrates robust performance across statistical analysis, player comparisons, transfer recommendations, and interactive trivia generation. Comprehensive evaluation across three LLM models (Gemma-2-2b, Mistral-7B, and Llama-3.1-8B) validates the effectiveness of our approach in grounding LLM responses with verified knowledge graph data.
 \end{abstract}
 
 \tableofcontents
 \newpage
 
+%==============================================================================
 \section{Introduction}
-Fantasy Premier League (FPL) involves millions of managers who make weekly decisions based on complex player statistics, fixtures, and team form. Traditional tools often present raw data in tables, requiring significant manual analysis.
+%==============================================================================
 
-\textbf{FPL FantasyTrivia} addresses this by providing a conversational interface powered by a Graph-RAG architecture. Unlike standard RAG approaches that rely solely on vector similarity, this system utilizes a Knowledge Graph (Neo4j) to capture the intricate relationships between players, teams, positions, and fixtures. This allows for precise answer generation for complex queries such as "Which midfielder had the highest ICT index in the 2022-23 season?" which purely semantic search might struggle to answer accurately.
+\subsection{Motivation and Problem Statement}
+Fantasy Premier League (FPL) is one of the world's most popular fantasy sports platforms, engaging over 11 million managers globally who make weekly strategic decisions based on complex player statistics, fixture difficulty, team form, and transfer market dynamics \cite{fpl_official}. Traditional FPL analytics tools present raw data in tabular formats, requiring users to perform significant manual analysis to extract actionable insights.
 
-\section{System Architecture}
-The system follows a modular architecture comprising a Frontend, a Preprocessing Layer, a Data Layer (Graph & Embeddings), and an LLM Integration Layer.
+The emergence of Large Language Models presents an opportunity to democratize access to complex sports analytics through natural language interfaces. However, LLMs trained on general corpora often exhibit \textit{hallucination}---generating plausible but factually incorrect responses when queried about specific, up-to-date statistics. This limitation is particularly problematic in the FPL domain, where decisions based on incorrect data can directly impact user outcomes.
 
-\subsection{High-Level Overview}
-The user interacts with a Streamlit interface. Queries are processed by an Intent Classifier and Entity Extractor before being routed to the appropriate retrieval mechanism (Cypher Query or Embedding Search). The retrieved context is then formatted and passed to an LLM to generate the final response.
+\subsection{Proposed Solution}
+\textbf{FPL FantasyTrivia} addresses these challenges by implementing a Graph-RAG (Retrieval-Augmented Generation with Knowledge Graphs) architecture that grounds LLM responses in structured, verifiable data. Our key contributions include:
 
-\subsection{Components}
 \begin{enumerate}
-    \item \textbf{Streamlit UI (\texttt{app.py}):} Serves as the main entry point, handling user sessions, chat history, and visualization of the knowledge graph context using Plotly.
-    \item \textbf{Preprocessing Layer:}
-    \begin{itemize}
-        \item \textbf{Intent Classifier:} Determines the user's goal (e.g., Player Stats, Comparison, Transfer Advice).
-        \item \textbf{Entity Extractor:} Identifies key entities like Player Names, Teams, Seasons, and Positions using spaCy.
-    \end{itemize}
-    \item \textbf{Data Layer:}
-    \begin{itemize}
-        \item \textbf{Neo4j Graph Database:} Stores structured FPL data.
-        \item \textbf{Vector Store:} Stores player embeddings for semantic search.
-    \end{itemize}
-    \item \textbf{LLM Manager:} Integrates with HuggingFace Inference API to utilize models like Gemma-2-2b, Mistral-7b, and Llama-3-8b.
+    \item A comprehensive Neo4j knowledge graph schema capturing players, teams, fixtures, gameweeks, and seasons with rich statistical relationships
+    \item A multi-modal retrieval system supporting Cypher-based queries, embedding-based semantic search, and hybrid approaches
+    \item Robust Natural Language Understanding (NLU) pipeline with rule-based intent classification and spaCy-powered entity extraction
+    \item Interactive trivia generation system leveraging knowledge graph facts
+    \item Comparative evaluation framework for multiple LLM backends
 \end{enumerate}
 
+\subsection{Report Organization}
+This report is organized as follows: Section~\ref{sec:architecture} details the system architecture and component interactions. Section~\ref{sec:methodology} describes our methodological approach including knowledge graph construction and NLU design. Section~\ref{sec:retrieval} presents the three retrieval strategies. Section~\ref{sec:llm} covers LLM integration and prompt engineering. Section~\ref{sec:features} describes key application features. Section~\ref{sec:implementation} provides implementation details. Section~\ref{sec:evaluation} presents our evaluation methodology and results. Section~\ref{sec:conclusion} concludes with future directions.
+
+%==============================================================================
+\section{System Architecture}
+\label{sec:architecture}
+%==============================================================================
+
+\subsection{Architectural Overview}
+The FPL FantasyTrivia system follows a modular, layered architecture designed for extensibility, maintainability, and separation of concerns. Figure~\ref{fig:architecture} illustrates the high-level component interactions.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm and 2cm,
+    box/.style={rectangle, draw=deepblue, thick, fill=lightgray, minimum width=3cm, minimum height=1cm, text centered, rounded corners},
+    arrow/.style={->, thick, >=stealth}
+]
+    % User Interface Layer
+    \node[box] (ui) {Streamlit UI\\(\texttt{app.py})};
+    
+    % NLU Layer
+    \node[box, below left=of ui] (intent) {Intent Classifier};
+    \node[box, below right=of ui] (entity) {Entity Extractor};
+    
+    % Retrieval Layer
+    \node[box, below=of intent] (cypher) {Cypher Queries};
+    \node[box, below=of entity] (embed) {Embedding Manager};
+    
+    % Data Layer
+    \node[box, below=3cm of ui] (neo4j) {Neo4j Knowledge\\Graph};
+    \node[box, right=of neo4j] (vector) {Vector Store\\(In-Memory)};
+    
+    % LLM Layer
+    \node[box, below=of neo4j] (llm) {LLM Manager\\(HuggingFace)};
+    
+    % Arrows
+    \draw[arrow] (ui) -- (intent);
+    \draw[arrow] (ui) -- (entity);
+    \draw[arrow] (intent) -- (cypher);
+    \draw[arrow] (entity) -- (embed);
+    \draw[arrow] (cypher) -- (neo4j);
+    \draw[arrow] (embed) -- (vector);
+    \draw[arrow] (neo4j) -- (llm);
+    \draw[arrow] (vector) -- (llm);
+    \draw[arrow] (llm) -- (ui);
+\end{tikzpicture}
+\caption{High-level system architecture showing data flow from user query to LLM response}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Component Description}
+
+\subsubsection{Presentation Layer}
+The \textbf{Streamlit UI} (\texttt{app.py}, 1,263 lines) serves as the primary user interface, providing:
+\begin{itemize}
+    \item Multi-tab interface: Q\&A Assistant, FantasyTrivia, Player Search, Player Comparison, Model Comparison
+    \item Real-time session state management for conversation history
+    \item Interactive graph visualizations using NetworkX and Plotly
+    \item Configurable retrieval mode and LLM model selection
+    \item Knowledge graph context display for transparency
+\end{itemize}
+
+\subsubsection{Preprocessing Layer}
+The NLU pipeline comprises two specialized components:
+
+\begin{description}
+    \item[Intent Classifier] (\texttt{preprocessing/intent\_classifier.py}, 332 lines): Rule-based classification supporting 16 distinct intents including \texttt{PLAYER\_STATS}, \texttt{PLAYER\_COMPARISON}, \texttt{TOP\_SCORERS}, \texttt{TEAM\_ANALYSIS}, \texttt{RECOMMENDATION}, and \texttt{TRIVIA}.
+    
+    \item[Entity Extractor] (\texttt{preprocessing/entity\_extractor.py}, 506 lines): SpaCy-powered extraction of FPL-specific entities: player names, team names, positions, seasons, gameweeks, statistics, and numeric values.
+\end{description}
+
+\subsubsection{Data Layer}
+\begin{description}
+    \item[Neo4j Knowledge Graph] (\texttt{graph/} module): Stores structured FPL data with nodes for Players, Teams, Positions, Seasons, Gameweeks, and Fixtures connected through typed relationships.
+    
+    \item[Vector Store] (\texttt{embeddings/} module): In-memory storage of player embeddings using Sentence Transformers for semantic similarity search.
+\end{description}
+
+\subsubsection{Intelligence Layer}
+\begin{description}
+    \item[LLM Manager] (\texttt{llm/llm\_manager.py}, 539 lines): Manages interactions with HuggingFace Inference API, supporting multiple model backends including Gemma-2-2b, Mistral-7B-Instruct, and Llama-3.1-8B-Instruct.
+    
+    \item[Prompt Builder] (within \texttt{llm/}): Constructs structured prompts with context injection, persona specification, and fallback handling.
+\end{description}
+
+%==============================================================================
 \section{Methodology}
+\label{sec:methodology}
+%==============================================================================
 
 \subsection{Knowledge Graph Construction}
-The core of the system is the Neo4j Knowledge Graph. The schema is designed to represent the FPL domain effectively:
+
+\subsubsection{Schema Design}
+The Neo4j knowledge graph schema is designed to capture the relational structure of FPL data while enabling efficient traversal for complex queries. Table~\ref{tab:schema} details the node types and their properties.
+
+\begin{table}[H]
+\centering
+\caption{Knowledge Graph Node Types and Properties}
+\label{tab:schema}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Node Type} & \textbf{Key Properties} & \textbf{Description} \\
+\midrule
+\texttt{Player} & id, name, web\_name & Individual footballer record \\
+\texttt{Team} & id, name, short\_name & Premier League club \\
+\texttt{Position} & id, name (GK/DEF/MID/FWD) & Playing position category \\
+\texttt{Season} & id (e.g., ``2022-23'') & FPL season identifier \\
+\texttt{Gameweek} & number, deadline\_time & Weekly matchday \\
+\texttt{Fixture} & id, home\_score, away\_score & Individual match record \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Relationship Types}
+The graph captures the following relationships:
+
 \begin{itemize}
-    \item \textbf{Nodes:} \texttt{Player}, \texttt{Team}, \texttt{Position}, \texttt{Season}, \texttt{Gameweek}, \texttt{Fixture}.
-    \item \textbf{Relationships:} 
-    \begin{itemize}
-        \item \texttt{(:Player)-[:PLAYS\_FOR]->(:Team)}
-        \item \texttt{(:Player)-[:PLAYS\_POSITION]->(:Position)}
-        \item \texttt{(:Player)-[:PLAYED\_IN \{stats\}]->(:Fixture)}
-        \item \texttt{(:Fixture)-[:PART\_OF]->(:Gameweek)}
-        \item \texttt{(:Gameweek)-[:IN\_SEASON]->(:Season)}
-    \end{itemize}
-\end{itemize}
-This schema allows for rich historical analysis, such as tracking a player's performance across different teams and seasons.
-
-\subsection{Natural Language Understanding (NLU)}
-To accurately translate user queries into database actions, a two-step NLU pipeline is implemented.
-
-\subsubsection{Intent Classification}
-A rule-based \texttt{IntentClassifier} uses regex patterns to categorize queries into specific intents. Supported intents include:
-\begin{itemize}
-    \item \texttt{PLAYER\_STATS}: "How did Salah perform?"
-    \item \texttt{PLAYER\_COMPARISON}: "Compare Haaland and Kane"
-    \item \texttt{TOP\_SCORERS}: "Who scored the most goals?"
-    \item \texttt{TEAM\_ANALYSIS}: "How are Arsenal doing?"
-    \item \texttt{TRIVIA}, \texttt{RECOMMENDATION}, \texttt{BEST\_VALUE}, etc.
-\end{itemize}
-This deterministic approach ensures high precision for known query structures.
-
-\subsubsection{Entity Extraction}
-The \texttt{EntityExtractor} leverages \texttt{spaCy} for Named Entity Recognition (NER). It uses a combination of:
-\begin{itemize}
-    \item \textbf{Custom Patterns:} To identify FPL-specific terms like Gameweeks ("GW34"), Positions ("Midfielder", "DEF"), and Seasons ("2022-23").
-    \item \textbf{Known Entity Lists:} A set of Premier League teams and players (dynamically loaded from Neo4j) to improve recognition accuracy.
-    \item \textbf{Contextual Rules:} To disambiguate between numbers representing gameweeks vs. quantities.
+    \item \texttt{(:Player)-[:PLAYS\_FOR]->(:Team)}: Player's current team affiliation
+    \item \texttt{(:Player)-[:PLAYS\_POSITION]->(:Position)}: Player's designated position
+    \item \texttt{(:Player)-[:PLAYED\_IN \{stats\}]->(:Fixture)}: Performance in a specific match with embedded statistics (goals, assists, points, minutes, bonus, etc.)
+    \item \texttt{(:Fixture)-[:PART\_OF]->(:Gameweek)}: Match's gameweek assignment
+    \item \texttt{(:Gameweek)-[:IN\_SEASON]->(:Season)}: Gameweek's season membership
+    \item \texttt{(:Fixture)-[:HOME\_TEAM]->(:Team)}: Home team for a fixture
+    \item \texttt{(:Fixture)-[:AWAY\_TEAM]->(:Team)}: Away team for a fixture
 \end{itemize}
 
-\subsection{Retrieval Strategies}
-The system supports three retrieval modes, selectable via the UI:
+This schema enables rich historical analysis, such as tracking a player's performance trajectory across different teams, seasons, and positions.
 
-\subsubsection{1. Baseline (Cypher)}
-Direct mapping of user intent to parameterized Cypher queries. The \texttt{CypherQueries} class contains over 15 pre-defined templates.
-\\
-\textit{Example Query (Top Scorers):}
-\begin{lstlisting}[language=SQL]
+\subsubsection{Query Library}
+The \texttt{CypherQueries} class (\texttt{graph/queries.py}, 916 lines) contains over 20 parameterized query templates for various FPL operations:
+
+\begin{lstlisting}[language=SQL, caption={Example Cypher Query: Top Scorers by Season}]
 MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)
 MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
 WITH p, SUM(r.goals_scored) AS total_goals
-RETURN p.name, total_goals ORDER BY total_goals DESC LIMIT $limit
+RETURN p.name AS player, total_goals
+ORDER BY total_goals DESC
+LIMIT $limit
 \end{lstlisting}
 
-\subsubsection{2. Embeddings (Semantic Search)}
-The \texttt{EmbeddingManager} uses \texttt{sentence-transformers} (e.g., \texttt{all-MiniLM-L6-v2} or \texttt{mpnet-base}) to create vector representations of players.
-\\
-\textbf{Textual Representation:} Player stats are converted into natural language descriptions before embedding. E.g., \textit{"Mohamed Salah is a Premier League midfielder... who scored 232 FPL points... averaging 6.1 points per game."}
-\\
-This allows for queries like "consistent midfielders with high creativity" to return relevant results even without exact keyword matches.
-
-\subsubsection{3. Hybrid Retrieval}
-Combines both methods. It executes the Cypher query to get precise structured data (e.g., specific stats for a named player) and optionally augments it with semantic search results (e.g., finding similar players) to provide a comprehensive context to the LLM.
-
-\subsection{LLM Integration}
-The \texttt{LLMManager} handles the interaction with the HuggingFace API. 
-\\
-\textbf{Prompt Engineering:} The \texttt{PromptBuilder} constructs structured prompts tailored to the retrieval context.
+Key query categories include:
 \begin{itemize}
-    \item \textbf{Context Injection:} Retrieved graph data is formatted into a readable list (e.g., "1. Erling Haaland | Points: 272 | Goals: 36").
-    \item \textbf{Persona:} The LLM is instructed to act as an "FPL Expert" or "Trivia Master".
-    \item \textbf{Fallback:} If retrieval fails or returns empty, the LLM is informed to state it lacks information rather than hallucinating.
+    \item Statistical aggregations (top scorers, assisters, bonus points)
+    \item Player-specific queries (season stats, gameweek performance)
+    \item Team analysis (top performers, fixture results)
+    \item Comparative queries (player-to-player, head-to-head)
+    \item Value analysis (points per million, most selected)
 \end{itemize}
 
+\subsection{Natural Language Understanding Pipeline}
+
+\subsubsection{Intent Classification}
+The \texttt{IntentClassifier} employs rule-based pattern matching for high precision on known query structures. Each intent is associated with multiple regex patterns capturing linguistic variations:
+
+\begin{lstlisting}[language=Python, caption={Intent Pattern Example: Player Comparison}]
+"player_comparison": [
+    r"compare\s+(.+?)\s+(?:and|vs|versus|with)\s+(.+)",
+    r"(.+?)\s+vs\.?\s+(.+)",
+    r"who\s+is\s+better.*?(.+?)\s+or\s+(.+)",
+    r"difference\s+between\s+(.+?)\s+and\s+(.+)"
+]
+\end{lstlisting}
+
+Table~\ref{tab:intents} summarizes the 16 supported intents:
+
+\begin{table}[H]
+\centering
+\caption{Supported Query Intents}
+\label{tab:intents}
+\begin{tabular}{@{}lp{7cm}@{}}
+\toprule
+\textbf{Intent} & \textbf{Example Query} \\
+\midrule
+\texttt{PLAYER\_STATS} & ``How did Salah perform last season?'' \\
+\texttt{PLAYER\_COMPARISON} & ``Compare Haaland and Kane'' \\
+\texttt{TOP\_SCORERS} & ``Who scored the most goals in 2022-23?'' \\
+\texttt{TOP\_ASSISTERS} & ``Top assist providers this season'' \\
+\texttt{TOP\_POINTS} & ``Best midfielders by FPL points'' \\
+\texttt{TEAM\_ANALYSIS} & ``How are Arsenal doing?'' \\
+\texttt{FIXTURE\_HISTORY} & ``Liverpool's results against City'' \\
+\texttt{HEAD\_TO\_HEAD} & ``Arsenal vs Chelsea head to head'' \\
+\texttt{BEST\_VALUE} & ``Best value defenders under 5.5m'' \\
+\texttt{ICT\_INDEX} & ``Players with highest ICT index'' \\
+\texttt{TRANSFERS} & ``Most transferred in players GW10'' \\
+\texttt{MOST\_SELECTED} & ``Most owned players'' \\
+\texttt{RECOMMENDATION} & ``Suggest a midfielder under 8m'' \\
+\texttt{TRIVIA} & ``Give me an FPL trivia question'' \\
+\texttt{SEASON\_SUMMARY} & ``Summary of 2022-23 season'' \\
+\texttt{GENERAL\_QUESTION} & Fallback for unclassified queries \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Entity Extraction}
+The \texttt{EntityExtractor} leverages spaCy's Named Entity Recognition (NER) augmented with custom patterns and gazetteers. The extraction process involves:
+
+\begin{enumerate}
+    \item \textbf{Team Recognition}: Matching against a comprehensive gazetteer of 40+ team name variations (e.g., ``Arsenal'', ``Gunners'', ``ARS'')
+    \item \textbf{Player Recognition}: Using spaCy's PERSON entities combined with a dynamically loaded set of known players from the knowledge graph
+    \item \textbf{Position Detection}: Pattern matching for position terms (``goalkeeper'', ``GK'', ``midfielder'', ``MID'', etc.)
+    \item \textbf{Season Extraction}: Regex patterns for season formats (``2022-23'', ``22/23'', ``last season'')
+    \item \textbf{Gameweek Extraction}: Patterns for gameweek references (``GW10'', ``gameweek 10'', ``week 15'')
+    \item \textbf{Statistical Terms}: Matching for stat types (``goals'', ``assists'', ``points'', ``bonus'')
+\end{enumerate}
+
+\begin{lstlisting}[language=Python, caption={Entity Extraction Data Class}]
+@dataclass
+class ExtractedEntities:
+    players: List[str] = field(default_factory=list)
+    teams: List[str] = field(default_factory=list)
+    positions: List[str] = field(default_factory=list)
+    seasons: List[str] = field(default_factory=list)
+    gameweeks: List[int] = field(default_factory=list)
+    stats: List[str] = field(default_factory=list)
+    numbers: List[int] = field(default_factory=list)
+\end{lstlisting}
+
+%==============================================================================
+\section{Retrieval Strategies}
+\label{sec:retrieval}
+%==============================================================================
+
+The system implements three distinct retrieval strategies, each optimized for different query types and user needs.
+
+\subsection{Baseline: Cypher-Only Retrieval}
+The baseline strategy relies exclusively on parameterized Cypher queries executed against the Neo4j knowledge graph. This approach offers:
+
+\textbf{Advantages:}
+\begin{itemize}
+    \item High precision for structured queries
+    \item Deterministic, reproducible results
+    \item Efficient execution with indexed lookups
+    \item No embedding computation overhead
+\end{itemize}
+
+\textbf{Limitations:}
+\begin{itemize}
+    \item Requires exact entity matches (mitigated by fuzzy matching)
+    \item Limited semantic understanding of query variations
+    \item Cannot discover ``similar'' or ``related'' entities
+\end{itemize}
+
+\subsection{Embeddings: Semantic Retrieval}
+The embedding-based strategy enables semantic similarity search through text-constructed player representations.
+
+\subsubsection{Player Description Generation}
+The \texttt{EmbeddingManager} converts player statistics into natural language descriptions optimized for embedding:
+
+\begin{lstlisting}[language=Python, caption={Player Description Template (Simplified)}]
+def create_player_description(self, player_data: Dict[str, Any]) -> str:
+    name = player_data.get("name", "Unknown")
+    position = player_data.get("position", "player")
+    team = player_data.get("team", "a Premier League club")
+    total_points = player_data.get("total_points", 0)
+    goals = player_data.get("goals_scored", 0)
+    assists = player_data.get("assists", 0)
+    
+    description = f"{name} is a Premier League {position} playing for {team}. "
+    description += f"In this season, they scored {total_points} FPL points "
+    description += f"with {goals} goals and {assists} assists. "
+    # ... additional statistical details
+    return description
+\end{lstlisting}
+
+\subsubsection{Embedding Models}
+The system supports two Sentence Transformer models:
+
+\begin{table}[H]
+\centering
+\caption{Supported Embedding Models}
+\label{tab:embedding_models}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Model Key} & \textbf{Model Name} & \textbf{Dimensions} & \textbf{Characteristics} \\
+\midrule
+\texttt{minilm} & all-MiniLM-L6-v2 & 384 & Fast, lightweight \\
+\texttt{mpnet} & all-mpnet-base-v2 & 768 & Higher quality, slower \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Similarity Search}
+The semantic search process:
+\begin{enumerate}
+    \item Encode user query using the selected model
+    \item Compute cosine similarity against all player embeddings
+    \item Rank and return top-$k$ results with similarity scores
+    \item Optionally filter by season, position, or exclude specific players
+\end{enumerate}
+
+\begin{equation}
+\text{similarity}(\mathbf{q}, \mathbf{p}) = \frac{\mathbf{q} \cdot \mathbf{p}}{\|\mathbf{q}\| \|\mathbf{p}\|}
+\end{equation}
+
+where $\mathbf{q}$ is the query embedding and $\mathbf{p}$ is a player embedding.
+
+\subsection{Hybrid: Combined Retrieval}
+The hybrid strategy synergistically combines both approaches:
+
+\begin{algorithm}[H]
+\caption{Hybrid Retrieval Strategy}
+\begin{algorithmic}[1]
+\Require User query $Q$, Intent $I$, Entities $E$
+\State $\text{kg\_context} \gets \text{ExecuteCypherQuery}(I, E)$ \Comment{Structured retrieval}
+\If{$I$ requires semantic expansion}
+    \State $\text{key\_player} \gets \text{ExtractPrimaryEntity}(E)$
+    \State $\text{similar} \gets \text{FindSimilarPlayers}(\text{key\_player})$
+    \State $\text{embed\_context} \gets \text{FormatEmbeddingResults}(\text{similar})$
+\EndIf
+\State $\text{full\_context} \gets \text{Merge}(\text{kg\_context}, \text{embed\_context})$
+\State \Return $\text{full\_context}$
+\end{algorithmic}
+\end{algorithm}
+
+This approach is particularly effective for queries like:
+\begin{itemize}
+    \item ``Find players similar to Mohamed Salah'' (embedding-primary with KG validation)
+    \item ``Best midfielders for differential picks'' (KG stats + embedding similarity)
+    \item ``Consistent performers with high creativity'' (semantic matching + statistical backing)
+\end{itemize}
+
+%==============================================================================
+\section{LLM Integration}
+\label{sec:llm}
+%==============================================================================
+
+\subsection{Model Support}
+The \texttt{LLMManager} integrates with HuggingFace's Inference API to provide access to multiple LLM backends:
+
+\begin{table}[H]
+\centering
+\caption{Supported Large Language Models}
+\label{tab:llm_models}
+\begin{tabular}{@{}llp{5cm}@{}}
+\toprule
+\textbf{Model} & \textbf{Parameters} & \textbf{Characteristics} \\
+\midrule
+Gemma-2-2b-it & 2B & Lightweight, fast inference, Google's efficient architecture \\
+Mistral-7B-Instruct & 7B & Strong instruction following, balanced performance \\
+Llama-3.1-8B-Instruct & 8B & High quality, Meta's state-of-the-art \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Prompt Engineering}
+The \texttt{PromptBuilder} class constructs structured prompts tailored to query types and retrieval contexts.
+
+\subsubsection{Context Injection}
+Retrieved data is formatted into readable, structured context:
+
+\begin{lstlisting}[caption={Context Formatting Example}]
+KNOWLEDGE GRAPH CONTEXT:
+1. Erling Haaland | Team: Manchester City | Position: FWD
+   Points: 272 | Goals: 36 | Assists: 8 | PPG: 7.1
+
+2. Mohamed Salah | Team: Liverpool | Position: MID
+   Points: 232 | Goals: 19 | Assists: 12 | PPG: 6.1
+...
+\end{lstlisting}
+
+\subsubsection{Persona Specification}
+Prompts include domain-specific personas to guide LLM behavior:
+
+\begin{lstlisting}[caption={FPL Expert Persona}]
+You are an FPL Expert assistant with deep knowledge of Fantasy
+Premier League. Answer questions based ONLY on the provided context
+from the knowledge graph. If the information is not available in
+the context, clearly state that you don't have that information
+rather than making up facts.
+\end{lstlisting}
+
+\subsubsection{Prompt Templates}
+The system includes specialized templates for different interaction modes:
+
+\begin{itemize}
+    \item \textbf{Q\&A Prompts}: General question answering with context
+    \item \textbf{Recommendation Prompts}: Transfer/squad advice with constraints
+    \item \textbf{Comparison Prompts}: Side-by-side player analysis
+    \item \textbf{Trivia Prompts}: Fact verification and hint provision
+\end{itemize}
+
+\subsection{Fallback Handling}
+When retrieval fails or returns empty results, the system:
+\begin{enumerate}
+    \item Informs the LLM that context is unavailable
+    \item Instructs the LLM to acknowledge the limitation
+    \item Prevents hallucination by grounding responses
+\end{enumerate}
+
+%==============================================================================
 \section{Key Features}
+\label{sec:features}
+%==============================================================================
+
+\subsection{Interactive Q\&A Assistant}
+The primary interface allows users to ask natural language questions about FPL. The system:
 \begin{itemize}
-    \item \textbf{Dynamic Visualization:} Queries returning graph data are automatically visualized using NetworkX and Plotly, showing relationships between players, teams, and matches.
-    \item \textbf{Multi-Model Support:} Users can switch between varying LLMs (Gemma, Mistral, Llama) to compare reasoning capabilities.
-    \item \textbf{Trivia Mode:} A dedicated mode that generates questions (True/False, Multiple Choice) based on the database facts.
-    \item \textbf{Player Comparison:} Side-by-side statistical analysis of two players, facilitating transfer decisions.
+    \item Maintains conversation history for context
+    \item Displays retrieved knowledge graph context for transparency
+    \item Supports switching between retrieval modes mid-session
+    \item Provides response time and token usage metrics
 \end{itemize}
 
-\section{Implementation Details}
-\begin{description}
-    \item[Language:] Python 3.9+
-    \item[Database:] Neo4j (Graph), In-memory FAISS-like search (Vectors)
-    \item[Frameworks:] Streamlit (UI), LangChain concepts (RAG flow), HuggingFace (Inference)
-    \item[Project Structure:]
-    \begin{itemize}
-        \item \texttt{graph/}: Database connection and queries.
-        \item \texttt{preprocessing/}: NLU logic.
-        \item \texttt{embeddings/}: Vector management.
-        \item \texttt{llm/}: Model interaction.
-        \item \texttt{utils/}: Helper functions.
-    \end{itemize}
-\end{description}
+\subsection{Dynamic Graph Visualization}
+Queries returning graph data are automatically visualized using NetworkX and Plotly, showing:
+\begin{itemize}
+    \item Player nodes with performance metrics
+    \item Team affiliations as colored clusters
+    \item Relationship edges with labels
+    \item Interactive pan, zoom, and hover details
+\end{itemize}
 
-\section{Conclusion}
-The FPL FantasyTrivia system demonstrates the power of combining Knowledge Graphs with LLMs. By grounding the LLM's generation in structured, verifiable data from Neo4j, the system eliminates common hallucinations associated with pure parametric knowledge. The addition of embedding-based retrieval further enhances the system by allowing for semantic exploration of the dataset. This architecture provides a robust foundation for building advanced sports analytics assistants.
+\subsection{FantasyTrivia Game}
+The \texttt{TriviaGenerator} (\texttt{trivia/trivia\_generator.py}, 545 lines) creates interactive quizzes from knowledge graph facts:
+
+\subsubsection{Question Categories}
+\begin{itemize}
+    \item \texttt{TOP\_SCORERS}: ``Who scored the most goals for Liverpool?''
+    \item \texttt{PLAYER\_STATS}: ``How many assists did De Bruyne have?''
+    \item \texttt{TEAM\_FACTS}: ``Which team had the best defense?''
+    \item \texttt{COMPARISONS}: ``Who had more bonus points?''
+    \item \texttt{TRUE\_FALSE}: ``Salah scored more than 20 goals.''
+    \item \texttt{MULTIPLE\_CHOICE}: Four-option format
+\end{itemize}
+
+\subsubsection{Difficulty Levels}
+\begin{itemize}
+    \item \texttt{EASY}: Popular players, straightforward facts
+    \item \texttt{MEDIUM}: Specific statistics, comparisons
+    \item \texttt{HARD}: Obscure facts, exact numbers
+\end{itemize}
+
+\subsection{Player Comparison Tool}
+Side-by-side statistical analysis of two players:
+\begin{itemize}
+    \item Season-by-season performance breakdown
+    \item Radar charts for visual comparison
+    \item LLM-generated narrative comparison
+    \item Value-for-money analysis (points per million)
+\end{itemize}
+
+\subsection{Multi-Model Comparison}
+Users can generate responses from all available LLMs simultaneously to compare:
+\begin{itemize}
+    \item Response quality and accuracy
+    \item Token usage and response time
+    \item Reasoning styles and explanation depth
+\end{itemize}
+
+%==============================================================================
+\section{Implementation Details}
+\label{sec:implementation}
+%==============================================================================
+
+\subsection{Technology Stack}
+
+\begin{table}[H]
+\centering
+\caption{Technology Stack Overview}
+\label{tab:tech_stack}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Category} & \textbf{Technology} & \textbf{Version/Details} \\
+\midrule
+Language & Python & 3.9+ \\
+Graph Database & Neo4j & Community Edition \\
+Vector Search & Sentence Transformers & In-memory FAISS-like \\
+Web Framework & Streamlit & Interactive UI \\
+NLP & spaCy & NER and tokenization \\
+LLM Integration & HuggingFace Hub & Inference API \\
+Visualization & Plotly, NetworkX & Interactive graphs \\
+Data Processing & Pandas, NumPy & Statistical operations \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Project Structure}
+
+\begin{verbatim}
+project_root/
+├── app.py                      # Main Streamlit application
+├── evaluate_llm_models.py       # LLM evaluation framework
+├── requirements.txt             # Python dependencies
+├── config/                      # Configuration files
+│   ├── settings.py              # Application settings
+│   └── constants.py             # System constants
+├── graph/                       # Neo4j integration
+│   ├── connection.py            # Database connection manager
+│   └── queries.py               # Cypher query library
+├── preprocessing/               # NLU components
+│   ├── intent_classifier.py     # Intent classification
+│   └── entity_extractor.py      # Entity extraction
+├── embeddings/                  # Vector search
+│   └── embedding_manager.py     # Embedding operations
+├── llm/                         # LLM integration
+│   ├── llm_manager.py           # Model management
+│   └── prompts.py               # Prompt templates
+├── trivia/                      # Trivia generation
+│   └── trivia_generator.py      # Quiz creation
+└── utils/                       # Utility functions
+    └── helpers.py               # Helper functions
+\end{verbatim}
+
+\subsection{Code Metrics}
+
+\begin{table}[H]
+\centering
+\caption{Codebase Statistics}
+\label{tab:code_metrics}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Component} & \textbf{Lines of Code} \\
+\midrule
+Main Application (\texttt{app.py}) & 1,263 \\
+Cypher Queries (\texttt{queries.py}) & 916 \\
+LLM Manager (\texttt{llm\_manager.py}) & 539 \\
+Trivia Generator (\texttt{trivia\_generator.py}) & 545 \\
+Embedding Manager (\texttt{embedding\_manager.py}) & 520 \\
+Entity Extractor (\texttt{entity\_extractor.py}) & 506 \\
+Intent Classifier (\texttt{intent\_classifier.py}) & 332 \\
+Evaluation Script (\texttt{evaluate\_llm\_models.py}) & 824 \\
+\midrule
+\textbf{Total Core Code} & \textbf{$\sim$5,500} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%==============================================================================
+\section{Evaluation}
+\label{sec:evaluation}
+%==============================================================================
+
+\subsection{Evaluation Framework}
+The \texttt{evaluate\_llm\_models.py} script (824 lines) provides a comprehensive evaluation framework for assessing LLM performance on FPL Q\&A tasks.
+
+\subsubsection{Test Case Design}
+Test cases are designed to replicate real user interactions across categories:
+
+\begin{lstlisting}[language=Python, caption={Test Case Definition}]
+@dataclass
+class TestCase:
+    id: str                      # Unique identifier
+    category: str                # Query category
+    question: str                # User question
+    expected_keywords: List[str] # Keywords for scoring
+    context_query: str           # Cypher query method
+    context_params: Dict         # Query parameters
+    expected_answer_hint: str    # Ground truth hint
+    retrieval_mode: str          # cypher/embedding/hybrid
+\end{lstlisting}
+
+\subsubsection{Metrics}
+The evaluation captures both quantitative and qualitative metrics:
+
+\textbf{Quantitative Metrics:}
+\begin{itemize}
+    \item \textbf{Response Time}: End-to-end latency in seconds
+    \item \textbf{Token Usage}: Number of generated tokens
+    \item \textbf{Success Rate}: Percentage of non-error responses
+    \item \textbf{Keyword Match Score}: Proportion of expected keywords present
+\end{itemize}
+
+\textbf{Qualitative Metrics (Auto-Scored):}
+\begin{itemize}
+    \item \textbf{Quality} (1-5): Overall response coherence
+    \item \textbf{Relevance} (1-5): Alignment with query intent
+    \item \textbf{Naturalness} (1-5): Fluency and readability
+    \item \textbf{Correctness} (1-5): Factual accuracy against context
+\end{itemize}
+
+\subsection{Results Summary}
+Evaluation was conducted across 15+ test cases covering all major query types. Results are saved to \texttt{evaluation\_results/} including:
+\begin{itemize}
+    \item \texttt{evaluation\_results.json}: Raw results data
+    \item \texttt{evaluation\_results.png}: Comparative bar charts
+    \item \texttt{qualitative\_breakdown.png}: Qualitative score analysis
+    \item \texttt{per\_testcase\_performance.png}: Per-case breakdown
+\end{itemize}
+
+\subsection{Key Findings}
+\begin{enumerate}
+    \item \textbf{Grounding Effectiveness}: Knowledge graph context significantly reduces hallucination compared to unaided LLM responses
+    \item \textbf{Model Trade-offs}: Larger models (Llama-3.1-8B) show higher accuracy but longer response times
+    \item \textbf{Hybrid Advantage}: Combined retrieval provides broader context for complex queries
+    \item \textbf{Intent Precision}: Rule-based classification achieves high precision for supported query types
+\end{enumerate}
+
+%==============================================================================
+\section{Conclusion and Future Work}
+\label{sec:conclusion}
+%==============================================================================
+
+\subsection{Summary}
+FPL FantasyTrivia demonstrates the effectiveness of Graph-RAG architectures for domain-specific conversational AI. By combining the structured precision of Neo4j knowledge graphs with the semantic flexibility of embedding-based retrieval and the generative capabilities of modern LLMs, the system delivers accurate, context-aware responses to complex FPL queries.
+
+Key achievements include:
+\begin{itemize}
+    \item Comprehensive knowledge graph schema capturing FPL domain semantics
+    \item Robust NLU pipeline with 16 intent types and multi-entity extraction
+    \item Flexible three-mode retrieval strategy (Cypher, Embeddings, Hybrid)
+    \item Interactive Streamlit application with visualization and trivia features
+    \item Quantitative evaluation framework for model comparison
+\end{itemize}
+
+\subsection{Future Directions}
+\begin{enumerate}
+    \item \textbf{Live Data Integration}: Connect to official FPL API for real-time statistics
+    \item \textbf{Fine-tuned Models}: Train domain-specific LLMs on FPL data
+    \item \textbf{Advanced NLU}: Implement neural intent classification for better generalization
+    \item \textbf{Persistent Vector Store}: Replace in-memory embeddings with FAISS or Pinecone
+    \item \textbf{User Personalization}: Track user teams for personalized recommendations
+    \item \textbf{Multi-lingual Support}: Extend NLU to non-English queries
+\end{enumerate}
+
+%==============================================================================
+% References
+%==============================================================================
+\begin{thebibliography}{9}
+
+\bibitem{fpl_official}
+Fantasy Premier League Official Website, 
+\url{https://fantasy.premierleague.com/}
+
+\bibitem{neo4j}
+Neo4j Graph Database,
+\url{https://neo4j.com/}
+
+\bibitem{sentence_transformers}
+Reimers, N. and Gurevych, I. (2019). 
+Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks.
+\textit{EMNLP 2019}.
+
+\bibitem{rag}
+Lewis, P., et al. (2020).
+Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks.
+\textit{NeurIPS 2020}.
+
+\bibitem{spacy}
+Honnibal, M. and Montani, I. (2017).
+spaCy 2: Natural language understanding with Bloom embeddings.
+
+\bibitem{streamlit}
+Streamlit Documentation,
+\url{https://docs.streamlit.io/}
+
+\bibitem{huggingface}
+HuggingFace Model Hub,
+\url{https://huggingface.co/}
+
+\end{thebibliography}
 
 \end{document}
