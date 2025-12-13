@@ -639,121 +639,222 @@ Do not include any explanation, just the JSON object."""
         plt.style.use('seaborn-v0_8-whitegrid')
         colors = plt.cm.Set2(np.linspace(0, 1, len(models)))
         
-        # Create figure with multiple subplots
-        fig = plt.figure(figsize=(20, 16))
-        
-        # 1. Response Time Comparison
-        ax1 = fig.add_subplot(2, 3, 1)
-        response_times = [metrics[m]["avg_response_time"] for m in models]
-        bars1 = ax1.bar(display_names, response_times, color=colors)
-        ax1.set_ylabel('Average Response Time (seconds)')
-        ax1.set_title('Response Time Comparison', fontsize=12, fontweight='bold')
-        ax1.tick_params(axis='x', rotation=45)
-        for bar, val in zip(bars1, response_times):
-            ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
-                    f'{val:.2f}s', ha='center', va='bottom', fontsize=9)
-        
-        # 2. Token Usage Comparison
-        ax2 = fig.add_subplot(2, 3, 2)
-        token_usage = [metrics[m]["avg_tokens"] for m in models]
-        bars2 = ax2.bar(display_names, token_usage, color=colors)
-        ax2.set_ylabel('Average Tokens Used')
-        ax2.set_title('Token Usage Comparison', fontsize=12, fontweight='bold')
-        ax2.tick_params(axis='x', rotation=45)
-        for bar, val in zip(bars2, token_usage):
-            ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 5, 
-                    f'{val:.0f}', ha='center', va='bottom', fontsize=9)
-        
-        # 3. Success Rate Comparison
-        ax3 = fig.add_subplot(2, 3, 3)
-        success_rates = [metrics[m]["success_rate"] for m in models]
-        bars3 = ax3.bar(display_names, success_rates, color=colors)
-        ax3.set_ylabel('Success Rate (%)')
-        ax3.set_title('Success Rate Comparison', fontsize=12, fontweight='bold')
-        ax3.set_ylim(0, 105)
-        ax3.tick_params(axis='x', rotation=45)
-        for bar, val in zip(bars3, success_rates):
-            ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
-                    f'{val:.0f}%', ha='center', va='bottom', fontsize=9)
-        
-        # 4. Qualitative Scores Heatmap
-        ax4 = fig.add_subplot(2, 3, 4)
-        qual_categories = ['Quality', 'Relevance', 'Naturalness', 'Correctness']
-        qual_data = np.array([
-            [metrics[m]["avg_quality"], metrics[m]["avg_relevance"], 
-             metrics[m]["avg_naturalness"], metrics[m]["avg_correctness"]]
-            for m in models
-        ])
-        im = ax4.imshow(qual_data, cmap='RdYlGn', aspect='auto', vmin=1, vmax=5)
-        ax4.set_xticks(np.arange(len(qual_categories)))
-        ax4.set_yticks(np.arange(len(display_names)))
-        ax4.set_xticklabels(qual_categories)
-        ax4.set_yticklabels(display_names)
-        ax4.set_title('Qualitative Scores (1-5)', fontsize=12, fontweight='bold')
-        
-        # Add text annotations
-        for i in range(len(display_names)):
-            for j in range(len(qual_categories)):
-                text = ax4.text(j, i, f'{qual_data[i, j]:.1f}',
-                               ha="center", va="center", color="black", fontsize=10)
-        
-        plt.colorbar(im, ax=ax4, shrink=0.8)
-        
-        # 5. Radar Chart - Overall Comparison
-        ax5 = fig.add_subplot(2, 3, 5, projection='polar')
-        categories = ['Response\nSpeed', 'Token\nEfficiency', 'Success\nRate', 
-                     'Keyword\nMatch', 'Overall\nQuality']
-        
-        # Normalize metrics for radar chart (0-1 scale)
-        for i, m in enumerate(models):
-            values = [
-                1 - min(metrics[m]["avg_response_time"] / 10, 1),  # Inverse (faster is better)
-                1 - min(metrics[m]["avg_tokens"] / 500, 1),  # Inverse (fewer tokens is better)
-                metrics[m]["success_rate"] / 100,
-                metrics[m]["avg_keyword_score"] / 100,
-                (metrics[m]["avg_quality"] + metrics[m]["avg_relevance"] + 
-                 metrics[m]["avg_naturalness"] + metrics[m]["avg_correctness"]) / 20,
-            ]
+        if self.quantitative_only:
+            # QUANTITATIVE-ONLY MODE: 2x3 grid with quantitative graphs only
+            fig = plt.figure(figsize=(20, 12))
             
-            angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
-            values += values[:1]  # Complete the loop
-            angles += angles[:1]
+            # 1. Response Time Comparison
+            ax1 = fig.add_subplot(2, 3, 1)
+            response_times = [metrics[m]["avg_response_time"] for m in models]
+            bars1 = ax1.bar(display_names, response_times, color=colors)
+            ax1.set_ylabel('Average Response Time (seconds)')
+            ax1.set_title('Response Time Comparison', fontsize=12, fontweight='bold')
+            ax1.tick_params(axis='x', rotation=45)
+            for bar, val in zip(bars1, response_times):
+                ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
+                        f'{val:.2f}s', ha='center', va='bottom', fontsize=9)
             
-            ax5.plot(angles, values, 'o-', linewidth=2, label=display_names[i], color=colors[i])
-            ax5.fill(angles, values, alpha=0.1, color=colors[i])
-        
-        ax5.set_xticks(np.linspace(0, 2 * np.pi, len(categories), endpoint=False))
-        ax5.set_xticklabels(categories, fontsize=8)
-        ax5.set_ylim(0, 1)
-        ax5.set_title('Overall Model Comparison', fontsize=12, fontweight='bold', pad=20)
-        ax5.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
-        
-        # 6. Summary Table
-        ax6 = fig.add_subplot(2, 3, 6)
-        ax6.axis('off')
-        
-        table_data = []
-        headers = ['Model', 'Time(s)', 'Tokens', 'Success%', 'Quality', 'Cost($)']
-        for m in models:
-            table_data.append([
-                metrics[m]["display_name"],
-                f'{metrics[m]["avg_response_time"]:.2f}',
-                f'{metrics[m]["avg_tokens"]:.0f}',
-                f'{metrics[m]["success_rate"]:.0f}%',
-                f'{((metrics[m]["avg_quality"] + metrics[m]["avg_relevance"] + metrics[m]["avg_naturalness"] + metrics[m]["avg_correctness"]) / 4):.1f}',
-                f'{metrics[m]["estimated_cost"]:.4f}',
+            # 2. Token Usage Comparison
+            ax2 = fig.add_subplot(2, 3, 2)
+            token_usage = [metrics[m]["avg_tokens"] for m in models]
+            bars2 = ax2.bar(display_names, token_usage, color=colors)
+            ax2.set_ylabel('Average Tokens Used')
+            ax2.set_title('Token Usage Comparison', fontsize=12, fontweight='bold')
+            ax2.tick_params(axis='x', rotation=45)
+            for bar, val in zip(bars2, token_usage):
+                ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 5, 
+                        f'{val:.0f}', ha='center', va='bottom', fontsize=9)
+            
+            # 3. Success Rate Comparison
+            ax3 = fig.add_subplot(2, 3, 3)
+            success_rates = [metrics[m]["success_rate"] for m in models]
+            bars3 = ax3.bar(display_names, success_rates, color=colors)
+            ax3.set_ylabel('Success Rate (%)')
+            ax3.set_title('Success Rate Comparison', fontsize=12, fontweight='bold')
+            ax3.set_ylim(0, 105)
+            ax3.tick_params(axis='x', rotation=45)
+            for bar, val in zip(bars3, success_rates):
+                ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
+                        f'{val:.0f}%', ha='center', va='bottom', fontsize=9)
+            
+            # 4. Keyword Match Score Comparison
+            ax4 = fig.add_subplot(2, 3, 4)
+            keyword_scores = [metrics[m]["avg_keyword_score"] for m in models]
+            bars4 = ax4.bar(display_names, keyword_scores, color=colors)
+            ax4.set_ylabel('Keyword Match Score (%)')
+            ax4.set_title('Keyword Match Accuracy', fontsize=12, fontweight='bold')
+            ax4.set_ylim(0, 105)
+            ax4.tick_params(axis='x', rotation=45)
+            for bar, val in zip(bars4, keyword_scores):
+                ax4.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
+                        f'{val:.0f}%', ha='center', va='bottom', fontsize=9)
+            
+            # 5. Radar Chart - Quantitative Metrics Only
+            ax5 = fig.add_subplot(2, 3, 5, projection='polar')
+            categories = ['Response\nSpeed', 'Token\nEfficiency', 'Success\nRate', 'Keyword\nMatch']
+            
+            for i, m in enumerate(models):
+                values = [
+                    1 - min(metrics[m]["avg_response_time"] / 15, 1),  # Inverse
+                    1 - min(metrics[m]["avg_tokens"] / 800, 1),  # Inverse
+                    metrics[m]["success_rate"] / 100,
+                    metrics[m]["avg_keyword_score"] / 100,
+                ]
+                
+                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+                values += values[:1]
+                angles += angles[:1]
+                
+                ax5.plot(angles, values, 'o-', linewidth=2, label=display_names[i], color=colors[i])
+                ax5.fill(angles, values, alpha=0.1, color=colors[i])
+            
+            ax5.set_xticks(np.linspace(0, 2 * np.pi, len(categories), endpoint=False))
+            ax5.set_xticklabels(categories, fontsize=8)
+            ax5.set_ylim(0, 1)
+            ax5.set_title('Quantitative Metrics Radar', fontsize=12, fontweight='bold', pad=20)
+            ax5.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
+            
+            # 6. Summary Table (Quantitative Only)
+            ax6 = fig.add_subplot(2, 3, 6)
+            ax6.axis('off')
+            
+            table_data = []
+            headers = ['Model', 'Time(s)', 'Tokens', 'Success%', 'Keywords%', 'Cost($)']
+            for m in models:
+                table_data.append([
+                    metrics[m]["display_name"],
+                    f'{metrics[m]["avg_response_time"]:.2f}',
+                    f'{metrics[m]["avg_tokens"]:.0f}',
+                    f'{metrics[m]["success_rate"]:.0f}%',
+                    f'{metrics[m]["avg_keyword_score"]:.0f}%',
+                    f'{metrics[m]["estimated_cost"]:.4f}',
+                ])
+            
+            table = ax6.table(cellText=table_data, colLabels=headers, 
+                             cellLoc='center', loc='center',
+                             colColours=['#2196F3']*len(headers))
+            table.auto_set_font_size(False)
+            table.set_fontsize(10)
+            table.scale(1.2, 1.5)
+            ax6.set_title('Quantitative Summary', fontsize=12, fontweight='bold', pad=20)
+            
+            plt.suptitle('FPL Graph-RAG LLM Evaluation (Quantitative Metrics)', 
+                        fontsize=16, fontweight='bold', y=1.02)
+        else:
+            # FULL MODE: Include qualitative graphs
+            fig = plt.figure(figsize=(20, 16))
+            
+            # 1. Response Time Comparison
+            ax1 = fig.add_subplot(2, 3, 1)
+            response_times = [metrics[m]["avg_response_time"] for m in models]
+            bars1 = ax1.bar(display_names, response_times, color=colors)
+            ax1.set_ylabel('Average Response Time (seconds)')
+            ax1.set_title('Response Time Comparison', fontsize=12, fontweight='bold')
+            ax1.tick_params(axis='x', rotation=45)
+            for bar, val in zip(bars1, response_times):
+                ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
+                        f'{val:.2f}s', ha='center', va='bottom', fontsize=9)
+            
+            # 2. Token Usage Comparison
+            ax2 = fig.add_subplot(2, 3, 2)
+            token_usage = [metrics[m]["avg_tokens"] for m in models]
+            bars2 = ax2.bar(display_names, token_usage, color=colors)
+            ax2.set_ylabel('Average Tokens Used')
+            ax2.set_title('Token Usage Comparison', fontsize=12, fontweight='bold')
+            ax2.tick_params(axis='x', rotation=45)
+            for bar, val in zip(bars2, token_usage):
+                ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 5, 
+                        f'{val:.0f}', ha='center', va='bottom', fontsize=9)
+            
+            # 3. Success Rate Comparison
+            ax3 = fig.add_subplot(2, 3, 3)
+            success_rates = [metrics[m]["success_rate"] for m in models]
+            bars3 = ax3.bar(display_names, success_rates, color=colors)
+            ax3.set_ylabel('Success Rate (%)')
+            ax3.set_title('Success Rate Comparison', fontsize=12, fontweight='bold')
+            ax3.set_ylim(0, 105)
+            ax3.tick_params(axis='x', rotation=45)
+            for bar, val in zip(bars3, success_rates):
+                ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1, 
+                        f'{val:.0f}%', ha='center', va='bottom', fontsize=9)
+            
+            # 4. Qualitative Scores Heatmap
+            ax4 = fig.add_subplot(2, 3, 4)
+            qual_categories = ['Quality', 'Relevance', 'Naturalness', 'Correctness']
+            qual_data = np.array([
+                [metrics[m]["avg_quality"], metrics[m]["avg_relevance"], 
+                 metrics[m]["avg_naturalness"], metrics[m]["avg_correctness"]]
+                for m in models
             ])
+            im = ax4.imshow(qual_data, cmap='RdYlGn', aspect='auto', vmin=1, vmax=5)
+            ax4.set_xticks(np.arange(len(qual_categories)))
+            ax4.set_yticks(np.arange(len(display_names)))
+            ax4.set_xticklabels(qual_categories)
+            ax4.set_yticklabels(display_names)
+            ax4.set_title('Qualitative Scores (1-5)', fontsize=12, fontweight='bold')
+            
+            for i in range(len(display_names)):
+                for j in range(len(qual_categories)):
+                    text = ax4.text(j, i, f'{qual_data[i, j]:.1f}',
+                                   ha="center", va="center", color="black", fontsize=10)
+            
+            plt.colorbar(im, ax=ax4, shrink=0.8)
+            
+            # 5. Radar Chart - Full Comparison
+            ax5 = fig.add_subplot(2, 3, 5, projection='polar')
+            categories = ['Response\nSpeed', 'Token\nEfficiency', 'Success\nRate', 
+                         'Keyword\nMatch', 'Overall\nQuality']
+            
+            for i, m in enumerate(models):
+                values = [
+                    1 - min(metrics[m]["avg_response_time"] / 10, 1),
+                    1 - min(metrics[m]["avg_tokens"] / 500, 1),
+                    metrics[m]["success_rate"] / 100,
+                    metrics[m]["avg_keyword_score"] / 100,
+                    (metrics[m]["avg_quality"] + metrics[m]["avg_relevance"] + 
+                     metrics[m]["avg_naturalness"] + metrics[m]["avg_correctness"]) / 20,
+                ]
+                
+                angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+                values += values[:1]
+                angles += angles[:1]
+                
+                ax5.plot(angles, values, 'o-', linewidth=2, label=display_names[i], color=colors[i])
+                ax5.fill(angles, values, alpha=0.1, color=colors[i])
+            
+            ax5.set_xticks(np.linspace(0, 2 * np.pi, len(categories), endpoint=False))
+            ax5.set_xticklabels(categories, fontsize=8)
+            ax5.set_ylim(0, 1)
+            ax5.set_title('Overall Model Comparison', fontsize=12, fontweight='bold', pad=20)
+            ax5.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=8)
+            
+            # 6. Summary Table
+            ax6 = fig.add_subplot(2, 3, 6)
+            ax6.axis('off')
+            
+            table_data = []
+            headers = ['Model', 'Time(s)', 'Tokens', 'Success%', 'Quality', 'Cost($)']
+            for m in models:
+                table_data.append([
+                    metrics[m]["display_name"],
+                    f'{metrics[m]["avg_response_time"]:.2f}',
+                    f'{metrics[m]["avg_tokens"]:.0f}',
+                    f'{metrics[m]["success_rate"]:.0f}%',
+                    f'{((metrics[m]["avg_quality"] + metrics[m]["avg_relevance"] + metrics[m]["avg_naturalness"] + metrics[m]["avg_correctness"]) / 4):.1f}',
+                    f'{metrics[m]["estimated_cost"]:.4f}',
+                ])
+            
+            table = ax6.table(cellText=table_data, colLabels=headers, 
+                             cellLoc='center', loc='center',
+                             colColours=['#4CAF50']*len(headers))
+            table.auto_set_font_size(False)
+            table.set_fontsize(10)
+            table.scale(1.2, 1.5)
+            ax6.set_title('Summary Table', fontsize=12, fontweight='bold', pad=20)
+            
+            plt.suptitle('FPL Graph-RAG LLM Model Evaluation Results', 
+                        fontsize=16, fontweight='bold', y=1.02)
         
-        table = ax6.table(cellText=table_data, colLabels=headers, 
-                         cellLoc='center', loc='center',
-                         colColours=['#4CAF50']*len(headers))
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1.2, 1.5)
-        ax6.set_title('Summary Table', fontsize=12, fontweight='bold', pad=20)
-        
-        plt.suptitle('FPL Graph-RAG LLM Model Evaluation Results', 
-                    fontsize=16, fontweight='bold', y=1.02)
         plt.tight_layout()
         
         # Save the figure
@@ -766,62 +867,186 @@ Do not include any explanation, just the JSON object."""
         self._create_individual_charts(metrics, models, display_names, colors)
     
     def _create_individual_charts(self, metrics, models, display_names, colors):
-        """Create individual detailed charts."""
+        """Create individual detailed charts based on evaluation mode."""
         
-        # Detailed Qualitative Comparison
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-        qual_metrics = ['avg_quality', 'avg_relevance', 'avg_naturalness', 'avg_correctness']
-        qual_titles = ['Quality Score', 'Relevance Score', 'Naturalness Score', 'Correctness Score']
-        
-        for ax, metric, title in zip(axes.flat, qual_metrics, qual_titles):
-            values = [metrics[m][metric] for m in models]
-            bars = ax.bar(display_names, values, color=colors)
-            ax.set_ylabel('Score (1-5)')
-            ax.set_title(title, fontsize=11, fontweight='bold')
-            ax.set_ylim(0, 5.5)
-            ax.tick_params(axis='x', rotation=45)
-            ax.axhline(y=3, color='gray', linestyle='--', alpha=0.5, label='Neutral (3)')
-            for bar, val in zip(bars, values):
-                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
-                       f'{val:.2f}', ha='center', va='bottom', fontsize=9)
-        
-        plt.suptitle('Qualitative Metrics Breakdown', fontsize=14, fontweight='bold')
-        plt.tight_layout()
-        output_path = os.path.join(self.output_dir, 'qualitative_breakdown.png')
-        plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
-        plt.close()
-        print(f"✓ Qualitative breakdown saved to: {output_path}")
-        
-        # Per-Test-Case Performance
-        fig, ax = plt.subplots(figsize=(14, 8))
-        test_cases = list(set(r.test_case_id for r in self.results))
-        test_cases.sort()
-        
-        x = np.arange(len(test_cases))
-        width = 0.15
-        
-        for i, m in enumerate(models):
-            model_results = [r for r in self.results if r.model_name == m]
-            keyword_scores = []
-            for tc in test_cases:
-                tc_result = next((r for r in model_results if r.test_case_id == tc), None)
-                keyword_scores.append(tc_result.keyword_match_score * 100 if tc_result else 0)
+        if self.quantitative_only:
+            # QUANTITATIVE CHARTS
             
-            ax.bar(x + i * width, keyword_scores, width, label=display_names[i], color=colors[i])
-        
-        ax.set_xlabel('Test Case')
-        ax.set_ylabel('Keyword Match Score (%)')
-        ax.set_title('Per-Test-Case Keyword Match Performance', fontsize=12, fontweight='bold')
-        ax.set_xticks(x + width * (len(models) - 1) / 2)
-        ax.set_xticklabels(test_cases, rotation=45)
-        ax.legend()
-        ax.set_ylim(0, 110)
-        
-        plt.tight_layout()
-        output_path = os.path.join(self.output_dir, 'per_testcase_performance.png')
-        plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
-        plt.close()
-        print(f"✓ Per-test-case performance saved to: {output_path}")
+            # 1. Response Time per Test Case
+            fig, ax = plt.subplots(figsize=(14, 8))
+            test_cases = list(set(r.test_case_id for r in self.results))
+            test_cases.sort()
+            
+            x = np.arange(len(test_cases))
+            width = 0.15
+            
+            for i, m in enumerate(models):
+                model_results = [r for r in self.results if r.model_name == m]
+                response_times = []
+                for tc in test_cases:
+                    tc_result = next((r for r in model_results if r.test_case_id == tc), None)
+                    response_times.append(tc_result.response_time if tc_result else 0)
+                
+                ax.bar(x + i * width, response_times, width, label=display_names[i], color=colors[i])
+            
+            ax.set_xlabel('Test Case')
+            ax.set_ylabel('Response Time (seconds)')
+            ax.set_title('Response Time per Test Case', fontsize=12, fontweight='bold')
+            ax.set_xticks(x + width * (len(models) - 1) / 2)
+            ax.set_xticklabels(test_cases, rotation=45)
+            ax.legend()
+            
+            plt.tight_layout()
+            output_path = os.path.join(self.output_dir, 'response_time_per_testcase.png')
+            plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
+            plt.close()
+            print(f"✓ Response time breakdown saved to: {output_path}")
+            
+            # 2. Token Usage per Test Case
+            fig, ax = plt.subplots(figsize=(14, 8))
+            
+            for i, m in enumerate(models):
+                model_results = [r for r in self.results if r.model_name == m]
+                token_counts = []
+                for tc in test_cases:
+                    tc_result = next((r for r in model_results if r.test_case_id == tc), None)
+                    token_counts.append(tc_result.tokens_used if tc_result else 0)
+                
+                ax.bar(x + i * width, token_counts, width, label=display_names[i], color=colors[i])
+            
+            ax.set_xlabel('Test Case')
+            ax.set_ylabel('Tokens Used')
+            ax.set_title('Token Usage per Test Case', fontsize=12, fontweight='bold')
+            ax.set_xticks(x + width * (len(models) - 1) / 2)
+            ax.set_xticklabels(test_cases, rotation=45)
+            ax.legend()
+            
+            plt.tight_layout()
+            output_path = os.path.join(self.output_dir, 'tokens_per_testcase.png')
+            plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
+            plt.close()
+            print(f"✓ Token usage breakdown saved to: {output_path}")
+            
+            # 3. Keyword Match per Test Case
+            fig, ax = plt.subplots(figsize=(14, 8))
+            
+            for i, m in enumerate(models):
+                model_results = [r for r in self.results if r.model_name == m]
+                keyword_scores = []
+                for tc in test_cases:
+                    tc_result = next((r for r in model_results if r.test_case_id == tc), None)
+                    keyword_scores.append(tc_result.keyword_match_score * 100 if tc_result else 0)
+                
+                ax.bar(x + i * width, keyword_scores, width, label=display_names[i], color=colors[i])
+            
+            ax.set_xlabel('Test Case')
+            ax.set_ylabel('Keyword Match Score (%)')
+            ax.set_title('Keyword Match per Test Case', fontsize=12, fontweight='bold')
+            ax.set_xticks(x + width * (len(models) - 1) / 2)
+            ax.set_xticklabels(test_cases, rotation=45)
+            ax.legend()
+            ax.set_ylim(0, 110)
+            
+            plt.tight_layout()
+            output_path = os.path.join(self.output_dir, 'keyword_match_per_testcase.png')
+            plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
+            plt.close()
+            print(f"✓ Keyword match breakdown saved to: {output_path}")
+            
+            # 4. Keyword Match by Category
+            fig, ax = plt.subplots(figsize=(12, 6))
+            
+            # Group test cases by category
+            test_cases_list = self.get_test_cases()
+            categories = list(set(tc.category for tc in test_cases_list))
+            categories.sort()
+            
+            category_scores = {m: [] for m in models}
+            for cat in categories:
+                cat_tests = [tc.id for tc in test_cases_list if tc.category == cat]
+                for m in models:
+                    model_results = [r for r in self.results if r.model_name == m and r.test_case_id in cat_tests]
+                    if model_results:
+                        avg_score = np.mean([r.keyword_match_score * 100 for r in model_results])
+                    else:
+                        avg_score = 0
+                    category_scores[m].append(avg_score)
+            
+            x = np.arange(len(categories))
+            for i, m in enumerate(models):
+                ax.bar(x + i * width, category_scores[m], width, label=display_names[i], color=colors[i])
+            
+            ax.set_xlabel('Category')
+            ax.set_ylabel('Average Keyword Match (%)')
+            ax.set_title('Keyword Match by Query Category', fontsize=12, fontweight='bold')
+            ax.set_xticks(x + width * (len(models) - 1) / 2)
+            ax.set_xticklabels(categories, rotation=45, ha='right')
+            ax.legend()
+            ax.set_ylim(0, 110)
+            
+            plt.tight_layout()
+            output_path = os.path.join(self.output_dir, 'keyword_by_category.png')
+            plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
+            plt.close()
+            print(f"✓ Category performance saved to: {output_path}")
+            
+        else:
+            # QUALITATIVE CHARTS (original)
+            
+            # Detailed Qualitative Comparison
+            fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+            qual_metrics = ['avg_quality', 'avg_relevance', 'avg_naturalness', 'avg_correctness']
+            qual_titles = ['Quality Score', 'Relevance Score', 'Naturalness Score', 'Correctness Score']
+            
+            for ax, metric, title in zip(axes.flat, qual_metrics, qual_titles):
+                values = [metrics[m][metric] for m in models]
+                bars = ax.bar(display_names, values, color=colors)
+                ax.set_ylabel('Score (1-5)')
+                ax.set_title(title, fontsize=11, fontweight='bold')
+                ax.set_ylim(0, 5.5)
+                ax.tick_params(axis='x', rotation=45)
+                ax.axhline(y=3, color='gray', linestyle='--', alpha=0.5, label='Neutral (3)')
+                for bar, val in zip(bars, values):
+                    ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
+                           f'{val:.2f}', ha='center', va='bottom', fontsize=9)
+            
+            plt.suptitle('Qualitative Metrics Breakdown', fontsize=14, fontweight='bold')
+            plt.tight_layout()
+            output_path = os.path.join(self.output_dir, 'qualitative_breakdown.png')
+            plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
+            plt.close()
+            print(f"✓ Qualitative breakdown saved to: {output_path}")
+            
+            # Per-Test-Case Performance
+            fig, ax = plt.subplots(figsize=(14, 8))
+            test_cases = list(set(r.test_case_id for r in self.results))
+            test_cases.sort()
+            
+            x = np.arange(len(test_cases))
+            width = 0.15
+            
+            for i, m in enumerate(models):
+                model_results = [r for r in self.results if r.model_name == m]
+                keyword_scores = []
+                for tc in test_cases:
+                    tc_result = next((r for r in model_results if r.test_case_id == tc), None)
+                    keyword_scores.append(tc_result.keyword_match_score * 100 if tc_result else 0)
+                
+                ax.bar(x + i * width, keyword_scores, width, label=display_names[i], color=colors[i])
+            
+            ax.set_xlabel('Test Case')
+            ax.set_ylabel('Keyword Match Score (%)')
+            ax.set_title('Per-Test-Case Keyword Match Performance', fontsize=12, fontweight='bold')
+            ax.set_xticks(x + width * (len(models) - 1) / 2)
+            ax.set_xticklabels(test_cases, rotation=45)
+            ax.legend()
+            ax.set_ylim(0, 110)
+            
+            plt.tight_layout()
+            output_path = os.path.join(self.output_dir, 'per_testcase_performance.png')
+            plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
+            plt.close()
+            print(f"✓ Per-test-case performance saved to: {output_path}")
     
     def save_results(self, metrics: Dict[str, Dict[str, Any]]):
         """Save evaluation results to JSON."""
