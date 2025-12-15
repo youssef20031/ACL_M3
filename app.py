@@ -85,7 +85,7 @@ def get_query_type_for_intent(intent: str) -> str:
     intent_to_query = {
         "player_stats": "get_player_season_stats",
         "player_comparison": "compare_players",
-        "player_search": "get_player_season_stats",
+        "player_search": "search_players_by_name",
         "top_scorers": "get_top_scorers_by_season",
         "top_assisters": "get_top_assisters_by_season",
         "top_points": "get_top_points_by_position",
@@ -561,6 +561,18 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                                 params["season"] = "2022-23"
                             if "gameweek" not in params:
                                 params["gameweek"] = 1
+                        
+                        # Special handling for top_scorers/top_assisters - route to position-aware query with sort_by
+                        if query_method in ["get_top_scorers_by_season", "get_top_assisters_by_season"]:
+                            query_method = "get_top_points_by_position"
+                            # Set appropriate sort_by based on original intent
+                            if intent_result == "top_scorers":
+                                params["sort_by"] = "goals"
+                            elif intent_result == "top_assisters":
+                                params["sort_by"] = "assists"
+                            else:
+                                params["sort_by"] = "total_points"
+
                         
                         # Get the query method and filter params to only those it accepts
                         method = getattr(CypherQueries, query_method)
