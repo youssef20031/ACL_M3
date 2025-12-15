@@ -3,7 +3,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from preprocessing.entity_extractor import EntityExtractor
+from input_preprocessing.entity_extractor import EntityExtractor
 
 # Test the entity extraction
 extractor = EntityExtractor()

@@ -1,5 +1,5 @@
 
-from preprocessing.intent_classifier import IntentClassifier, Intent
+from input_preprocessing.intent_classifier import IntentClassifier, Intent
 
 def test_intent():
     classifier = IntentClassifier()

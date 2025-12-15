@@ -6,8 +6,8 @@ import inspect
 # Add parent directory to path to import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from preprocessing.intent_classifier import IntentClassifier, Intent
-from preprocessing.entity_extractor import EntityExtractor
+from input_preprocessing.intent_classifier import IntentClassifier, Intent
+from input_preprocessing.entity_extractor import EntityExtractor
 from graph.queries import CypherQueries
 
 class TestAppPipeline(unittest.TestCase):
