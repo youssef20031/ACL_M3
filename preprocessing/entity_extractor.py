@@ -406,15 +406,38 @@ class EntityExtractor:
         """
         Extract player names from query using spaCy NER.
         Uses known players list and spaCy's PERSON entities.
+        Supports partial matching (e.g., "Salah" matches "Mohamed Salah").
         """
         players = []
         text_lower = doc.text.lower()
         
-        # First, check against known players
+        # First, check against known players (exact full name match)
         if self.known_players:
             for player in self.known_players:
                 if player.lower() in text_lower:
                     players.append(player)
+        
+        # If no exact match, try partial matching (last name or common nicknames)
+        if not players and self.known_players:
+            query_words = set(text_lower.split())
+            # Common words to exclude from matching
+            common_words = {
+                'the', 'a', 'an', 'in', 'on', 'at', 'for', 'to', 'of', 'and', 'or',
+                'how', 'did', 'do', 'does', 'was', 'were', 'is', 'are', 'what', 'who',
+                'most', 'best', 'top', 'all', 'get', 'show', 'find', 'gameweek', 'season',
+                'stats', 'points', 'goals', 'assists', 'scored', 'performance'
+            }
+            query_words = query_words - common_words
+            
+            for player in self.known_players:
+                player_parts = player.lower().split()
+                # Check if any part of the player name (especially last name) matches query words
+                for part in player_parts:
+                    if len(part) >= 4 and part in query_words:  # Minimum 4 chars to avoid false positives
+                        players.append(player)
+                        break
+                if players:
+                    break  # Found a match, stop searching
         
         # If no known players found, use spaCy's PERSON entity recognition
         if not players:

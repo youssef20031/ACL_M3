@@ -546,8 +546,10 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                         missing_params = [p for p in required_params if p not in params]
                         
                         if missing_params:
-                            # Missing required parameters - use fallback
+                            # Missing required parameters - use fallback with gameweek/season if available
                             query, query_params = CypherQueries.get_top_players_all_positions(
+                                season=params.get("season"),
+                                gameweek=params.get("gameweek"),
                                 limit_per_position=5
                             )
                             results = st.session_state.graph_conn.execute_query(query, query_params)
@@ -626,8 +628,10 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                     
                     # If no results or no query method, try a fallback
                     if not results:
-                        # Fallback to top players by all positions
+                        # Fallback to top players by all positions with gameweek/season if available
                         query, query_params = CypherQueries.get_top_players_all_positions(
+                            season=params.get("season"),
+                            gameweek=params.get("gameweek"),
                             limit_per_position=5
                         )
                         results = st.session_state.graph_conn.execute_query(query, query_params)

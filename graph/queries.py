@@ -79,7 +79,7 @@ class CypherQueries:
             return query, {"limit": limit}
     
     @staticmethod
-    def get_top_points_by_position(position: str = None, season: str = None, sort_by: str = "total_points", limit: int = 10) -> tuple:
+    def get_top_points_by_position(position: str = None, season: str = None, gameweek: int = None, sort_by: str = "total_points", limit: int = 10) -> tuple:
         """
         Query 3: Get top scoring players by position in a season or all seasons.
         Supports dynamic sorting by the following metrics:
@@ -91,6 +91,7 @@ class CypherQueries:
         Args:
             position: Position code (GK, DEF, MID, FWD) - if None, returns top 10 overall
             season: Season ID - if None, returns from all seasons
+            gameweek: Gameweek number (1-38) - if specified, filter to that specific gameweek
             sort_by: Metric to sort by (e.g., 'goals', 'assists', 'bonus').
             limit: Number of results
         """
@@ -106,12 +107,18 @@ class CypherQueries:
         }
         sort_field = valid_sorts.get(sort_by, "total_points")
 
+        # Build gameweek filter
+        if gameweek:
+            gw_match = "MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek {number: $gameweek})"
+        else:
+            gw_match = "MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)"
+        
         season_filter = "MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})" if season else "MATCH (gw)-[:IN_SEASON]->(s:Season)"
         
         if position and position.upper() in ['GK', 'DEF', 'MID', 'FWD']:
             query = f"""
             MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: $position}})
-            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+            {gw_match}
             {season_filter}
             WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
                  SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
@@ -122,12 +129,14 @@ class CypherQueries:
             params = {"position": position.upper(), "limit": limit}
             if season:
                 params["season"] = season
+            if gameweek:
+                params["gameweek"] = gameweek
             return query, params
         else:
             # Return top players overall with their positions
             query = f"""
             MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
-            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+            {gw_match}
             {season_filter}
             WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
                  SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
@@ -138,19 +147,32 @@ class CypherQueries:
             params = {"limit": limit}
             if season:
                 params["season"] = season
+            if gameweek:
+                params["gameweek"] = gameweek
             return query, params
 
     @staticmethod
-    def get_top_players_all_positions(season: str = None, limit_per_position: int = 5) -> tuple:
+    def get_top_players_all_positions(season: str = None, gameweek: int = None, limit_per_position: int = 5) -> tuple:
         """
         Query 3b: Get top scoring players for ALL positions in a season or all seasons.
         Uses UNION to combine results from each position.
+        
+        Args:
+            season: Season ID - if None, returns from all seasons
+            gameweek: Gameweek number (1-38) - if specified, filter to that specific gameweek
+            limit_per_position: Number of results per position
         """
+        # Build gameweek filter clause
+        if gameweek:
+            gw_match = "MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek {number: $gameweek})"
+        else:
+            gw_match = "MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)"
+        
         season_filter = "MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})" if season else "MATCH (gw)-[:IN_SEASON]->(s:Season)"
         
         query = f"""
         MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'GK'}})
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+        {gw_match}
         {season_filter}
         WITH 'GK' AS position, p.name AS player_name, 
              SUM(r.total_points) AS total_points, 
@@ -164,7 +186,7 @@ class CypherQueries:
         UNION ALL
         
         MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'DEF'}})
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+        {gw_match}
         {season_filter}
         WITH 'DEF' AS position, p.name AS player_name, 
              SUM(r.total_points) AS total_points, 
@@ -178,7 +200,7 @@ class CypherQueries:
         UNION ALL
         
         MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'MID'}})
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+        {gw_match}
         {season_filter}
         WITH 'MID' AS position, p.name AS player_name, 
              SUM(r.total_points) AS total_points, 
@@ -192,7 +214,7 @@ class CypherQueries:
         UNION ALL
         
         MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'FWD'}})
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)
+        {gw_match}
         {season_filter}
         WITH 'FWD' AS position, p.name AS player_name, 
              SUM(r.total_points) AS total_points, 
@@ -206,6 +228,8 @@ class CypherQueries:
         params = {"limit_per_position": limit_per_position}
         if season:
             params["season"] = season
+        if gameweek:
+            params["gameweek"] = gameweek
         return query, params
     
     @staticmethod
