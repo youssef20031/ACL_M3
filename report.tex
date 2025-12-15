@@ -21,49 +21,140 @@
 \usepackage{multirow}
 \usetikzlibrary{shapes.geometric, arrows, positioning, fit}
 
-\geometry{a4paper, margin=1in}
+% Enhanced typography
+\usepackage{palatino}           % Professional serif font
+\usepackage{microtype}          % Improved text spacing
+\usepackage{parskip}            % Better paragraph spacing
+\usepackage{fancyhdr}           % Custom headers/footers
+\usepackage{titlesec}           % Custom section formatting
+\usepackage{tocloft}            % Table of contents styling
+\usepackage{setspace}           % Line spacing control
+\usepackage{colortbl}           % Colored table cells
+\usepackage{array}              % Enhanced table columns
+
+\geometry{a4paper, margin=1in, headheight=14pt}
 \pgfplotsset{compat=1.18}
 
-% Code listing settings
-\definecolor{codegreen}{rgb}{0,0.6,0}
-\definecolor{codegray}{rgb}{0.5,0.5,0.5}
-\definecolor{codepurple}{rgb}{0.58,0,0.82}
-\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
-\definecolor{deepblue}{rgb}{0.1,0.2,0.4}
+% Color palette - Professional blue theme
+\definecolor{deepblue}{rgb}{0.1,0.2,0.5}
+\definecolor{lightblue}{rgb}{0.93,0.95,0.98}
+\definecolor{accentblue}{rgb}{0.2,0.4,0.7}
+\definecolor{darkgray}{rgb}{0.25,0.25,0.25}
 \definecolor{lightgray}{rgb}{0.9,0.9,0.9}
+\definecolor{tableheader}{rgb}{0.2,0.3,0.5}
+\definecolor{tablerow}{rgb}{0.95,0.96,0.98}
 
+% Code colors - Light theme with vibrant syntax highlighting
+\definecolor{codebackground}{HTML}{FFFFFF}       % White background
+\definecolor{codekeyword}{HTML}{0000FF}          % Blue keywords
+\definecolor{codestring}{HTML}{A31515}           % Red strings
+\definecolor{codecomment}{HTML}{008000}          % Green comments
+\definecolor{codenumber}{HTML}{098658}           % Teal numbers
+\definecolor{codefunction}{HTML}{795E26}         % Brown functions
+\definecolor{codetype}{HTML}{267F99}             % Teal types
+\definecolor{codetext}{HTML}{000000}             % Black text
+\definecolor{codelinenumber}{HTML}{6E7681}       % Gray line numbers
+\definecolor{codeframe}{HTML}{D0D7DE}            % Light gray frame
+
+% Enhanced code listing style - Light theme
 \lstdefinestyle{mystyle}{
-    backgroundcolor=\color{backcolour},   
-    commentstyle=\color{codegreen},
-    keywordstyle=\color{magenta},
-    numberstyle=\tiny\color{codegray},
-    stringstyle=\color{codepurple},
-    basicstyle=\ttfamily\footnotesize,
-    breakatwhitespace=false,         
-    breaklines=true,                 
-    captionpos=b,                    
-    keepspaces=true,                 
-    numbers=left,                    
-    numbersep=5pt,                  
-    showspaces=false,                
+    backgroundcolor=\color{codebackground},
+    commentstyle=\color{codecomment}\itshape,
+    keywordstyle=\color{codekeyword}\bfseries,
+    numberstyle=\tiny\color{codelinenumber},
+    stringstyle=\color{codestring},
+    basicstyle=\ttfamily\small\color{codetext},
+    breakatwhitespace=false,
+    breaklines=true,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=10pt,
+    showspaces=false,
     showstringspaces=false,
-    showtabs=false,                  
-    tabsize=2
+    showtabs=false,
+    tabsize=2,
+    frame=single,
+    framerule=0.8pt,
+    rulecolor=\color{codeframe},
+    xleftmargin=18pt,
+    framexleftmargin=18pt,
+    framexrightmargin=0pt,
+    framextopmargin=3pt,
+    framexbottommargin=3pt,
+    aboveskip=12pt,
+    belowskip=8pt
 }
 
 \lstset{style=mystyle}
 
-% Hyperref setup
+% Header and footer styling
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{darkgray}{\leftmark}}
+\fancyhead[R]{\small\textcolor{darkgray}{FPL FantasyTrivia}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Section title styling
+\titleformat{\section}
+    {\Large\bfseries\color{deepblue}}
+    {\thesection}{1em}{}
+    [\vspace{-0.5em}\textcolor{accentblue}{\titlerule[1pt]}]
+\titleformat{\subsection}
+    {\large\bfseries\color{deepblue}}
+    {\thesubsection}{1em}{}
+\titleformat{\subsubsection}
+    {\normalsize\bfseries\color{darkgray}}
+    {\thesubsubsection}{1em}{}
+
+% Table of contents styling
+\renewcommand{\cftsecfont}{\bfseries\color{deepblue}}
+\renewcommand{\cftsubsecfont}{\color{darkgray}}
+\renewcommand{\cftsecpagefont}{\bfseries\color{deepblue}}
+\setlength{\cftbeforesecskip}{6pt}
+
+% Caption styling
+\captionsetup{
+    font=small,
+    labelfont={bf,color=deepblue},
+    textfont={color=darkgray},
+    margin=20pt
+}
+
+% Hyperref setup - Professional look
 \hypersetup{
     colorlinks=true,
     linkcolor=deepblue,
-    citecolor=deepblue,
-    urlcolor=blue
+    citecolor=accentblue,
+    urlcolor=accentblue,
+    pdfborder={0 0 0}
 }
 
-\title{\textbf{FPL FantasyTrivia: A Graph-RAG System for Fantasy Premier League Analytics}\\[0.5em]
-\large Advanced Conversational AI for Sports Data Intelligence}
-\author{
+% Line spacing
+\setstretch{1.15}
+
+% Custom abstract environment
+\renewenvironment{abstract}{%
+    \begin{center}
+    \textbf{\large\color{deepblue}Abstract}
+    \end{center}
+    \begin{quotation}
+    \small
+}{%
+    \end{quotation}
+}
+
+\title{%
+    \vspace{-1cm}
+    \textcolor{deepblue}{\rule{\textwidth}{2pt}}\\[0.8em]
+    \textbf{\LARGE FPL FantasyTrivia}\\[0.3em]
+    \textbf{\Large A Graph-RAG System for Fantasy Premier League Analytics}\\[0.5em]
+    \textcolor{deepblue}{\rule{\textwidth}{1pt}}\\[1em]
+    \large\textit{Advanced Conversational AI for Sports Data Intelligence}
+}
+\author{%
     \textbf{Project Report}\\[0.5em]
     \textit{Natural Language Processing \& Knowledge Graphs}
 }
@@ -72,10 +163,12 @@
 \begin{document}
 
 \maketitle
+\newpage
 
 \begin{abstract}
-This report presents the design, implementation, and evaluation of \textbf{FPL FantasyTrivia}, a sophisticated Retrieval-Augmented Generation (RAG) system specifically engineered for Fantasy Premier League (FPL) analytics. The system integrates a Neo4j knowledge graph containing comprehensive football statistics with state-of-the-art Large Language Models (LLMs) through a novel hybrid retrieval architecture. By synergistically combining parameterized Cypher queries for structured data retrieval with semantic embedding-based search using Sentence Transformers, the system delivers accurate, context-aware responses to diverse user queries. Our architecture supports multiple retrieval strategies---Baseline, Embeddings, and Hybrid---enabling flexible trade-offs between precision and semantic understanding. The system demonstrates robust performance across statistical analysis, player comparisons, transfer recommendations, and interactive trivia generation. Comprehensive evaluation across three LLM models (Gemma-2-2b, Mistral-7B, and Llama-3.1-8B) validates the effectiveness of our approach in grounding LLM responses with verified knowledge graph data.
+This report presents the design, implementation, and evaluation of \textbf{FPL FantasyTrivia}, a sophisticated Retrieval-Augmented Generation (RAG) system specifically engineered for Fantasy Premier League (FPL) analytics. The system integrates a Neo4j knowledge graph containing comprehensive football statistics with state-of-the-art Large Language Models (LLMs) through a novel hybrid retrieval architecture. By synergistically combining parameterized Cypher queries for structured data retrieval with semantic embedding-based search using Sentence Transformers, the system delivers accurate, context-aware responses to diverse user queries. Our architecture supports multiple retrieval strategies---Baseline, Embeddings, and Hybrid---enabling flexible trade-offs between precision and semantic understanding. The system demonstrates robust performance across statistical analysis, player comparisons, transfer recommendations, and interactive trivia generation. Comprehensive evaluation across five LLM models (Gemma-2-2b, Mistral-7B, Llama-3.1-8B, Zephyr-7B, and Qwen-2.5-72B) validates the effectiveness of our approach in grounding LLM responses with verified knowledge graph data.
 \end{abstract}
+\newpage
 
 \tableofcontents
 \newpage
@@ -114,38 +207,65 @@ The FPL FantasyTrivia system follows a modular, layered architecture designed fo
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
-    node distance=1.5cm and 2cm,
-    box/.style={rectangle, draw=deepblue, thick, fill=lightgray, minimum width=3cm, minimum height=1cm, text centered, rounded corners},
-    arrow/.style={->, thick, >=stealth}
+    box/.style={
+        rectangle, 
+        draw=blue!50!black, 
+        thick, 
+        fill=blue!10, 
+        minimum width=3cm, 
+        minimum height=1cm, 
+        align=center,
+        rounded corners=3pt, 
+        font=\small
+    },
+    arrow/.style={
+        ->, 
+        thick, 
+        >=stealth,
+        draw=blue!50!black
+    }
 ]
-    % User Interface Layer
-    \node[box] (ui) {Streamlit UI\\(\texttt{app.py})};
+
+    % Layer 1: User Interface (top center)
+    \node[box] at (0, 0) (ui) {Streamlit UI\\(\texttt{app.py})};
     
-    % NLU Layer
-    \node[box, below left=of ui] (intent) {Intent Classifier};
-    \node[box, below right=of ui] (entity) {Entity Extractor};
+    % Layer 2: NLU Processing (both receive the query)
+    \node[box] at (-3, -2.5) (intent) {Intent Classifier};
+    \node[box] at (3, -2.5) (entity) {Entity Extractor};
     
-    % Retrieval Layer
-    \node[box, below=of intent] (cypher) {Cypher Queries};
-    \node[box, below=of entity] (embed) {Embedding Manager};
+    % Layer 3: Query Construction
+    \node[box] at (0, -5) (cypher) {Cypher Query\\Builder};
+    \node[box] at (5, -5) (embed) {Embedding\\Manager};
     
-    % Data Layer
-    \node[box, below=3cm of ui] (neo4j) {Neo4j Knowledge\\Graph};
-    \node[box, right=of neo4j] (vector) {Vector Store\\(In-Memory)};
+    % Layer 4: Data Stores
+    \node[box] at (-2, -7.5) (neo4j) {Neo4j Knowledge\\Graph};
+    \node[box] at (4, -7.5) (vector) {Vector Store\\(In-Memory)};
     
-    % LLM Layer
-    \node[box, below=of neo4j] (llm) {LLM Manager\\(HuggingFace)};
+    % Layer 5: LLM (bottom center)
+    \node[box] at (1, -10) (llm) {LLM Manager\\(HuggingFace)};
+
+    % Arrows: UI sends query to BOTH NLU components
+    \draw[arrow] (ui.south) -- ++(0,-0.4) -| (intent.north);
+    \draw[arrow] (ui.south) -- ++(0,-0.4) -| (entity.north);
     
-    % Arrows
-    \draw[arrow] (ui) -- (intent);
-    \draw[arrow] (ui) -- (entity);
-    \draw[arrow] (intent) -- (cypher);
-    \draw[arrow] (entity) -- (embed);
-    \draw[arrow] (cypher) -- (neo4j);
-    \draw[arrow] (embed) -- (vector);
-    \draw[arrow] (neo4j) -- (llm);
-    \draw[arrow] (vector) -- (llm);
-    \draw[arrow] (llm) -- (ui);
+    % Intent determines WHICH query to run
+    \draw[arrow] (intent.south) -- ++(0,-0.5) -| node[pos=0.75, right, font=\tiny] {query type} (cypher.north west);
+    
+    % Entity provides PARAMETERS for query and embeddings
+    \draw[arrow] (entity.south) -- ++(0,-0.3) -| node[pos=0.75, left, font=\tiny] {params} (cypher.north east);
+    \draw[arrow] (entity.south) -- ++(0,-0.3) -| node[pos=0.75, left, font=\tiny] {search} (embed.north);
+    
+    % Query execution to data stores
+    \draw[arrow] (cypher.south) -- (neo4j.north);
+    \draw[arrow] (embed.south) -- (vector.north);
+    
+    % Data Stores to LLM (context)
+    \draw[arrow] (neo4j.south) -- ++(0,-0.4) -| node[pos=0.6, below, font=\tiny] {KG context} (llm.north west);
+    \draw[arrow] (vector.south) -- ++(0,-0.4) -| node[pos=0.6, below, font=\tiny] {embed context} (llm.north east);
+    
+    % Response arrow (dashed): LLM back to UI
+    \draw[arrow, dashed] (llm.west) -- ++(-4.5,0) |- node[pos=0.25, left, font=\tiny] {response} (ui.west);
+
 \end{tikzpicture}
 \caption{High-level system architecture showing data flow from user query to LLM response}
 \label{fig:architecture}
@@ -441,6 +561,8 @@ The \texttt{LLMManager} integrates with HuggingFace's Inference API to provide a
 Gemma-2-2b-it & 2B & Lightweight, fast inference, Google's efficient architecture \\
 Mistral-7B-Instruct & 7B & Strong instruction following, balanced performance \\
 Llama-3.1-8B-Instruct & 8B & High quality, Meta's state-of-the-art \\
+Zephyr-7B-Beta & 7B & Fine-tuned Mistral, high accuracy, verbose outputs \\
+Qwen-2.5-72B-Instruct & 72B & Alibaba's large model, strong reasoning capabilities \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -680,12 +802,107 @@ Evaluation was conducted across 15+ test cases covering all major query types. R
     \item \texttt{per\_testcase\_performance.png}: Per-case breakdown
 \end{itemize}
 
+\subsection{Quantitative Evaluation Results}
+
+\subsubsection{Overall Model Comparison}
+Figure~\ref{fig:evaluation_results} provides a comprehensive comparison of all three LLM models across key performance metrics. This overview visualization enables rapid assessment of relative model strengths and weaknesses.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{evaluation_results/evaluation_results.png}
+\caption{Overall evaluation results comparing Gemma-2-2b, Mistral-7B, and Llama-3.1-8B across quantitative metrics including response time, token usage, and success rate.}
+\label{fig:evaluation_results}
+\end{figure}
+
+\subsubsection{Response Time Analysis}
+Figure~\ref{fig:response_time} presents the response time (in seconds) for each test case across the three evaluated models. Response time is a critical metric for user experience in interactive applications. The results reveal significant variation in latency based on query complexity and model size.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{evaluation_results/response_time_per_testcase.png}
+\caption{Response time per test case across evaluated LLM models. Lower values indicate faster response times.}
+\label{fig:response_time}
+\end{figure}
+
+\subsubsection{Token Usage Analysis}
+Figure~\ref{fig:token_usage} illustrates the token consumption for each test case. Token usage directly correlates with computational cost and API pricing when using cloud-hosted models. Understanding token patterns helps optimize prompt engineering and context window utilization.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{evaluation_results/tokens_per_testcase.png}
+\caption{Token usage per test case across evaluated LLM models. Token counts reflect the verbosity and detail of generated responses.}
+\label{fig:token_usage}
+\end{figure}
+
+\subsubsection{Keyword Match Performance}
+The keyword match score measures the proportion of expected keywords present in the LLM response, serving as a proxy for factual accuracy and relevance. Figure~\ref{fig:keyword_match} shows the keyword match performance for each individual test case.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{evaluation_results/keyword_match_per_testcase.png}
+\caption{Keyword match score per test case. Higher scores indicate better coverage of expected answer components.}
+\label{fig:keyword_match}
+\end{figure}
+
+\subsubsection{Performance by Query Category}
+Figure~\ref{fig:keyword_category} aggregates keyword match performance by query category, providing insights into which types of queries each model handles most effectively.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{evaluation_results/keyword_by_category.png}
+\caption{Average keyword match score by query category across models. This reveals category-specific strengths and weaknesses.}
+\label{fig:keyword_category}
+\end{figure}
+
+\subsection{Detailed Evaluation Metrics}
+
+Table~\ref{tab:evaluation_metrics} summarizes the quantitative evaluation results across all five evaluated models on 18 test cases covering diverse FPL query types.
+
+\begin{table}[H]
+\centering
+\caption{Comprehensive Evaluation Metrics Across LLM Models}
+\label{tab:evaluation_metrics}
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+\textbf{Metric} & \textbf{Gemma 2B} & \textbf{Mistral 7B} & \textbf{Llama 8B} & \textbf{Zephyr 7B} & \textbf{Qwen 72B} \\
+\midrule
+Success Rate (\%) & 100.0 & 100.0 & 100.0 & 100.0 & 100.0 \\
+Avg Response Time (s) & \textbf{0.90} & 5.21 & 2.75 & 29.77 & 10.05 \\
+Total Tokens & 6,780 & 7,183 & 7,802 & 14,618 & 8,234 \\
+Avg Tokens/Response & 377 & 399 & 433 & 812 & 457 \\
+Avg Keyword Score (\%) & 67.13 & 71.20 & 73.98 & \textbf{80.46} & 75.93 \\
+Estimated Cost (\$) & 0.68 & 0.72 & 0.78 & 1.46 & 0.82 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Model Performance Analysis}
+
+\textbf{Gemma-2-2b} demonstrated the fastest response times (average 0.90 seconds), making it ideal for real-time applications where latency is critical. However, it achieved the lowest keyword match score (67.13\%), indicating less comprehensive coverage of expected answer components.
+
+\textbf{Mistral-7B} provided a balanced trade-off between speed (5.21s average) and accuracy (71.20\% keyword match). Its moderate token usage (399 tokens/response) suggests efficient response generation.
+
+\textbf{Llama-3.1-8B} achieved strong keyword match performance (73.98\%) with reasonable response times (2.75s), representing an excellent balance between accuracy and speed for production deployments.
+
+\textbf{Zephyr-7B} achieved the highest keyword match score (80.46\%) but with significantly longer response times (29.77s average) and higher token consumption (812 tokens/response). This model is best suited for batch processing where accuracy is paramount over speed.
+
+\textbf{Qwen-2.5-72B}, despite being the largest model, achieved moderate performance (75.93\% keyword match) with 10.05s average response time, suggesting that parameter count alone does not guarantee superior performance on domain-specific tasks.
+
 \subsection{Key Findings}
 \begin{enumerate}
-    \item \textbf{Grounding Effectiveness}: Knowledge graph context significantly reduces hallucination compared to unaided LLM responses
-    \item \textbf{Model Trade-offs}: Larger models (Llama-3.1-8B) show higher accuracy but longer response times
-    \item \textbf{Hybrid Advantage}: Combined retrieval provides broader context for complex queries
-    \item \textbf{Intent Precision}: Rule-based classification achieves high precision for supported query types
+    \item \textbf{Universal Success Rate}: All five models achieved 100\% success rate across 18 test cases, demonstrating robust API integration and error handling in the evaluation framework.
+    
+    \item \textbf{Speed-Accuracy Trade-off}: A clear inverse relationship exists between response time and keyword match accuracy. Gemma-2-2b is 33$\times$ faster than Zephyr-7B but scores 13.33 percentage points lower on keyword matching.
+    
+    \item \textbf{Grounding Effectiveness}: Knowledge graph context significantly reduces hallucination compared to unaided LLM responses. Test cases with complete context (e.g., player stats, defender rankings) consistently achieved 100\% keyword match across multiple models.
+    
+    \item \textbf{Token Efficiency}: Smaller models (Gemma, Mistral) generate more concise responses averaging 377--399 tokens, while Zephyr-7B produces verbose outputs averaging 812 tokens without proportional accuracy gains.
+    
+    \item \textbf{Hybrid Advantage}: Combined retrieval provides broader context for complex queries, enabling accurate responses to multi-faceted questions like player comparisons and form history requests.
+    
+    \item \textbf{Category-Specific Performance}: Models perform best on structured queries (player stats, top scorers) with keyword scores approaching 100\%, while fixture history and team analysis queries show more variation (40--75\%).
+    
+    \item \textbf{Cost-Performance Optimization}: Llama-3.1-8B emerges as the optimal choice for production deployment, achieving 73.98\% keyword accuracy at \$0.78 estimated cost---only \$0.10 more than the least accurate model while being 10$\times$ faster than the most accurate one.
 \end{enumerate}
 
 %==============================================================================
@@ -718,6 +935,7 @@ Key achievements include:
 %==============================================================================
 % References
 %==============================================================================
+\newpage
 \begin{thebibliography}{9}
 
 \bibitem{fpl_official}
