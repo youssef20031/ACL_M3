@@ -21,8 +21,8 @@ from config.settings import (
 from graph.connection import Neo4jConnection
 from graph.queries import CypherQueries, QueryExecutor
 from graph.data_loader import FPLDataLoader
-from preprocessing.intent_classifier import IntentClassifier, Intent
-from preprocessing.entity_extractor import EntityExtractor
+from input_preprocessing.intent_classifier import IntentClassifier
+from input_preprocessing.entity_extractor import EntityExtractor
 from embeddings.embedding_manager import EmbeddingManager
 from trivia.trivia_generator import TriviaGenerator, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
@@ -77,6 +77,34 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+
+# Intent to Query Mapping
+def get_query_type_for_intent(intent: str) -> str:
+    """Map intent strings to their corresponding CypherQueries method names."""
+    intent_to_query = {
+        "player_stats": "get_player_season_stats",
+        "player_comparison": "compare_players",
+        "player_search": "get_player_season_stats",
+        "top_scorers": "get_top_scorers_by_season",
+        "top_assisters": "get_top_assisters_by_season",
+        "top_points": "get_top_points_by_position",
+        "best_value": "get_best_value_players",
+        "team_analysis": "get_team_top_performers",
+        "head_to_head": "get_head_to_head",
+        "fixture_results": "get_fixture_results",
+        "clean_sheets": "get_clean_sheet_leaders",
+        "bonus_points": "get_bonus_point_leaders",
+        "ict_index": "get_ict_index_leaders",
+        "transfers": "get_most_transferred_players",
+        "most_selected": "get_most_selected_players",
+        "trivia": None,  # Handled separately
+        "recommendation": "get_top_players_all_positions",
+        "general_question": "get_top_players_all_positions",
+        "season_summary": "get_season_summary",
+        "unknown": "get_top_players_all_positions"
+    }
+    return intent_to_query.get(intent, "get_top_players_all_positions")
 
 
 # Initialize session state
@@ -491,7 +519,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                 results = []
                 
                 try:
-                    query_method = st.session_state.intent_classifier.get_query_type_for_intent(intent_result.intent)
+                    query_method = get_query_type_for_intent(intent_result)
                     
                     if query_method:
                         # Ensure required parameters have defaults
@@ -758,7 +786,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                 
                 # Store query info for display
                 st.session_state.last_query_info = {
-                    "intent": intent_result.intent.value,
+                    "intent": intent_result,
                     "entities": entities.to_dict(),
                     "cypher_query": executed_query,
                     "kg_context": full_context if 'full_context' in locals() else cypher_context,

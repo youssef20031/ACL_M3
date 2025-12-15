@@ -3,7 +3,7 @@ from huggingface_hub import InferenceClient
 
 class IntentClassifier:
     def __init__(self):
-        hf_token = os.getenv("HF_TOKEN")
+        hf_token = os.getenv("HUGGINGFACE_API_TOKEN")
         if not hf_token:
             raise ValueError("HF_TOKEN environment variable is not set.")
 
