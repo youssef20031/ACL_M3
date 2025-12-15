@@ -94,8 +94,8 @@ class IntentClassifier:
                 if intent in predicted_intent:
                     return intent
             
-            return "general question"
+            return "general_question"
 
         except Exception as e:
             print(f"Error calling Cloud API: {e}")
-            return "general question"
+            return "general_question"

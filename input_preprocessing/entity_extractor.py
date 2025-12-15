@@ -248,14 +248,42 @@ class EntityExtractor:
         return numbers
     
     def _extract_players(self, doc: Doc, entities: ExtractedEntities) -> List[str]:
+        """
+        Extract player names from query.
+        Supports partial matching (e.g., "Salah" matches "Mohamed Salah").
+        """
         players = []
         text_lower = doc.text.lower()
         
+        # First, check against known players (exact full name match)
         if self.known_players:
             for player in self.known_players:
                 if player.lower() in text_lower:
                     players.append(player)
         
+        # If no exact match, try partial matching (last name or common nicknames)
+        if not players and self.known_players:
+            query_words = set(text_lower.split())
+            # Common words to exclude from matching
+            common_words = {
+                'the', 'a', 'an', 'in', 'on', 'at', 'for', 'to', 'of', 'and', 'or',
+                'how', 'did', 'do', 'does', 'was', 'were', 'is', 'are', 'what', 'who',
+                'most', 'best', 'top', 'all', 'get', 'show', 'find', 'gameweek', 'season',
+                'stats', 'points', 'goals', 'assists', 'scored', 'performance'
+            }
+            query_words = query_words - common_words
+            
+            for player in self.known_players:
+                player_parts = player.lower().split()
+                # Check if any part of the player name (especially last name) matches query words
+                for part in player_parts:
+                    if len(part) >= 4 and part in query_words:  # Minimum 4 chars to avoid false positives
+                        players.append(player)
+                        break
+                if players:
+                    break  # Found a match, stop searching
+        
+        # If still no players found, use spaCy's PERSON entity recognition
         if not players:
             non_names = {
                 "Premier", "League", "Season", "Gameweek", "Week",
@@ -306,5 +334,25 @@ class EntityExtractor:
         if entities.numbers:
             if entities.numbers[0] <= 50:
                 params["limit"] = entities.numbers[0]
+        
+        # Derive sort_by from stats
+        if entities.stats:
+            stat_map = {
+                "goals_scored": "goals",
+                "assists": "assists",
+                "total_points": "total_points",
+                "bonus": "bonus",
+                "ict_index": "ict_index",
+                "clean_sheets": "clean_sheets",
+                "transfers_in": "transfers_in",
+                "transfers_out": "transfers_out",
+                "selected": "selected",
+                "value": "value"
+            }
+            # Use the first relevant stat found
+            for stat in entities.stats:
+                if stat in stat_map:
+                    params["sort_by"] = stat_map[stat]
+                    break
         
         return params
