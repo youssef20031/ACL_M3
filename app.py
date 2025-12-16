@@ -1046,6 +1046,21 @@ def render_comparison_tab(selected_model: str):
         results = st.session_state.graph_conn.execute_query(query, params)
         st.session_state.all_player_names = [r['player_name'] for r in results] if results else []
     
+    # Initialize suggestion state
+    if 'compare_p1_suggestions' not in st.session_state:
+        st.session_state.compare_p1_suggestions = []
+    if 'compare_p2_suggestions' not in st.session_state:
+        st.session_state.compare_p2_suggestions = []
+    if 'compare_p1_original' not in st.session_state:
+        st.session_state.compare_p1_original = ""
+    if 'compare_p2_original' not in st.session_state:
+        st.session_state.compare_p2_original = ""
+    # Store selected names from suggestions (separate from widget keys)
+    if 'compare_p1_selected' not in st.session_state:
+        st.session_state.compare_p1_selected = None
+    if 'compare_p2_selected' not in st.session_state:
+        st.session_state.compare_p2_selected = None
+    
     col1, col2 = st.columns(2)
     
     with col1:
@@ -1053,77 +1068,109 @@ def render_comparison_tab(selected_model: str):
     with col2:
         player2 = st.text_input("Player 2", placeholder="e.g., Erling Haaland", key="compare_p2")
     
-    if st.button("Compare", type="primary") and player1 and player2:
+    # Show suggestions for player 1 if available (outside button block)
+    if st.session_state.compare_p1_suggestions:
+        st.warning(f"⚠️ Could not find '{st.session_state.compare_p1_original}'. Did you mean:")
+        suggestion_cols = st.columns(len(st.session_state.compare_p1_suggestions[:3]))
+        for i, (name, score) in enumerate(st.session_state.compare_p1_suggestions[:3]):
+            with suggestion_cols[i]:
+                if st.button(f"{name}", key=f"sug_p1_{i}"):
+                    st.session_state.compare_p1_selected = name  # Store in separate state
+                    st.session_state.compare_p1_suggestions = []  # Clear suggestions
+                    st.rerun()
+    
+    # Show suggestions for player 2 if available (outside button block)
+    if st.session_state.compare_p2_suggestions:
+        st.warning(f"⚠️ Could not find '{st.session_state.compare_p2_original}'. Did you mean:")
+        suggestion_cols = st.columns(len(st.session_state.compare_p2_suggestions[:3]))
+        for i, (name, score) in enumerate(st.session_state.compare_p2_suggestions[:3]):
+            with suggestion_cols[i]:
+                if st.button(f"{name}", key=f"sug_p2_{i}"):
+                    st.session_state.compare_p2_selected = name  # Store in separate state
+                    st.session_state.compare_p2_suggestions = []  # Clear suggestions
+                    st.rerun()
+    
+    # Show selected names if available (so user knows what was selected)
+    if st.session_state.compare_p1_selected:
+        st.success(f"✅ Player 1: {st.session_state.compare_p1_selected}")
+    if st.session_state.compare_p2_selected:
+        st.success(f"✅ Player 2: {st.session_state.compare_p2_selected}")
+    
+    # Compare button
+    if st.button("Compare", type="primary"):
+        # Use selected names from suggestions if available, otherwise use text input values
+        player1_to_use = st.session_state.compare_p1_selected or player1
+        player2_to_use = st.session_state.compare_p2_selected or player2
+        
+        if not player1_to_use or not player2_to_use:
+            st.warning("Please enter both player names.")
+            return
+        
         # Try to find exact or fuzzy matches for both players
         player1_match = None
         player2_match = None
-        player1_suggestions = []
-        player2_suggestions = []
         
         all_names = st.session_state.all_player_names
         
         # Check player 1
-        if player1.strip() in all_names:
-            player1_match = player1.strip()
+        if player1_to_use.strip() in all_names:
+            player1_match = player1_to_use.strip()
         else:
             # Try case-insensitive exact match first
             for name in all_names:
-                if name.lower() == player1.lower().strip():
+                if name.lower() == player1_to_use.lower().strip():
                     player1_match = name
                     break
             
             # If no exact match, try fuzzy matching
             if not player1_match:
-                player1_suggestions = fuzzy_match_player(player1, all_names)
+                player1_suggestions = fuzzy_match_player(player1_to_use, all_names)
                 if player1_suggestions and player1_suggestions[0][1] >= 0.85:
                     # High confidence match - use it automatically
                     player1_match = player1_suggestions[0][0]
-                    st.info(f"🔍 Using '{player1_match}' for '{player1}'")
+                    st.info(f"🔍 Using '{player1_match}' for '{player1_to_use}'")
+                elif player1_suggestions:
+                    # Store suggestions for display
+                    st.session_state.compare_p1_suggestions = player1_suggestions
+                    st.session_state.compare_p1_original = player1_to_use
         
         # Check player 2
-        if player2.strip() in all_names:
-            player2_match = player2.strip()
+        if player2_to_use.strip() in all_names:
+            player2_match = player2_to_use.strip()
         else:
             # Try case-insensitive exact match first
             for name in all_names:
-                if name.lower() == player2.lower().strip():
+                if name.lower() == player2_to_use.lower().strip():
                     player2_match = name
                     break
             
             # If no exact match, try fuzzy matching
             if not player2_match:
-                player2_suggestions = fuzzy_match_player(player2, all_names)
+                player2_suggestions = fuzzy_match_player(player2_to_use, all_names)
                 if player2_suggestions and player2_suggestions[0][1] >= 0.85:
                     # High confidence match - use it automatically
                     player2_match = player2_suggestions[0][0]
-                    st.info(f"🔍 Using '{player2_match}' for '{player2}'")
+                    st.info(f"🔍 Using '{player2_match}' for '{player2_to_use}'")
+                elif player2_suggestions:
+                    # Store suggestions for display
+                    st.session_state.compare_p2_suggestions = player2_suggestions
+                    st.session_state.compare_p2_original = player2_to_use
         
-        # Show suggestions if no match found
-        if not player1_match and player1_suggestions:
-            st.warning(f"⚠️ Could not find '{player1}'. Did you mean:")
-            suggestion_cols = st.columns(len(player1_suggestions[:3]))
-            for i, (name, score) in enumerate(player1_suggestions[:3]):
-                with suggestion_cols[i]:
-                    if st.button(f"{name}", key=f"sug_p1_{i}"):
-                        st.session_state.compare_p1 = name
-                        st.rerun()
-        
-        if not player2_match and player2_suggestions:
-            st.warning(f"⚠️ Could not find '{player2}'. Did you mean:")
-            suggestion_cols = st.columns(len(player2_suggestions[:3]))
-            for i, (name, score) in enumerate(player2_suggestions[:3]):
-                with suggestion_cols[i]:
-                    if st.button(f"{name}", key=f"sug_p2_{i}"):
-                        st.session_state.compare_p2 = name
-                        st.rerun()
+        # If we have pending suggestions, rerun to show them
+        if st.session_state.compare_p1_suggestions or st.session_state.compare_p2_suggestions:
+            st.rerun()
         
         # If we couldn't resolve both players, stop here
         if not player1_match or not player2_match:
-            if not player1_match and not player1_suggestions:
-                st.error(f"❌ Could not find any player matching '{player1}'")
-            if not player2_match and not player2_suggestions:
-                st.error(f"❌ Could not find any player matching '{player2}'")
+            if not player1_match:
+                st.error(f"❌ Could not find any player matching '{player1_to_use}'")
+            if not player2_match:
+                st.error(f"❌ Could not find any player matching '{player2_to_use}'")
             return
+        
+        # Clear selected names after successful resolution
+        st.session_state.compare_p1_selected = None
+        st.session_state.compare_p2_selected = None
         
         # Proceed with comparison
         query, params = CypherQueries.compare_players(player1_match, player2_match)

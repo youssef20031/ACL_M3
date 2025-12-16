@@ -179,6 +179,7 @@ class LLMManager:
                     max_new_tokens=max_tokens,
                     temperature=temperature,
                     do_sample=True,
+                     
                     return_full_text=False
                 )
                 generated_text = response.strip()
