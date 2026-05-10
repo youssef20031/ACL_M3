@@ -13,11 +13,15 @@ langchain-community>=0.0.10
 langchain-huggingface>=0.0.1
 
 # Embeddings
-sentence-transformers>=2.2.2
-transformers>=4.36.0
+sentence-transformers==2.5.1
+transformers==4.35.2
 
 # HuggingFace Integration
-huggingface_hub>=0.23.0
+huggingface_hub>=0.15.1
+
+# PyTorch (for transformers/sentence-transformers)
+torch>=1.11.0
+torchvision>=0.12.0
 
 # Data Processing
 pandas>=2.1.4
@@ -25,6 +29,8 @@ numpy>=1.26.2
 
 # NLP and Entity Extraction
 spacy>=3.7.0
+nltk>=3.8.0
+scikit-learn>=1.3.0
 
 # Visualization
 plotly>=5.18.0

@@ -195,7 +195,8 @@ class EntityExtractor:
         except OSError:
             print("Downloading spaCy model 'en_core_web_sm'...")
             import subprocess
-            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
+            import sys
+            subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"], check=False)
             self.nlp = spacy.load("en_core_web_sm")
         
         # Initialize matcher for patterns
