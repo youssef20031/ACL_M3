@@ -33,47 +33,39 @@ class LLMManager:
     # Available models configuration
     # Using models that support chat/conversational task on HuggingFace Inference API
     MODELS = {
-        "gemma-2-2b": {
-            "name": "google/gemma-2-2b-it",
-            "display_name": "Gemma 2 2B",
-            "description": "Google's lightweight instruction-tuned model",
-            "max_tokens": 1024,
-            "temperature": 0.7,
-            "use_chat": True,
-        },
-        "mistral-7b": {
-            "name": "mistralai/Mistral-7B-Instruct-v0.2",
-            "display_name": "Mistral 7B",
-            "description": "High-quality open-source model from Mistral AI",
-            "max_tokens": 1024,
-            "temperature": 0.7,
-            "use_chat": True,
-        },
-        "llama-3-8b": {
-            "name": "meta-llama/Llama-3.1-8B-Instruct",
-            "display_name": "Llama 3.1 8B",
-            "description": "Meta's latest instruction-tuned model",
-            "max_tokens": 1024,
-            "temperature": 0.7,
-            "use_chat": True,
-        },
-        "zephyr-7b": {
-            "name": "HuggingFaceH4/zephyr-7b-beta",
-            "display_name": "Zephyr 7B",
-            "description": "Fine-tuned Mistral for helpful responses",
-            "max_tokens": 1024,
-            "temperature": 0.7,
-            "use_chat": True,
-        },
-        "qwen-2.5-72b": {
-            "name": "Qwen/Qwen2.5-72B-Instruct",
-            "display_name": "Qwen 2.5 72B",
-            "description": "Alibaba's powerful instruction model",
-            "max_tokens": 1024,
-            "temperature": 0.7,
-            "use_chat": True,
-        }
-    }
+    "qwen-2.5-coder": {
+        "name": "Qwen/Qwen2.5-Coder-32B-Instruct",
+        "display_name": "Qwen 2.5 Coder 32B",
+        "description": "Powerful coding and reasoning model",
+        "max_tokens": 1024,
+        "temperature": 0.7,
+        "use_chat": True,
+    },
+    "llama-3.2-3b": {
+        "name": "meta-llama/Llama-3.2-3B-Instruct",
+        "display_name": "Llama 3.2 3B",
+        "description": "Meta's efficient instruction model",
+        "max_tokens": 1024,
+        "temperature": 0.7,
+        "use_chat": True,
+    },
+    "phi-3-mini": {
+        "name": "microsoft/Phi-3-mini-4k-instruct",
+        "display_name": "Phi 3 Mini",
+        "description": "Microsoft's efficient small model",
+        "max_tokens": 1024,
+        "temperature": 0.7,
+        "use_chat": True,
+    },
+    "qwen-2.5-7b": {
+        "name": "Qwen/Qwen2.5-7B-Instruct",
+        "display_name": "Qwen 2.5 7B",
+        "description": "Balanced instruction model",
+        "max_tokens": 1024,
+        "temperature": 0.7,
+        "use_chat": True,
+    },
+}
     
     def __init__(self, api_token: Optional[str] = None, default_model: str = "gemma-2-2b"):
         """
@@ -171,7 +163,7 @@ class LLMManager:
                     model=model_name,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    timeout=timeout
+                    #timeout=timeout
                 )
                 generated_text = response.choices[0].message.content.strip()
             else:
@@ -182,7 +174,7 @@ class LLMManager:
                     max_new_tokens=max_tokens,
                     temperature=temperature,
                     do_sample=True,
-                    timeout=timeout,
+                    #timeout=timeout,
                     return_full_text=False
                 )
 

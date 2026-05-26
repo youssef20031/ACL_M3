@@ -188,16 +188,25 @@ class EntityExtractor:
             known_players: Optional set of known player names for better extraction
         """
         self.known_players = known_players or set()
-        
         # Load spaCy model
         try:
             self.nlp = spacy.load("en_core_web_sm")
         except OSError:
-            print("Downloading spaCy model 'en_core_web_sm'...")
-            import subprocess
-            import sys
-            subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"], check=False)
-            self.nlp = spacy.load("en_core_web_sm")
+            print("Warning: spaCy model 'en_core_web_sm' not found. Attempting to download...")
+            try:
+                import subprocess
+                import sys
+                # Use -q flag for quiet download to reduce output
+                subprocess.run([sys.executable, "-m", "spacy", "download", "en_core_web_sm"], 
+                               check=True, capture_output=True, timeout=120)  # 2 minute timeout
+                self.nlp = spacy.load("en_core_web_sm")
+            except Exception as e:
+                print(f"Error downloading spaCy model: {e}")
+                # Fallback to a blank model if download fails
+                self.nlp = spacy.blank("en")
+                print("Using blank English model as fallback.")
+
+                self.nlp = spacy.blank("en")
         
         # Initialize matcher for patterns
         self.matcher = Matcher(self.nlp.vocab)

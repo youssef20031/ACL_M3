@@ -379,7 +379,7 @@ def render_sidebar():
     # Model selection
     selected_model = st.sidebar.selectbox(
         "Select LLM Model",
-        options=["gemma-2-2b", "mistral-7b", "llama-3-8b", "zephyr-7b", "qwen-2.5-72b"],
+        options=["qwen-2.5-coder", "llama-3.2-3b", "phi-3-mini", "qwen-2.5-7b"],
         index=0,
         key="selected_model"
     )
