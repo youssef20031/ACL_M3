@@ -1,4 +1,31 @@
-/.env
-/.env.example
-/.venv
+# Environment
+.env
+.env.example
+.env.local
+.env.production
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist-info/
+.pytest_cache/
+
+# Node
 node_modules/
+dist/
+.vercel/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data (large files — load via the app instead)
+# cleaned_merged_seasons_cleaned.csv  # keep this committed so Railway can access it

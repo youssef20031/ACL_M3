@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: fpl-fantasytrivia-api
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: |
+      pip install --upgrade pip &&
+      pip install -r requirements.txt &&
+      python -m spacy download en_core_web_sm &&
+      python -m nltk.downloader punkt stopwords wordnet
+    startCommand: uvicorn api_main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USER
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: HUGGINGFACE_API_TOKEN
+        sync: false
+      - key: TRANSFORMERS_NO_TF
+        value: "1"
+      - key: TF_ENABLE_ONEDNN_OPTS
+        value: "0"
+      - key: PYTHON_VERSION
+        value: "3.11.0"

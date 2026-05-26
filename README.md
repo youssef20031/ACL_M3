@@ -207,6 +207,99 @@ ACL_M3/
 
 ---
 
+## ☁️ Deployment
+
+The app deploys as three separate services:
+
+| Component | Platform | Cost |
+|-----------|----------|------|
+| React frontend | Vercel | Free |
+| FastAPI backend | Render | Free (sleeps after 15min inactivity) |
+| Neo4j database | AuraDB | Free tier |
+
+---
+
+### 1 — Neo4j AuraDB (database)
+
+1. Go to [console.neo4j.io](https://console.neo4j.io) and create a free account
+2. Create a new **AuraDB Free** instance
+3. Download the credentials file when prompted — you need:
+   - **Connection URI** (looks like `neo4j+s://xxxxxxxx.databases.neo4j.io`)
+   - **Username** (usually `neo4j`)
+   - **Password** (auto-generated)
+4. Keep these — you'll add them as environment variables in Railway
+
+---
+
+### 2 — Render (FastAPI backend)
+
+1. Go to [render.com](https://render.com) and sign in with GitHub
+2. Click **New → Web Service**
+3. Connect your GitHub repo
+4. Render will auto-detect Python using `render.yaml`. Confirm these settings:
+   - **Runtime**: Python
+   - **Build Command**: *(auto-filled from render.yaml)*
+   - **Start Command**: `uvicorn api_main:app --host 0.0.0.0 --port $PORT`
+   - **Plan**: Free
+5. Scroll to **Environment Variables** and add:
+
+```
+NEO4J_URI=neo4j+s://xxxxxxxx.databases.neo4j.io
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=your_aura_password
+HUGGINGFACE_API_TOKEN=hf_your_token_here
+```
+
+6. Click **Create Web Service**. Render will build and deploy (takes ~5 minutes first time)
+7. Copy the public URL it gives you (e.g. `https://fpl-fantasytrivia-api.onrender.com`)
+
+> **Note**: On the free tier, the service spins down after 15 minutes of inactivity. The first request after that takes ~30 seconds to wake up. This is normal.
+
+---
+
+### 3 — Vercel (React frontend)
+
+1. Go to [vercel.com](https://vercel.com) and sign in with GitHub
+2. Click **Add New Project** and import this repository
+3. Vercel will detect Vite automatically. Leave all build settings as-is
+4. Before deploying, add this **Environment Variable**:
+   ```
+   VITE_API_URL=https://fpl-fantasytrivia-api.onrender.com
+   ```
+   (replace with your actual Render URL)
+5. Also open `vercel.json` and replace both `REPLACE_WITH_YOUR_RAILWAY_URL` with your Render URL:
+   ```json
+   "destination": "https://fpl-fantasytrivia-api.onrender.com/api/:path*"
+   ```
+6. Click **Deploy**
+
+Your app will be live at `https://your-project.vercel.app`
+
+---
+
+### 4 — Load data after deployment
+
+Once both services are running:
+1. Open your Vercel URL
+2. Go to **Settings**
+3. The Neo4j connection will auto-connect using the Railway env vars
+4. Click **📥 Load FPL Data** to populate AuraDB
+5. Click **🔮 Build Embeddings** if you want semantic search
+
+---
+
+### Environment variables reference
+
+| Variable | Where | Description |
+|----------|-------|-------------|
+| `NEO4J_URI` | Render | AuraDB connection URI |
+| `NEO4J_USER` | Render | AuraDB username |
+| `NEO4J_PASSWORD` | Render | AuraDB password |
+| `HUGGINGFACE_API_TOKEN` | Render | HuggingFace API token |
+| `VITE_API_URL` | Vercel | Render backend public URL |
+
+---
+
 ## 🔧 Environment Variables
 
 Create or edit `.env` in the project root:
