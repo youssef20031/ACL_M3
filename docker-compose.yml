@@ -29,19 +29,16 @@ services:
         limits:
           memory: 4G
 
-  web:
+  backend:
     build: .
-    container_name: streamlit_fpl
+    container_name: fastapi_fpl
     ports:
-      - "8501:8501"
+      - "8000:8000"
     environment:
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=password
       - HUGGINGFACE_API_TOKEN=${HUGGINGFACE_API_TOKEN}
-      # Streamlit optimizations
-      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=50
-      - STREAMLIT_SERVER_MAX_MESSAGE_SIZE=50
     depends_on:
       neo4j:
         condition: service_healthy
@@ -51,6 +48,19 @@ services:
       resources:
         limits:
           memory: 8G
+    restart: always
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: react_fpl
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
     restart: always
 
 volumes:

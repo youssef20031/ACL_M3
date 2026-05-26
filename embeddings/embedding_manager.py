@@ -2,6 +2,8 @@
 Embedding Manager for FPL Graph-RAG System
 Handles text-constructed embeddings and semantic similarity search
 """
+import os
+os.environ['TRANSFORMERS_NO_TF'] = '1'
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
 from sentence_transformers import SentenceTransformer

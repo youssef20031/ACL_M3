@@ -42,3 +42,14 @@ matplotlib>=3.8.0
 python-dotenv>=1.0.0
 requests>=2.31.0
 tqdm>=4.66.1
+
+#fastapi for backend
+# FastAPI and ASGI server
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.12
+websockets==13.1
+
+# Add CORS support
+python-jose[cryptography]==3.3.0  # For JWT tokens if needed
+passlib[bcrypt]==1.7.4  # For password hashing if needed
