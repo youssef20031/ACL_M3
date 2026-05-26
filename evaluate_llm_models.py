@@ -534,7 +534,7 @@ Do not include any explanation, just the JSON object."""
             max_retries = 3
             response = None
             for attempt in range(max_retries):
-                response = self.llm_manager.generate(prompt, model_key=model_key)
+                response = self.llm_manager.generate(prompt, model_key=model_key, timeout=60)
                 
                 # Check for rate limit errors (402, 429)
                 if response.error and ("402" in str(response.error) or "429" in str(response.error) or "rate" in str(response.error).lower()):

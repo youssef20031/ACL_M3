@@ -117,7 +117,8 @@ class LLMManager:
         prompt: str, 
         model_key: Optional[str] = None,
         max_tokens: Optional[int] = None,
-        temperature: Optional[float] = None
+        temperature: Optional[float] = None,
+        timeout: int = 30
     ) -> LLMResponse:
         """
         Generate a response from the LLM.
@@ -127,6 +128,7 @@ class LLMManager:
             model_key: Model to use (default if None)
             max_tokens: Maximum tokens in response
             temperature: Sampling temperature
+            timeout: Request timeout in seconds
             
         Returns:
             LLMResponse with generated text and metadata
@@ -169,6 +171,7 @@ class LLMManager:
                     model=model_name,
                     max_tokens=max_tokens,
                     temperature=temperature,
+                    timeout=timeout
                 )
                 generated_text = response.choices[0].message.content.strip()
             else:
@@ -179,9 +182,10 @@ class LLMManager:
                     max_new_tokens=max_tokens,
                     temperature=temperature,
                     do_sample=True,
-                     
+                    timeout=timeout,
                     return_full_text=False
                 )
+
                 generated_text = response.strip()
             
             response_time = time.time() - start_time

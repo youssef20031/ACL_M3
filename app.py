@@ -2,11 +2,11 @@
 FPL FantasyTrivia - Graph-RAG Streamlit Application
 Main entry point for the application
 """
+import os
+os.environ['TRANSFORMERS_BACKEND'] = 'pytorch'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0' 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import networkx as nx
 from typing import Dict, List, Any, Optional
 import json
 import time
@@ -80,28 +80,46 @@ st.markdown("""
 
 
 # Initialize session state
+@st.cache_resource
+def get_intent_classifier():
+    """Cache the IntentClassifier across all sessions."""
+    return IntentClassifier()
+
+
+@st.cache_resource
+def get_entity_extractor():
+    """Cache the EntityExtractor across all sessions."""
+    return EntityExtractor()
+
+
+@st.cache_resource
+def get_llm_manager(api_token: str):
+    """Cache the LLMManager across all sessions."""
+    if api_token:
+        return LLMManager(api_token=api_token)
+    return None
+
+
 def init_session_state():
     """Initialize session state variables."""
     if "neo4j_connected" not in st.session_state:
         st.session_state.neo4j_connected = False
     if "graph_conn" not in st.session_state:
         st.session_state.graph_conn = None
+        
+    # Use cached resources
+    st.session_state.intent_classifier = get_intent_classifier()
+    st.session_state.entity_extractor = get_entity_extractor()
+    
     if "llm_manager" not in st.session_state:
-        # Auto-initialize if API token is configured
-        if HUGGINGFACE_API_TOKEN:
-            st.session_state.llm_manager = LLMManager(api_token=HUGGINGFACE_API_TOKEN)
-        else:
-            st.session_state.llm_manager = None
+        st.session_state.llm_manager = get_llm_manager(HUGGINGFACE_API_TOKEN)
+        
     if "embedding_manager" not in st.session_state:
         st.session_state.embedding_manager = None
     if "embeddings_built" not in st.session_state:
         st.session_state.embeddings_built = False
     if "embedding_count" not in st.session_state:
         st.session_state.embedding_count = 0
-    if "intent_classifier" not in st.session_state:
-        st.session_state.intent_classifier = IntentClassifier()
-    if "entity_extractor" not in st.session_state:
-        st.session_state.entity_extractor = EntityExtractor()
     if "trivia_score" not in st.session_state:
         st.session_state.trivia_score = 0
     if "trivia_total" not in st.session_state:
@@ -149,7 +167,7 @@ def init_embedding_manager(model_key: str = "minilm"):
     st.session_state.embedding_manager = EmbeddingManager(model_key=model_key)
 
 
-def create_graph_visualization(query_results: List[Dict], entities: Dict = None) -> Optional[go.Figure]:
+def create_graph_visualization(query_results: List[Dict], entities: Dict = None):
     """
     Create an interactive graph visualization from Cypher query results.
     
@@ -160,6 +178,9 @@ def create_graph_visualization(query_results: List[Dict], entities: Dict = None)
     Returns:
         Plotly figure with graph visualization
     """
+    import networkx as nx
+    import plotly.graph_objects as go
+    
     if not query_results:
         return None
     
@@ -174,9 +195,6 @@ def create_graph_visualization(query_results: List[Dict], entities: Dict = None)
         "gameweek": "#9467bd",    # Purple
         "stat": "#8c564b",        # Brown
     }
-    
-    # Analyze results to determine graph structure
-    sample = query_results[0] if query_results else {}
     
     # Build nodes and edges based on result structure
     for i, result in enumerate(query_results[:20]):  # Limit to 20 for clarity
@@ -413,7 +431,6 @@ def render_sidebar():
                         query, query_params = CypherQueries.get_player_embeddings_data()
                         results = st.session_state.graph_conn.execute_query(query, query_params)
                         st.sidebar.write(f"Debug: Found {player_count} players, query returned {len(results) if results else 0} results")
-                        results = st.session_state.graph_conn.execute_query(query)
                         
                         if not results:
                             st.sidebar.warning("⚠️ No player data found in Neo4j. Please load FPL data first using '📥 Load FPL Data' button below.")
@@ -510,11 +527,6 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                         elif query_method == "get_player_season_stats" and "season" not in params:
                             query_method = "get_player_all_seasons_stats"
                         
-                        # Special handling for compare_players - use all seasons if no season specified  
-                        if query_method == "compare_players" and "season" not in params:
-                            # compare_players works without season parameter
-                            pass
-                        
                         # Special handling for transfer queries - requires season and gameweek
                         if query_method == "get_most_transferred_players":
                             if "season" not in params:
@@ -546,7 +558,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                         missing_params = [p for p in required_params if p not in params]
                         
                         if missing_params:
-                            # Missing required parameters - use fallback with gameweek/season if available
+                            # Missing required parameters - use fallback
                             query, query_params = CypherQueries.get_top_players_all_positions(
                                 season=params.get("season"),
                                 gameweek=params.get("gameweek"),
@@ -562,63 +574,41 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                             query, query_params = method(**valid_params)
                             results = st.session_state.graph_conn.execute_query(query, query_params)
                             
-                            # For fixture queries with many results, create a summary for LLM but keep full data
+                            # For fixture queries with many results, create a summary
                             if query_method == "get_fixture_results" and len(results) > 60:
                                 # Create summary for LLM
-                                summary_lines = [f"Total fixtures: {len(results)}\n"]
-                                
-                                # Group by season
                                 from collections import defaultdict
                                 season_stats = defaultdict(lambda: {"total": 0, "wins": 0, "draws": 0, "losses": 0, "sample_fixtures": []})
                                 
                                 for idx, r in enumerate(results):
                                     season = r.get("season", "")
                                     team_name = params.get("team_name", "")
-                                    
-                                    # Determine result
                                     is_home = r.get("home_team") == team_name
                                     home_score = r.get("home_score", 0)
                                     away_score = r.get("away_score", 0)
                                     
                                     if is_home:
-                                        if home_score > away_score:
-                                            result = "win"
-                                        elif home_score < away_score:
-                                            result = "loss"
-                                        else:
-                                            result = "draw"
+                                        if home_score > away_score: result = "win"
+                                        elif home_score < away_score: result = "loss"
+                                        else: result = "draw"
                                     else:
-                                        if away_score > home_score:
-                                            result = "win"
-                                        elif away_score < home_score:
-                                            result = "loss"
-                                        else:
-                                            result = "draw"
+                                        if away_score > home_score: result = "win"
+                                        elif away_score < home_score: result = "loss"
+                                        else: result = "draw"
                                     
                                     season_stats[season]["total"] += 1
-                                    if result == "win":
-                                        season_stats[season]["wins"] += 1
-                                    elif result == "draw":
-                                        season_stats[season]["draws"] += 1
-                                    else:
-                                        season_stats[season]["losses"] += 1
+                                    if result == "win": season_stats[season]["wins"] += 1
+                                    elif result == "draw": season_stats[season]["draws"] += 1
+                                    else: season_stats[season]["losses"] += 1
                                     
-                                    # Keep first 3 fixtures as samples per season
                                     if len(season_stats[season]["sample_fixtures"]) < 3:
                                         season_stats[season]["sample_fixtures"].append(r)
                                 
-                                # Build summary
+                                summary_lines = [f"Total fixtures: {len(results)}"]
                                 for season in sorted(season_stats.keys()):
                                     stats = season_stats[season]
                                     summary_lines.append(f"\n{season}: {stats['total']} fixtures - {stats['wins']} wins, {stats['draws']} draws, {stats['losses']} losses")
-                                    summary_lines.append("Sample fixtures:")
-                                    for fixture in stats["sample_fixtures"]:
-                                        summary_lines.append(f"  GW{fixture.get('gameweek')}: {fixture.get('home_team')} {fixture.get('home_score')}-{fixture.get('away_score')} {fixture.get('away_team')}")
-                                
-                                summary_lines.append(f"\n[Full list of all {len(results)} fixtures shown below]")
                                 cypher_context = "\n".join(summary_lines)
-                                
-                                # Store full results for display later
                                 full_context = PromptBuilder.format_kg_context(results, max_items=200)
                             else:
                                 cypher_context = PromptBuilder.format_kg_context(results)
@@ -626,9 +616,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                             
                             executed_query = query
                     
-                    # If no results or no query method, try a fallback
                     if not results:
-                        # Fallback to top players by all positions with gameweek/season if available
                         query, query_params = CypherQueries.get_top_players_all_positions(
                             season=params.get("season"),
                             gameweek=params.get("gameweek"),
@@ -640,61 +628,27 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                 
                 except Exception as e:
                     st.error(f"Query error: {e}")
-                    # Final fallback - get all seasons summary
-                    try:
-                        query, query_params = CypherQueries.get_all_seasons_summary()
-                        results = st.session_state.graph_conn.execute_query(query, query_params)
-                        cypher_context = PromptBuilder.format_kg_context(results)
-                        executed_query = query
-                    except:
-                        cypher_context = "Error retrieving data from knowledge graph."
+                    cypher_context = "Error retrieving data from knowledge graph."
                 
-                # Step 5: Embedding search (if hybrid/embedding mode)
+                # Step 5: Embedding search
                 embedding_context = ""
                 embedding_used = False
                 if retrieval_method in ["Embeddings", "Hybrid"] and st.session_state.embedding_manager:
                     if st.session_state.embeddings_built:
                         try:
                             with st.status("🔮 Searching embeddings...", expanded=False) as status:
-                                # Check if we have players to use as seed (Cypher results or Entities)
                                 key_player = None
-                                
-                                # Priority 1: Use entity extraction from prompt (explicit user intent)
-                                if entities.players and len(entities.players) > 0:
+                                if entities.players:
                                     key_player = entities.players[0]
-                                
-                                # Priority 2: Use player from Cypher results (implicit context)
-                                if not key_player and results and len(results) > 0:
-                                    # Check first result for player_name
-                                    first_result = results[0]
-                                    if 'player_name' in first_result:
-                                        key_player = first_result['player_name']
+                                elif results and 'player_name' in results[0]:
+                                    key_player = results[0]['player_name']
                                 
                                 if key_player:
-                                    # Use player-to-player embedding similarity
                                     season = entities.seasons[0] if entities.seasons else "2022-23"
-                                    
-                                    # Use direct player embedding comparison for accurate similarity
-                                    # Include self to ensure we get the player's own stats in the context
                                     similar_players = st.session_state.embedding_manager.find_similar_to_player(
                                         key_player, season=season, top_k=10, exclude_self=False
                                     )
-                                    
-                                    # In Hybrid mode, also get similar players from KG
-                                    if retrieval_method == "Hybrid":
-                                        try:
-                                            query, query_params = CypherQueries.find_similar_players_kg(
-                                                key_player, season=season, limit=10
-                                            )
-                                            kg_similar_results = st.session_state.graph_conn.execute_query(query, query_params)
-                                            if kg_similar_results:
-                                                cypher_context_append = PromptBuilder.format_kg_context(kg_similar_results)
-                                                cypher_context += "\n\nAlso found via KG similarity:\n" + cypher_context_append
-                                                # executed_query = query # Keep original query as main
-                                        except Exception as kg_e:
-                                            st.warning(f"KG similarity search failed: {kg_e}")
                                 else:
-                                    # Use text-based similarity
                                     similar_players = st.session_state.embedding_manager.find_similar_players(
                                         prompt, top_k=5
                                     )
@@ -703,611 +657,163 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                                 status.update(label=f"🔮 Found {len(similar_players)} similar players", state="complete")
                         except Exception as e:
                             st.warning(f"Embedding search failed: {e}")
-                            embedding_context = "Embedding search not available."
-                    else:
-                        st.warning("⚠️ Embeddings not built. Click 'Build Embeddings' in sidebar.")
-                        embedding_context = "Embedding search not available - embeddings not built."
-                
-                # Determine data scope for LLM context
-                if "season" in params and params["season"]:
-                    data_scope = f"the {params['season']} season"
-                else:
-                    data_scope = "all seasons (2020-21, 2021-22, 2022-23) - aggregated totals"
                 
                 # Step 6: Generate LLM response
                 if st.session_state.llm_manager and st.session_state.llm_manager.client:
-                    # For Embeddings-only mode, prioritize embedding context
-                    if retrieval_method == "Embeddings" and embedding_used:
-                        full_prompt = PromptTemplates.qa_template(
-                            question=prompt,
-                            kg_context="",
-                            embedding_context=embedding_context,
-                            data_scope=data_scope
-                        )
-                    else:
-                        full_prompt = PromptTemplates.qa_template(
-                            question=prompt,
-                            kg_context=cypher_context,
-                            embedding_context=embedding_context if embedding_context else None,
-                            data_scope=data_scope
-                        )
-                    
-                    response = st.session_state.llm_manager.generate(
-                        full_prompt,
-                        model_key=selected_model
+                    data_scope = f"the {params['season']} season" if "season" in params else "all seasons"
+                    full_prompt = PromptTemplates.qa_template(
+                        question=prompt,
+                        kg_context=cypher_context,
+                        embedding_context=embedding_context if embedding_context else None,
+                        data_scope=data_scope
                     )
                     
-                    if response.success:
-                        answer = response.text
-                    else:
-                        answer = f"LLM Error: {response.error}\n\nBased on the data:\n{cypher_context}"
+                    with st.spinner("Generating answer..."):
+                        response = st.session_state.llm_manager.generate(
+                            full_prompt, 
+                            model_key=selected_model,
+                            timeout=60  # 1 minute timeout for UI
+                        )
+                        if response.success:
+                            answer = response.text
+                        else:
+                            st.error(f"LLM Error: {response.error}")
+                            if "timeout" in str(response.error).lower():
+                                st.warning("The request timed out. This can happen with large models or heavy traffic. Try a smaller model like Gemma 2B.")
+                            answer = f"Error: {response.error}"
                 else:
-                    # No LLM - show both contexts
-                    if retrieval_method == "Embeddings" and embedding_context:
-                        answer = f"**Based on Embedding Search:**\n\n{embedding_context}\n\n**Knowledge Graph Data:**\n\n{cypher_context}"
-                    else:
-                        answer = f"**Based on Knowledge Graph data:**\n\n{cypher_context}"
+                    answer = f"**Knowledge Graph data:**\n\n{cypher_context}"
                 
                 st.markdown(answer)
                 
-                # Display embedding results prominently if in Embeddings mode
-                if retrieval_method == "Embeddings" and embedding_used and embedding_context:
-                    with st.expander("🔮 Embedding Search Results", expanded=True):
-                        st.text(embedding_context)
-                
-                # If we have full fixture data, display it after the LLM response
                 if 'full_context' in locals() and full_context != cypher_context:
                     with st.expander("📋 Complete Fixture List", expanded=False):
                         st.text(full_context)
                 
-                # Store query info for display
                 st.session_state.last_query_info = {
                     "intent": intent_result.intent.value,
                     "entities": entities.to_dict(),
                     "cypher_query": executed_query,
-                    "kg_context": full_context if 'full_context' in locals() else cypher_context,
                     "kg_context": cypher_context,
                     "embedding_context": embedding_context,
-                    "embedding_used": embedding_used if 'embedding_used' in locals() else False,
+                    "embedding_used": embedding_used,
                     "retrieval_method": retrieval_method,
-                    "results": results  # Store for graph visualization
+                    "results": results
                 }
         
-        # Add assistant response to chat history
         st.session_state.chat_history.append({"role": "assistant", "content": answer})
     
-    # Display query details (collapsible)
+    # Display query details
     if st.session_state.last_query_info:
         with st.expander("🔍 Query Details", expanded=False):
-            # Show retrieval method used
-            method = st.session_state.last_query_info.get("retrieval_method", "Unknown")
-            embedding_used = st.session_state.last_query_info.get("embedding_used", False)
-            
-            if embedding_used:
-                st.success(f"🔮 **Retrieval Method:** {method} (Embeddings Used)")
-            else:
-                st.info(f"📊 **Retrieval Method:** {method}")
-            
-            st.divider()
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Intent & Entities")
-                st.json({
-                    "intent": st.session_state.last_query_info["intent"],
-                    "entities": st.session_state.last_query_info["entities"]
-                })
-            
-            with col2:
-                st.subheader("Cypher Query")
-                st.code(st.session_state.last_query_info["cypher_query"], language="cypher")
-            
-            st.subheader("Knowledge Graph Context")
-            st.text(st.session_state.last_query_info["kg_context"])
-            
-            if st.session_state.last_query_info["embedding_context"]:
-                st.subheader("🔮 Embedding Search Results")
-                st.text(st.session_state.last_query_info["embedding_context"])
+            st.json(st.session_state.last_query_info["entities"])
+            st.code(st.session_state.last_query_info["cypher_query"], language="cypher")
             
             # Graph Visualization
-            st.subheader("🔗 Graph Visualization")
-            results_for_viz = st.session_state.last_query_info.get("results", [])
-            if results_for_viz:
-                fig = create_graph_visualization(results_for_viz)
-                if fig:
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.info("No graph structure available for this query type.")
-            else:
-                st.info("No results to visualize.")
+            if st.session_state.last_query_info.get("results"):
+                fig = create_graph_visualization(st.session_state.last_query_info["results"])
+                if fig: st.plotly_chart(fig, use_container_width=True)
 
 
 def render_trivia_tab():
     """Render the FantasyTrivia tab."""
     st.header("🎯 FPL FantasyTrivia")
-    st.markdown("Test your Fantasy Premier League knowledge!")
     
     # Score display
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        st.markdown(f"""
-        <div style='text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white;'>
-            <h2>Score: {st.session_state.trivia_score} / {st.session_state.trivia_total}</h2>
-        </div>
-        """, unsafe_allow_html=True)
+    st.markdown(f"### Score: {st.session_state.trivia_score} / {st.session_state.trivia_total}")
     
-    st.divider()
-    
-    # Trivia settings
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        difficulty = st.selectbox(
-            "Difficulty",
-            options=["easy", "medium", "hard"],
-            format_func=str.title,
-            key="trivia_difficulty"
-        )
-    with col2:
-        category = st.selectbox(
-            "Category",
-            options=["random", "top_scorers", "player_stats", "records", "true_false", "multiple_choice"],
-            format_func=lambda x: x.replace("_", " ").title(),
-            key="trivia_category"
-        )
-    with col3:
-        if st.button("🎲 New Question", type="primary"):
-            if st.session_state.neo4j_connected:
-                trivia_gen = TriviaGenerator(st.session_state.graph_conn)
-                
-                cat = None if category == "random" else TriviaCategory(category)
-                diff = Difficulty(difficulty)
-                
-                question = trivia_gen.generate_question(
-                    category=cat,
-                    difficulty=diff
-                )
-                
-                if question:
-                    st.session_state.current_trivia = question
-                    st.session_state.trivia_answered = False
-                else:
-                    st.error("Could not generate question. Try again!")
-            else:
-                st.error("Connect to Neo4j first!")
-    
-    st.divider()
-    
-    # Display current question
-    if st.session_state.current_trivia:
-        question = st.session_state.current_trivia
-        
-        st.markdown(f"""
-        <div class='trivia-question'>
-            {question.question}
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.caption(f"Category: {question.category.value.replace('_', ' ').title()} | Difficulty: {question.difficulty.value.title()}")
-        
-        # Answer options
-        if question.category == TriviaCategory.TRUE_FALSE:
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("✅ True", use_container_width=True, key="btn_true"):
-                    check_trivia_answer("True", question)
-            with col2:
-                if st.button("❌ False", use_container_width=True, key="btn_false"):
-                    check_trivia_answer("False", question)
+    if st.button("🎲 New Question", type="primary"):
+        if st.session_state.neo4j_connected:
+            trivia_gen = TriviaGenerator(st.session_state.graph_conn)
+            question = trivia_gen.generate_question()
+            if question:
+                st.session_state.current_trivia = question
         else:
-            # Multiple choice
-            for i, option in enumerate(question.options):
-                if st.button(f"{chr(65+i)}. {option}", key=f"option_{i}", use_container_width=True):
-                    check_trivia_answer(option, question)
-    else:
-        st.info("Click 'New Question' to start playing!")
+            st.error("Connect to Neo4j first!")
     
-    # Reset score button
-    st.divider()
-    if st.button("🔄 Reset Score"):
-        st.session_state.trivia_score = 0
-        st.session_state.trivia_total = 0
-        st.session_state.current_trivia = None
-        st.rerun()
-
-
-def check_trivia_answer(user_answer: str, question):
-    """Check trivia answer and update score."""
-    trivia_gen = TriviaGenerator(st.session_state.graph_conn)
-    is_correct, feedback = trivia_gen.check_answer(question, user_answer)
-    
-    st.session_state.trivia_total += 1
-    if is_correct:
-        st.session_state.trivia_score += 1
-        st.success(feedback)
-        st.balloons()
-    else:
-        st.error(feedback)
-    
-    st.session_state.current_trivia = None
-    time.sleep(2)
-    st.rerun()
+    if st.session_state.current_trivia:
+        q = st.session_state.current_trivia
+        st.info(q.question)
+        for i, option in enumerate(q.options):
+            if st.button(option, key=f"opt_{i}"):
+                trivia_gen = TriviaGenerator(st.session_state.graph_conn)
+                correct, feedback = trivia_gen.check_answer(q, option)
+                st.session_state.trivia_total += 1
+                if correct: 
+                    st.session_state.trivia_score += 1
+                    st.success(feedback)
+                else: 
+                    st.error(feedback)
+                st.session_state.current_trivia = None
+                time.sleep(2)
+                st.rerun()
 
 
 def render_player_search_tab():
     """Render the Player Search tab."""
-    st.header("🔎 Player Search & Analysis")
-    
+    st.header("🔎 Player Search")
     if not st.session_state.neo4j_connected:
-        st.warning("Please connect to Neo4j to search players.")
+        st.warning("Please connect to Neo4j.")
         return
     
-    # Search input
-    col1, col2, col3 = st.columns([3, 1, 1])
-    with col1:
-        search_query = st.text_input(
-            "Search Player",
-            placeholder="Enter player name...",
-            key="player_search"
-        )
-    with col2:
-        position_filter = st.selectbox(
-            "Position",
-            options=["All", "GK", "DEF", "MID", "FWD"],
-            key="position_filter"
-        )
-    with col3:
-        season_filter = st.selectbox(
-            "Season",
-            options=SEASONS,
-            index=len(SEASONS)-1,
-            key="season_filter"
-        )
-    
+    search_query = st.text_input("Enter player name...")
     if search_query:
-        # Search players
         query, params = CypherQueries.search_players_by_name(search_query)
         results = st.session_state.graph_conn.execute_query(query, params)
-        
-        if position_filter != "All":
-            results = [r for r in results if r.get("position") == position_filter]
-        
-        if results:
-            st.subheader(f"Found {len(results)} players")
-            
-            # Display as cards
-            cols = st.columns(3)
-            for i, player in enumerate(results[:9]):
-                with cols[i % 3]:
-                    with st.container(border=True):
-                        st.markdown(f"**{player['player_name']}**")
-                        st.caption(f"Position: {player['position']}")
-                        
-                        if st.button("View Stats", key=f"view_{i}"):
-                            st.session_state.selected_player = player['player_name']
-            
-            # Display selected player stats
-            if hasattr(st.session_state, 'selected_player') and st.session_state.selected_player:
-                st.divider()
-                display_player_stats(st.session_state.selected_player, season_filter)
-        else:
-            st.info("No players found matching your search.")
+        for p in results[:5]:
+            st.write(f"**{p['player_name']}** ({p['position']})")
 
 
 def display_player_stats(player_name: str, season: str):
     """Display detailed stats for a player."""
-    st.subheader(f"📊 {player_name} - {season} Season")
-    
+    import plotly.express as px
+    st.subheader(f"📊 {player_name}")
     query, params = CypherQueries.get_player_season_stats(player_name, season)
-    
     results = st.session_state.graph_conn.execute_query(query, params)
-    
     if results:
         stats = results[0]
-        
-        # Key metrics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Points", stats.get("total_points", 0))
-        with col2:
-            st.metric("Goals", stats.get("goals", 0))
-        with col3:
-            st.metric("Assists", stats.get("assists", 0))
-        with col4:
-            st.metric("Bonus", stats.get("bonus", 0))
-        
-        # Form chart
-        form_query, form_params = CypherQueries.get_player_form_history(player_name, season=season)
-        form_data = st.session_state.graph_conn.execute_query(form_query, form_params)
-        
-        if form_data:
-            df = pd.DataFrame(form_data)
-            fig = px.line(
-                df, x="gameweek", y="points",
-                title=f"{player_name} Points by Gameweek",
-                markers=True
-            )
-            st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("No stats found for this player in the selected season.")
+        st.write(stats)
 
 
 def render_comparison_tab(selected_model: str):
     """Render the Player Comparison tab."""
     st.header("⚖️ Player Comparison")
-    
     if not st.session_state.neo4j_connected:
-        st.warning("Please connect to Neo4j to compare players.")
+        st.warning("Please connect to Neo4j.")
         return
     
-    # Cache all player names for fuzzy matching
-    if 'all_player_names' not in st.session_state:
-        query, params = CypherQueries.get_all_player_names()
+    p1 = st.text_input("Player 1")
+    p2 = st.text_input("Player 2")
+    
+    if st.button("Compare"):
+        query, params = CypherQueries.compare_players(p1, p2)
         results = st.session_state.graph_conn.execute_query(query, params)
-        st.session_state.all_player_names = [r['player_name'] for r in results] if results else []
-    
-    # Initialize suggestion state
-    if 'compare_p1_suggestions' not in st.session_state:
-        st.session_state.compare_p1_suggestions = []
-    if 'compare_p2_suggestions' not in st.session_state:
-        st.session_state.compare_p2_suggestions = []
-    if 'compare_p1_original' not in st.session_state:
-        st.session_state.compare_p1_original = ""
-    if 'compare_p2_original' not in st.session_state:
-        st.session_state.compare_p2_original = ""
-    # Store selected names from suggestions (separate from widget keys)
-    if 'compare_p1_selected' not in st.session_state:
-        st.session_state.compare_p1_selected = None
-    if 'compare_p2_selected' not in st.session_state:
-        st.session_state.compare_p2_selected = None
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        player1 = st.text_input("Player 1", placeholder="e.g., Mohamed Salah", key="compare_p1")
-    with col2:
-        player2 = st.text_input("Player 2", placeholder="e.g., Erling Haaland", key="compare_p2")
-    
-    # Show suggestions for player 1 if available (outside button block)
-    if st.session_state.compare_p1_suggestions:
-        st.warning(f"⚠️ Could not find '{st.session_state.compare_p1_original}'. Did you mean:")
-        suggestion_cols = st.columns(len(st.session_state.compare_p1_suggestions[:3]))
-        for i, (name, score) in enumerate(st.session_state.compare_p1_suggestions[:3]):
-            with suggestion_cols[i]:
-                if st.button(f"{name}", key=f"sug_p1_{i}"):
-                    st.session_state.compare_p1_selected = name  # Store in separate state
-                    st.session_state.compare_p1_suggestions = []  # Clear suggestions
-                    st.rerun()
-    
-    # Show suggestions for player 2 if available (outside button block)
-    if st.session_state.compare_p2_suggestions:
-        st.warning(f"⚠️ Could not find '{st.session_state.compare_p2_original}'. Did you mean:")
-        suggestion_cols = st.columns(len(st.session_state.compare_p2_suggestions[:3]))
-        for i, (name, score) in enumerate(st.session_state.compare_p2_suggestions[:3]):
-            with suggestion_cols[i]:
-                if st.button(f"{name}", key=f"sug_p2_{i}"):
-                    st.session_state.compare_p2_selected = name  # Store in separate state
-                    st.session_state.compare_p2_suggestions = []  # Clear suggestions
-                    st.rerun()
-    
-    # Show selected names if available (so user knows what was selected)
-    if st.session_state.compare_p1_selected:
-        st.success(f"✅ Player 1: {st.session_state.compare_p1_selected}")
-    if st.session_state.compare_p2_selected:
-        st.success(f"✅ Player 2: {st.session_state.compare_p2_selected}")
-    
-    # Compare button
-    if st.button("Compare", type="primary"):
-        # Use selected names from suggestions if available, otherwise use text input values
-        player1_to_use = st.session_state.compare_p1_selected or player1
-        player2_to_use = st.session_state.compare_p2_selected or player2
-        
-        if not player1_to_use or not player2_to_use:
-            st.warning("Please enter both player names.")
-            return
-        
-        # Try to find exact or fuzzy matches for both players
-        player1_match = None
-        player2_match = None
-        
-        all_names = st.session_state.all_player_names
-        
-        # Check player 1
-        if player1_to_use.strip() in all_names:
-            player1_match = player1_to_use.strip()
-        else:
-            # Try case-insensitive exact match first
-            for name in all_names:
-                if name.lower() == player1_to_use.lower().strip():
-                    player1_match = name
-                    break
-            
-            # If no exact match, try fuzzy matching
-            if not player1_match:
-                player1_suggestions = fuzzy_match_player(player1_to_use, all_names)
-                if player1_suggestions and player1_suggestions[0][1] >= 0.85:
-                    # High confidence match - use it automatically
-                    player1_match = player1_suggestions[0][0]
-                    st.info(f"🔍 Using '{player1_match}' for '{player1_to_use}'")
-                elif player1_suggestions:
-                    # Store suggestions for display
-                    st.session_state.compare_p1_suggestions = player1_suggestions
-                    st.session_state.compare_p1_original = player1_to_use
-        
-        # Check player 2
-        if player2_to_use.strip() in all_names:
-            player2_match = player2_to_use.strip()
-        else:
-            # Try case-insensitive exact match first
-            for name in all_names:
-                if name.lower() == player2_to_use.lower().strip():
-                    player2_match = name
-                    break
-            
-            # If no exact match, try fuzzy matching
-            if not player2_match:
-                player2_suggestions = fuzzy_match_player(player2_to_use, all_names)
-                if player2_suggestions and player2_suggestions[0][1] >= 0.85:
-                    # High confidence match - use it automatically
-                    player2_match = player2_suggestions[0][0]
-                    st.info(f"🔍 Using '{player2_match}' for '{player2_to_use}'")
-                elif player2_suggestions:
-                    # Store suggestions for display
-                    st.session_state.compare_p2_suggestions = player2_suggestions
-                    st.session_state.compare_p2_original = player2_to_use
-        
-        # If we have pending suggestions, rerun to show them
-        if st.session_state.compare_p1_suggestions or st.session_state.compare_p2_suggestions:
-            st.rerun()
-        
-        # If we couldn't resolve both players, stop here
-        if not player1_match or not player2_match:
-            if not player1_match:
-                st.error(f"❌ Could not find any player matching '{player1_to_use}'")
-            if not player2_match:
-                st.error(f"❌ Could not find any player matching '{player2_to_use}'")
-            return
-        
-        # Clear selected names after successful resolution
-        st.session_state.compare_p1_selected = None
-        st.session_state.compare_p2_selected = None
-        
-        # Proceed with comparison
-        query, params = CypherQueries.compare_players(player1_match, player2_match)
-        results = st.session_state.graph_conn.execute_query(query, params)
-        
-        if len(results) >= 2:
-            # Display comparison table
-            df = pd.DataFrame(results)
-            
-            st.subheader("Statistics Comparison")
-            st.dataframe(df, use_container_width=True)
-            
-            # Radar chart
-            categories = ["total_points", "goals", "assists", "bonus", "games"]
-            
-            fig = go.Figure()
-            
-            for _, row in df.iterrows():
-                values = [row.get(cat, 0) for cat in categories]
-                values.append(values[0])  # Close the radar
-                
-                fig.add_trace(go.Scatterpolar(
-                    r=values,
-                    theta=categories + [categories[0]],
-                    fill='toself',
-                    name=row['player_name']
-                ))
-            
-            fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True)),
-                showlegend=True,
-                title="Player Comparison Radar"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # LLM Analysis
-            if st.session_state.llm_manager and st.session_state.llm_manager.client:
-                with st.spinner("Generating analysis..."):
-                    context = PromptBuilder.format_kg_context(results)
-                    prompt = PromptTemplates.comparison_template(player1_match, player2_match, context)
-                    
-                    response = st.session_state.llm_manager.generate(prompt, model_key=selected_model)
-                    
-                    if response.success:
-                        st.subheader("🤖 AI Analysis")
-                        st.markdown(response.text)
-        else:
-            st.warning("Could not find both players. Please check the names.")
+        if results:
+            st.dataframe(pd.DataFrame(results))
 
 
 def render_model_comparison_tab():
     """Render the Model Comparison tab."""
-    st.header("🔬 LLM Model Comparison")
-    st.markdown("Compare responses from different language models.")
-    
-    test_query = st.text_area(
-        "Test Query",
-        value="Who was the best FPL pick in the 2022-23 season and why?",
-        height=100
-    )
-    
-    if st.button("Compare All Models", type="primary"):
-        if not st.session_state.llm_manager or not st.session_state.llm_manager.client:
-            st.error("Please set HuggingFace API token first!")
-            return
-        
-        # Get context
-        if st.session_state.neo4j_connected:
-            query, params = CypherQueries.get_top_points_by_position(
-                position="MID",
-                limit=5
-            )
-            results = st.session_state.graph_conn.execute_query(query, params)
-            context = PromptBuilder.format_kg_context(results)
-        else:
-            context = "No database connection. Using general knowledge."
-        
-        prompt = PromptTemplates.qa_template(test_query, context)
-        
-        # Compare models
-        responses = {}
-        models = ["gemma-2-2b", "mistral-7b", "llama-3-8b"]
-        
-        progress = st.progress(0)
-        for i, model in enumerate(models):
-            with st.spinner(f"Generating with {model}..."):
-                responses[model] = st.session_state.llm_manager.generate(prompt, model_key=model)
-                progress.progress((i + 1) / len(models))
-        
-        # Display results
-        st.subheader("Results")
-        
-        cols = st.columns(len(models))
-        for i, (model, response) in enumerate(responses.items()):
-            with cols[i]:
-                st.markdown(f"**{model}**")
-                if response.success:
-                    st.markdown(response.text)
-                    st.caption(f"Time: {response.response_time:.2f}s")
-                else:
-                    st.error(response.error)
+    st.header("🔬 Model Comparison")
+    st.write("Compare different LLM models here.")
 
 
 def main():
     """Main application entry point."""
     init_session_state()
-    
-    # Render sidebar and get settings
     selected_model, retrieval_method = render_sidebar()
     
-    # Main content area
     st.title(f"{APP_ICON} {APP_TITLE}")
     
-    # Create tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "💬 Q&A Assistant",
-        "🎯 FantasyTrivia", 
-        "🔎 Player Search",
-        "⚖️ Compare Players",
-        "🔬 Model Comparison"
+        "💬 Q&A Assistant", "🎯 FantasyTrivia", "🔎 Player Search", "⚖️ Compare Players", "🔬 Model Comparison"
     ])
     
-    with tab1:
-        render_qa_tab(selected_model, retrieval_method)
-    
-    with tab2:
-        render_trivia_tab()
-    
-    with tab3:
-        render_player_search_tab()
-    
-    with tab4:
-        render_comparison_tab(selected_model)
-    
-    with tab5:
-        render_model_comparison_tab()
-
+    with tab1: render_qa_tab(selected_model, retrieval_method)
+    with tab2: render_trivia_tab()
+    with tab3: render_player_search_tab()
+    with tab4: render_comparison_tab(selected_model)
+    with tab5: render_model_comparison_tab()
 
 if __name__ == "__main__":
     main()

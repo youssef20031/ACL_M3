@@ -856,9 +856,10 @@ class CypherQueries:
         """
         query = """
         MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
-        OPTIONAL MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+        MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
         OPTIONAL MATCH (f)-[:HOME_TEAM]->(ht:Team)
         OPTIONAL MATCH (f)-[:AWAY_TEAM]->(at:Team)
+        WITH p, s, pos, r, ht, at
         WITH p, s, pos,
              SUM(r.total_points) as total_points,
              SUM(r.goals_scored) as goals_scored,
@@ -878,14 +879,16 @@ class CypherQueries:
              SUM(r.yellow_cards) as yellow_cards,
              SUM(r.red_cards) as red_cards,
              COUNT(r) as games,
-             (COLLECT(ht.name) + COLLECT(at.name)) as teams
+             COLLECT(DISTINCT ht.name) as home_teams,
+             COLLECT(DISTINCT at.name) as away_teams
         RETURN p.name as name, 
                COALESCE(s.name, s.id) as season,
                COALESCE(pos.code, 'Unknown') as position,
                total_points, goals_scored, assists, clean_sheets,
                bonus, bps, minutes, ict_index, influence, creativity,
                threat, value, selected, saves, goals_conceded,
-               yellow_cards, red_cards, games, teams
+               yellow_cards, red_cards, games,
+               (home_teams + away_teams) as teams
         """
         return query, {}
 

@@ -26,20 +26,25 @@ class Neo4jConnection:
         self.password = password
         self.driver = None
         self._connect()
-    
     def _connect(self):
         """Establish connection to Neo4j database."""
         try:
             self.driver = GraphDatabase.driver(
                 self.uri, 
-                auth=(self.user, self.password)
+                auth=(self.user, self.password),
+                connection_timeout=30,  # 30 seconds timeout
+                max_connection_lifetime=3600,
+                max_connection_pool_size=50,
+                connection_acquisition_timeout=60
             )
             # Verify connection
             self.driver.verify_connectivity()
-            logger.info(f"Successfully connected to Neo4j at {self.uri}")
+            logger.info(f"Connected to Neo4j at {self.uri}")
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {e}")
+            self.driver = None
             raise
+
     
     def close(self):
         """Close the database connection."""

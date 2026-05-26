@@ -13,8 +13,8 @@ langchain-community>=0.0.10
 langchain-huggingface>=0.0.1
 
 # Embeddings
-sentence-transformers==2.5.1
-transformers==4.35.2
+sentence-transformers>=2.5.1
+transformers>=4.35.2
 
 # HuggingFace Integration
 huggingface_hub>=0.15.1

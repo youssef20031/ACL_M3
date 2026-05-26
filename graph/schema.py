@@ -82,6 +82,14 @@ class GraphSchema:
                 logger.info(f"Created index: {index[:50]}...")
             except Exception as e:
                 logger.warning(f"Index may already exist: {e}")
+        
+        # Wait for indexes to be online
+        try:
+            logger.info("Waiting for indexes to be online...")
+            self.conn.execute_query("CALL db.awaitIndexes(60)")  # Wait up to 60 seconds
+            logger.info("Indexes are online.")
+        except Exception as e:
+            logger.warning(f"Wait for indexes failed: {e}")
     
     def create_vector_index(self, embedding_dim: int = 384):
         """

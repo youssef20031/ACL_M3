@@ -353,3 +353,9 @@ Most limitations are **documented trade-offs** made for:
 - Development time constraints
 - System simplicity
 - Performance optimization
+
+## System Resource Limitations
+
+**Issue:** High memory usage due to heavy NLP stack (spaCy, Sentence-Transformers, Torch).
+**Impact:** May cause server timeouts or ERR_EMPTY_RESPONSE if the host has less than 8GB of RAM.
+**Recommendation:** Ensure at least 8GB of system RAM. If running in Docker, allocate at least 4GB to the web container and 2GB to Neo4j.
