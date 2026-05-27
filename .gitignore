@@ -2,7 +2,7 @@
 .env
 .env.example
 .env.local
-.env.production
+# .env.production is committed (contains public Railway URL)
 
 # Python
 .venv/
