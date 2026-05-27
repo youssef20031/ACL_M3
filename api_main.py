@@ -294,6 +294,18 @@ async def root():
     }
 
 
+@app.get("/debug/env")
+async def debug_env():
+    """Temporary: show what Neo4j config Railway is using (no password)."""
+    return {
+        "NEO4J_URI": NEO4J_URI,
+        "NEO4J_USER": NEO4J_USER,
+        "NEO4J_PASSWORD_LENGTH": len(NEO4J_PASSWORD),
+        "NEO4J_PASSWORD_FIRST4": NEO4J_PASSWORD[:4] if NEO4J_PASSWORD else "EMPTY",
+        "neo4j_connected": app_state["neo4j_conn"] is not None,
+    }
+
+
 @app.get("/health")
 async def health_check():
     """Detailed health check."""
