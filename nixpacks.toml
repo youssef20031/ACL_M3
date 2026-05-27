@@ -5,8 +5,8 @@ nixPkgs = ["python311", "gcc", "g++"]
 cmds = [
   "pip install --upgrade pip",
   "pip install -r requirements.txt",
-  "python -m spacy download en_core_web_sm",
-  "python -m nltk.downloader punkt stopwords wordnet"
+  "python -m spacy download en_core_web_sm || true",
+  "python -c 'import nltk; nltk.download(\"punkt\", quiet=True); nltk.download(\"stopwords\", quiet=True); nltk.download(\"wordnet\", quiet=True)' || true"
 ]
 
 [start]

@@ -47,34 +47,23 @@ async def lifespan(app: FastAPI):
     # Startup
     print("🚀 Initializing FPL FantasyTrivia API...")
     
-    # Initialize ML models
-    app_state["intent_classifier"] = IntentClassifier()
-    app_state["entity_extractor"] = EntityExtractor()
-    
-    # Initialize LLM manager
+    # Initialize LLM manager first (lightweight)
     if HUGGINGFACE_API_TOKEN:
         app_state["llm_manager"] = LLMManager(api_token=HUGGINGFACE_API_TOKEN)
     
-    # Connect to Neo4j
+    # Connect to Neo4j (fast)
     try:
         conn = Neo4jConnection(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
         if conn.test_connection():
             app_state["neo4j_conn"] = conn
             print("✅ Neo4j connected")
-            
-            # Load known players for entity extraction
-            try:
-                query, _ = CypherQueries.get_all_player_names()
-                results = conn.execute_query(query)
-                if results:
-                    players = {r['player_name'] for r in results}
-                    app_state["entity_extractor"].set_known_players(players)
-            except Exception as e:
-                print(f"Warning: Failed to load player names: {e}")
     except Exception as e:
         print(f"⚠️  Neo4j connection failed: {e}")
     
     print("✅ API Ready!")
+    
+    # Defer heavy ML model initialization to first use
+    # This makes startup much faster
     
     yield
     
@@ -182,6 +171,33 @@ class DataLoadRequest(BaseModel):
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
+def get_intent_classifier():
+    """Lazy load intent classifier."""
+    if not app_state["intent_classifier"]:
+        print("🔄 Loading intent classifier...")
+        app_state["intent_classifier"] = IntentClassifier()
+    return app_state["intent_classifier"]
+
+
+def get_entity_extractor():
+    """Lazy load entity extractor."""
+    if not app_state["entity_extractor"]:
+        print("🔄 Loading entity extractor...")
+        app_state["entity_extractor"] = EntityExtractor()
+        
+        # Load known players if Neo4j is connected
+        if app_state["neo4j_conn"]:
+            try:
+                query, _ = CypherQueries.get_all_player_names()
+                results = app_state["neo4j_conn"].execute_query(query)
+                if results:
+                    players = {r['player_name'] for r in results}
+                    app_state["entity_extractor"].set_known_players(players)
+            except Exception as e:
+                print(f"Warning: Failed to load player names: {e}")
+    return app_state["entity_extractor"]
+
 
 def get_neo4j_conn():
     """Dependency to get Neo4j connection."""
@@ -339,14 +355,16 @@ async def disconnect_neo4j():
 async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
     """Process FPL query and return answer."""
     try:
-        # Step 1: Intent Classification
-        intent_result = app_state["intent_classifier"].classify(request.question)
+        # Step 1: Intent Classification (lazy load)
+        intent_classifier = get_intent_classifier()
+        intent_result = intent_classifier.classify(request.question)
         
-        # Step 2: Entity Extraction
-        entities = app_state["entity_extractor"].extract(request.question)
+        # Step 2: Entity Extraction (lazy load)
+        entity_extractor = get_entity_extractor()
+        entities = entity_extractor.extract(request.question)
         
         # Step 3: Get query parameters
-        params = app_state["entity_extractor"].get_query_parameters(entities)
+        params = entity_extractor.get_query_parameters(entities)
         
         # Step 4: Execute Cypher query
         query_executor = QueryExecutor(conn)
@@ -354,7 +372,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         executed_query = ""
         results = []
         
-        query_method = app_state["intent_classifier"].get_query_type_for_intent(intent_result.intent)
+        query_method = intent_classifier.get_query_type_for_intent(intent_result.intent)
         
         if query_method:
             # Ensure required parameters
@@ -646,12 +664,13 @@ async def load_fpl_data(request: DataLoadRequest, conn=Depends(get_neo4j_conn)):
         loader = FPLDataLoader(conn)
         stats = loader.load_all(DATA_PATH, clear_existing=request.clear_existing)
         
-        # Reload player names for entity extraction
-        query, _ = CypherQueries.get_all_player_names()
-        results = conn.execute_query(query)
-        if results:
-            players = {r['player_name'] for r in results}
-            app_state["entity_extractor"].set_known_players(players)
+        # Reload player names for entity extraction (if already loaded)
+        if app_state["entity_extractor"]:
+            query, _ = CypherQueries.get_all_player_names()
+            results = conn.execute_query(query)
+            if results:
+                players = {r['player_name'] for r in results}
+                app_state["entity_extractor"].set_known_players(players)
         
         return {"success": True, "stats": stats}
     except Exception as e:
