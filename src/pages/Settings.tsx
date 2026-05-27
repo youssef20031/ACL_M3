@@ -52,7 +52,7 @@ export function Settings() {
     setEmbeddingModel,
   } = useAppStore();
 
-  const [uri, setUri] = useState('bolt://localhost:7687');
+  const [uri, setUri] = useState('');
   const [username, setUsername] = useState('neo4j');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -152,7 +152,7 @@ export function Settings() {
               type="text"
               value={uri}
               onChange={(e) => setUri(e.target.value)}
-              placeholder="bolt://localhost:7687"
+              placeholder="neo4j+s://xxxxxxxx.databases.neo4j.io"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
