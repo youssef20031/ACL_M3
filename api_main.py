@@ -257,12 +257,10 @@ def build_graph_data(results: List[Dict], limit: int = 20) -> Dict[str, Any]:
 
 @app.get("/")
 async def root():
-    """Health check endpoint."""
+    """Health check endpoint - lightweight for Railway."""
     return {
         "message": "FPL FantasyTrivia API",
-        "status": "running",
-        "neo4j_connected": app_state["neo4j_conn"] is not None,
-        "embeddings_built": app_state["embeddings_built"]
+        "status": "running"
     }
 
 
