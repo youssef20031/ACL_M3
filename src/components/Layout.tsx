@@ -52,18 +52,18 @@ export function Layout() {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex min-h-[100dvh] flex-col bg-gray-50 lg:flex-row">
       {/* Sidebar */}
-      <aside className="w-64 bg-gradient-to-br from-purple-600 to-indigo-700 text-white flex flex-col">
-        <div className="p-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+      <aside className="flex w-full flex-col bg-gradient-to-br from-purple-600 to-indigo-700 text-white lg:w-64 lg:min-h-[100dvh]">
+        <div className="px-4 py-4 sm:px-6 lg:p-6">
+          <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
             ⚽ FPL FantasyTrivia
           </h1>
-          <p className="text-purple-200 text-sm mt-1">Graph-RAG Q&A System</p>
+          <p className="mt-1 text-sm text-purple-200">Graph-RAG Q&A System</p>
         </div>
 
         {/* Status */}
-        <div className="px-6 py-3 bg-purple-700/30 border-y border-purple-500/30">
+        <div className="border-y border-purple-500/30 bg-purple-700/30 px-4 py-3 sm:px-6">
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -111,14 +111,15 @@ export function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
+        <nav className="flex-1 overflow-x-auto px-2 py-3 sm:px-3 lg:space-y-1 lg:overflow-visible lg:px-3">
+          <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                  'flex min-w-max items-center gap-3 rounded-lg px-3 py-2.5 transition-colors lg:min-w-0',
                   'hover:bg-purple-500/30',
                   isActive
                     ? 'bg-white text-purple-700 font-medium shadow-lg'
@@ -130,17 +131,18 @@ export function Layout() {
               <span>{item.label}</span>
             </NavLink>
           ))}
+          </div>
         </nav>
 
         {/* Footer */}
-        <div className="p-4 text-xs text-purple-200 border-t border-purple-500/30">
+        <div className="border-t border-purple-500/30 p-4 text-xs text-purple-200">
           <p>© 2024 FPL FantasyTrivia</p>
           <p className="mt-1">Powered by Neo4j & FastAPI</p>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto">
+      <main className="min-w-0 flex-1 overflow-auto">
         <Outlet />
       </main>
     </div>

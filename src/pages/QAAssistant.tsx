@@ -70,14 +70,14 @@ export function QAAssistant() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">💬 FPL Q&A Assistant</h2>
+      <div className="bg-white border-b px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">💬 FPL Q&A Assistant</h2>
           <p className="text-sm text-gray-600">
             Ask questions about Fantasy Premier League players and statistics
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowDetails(!showDetails)}
             className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
@@ -94,7 +94,7 @@ export function QAAssistant() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 sm:px-6">
         {!neo4jConnected && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
@@ -224,8 +224,8 @@ export function QAAssistant() {
       )}
 
       {/* Input Form */}
-      <div className="bg-white border-t px-6 py-4">
-        <form onSubmit={handleSubmit} className="flex gap-3">
+      <div className="bg-white border-t px-4 py-4 sm:px-6">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
           <input
             type="text"
             value={input}
@@ -236,12 +236,12 @@ export function QAAssistant() {
                 : 'Connect to Neo4j first...'
             }
             disabled={!neo4jConnected || queryMutation.isPending}
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
           />
           <button
             type="submit"
             disabled={!neo4jConnected || queryMutation.isPending || !input.trim()}
-            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:w-auto"
           >
             {queryMutation.isPending ? (
               <Loader2 className="w-5 h-5 animate-spin" />

@@ -185,12 +185,12 @@ export function PlayerComparison() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="bg-white border-b px-6 py-4">
-        <h2 className="text-2xl font-bold text-gray-900">⚖️ Compare Players</h2>
+      <div className="bg-white border-b px-4 py-4 sm:px-6">
+        <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">⚖️ Compare Players</h2>
         <p className="text-sm text-gray-600 mt-1">Head-to-head stats comparison between two players</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-4xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 max-w-4xl mx-auto w-full sm:px-6">
         {!neo4jConnected && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
@@ -198,11 +198,11 @@ export function PlayerComparison() {
           </div>
         )}
 
-        <form onSubmit={handleCompare} className="bg-white border rounded-xl p-5 space-y-4" autoComplete="off">
+        <form onSubmit={handleCompare} className="bg-white border rounded-xl p-4 space-y-4 sm:p-5" autoComplete="off">
           {/* Hidden fields to deter browser autofill/credentials suggestions */}
           <input aria-hidden="true" tabIndex={-1} style={{position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden'}} type="text" name="__fake_user" autoComplete="username" />
           <input aria-hidden="true" tabIndex={-1} style={{position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden'}} type="password" name="__fake_pass" autoComplete="current-password" />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">Player 1</label>
               <input
@@ -317,7 +317,7 @@ export function PlayerComparison() {
             </div>
           </div>
 
-          <div className="flex items-end gap-4 flex-wrap">
+          <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-end">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Season (optional)</label>
               <select
@@ -336,7 +336,7 @@ export function PlayerComparison() {
             <button
               type="submit"
               disabled={!neo4jConnected || compareMutation.isPending || !player1.trim() || !player2.trim()}
-              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:w-auto"
             >
               {compareMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -435,7 +435,7 @@ function ComparisonResults({ p1, p2 }: { p1: PlayerStats; p2: PlayerStats }) {
   return (
     <div className="space-y-6">
       {/* Player headers */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {[p1, p2].map((p, i) => {
           const name = p.player_name ?? `Player ${i + 1}`;
           const color = i === 0 ? 'from-purple-600 to-indigo-700' : 'from-pink-500 to-rose-600';
@@ -462,7 +462,7 @@ function ComparisonResults({ p1, p2 }: { p1: PlayerStats; p2: PlayerStats }) {
       </div>
 
       {/* Stat table */}
-      <div className="bg-white border rounded-xl overflow-hidden">
+        <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <div className="grid grid-cols-3 bg-gray-50 border-b px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
           <span className="text-purple-600">{p1Name}</span>
           <span className="text-center">Stat</span>
@@ -489,7 +489,7 @@ function ComparisonResults({ p1, p2 }: { p1: PlayerStats; p2: PlayerStats }) {
       </div>
 
       {/* Bar chart */}
-      <div className="bg-white border rounded-xl p-5">
+      <div className="bg-white border rounded-xl p-4 sm:p-5">
         <h4 className="text-sm font-semibold text-gray-700 mb-4">Side-by-Side Comparison</h4>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={barStats} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
@@ -505,7 +505,7 @@ function ComparisonResults({ p1, p2 }: { p1: PlayerStats; p2: PlayerStats }) {
       </div>
 
       {/* Radar chart */}
-      <div className="bg-white border rounded-xl p-5">
+      <div className="bg-white border rounded-xl p-4 sm:p-5">
         <h4 className="text-sm font-semibold text-gray-700 mb-4">Performance Radar (normalised)</h4>
         <ResponsiveContainer width="100%" height={280}>
           <RadarChart data={radarData}>

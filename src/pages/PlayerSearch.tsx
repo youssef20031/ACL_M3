@@ -45,13 +45,13 @@ export function PlayerSearch() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="bg-white border-b px-6 py-4">
-        <h2 className="text-2xl font-bold text-gray-900">🔍 Player Search</h2>
+      <div className="bg-white border-b px-4 py-4 sm:px-6">
+        <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">🔍 Player Search</h2>
         <p className="text-sm text-gray-600 mt-1">Search for any FPL player and view their stats</p>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        <form onSubmit={handleSearch} className="flex gap-3">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 sm:px-6">
+        <form onSubmit={handleSearch} className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -60,13 +60,13 @@ export function PlayerSearch() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={neo4jConnected ? 'Search by player name...' : 'Connect to Neo4j first...'}
               disabled={!neo4jConnected}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
             />
           </div>
           <button
             type="submit"
             disabled={!neo4jConnected || searchMutation.isPending || !query.trim()}
-            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:w-auto"
           >
             {searchMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
             Search
@@ -118,7 +118,7 @@ export function PlayerSearch() {
               <button
                 key={i}
                 onClick={() => setSelectedPlayer(player)}
-                className="w-full text-left bg-white border border-gray-200 hover:border-purple-400 hover:shadow-sm rounded-xl p-4 transition-all flex items-center justify-between"
+                className="w-full text-left bg-white border border-gray-200 hover:border-purple-400 hover:shadow-sm rounded-xl p-4 transition-all flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-sm">
@@ -138,7 +138,7 @@ export function PlayerSearch() {
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-left sm:text-right">
                   {player.total_points != null && (
                     <p className="font-bold text-purple-600">{player.total_points} pts</p>
                   )}
@@ -215,7 +215,7 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {detailStats.map((s) => (
           <div key={s.label} className="bg-white border rounded-xl p-3 text-center">
             <p className="text-xl font-bold text-gray-900">{s.value}</p>

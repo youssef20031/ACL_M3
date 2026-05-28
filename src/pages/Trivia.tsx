@@ -78,9 +78,9 @@ export function Trivia() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">🎯 FPL FantasyTrivia</h2>
+      <div className="bg-white border-b px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">🎯 FPL FantasyTrivia</h2>
           <p className="text-sm text-gray-600">Test your Fantasy Premier League knowledge</p>
         </div>
         <button
@@ -91,9 +91,9 @@ export function Trivia() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-2xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 max-w-2xl mx-auto w-full sm:px-6">
         {/* Score cards */}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
           <ScoreCard label="Score" value={`${triviaScore} / ${triviaTotal}`} icon="🏆" />
           <ScoreCard label="Accuracy" value={`${accuracy}%`} icon="🎯" />
           <ScoreCard
@@ -125,7 +125,7 @@ export function Trivia() {
             <button
               onClick={loadNewQuestion}
               disabled={!neo4jConnected || questionQuery.isFetching}
-              className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+              className="w-full px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mx-auto sm:w-auto"
             >
               {questionQuery.isFetching ? (
                 <>
@@ -193,7 +193,7 @@ export function Trivia() {
                       key={option}
                       onClick={() => handleAnswer(option)}
                       disabled={answerState !== 'idle' || answerMutation.isPending}
-                      className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium flex items-center justify-between ${style}`}
+                      className={`w-full text-left px-4 py-3 rounded-lg border-2 transition-all text-sm font-medium flex items-center justify-between gap-3 ${style}`}
                     >
                       <span>{option}</span>
                       {answerState !== 'idle' && option === selectedAnswer && answerState === 'correct' && (
