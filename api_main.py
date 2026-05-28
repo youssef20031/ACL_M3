@@ -109,9 +109,9 @@ app.add_middleware(
 # ============================================================================
 
 class ConnectionRequest(BaseModel):
-    uri: str
-    username: str
-    password: str
+    uri: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class ConnectionResponse(BaseModel):
@@ -332,7 +332,14 @@ async def health_check():
 async def connect_neo4j(request: ConnectionRequest):
     """Connect to Neo4j database."""
     try:
-        conn = Neo4jConnection(request.uri, request.username, request.password)
+        uri = (request.uri or NEO4J_URI).strip()
+        username = (request.username or NEO4J_USER).strip()
+        password = request.password if request.password is not None else NEO4J_PASSWORD
+
+        if not password:
+            password = NEO4J_PASSWORD
+
+        conn = Neo4jConnection(uri, username, password)
         if conn.test_connection():
             # Close old connection
             if app_state["neo4j_conn"]:

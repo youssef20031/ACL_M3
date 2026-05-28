@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   MessageCircle,
   Target,
@@ -9,10 +11,37 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
+import { apiService } from '../services/api';
 import { cn } from '../utils/cn';
 
 export function Layout() {
-  const { neo4jConnected, neo4jStats, embeddingsBuilt, embeddingCount } = useAppStore();
+  const {
+    neo4jConnected,
+    neo4jStats,
+    embeddingsBuilt,
+    embeddingCount,
+    setNeo4jConnected,
+    setNeo4jStats,
+    setEmbeddingsBuilt,
+    setEmbeddingCount,
+  } = useAppStore();
+
+  const { data: health } = useQuery({
+    queryKey: ['health', 'layout'],
+    queryFn: () => apiService.getHealth(),
+    refetchInterval: 30000,
+  });
+
+  useEffect(() => {
+    if (!health) {
+      return;
+    }
+
+    setNeo4jConnected(health.neo4j === 'connected');
+    setNeo4jStats(health.neo4j_stats ?? null);
+    setEmbeddingsBuilt(health.embeddings_built);
+    setEmbeddingCount(health.embedding_count);
+  }, [health, setEmbeddingCount, setEmbeddingsBuilt, setNeo4jConnected, setNeo4jStats]);
 
   const navItems = [
     { to: '/qa', icon: MessageCircle, label: 'Q&A Assistant' },
