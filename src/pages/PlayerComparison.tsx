@@ -56,6 +56,13 @@ export function PlayerComparison() {
     compareMutation.mutate({ p1, p2, s: season });
   };
 
+  // Auto-compare when season changes if both players are set
+  useEffect(() => {
+    if (player1.trim() && player2.trim() && neo4jConnected) {
+      compareMutation.mutate({ p1: player1.trim(), p2: player2.trim(), s: season });
+    }
+  }, [season]);
+
   // helper to run search and update suggestions
   const runSearch = async (q: string, setSuggestions: (s: Suggestion[]) => void) => {
     if (!q || q.trim().length < 2) {
