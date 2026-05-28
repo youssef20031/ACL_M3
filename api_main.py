@@ -10,9 +10,11 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dataclasses import asdict
 from typing import List, Optional, Dict, Any
 import json
 import inspect
+import time
 from contextlib import asynccontextmanager
 
 # Import project modules
@@ -26,7 +28,12 @@ from graph.data_loader import FPLDataLoader
 from preprocessing.intent_classifier import IntentClassifier
 from preprocessing.entity_extractor import EntityExtractor
 from embeddings.embedding_manager import EmbeddingManager
-from trivia.trivia_generator import TriviaGenerator
+try:
+    import redis  # type: ignore
+except Exception:
+    redis = None
+
+from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
 
@@ -37,8 +44,79 @@ app_state = {
     "entity_extractor": None,
     "llm_manager": None,
     "embedding_manager": None,
-    "embeddings_built": False
+    "embeddings_built": False,
+    "trivia_cache": None,
 }
+
+
+class TriviaQuestionCache:
+    """Cache generated trivia questions for answer validation."""
+
+    def __init__(self, ttl_seconds: int = 1800):
+        self.ttl_seconds = ttl_seconds
+        self._memory: Dict[str, Dict[str, Any]] = {}
+        self._redis = None
+
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url and redis is not None:
+            try:
+                self._redis = redis.Redis.from_url(redis_url, decode_responses=True)
+                self._redis.ping()
+                print("✅ Trivia cache using Redis")
+            except Exception as exc:
+                print(f"⚠️ Redis unavailable for trivia cache, falling back to memory: {exc}")
+                self._redis = None
+
+    def _serialize(self, question: GeneratedTriviaQuestion) -> Dict[str, Any]:
+        payload = asdict(question)
+        payload["category"] = question.category.value
+        payload["difficulty"] = question.difficulty.value
+        return payload
+
+    def _deserialize(self, payload: Dict[str, Any]) -> Optional[GeneratedTriviaQuestion]:
+        try:
+            return GeneratedTriviaQuestion(
+                question_id=payload["question_id"],
+                question=payload["question"],
+                correct_answer=payload["correct_answer"],
+                options=list(payload.get("options", [])),
+                category=TriviaCategory(payload["category"]),
+                difficulty=Difficulty(payload["difficulty"]),
+                explanation=payload["explanation"],
+                source_query=payload["source_query"],
+                metadata=payload.get("metadata", {}),
+            )
+        except Exception:
+            return None
+
+    def store(self, question: GeneratedTriviaQuestion) -> None:
+        payload = self._serialize(question)
+        if self._redis is not None:
+            self._redis.setex(question.question_id, self.ttl_seconds, json.dumps(payload))
+            return
+
+        self._memory[question.question_id] = {
+            "expires_at": time.time() + self.ttl_seconds,
+            "payload": payload,
+        }
+
+    def get(self, question_id: str) -> Optional[GeneratedTriviaQuestion]:
+        if self._redis is not None:
+            raw = self._redis.get(question_id)
+            if not raw:
+                return None
+            try:
+                return self._deserialize(json.loads(raw))
+            except Exception:
+                return None
+
+        record = self._memory.get(question_id)
+        if not record:
+            return None
+        if record["expires_at"] < time.time():
+            self._memory.pop(question_id, None)
+            return None
+        return self._deserialize(record["payload"])
 
 
 @asynccontextmanager
@@ -50,6 +128,8 @@ async def lifespan(app: FastAPI):
     # Initialize LLM manager first (lightweight)
     if HUGGINGFACE_API_TOKEN:
         app_state["llm_manager"] = LLMManager(api_token=HUGGINGFACE_API_TOKEN)
+
+    app_state["trivia_cache"] = TriviaQuestionCache()
     
     # Connect to Neo4j (fast)
     try:
@@ -593,6 +673,9 @@ async def get_trivia_question(conn=Depends(get_neo4j_conn)):
         
         if not question:
             raise HTTPException(status_code=500, detail="Failed to generate question")
+
+        trivia_cache: TriviaQuestionCache = app_state["trivia_cache"]
+        trivia_cache.store(question)
         
         return TriviaQuestion(
             question=question.question,
@@ -601,6 +684,8 @@ async def get_trivia_question(conn=Depends(get_neo4j_conn)):
             difficulty=question.difficulty.value,
             question_id=question.question_id
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -609,13 +694,23 @@ async def get_trivia_question(conn=Depends(get_neo4j_conn)):
 async def check_trivia_answer(request: TriviaAnswerRequest, conn=Depends(get_neo4j_conn)):
     """Check trivia answer (simplified - store questions in session/cache in production)."""
     try:
-        # Note: In production, you'd store the question in Redis/cache with question_id
-        # For now, just return a generic response
+        trivia_cache: TriviaQuestionCache = app_state["trivia_cache"]
+        if not trivia_cache:
+            raise HTTPException(status_code=503, detail="Trivia cache not initialized")
+
+        stored_question = trivia_cache.get(request.question_id)
+        if not stored_question:
+            raise HTTPException(status_code=404, detail="Trivia question not found or expired")
+
+        trivia_gen = TriviaGenerator(conn)
+        correct, feedback = trivia_gen.check_answer(stored_question, request.answer)
         return TriviaAnswerResponse(
-            correct=False,
-            feedback="Answer checking requires session management. Implement with Redis/cache.",
-            correct_answer=None
+            correct=correct,
+            feedback=feedback,
+            correct_answer=stored_question.correct_answer if not correct else None
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

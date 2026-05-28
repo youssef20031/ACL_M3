@@ -50,6 +50,9 @@ uvicorn[standard]==0.32.0
 python-multipart==0.0.12
 websockets==13.1
 
+# Optional cache/session backend for trivia answers
+redis>=5.0.0
+
 # Add CORS support
 python-jose[cryptography]==3.3.0  # For JWT tokens if needed
 passlib[bcrypt]==1.7.4  # For password hashing if needed

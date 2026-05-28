@@ -3,6 +3,7 @@ FPL FantasyTrivia Generator
 Generates trivia questions from the Knowledge Graph
 """
 import random
+import uuid
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -32,6 +33,7 @@ class Difficulty(Enum):
 @dataclass
 class TriviaQuestion:
     """Container for a trivia question."""
+    question_id: str
     question: str
     correct_answer: str
     options: List[str]  # For multiple choice
@@ -435,6 +437,7 @@ class TriviaGenerator:
         explanation = template["explanation_template"].format(**explanation_params)
         
         return TriviaQuestion(
+            question_id=str(uuid.uuid4()),
             question=question_text,
             correct_answer=correct_answer,
             options=options,
