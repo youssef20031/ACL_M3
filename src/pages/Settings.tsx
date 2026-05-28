@@ -19,7 +19,6 @@ import { apiService, handleApiError } from '../services/api';
 const MODELS = [
   { key: 'qwen-2.5-coder', label: 'Qwen 2.5 Coder', description: 'Good for structured data queries' },
   { key: 'llama-3.2-3b', label: 'Llama 3.2 3B', description: 'Fast, lightweight responses' },
-  { key: 'phi-3-mini', label: 'Phi-3 Mini', description: 'Microsoft compact model' },
   { key: 'qwen-2.5-7b', label: 'Qwen 2.5 7B', description: 'Higher quality, slower' },
 ];
 

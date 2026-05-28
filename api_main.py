@@ -15,6 +15,7 @@ from typing import List, Optional, Dict, Any
 import json
 import inspect
 import time
+import hashlib
 from contextlib import asynccontextmanager
 
 # Import project modules
@@ -52,9 +53,11 @@ app_state = {
 class TriviaQuestionCache:
     """Cache generated trivia questions for answer validation."""
 
-    def __init__(self, ttl_seconds: int = 1800):
+    def __init__(self, ttl_seconds: int = 1800, repeat_window_seconds: int = 1800):
         self.ttl_seconds = ttl_seconds
+        self.repeat_window_seconds = repeat_window_seconds
         self._memory: Dict[str, Dict[str, Any]] = {}
+        self._recent_questions: Dict[str, float] = {}
         self._redis = None
 
         redis_url = os.getenv("REDIS_URL")
@@ -117,6 +120,38 @@ class TriviaQuestionCache:
             self._memory.pop(question_id, None)
             return None
         return self._deserialize(record["payload"])
+
+    def _question_key(self, question_text: str) -> str:
+        normalized = " ".join(question_text.lower().split())
+        digest = hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+        return f"trivia:recent:{digest}"
+
+    def is_recent(self, question_text: str) -> bool:
+        key = self._question_key(question_text)
+
+        if self._redis is not None:
+            try:
+                return bool(self._redis.exists(key))
+            except Exception:
+                return False
+
+        now = time.time()
+        expired = [k for k, exp in self._recent_questions.items() if exp < now]
+        for k in expired:
+            self._recent_questions.pop(k, None)
+        return key in self._recent_questions
+
+    def mark_recent(self, question_text: str) -> None:
+        key = self._question_key(question_text)
+
+        if self._redis is not None:
+            try:
+                self._redis.setex(key, self.repeat_window_seconds, "1")
+                return
+            except Exception:
+                pass
+
+        self._recent_questions[key] = time.time() + self.repeat_window_seconds
 
 
 @asynccontextmanager
@@ -669,12 +704,27 @@ async def get_trivia_question(conn=Depends(get_neo4j_conn)):
     """Generate a new trivia question."""
     try:
         trivia_gen = TriviaGenerator(conn)
-        question = trivia_gen.generate_question()
+        trivia_cache: TriviaQuestionCache = app_state["trivia_cache"]
+        if not trivia_cache:
+            raise HTTPException(status_code=503, detail="Trivia cache not initialized")
+
+        # Avoid serving very recent duplicate questions.
+        question = None
+        max_attempts = 8
+        for _ in range(max_attempts):
+            candidate = trivia_gen.generate_question()
+            if not candidate:
+                continue
+            if not trivia_cache.is_recent(candidate.question):
+                question = candidate
+                break
+            # Keep a fallback so we still return something if generation space is exhausted.
+            question = candidate
         
         if not question:
             raise HTTPException(status_code=500, detail="Failed to generate question")
 
-        trivia_cache: TriviaQuestionCache = app_state["trivia_cache"]
+        trivia_cache.mark_recent(question.question)
         trivia_cache.store(question)
         
         return TriviaQuestion(

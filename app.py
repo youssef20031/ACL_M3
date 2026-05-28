@@ -379,7 +379,7 @@ def render_sidebar():
     # Model selection
     selected_model = st.sidebar.selectbox(
         "Select LLM Model",
-        options=["qwen-2.5-coder", "llama-3.2-3b", "phi-3-mini", "qwen-2.5-7b"],
+        options=["qwen-2.5-coder", "llama-3.2-3b", "qwen-2.5-7b"],
         index=0,
         key="selected_model"
     )
@@ -679,7 +679,7 @@ def render_qa_tab(selected_model: str, retrieval_method: str):
                         else:
                             st.error(f"LLM Error: {response.error}")
                             if "timeout" in str(response.error).lower():
-                                st.warning("The request timed out. This can happen with large models or heavy traffic. Try a smaller model like Gemma 2B.")
+                                st.warning("The request timed out. This can happen with large models or heavy traffic. Try a smaller model.")
                             answer = f"Error: {response.error}"
                 else:
                     answer = f"**Knowledge Graph data:**\n\n{cypher_context}"

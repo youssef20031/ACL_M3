@@ -16,12 +16,6 @@ HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "")
 
 # LLM Models Configuration
 LLM_MODELS = {
-    "gemma-2-2b": {
-        "name": "google/gemma-2-2b-it",
-        "description": "Gemma 2 2B Instruct - Google's lightweight model",
-        "max_tokens": 1024,
-        "temperature": 0.7
-    },
     "mistral-7b": {
         "name": "mistralai/Mistral-7B-Instruct-v0.2",
         "description": "Mistral 7B Instruct - High quality open model",

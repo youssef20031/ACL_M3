@@ -368,24 +368,52 @@ class TriviaGenerator:
         
         # Extract answer
         answer_field = template["answer_field"]
-        
-        if answer_field == "formatted":
+        accepted_answers: List[str] = []
+
+        # TRUE/FALSE templates should always produce a boolean answer, even when
+        # the template's answer field is a numeric stat like "goals".
+        if category == TriviaCategory.TRUE_FALSE:
+            if "threshold" in params:
+                actual_value = results[0].get("goals", 0) or 0
+                correct_answer = "True" if float(actual_value) > float(params["threshold"]) else "False"
+            else:
+                # Player comparison: sorted descending, so top row has the larger stat.
+                if len(results) >= 2:
+                    correct_answer = "True" if results[0].get("name") == params.get("player") else "False"
+                else:
+                    return None
+        elif answer_field == "formatted":
             # Special formatting for complex answers
             r = results[0]
             correct_answer = f"{r.get('home', '')} vs {r.get('away', '')}"
         elif answer_field == "comparison":
-            # True/False comparison
+            # Explicit comparison fallback for templates that use this marker.
             if "threshold" in params:
-                actual_value = results[0].get("goals", 0)
-                correct_answer = "True" if actual_value > params["threshold"] else "False"
+                actual_value = results[0].get("goals", 0) or 0
+                correct_answer = "True" if float(actual_value) > float(params["threshold"]) else "False"
             else:
-                # Player comparison
                 if len(results) >= 2:
-                    correct_answer = "True" if results[0]["name"] == params.get("player") else "False"
+                    correct_answer = "True" if results[0].get("name") == params.get("player") else "False"
                 else:
                     return None
         else:
             correct_answer = str(results[0].get(answer_field, "Unknown"))
+
+        # Accept all tied top scorers as correct answers.
+        if (
+            category == TriviaCategory.TOP_SCORERS
+            and answer_field == "answer"
+            and results
+            and "goals" in results[0]
+        ):
+            top_goals = results[0].get("goals")
+            accepted_answers = [
+                str(r.get("answer", "")).strip()
+                for r in results
+                if r.get("goals") == top_goals and r.get("answer")
+            ]
+            if accepted_answers:
+                correct_answer = accepted_answers[0]
         
         # Generate options for multiple choice
         if category == TriviaCategory.MULTIPLE_CHOICE:
@@ -448,6 +476,9 @@ class TriviaGenerator:
             metadata={
                 "season": season,
                 "params": params,
+                "numeric": bool(template.get("numeric", False)),
+                "tolerance": template.get("tolerance", 0),
+                "accepted_answers": accepted_answers,
                 "raw_results": results[:3] if results else []
             }
         )
@@ -509,6 +540,26 @@ class TriviaGenerator:
         """
         correct = question.correct_answer.lower().strip()
         user = user_answer.lower().strip()
+
+        accepted_answers = [
+            str(ans).lower().strip()
+            for ans in question.metadata.get("accepted_answers", [])
+            if str(ans).strip()
+        ]
+
+        if accepted_answers:
+            is_correct = user in accepted_answers
+            if is_correct:
+                feedback = f"✅ Correct! {question.explanation}"
+            else:
+                accepted_display = [
+                    str(ans).strip()
+                    for ans in question.metadata.get("accepted_answers", [])
+                    if str(ans).strip()
+                ]
+                display_answers = self._join_with_and(accepted_display)
+                feedback = f"❌ Wrong! Accepted correct answers include {display_answers}. {question.explanation}"
+            return is_correct, feedback
         
         # Check for numeric tolerance
         if question.metadata.get("numeric"):
@@ -528,6 +579,17 @@ class TriviaGenerator:
             feedback = f"❌ Wrong! The correct answer was: {question.correct_answer}. {question.explanation}"
         
         return is_correct, feedback
+
+    @staticmethod
+    def _join_with_and(items: List[str]) -> str:
+        """Join values into natural language: A, B, and C."""
+        if not items:
+            return ""
+        if len(items) == 1:
+            return items[0]
+        if len(items) == 2:
+            return f"{items[0]} and {items[1]}"
+        return f"{', '.join(items[:-1])}, and {items[-1]}"
     
     def get_categories(self) -> List[Dict[str, str]]:
         """Get available trivia categories with descriptions."""

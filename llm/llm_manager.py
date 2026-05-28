@@ -49,14 +49,6 @@ class LLMManager:
         "temperature": 0.7,
         "use_chat": True,
     },
-    "phi-3-mini": {
-        "name": "microsoft/Phi-3-mini-4k-instruct",
-        "display_name": "Phi 3 Mini",
-        "description": "Microsoft's efficient small model",
-        "max_tokens": 1024,
-        "temperature": 0.7,
-        "use_chat": True,
-    },
     "qwen-2.5-7b": {
         "name": "Qwen/Qwen2.5-7B-Instruct",
         "display_name": "Qwen 2.5 7B",
@@ -67,7 +59,7 @@ class LLMManager:
     },
 }
     
-    def __init__(self, api_token: Optional[str] = None, default_model: str = "gemma-2-2b"):
+    def __init__(self, api_token: Optional[str] = None, default_model: str = "qwen-2.5-coder"):
         """
         Initialize LLM manager.
         
@@ -126,6 +118,11 @@ class LLMManager:
             LLMResponse with generated text and metadata
         """
         model_key = model_key or self.default_model
+
+        # Backward compatibility for persisted legacy model keys.
+        if model_key in {"phi-3-mini", "gemma-2-2b"}:
+            logger.warning("Model '%s' is deprecated. Falling back to 'qwen-2.5-coder'.", model_key)
+            model_key = "qwen-2.5-coder"
         
         if model_key not in self.MODELS:
             return LLMResponse(

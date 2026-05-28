@@ -338,7 +338,6 @@ NEO4J_PASSWORD=password
 |-----|-------|
 | `qwen-2.5-coder` | Qwen 2.5 Coder (default) |
 | `llama-3.2-3b` | Llama 3.2 3B Instruct |
-| `phi-3-mini` | Microsoft Phi-3 Mini |
 | `qwen-2.5-7b` | Qwen 2.5 7B |
 
 ---
