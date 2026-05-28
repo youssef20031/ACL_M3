@@ -321,6 +321,19 @@ class EntityExtractor:
     def _extract_seasons(self, doc: Doc) -> List[str]:
         """Extract seasons from query using spaCy matcher."""
         seasons = []
+        text_lower = doc.text.lower()
+
+        # Handle phrases like "season that ended in 2022" before generic year parsing.
+        # This should map to the previous FPL season (2021-22), not 2022-23.
+        ended_year_matches = re.findall(r"ended\s+in\s+(20\d{2})", text_lower)
+        for year_text in ended_year_matches:
+            year = int(year_text)
+            if year > 2020:
+                prev_year = year - 1
+                season = f"{prev_year}-{str(year)[2:]}"
+                if season in ["2020-21", "2021-22", "2022-23"] and season not in seasons:
+                    seasons.append(season)
+
         matches = self.matcher(doc)
         
         for match_id, start, end in matches:
@@ -349,6 +362,9 @@ class EntityExtractor:
         for ent in doc.ents:
             if ent.label_ == "DATE" and ent.text.isdigit():
                 year = int(ent.text)
+                # Skip if this year already belongs to an "ended in YEAR" phrase.
+                if re.search(rf"ended\s+in\s+{year}", text_lower):
+                    continue
                 if year == 2020:
                     seasons.append("2020-21")
                 elif year == 2021:

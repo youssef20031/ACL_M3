@@ -16,6 +16,7 @@ import json
 import inspect
 import time
 import hashlib
+import re
 from contextlib import asynccontextmanager
 
 # Import project modules
@@ -26,7 +27,7 @@ from config.settings import (
 from graph.connection import Neo4jConnection
 from graph.queries import CypherQueries, QueryExecutor
 from graph.data_loader import FPLDataLoader
-from preprocessing.intent_classifier import IntentClassifier
+from preprocessing.intent_classifier import IntentClassifier, Intent
 from preprocessing.entity_extractor import EntityExtractor
 from embeddings.embedding_manager import EmbeddingManager
 try:
@@ -255,6 +256,22 @@ class QueryResponse(BaseModel):
     graph_data: Optional[Dict[str, Any]] = None
 
 
+def looks_like_small_talk(question: str) -> bool:
+    """Return True when the message is a normal chat response rather than an FPL query."""
+    text = question.strip().lower()
+    if not text:
+        return True
+
+    small_talk_patterns = [
+        r"^(hi|hello|hey|yo|thanks|thank you|thx|nice|cool|wow|great|awesome|amazing)([!.?\s].*)?$",
+        r"^(that's|that is)\s+(great|awesome|amazing|cool|nice)([!.?\s].*)?$",
+        r"^(ok|okay|sure|got it|understood|perfect)([!.?\s].*)?$",
+        r"^(lol|lmao|haha|haha+)([!.?\s].*)?$",
+    ]
+
+    return any(re.match(pattern, text) for pattern in small_talk_patterns)
+
+
 class TriviaQuestion(BaseModel):
     question: str
     options: List[str]
@@ -397,6 +414,103 @@ def build_graph_data(results: List[Dict], limit: int = 20) -> Dict[str, Any]:
     return {"nodes": nodes, "edges": edges}
 
 
+def add_tie_note_if_needed(
+    intent: Intent,
+    query_method: str,
+    params: Dict[str, Any],
+    results: List[Dict[str, Any]],
+    context: str,
+) -> str:
+    """Annotate ranked results when the top value is tied so the LLM can mention all co-leaders."""
+    if not results:
+        return context
+
+    is_goal_leader_query = intent == Intent.TOP_SCORERS or (
+        query_method == "get_top_points_by_position" and params.get("sort_by") == "goals"
+    )
+
+    if not is_goal_leader_query:
+        return context
+
+    metric_key = next((candidate for candidate in ("total_goals", "goals", "answer") if candidate in results[0]), None)
+    if not metric_key:
+        return context
+
+    top_value = results[0].get(metric_key)
+    if top_value is None:
+        return context
+
+    name_key = "player_name" if "player_name" in results[0] else "answer"
+    tied_names = []
+    for row in results:
+        if row.get(metric_key) == top_value and row.get(name_key):
+            tied_names.append(str(row[name_key]))
+
+    tied_names = list(dict.fromkeys(tied_names))
+    if len(tied_names) < 2:
+        return context
+
+    if len(tied_names) == 2:
+        tie_text = f"{tied_names[0]} and {tied_names[1]}"
+    else:
+        tie_text = f"{', '.join(tied_names[:-1])}, and {tied_names[-1]}"
+
+    summary = f"**Top Scorers Summary**: {tie_text} share the top spot with {top_value} goals each. Mention all co-leaders."
+    note = f"\n**Tie Note**: The top value is shared by {tie_text}. Mention all of them as co-leaders.\n"
+    return summary + note + context
+
+
+def enforce_tied_top_scorers_in_answer(
+    answer: str,
+    intent: Intent,
+    query_method: str,
+    params: Dict[str, Any],
+    results: List[Dict[str, Any]],
+) -> str:
+    """Guarantee tied top-scorer answers mention every co-leader."""
+    if not answer or not results:
+        return answer
+
+    is_goal_leader_query = intent == Intent.TOP_SCORERS or (
+        query_method == "get_top_points_by_position" and params.get("sort_by") == "goals"
+    )
+    if not is_goal_leader_query:
+        return answer
+
+    metric_key = next((candidate for candidate in ("total_goals", "goals", "answer") if candidate in results[0]), None)
+    if not metric_key:
+        return answer
+
+    top_value = results[0].get(metric_key)
+    if top_value is None:
+        return answer
+
+    name_key = "player_name" if "player_name" in results[0] else "answer"
+    tied_names = []
+    for row in results:
+        if row.get(metric_key) == top_value and row.get(name_key):
+            tied_names.append(str(row[name_key]))
+
+    tied_names = list(dict.fromkeys(tied_names))
+    if len(tied_names) < 2:
+        return answer
+
+    missing_names = [name for name in tied_names if name.lower() not in answer.lower()]
+    if not missing_names:
+        return answer
+
+    if len(tied_names) == 2:
+        tie_text = f"{tied_names[0]} and {tied_names[1]}"
+    else:
+        tie_text = f"{', '.join(tied_names[:-1])}, and {tied_names[-1]}"
+
+    tie_sentence = f"Top scorers are {tie_text}, with {top_value} goals each."
+    stripped_answer = answer.strip()
+    if stripped_answer:
+        return f"{tie_sentence} {stripped_answer}"
+    return tie_sentence
+
+
 # ============================================================================
 # API Endpoints
 # ============================================================================
@@ -504,6 +618,19 @@ async def disconnect_neo4j():
 async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
     """Process FPL query and return answer."""
     try:
+        if looks_like_small_talk(request.question):
+            return QueryResponse(
+                answer="Glad you think so — ask me anything about FPL players, teams, or stats.",
+                intent=Intent.GENERAL_QUESTION.value,
+                entities={"players": [], "teams": [], "seasons": [], "stats": [], "positions": []},
+                cypher_query="",
+                kg_context="",
+                embedding_context=None,
+                embedding_used=False,
+                results=[],
+                graph_data=None,
+            )
+
         # Step 1: Intent Classification (lazy load)
         intent_classifier = get_intent_classifier()
         intent_result = intent_classifier.classify(request.question)
@@ -576,6 +703,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             
             results = conn.execute_query(query, query_params)
             cypher_context = PromptBuilder.format_kg_context(results)
+            cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
             executed_query = query
         
         if not results:
@@ -586,6 +714,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             )
             results = conn.execute_query(query, query_params)
             cypher_context = PromptBuilder.format_kg_context(results)
+            cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
             executed_query = query
         
         # Step 5: Embedding search
@@ -641,6 +770,14 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 answer = response.text
             else:
                 answer = f"Error generating response: {response.error}"
+
+            answer = enforce_tied_top_scorers_in_answer(
+                answer=answer,
+                intent=intent_result.intent,
+                query_method=query_method,
+                params=params,
+                results=results,
+            )
         else:
             answer = f"**Knowledge Graph data:**\n\n{cypher_context}"
         

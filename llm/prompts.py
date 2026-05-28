@@ -67,6 +67,7 @@ You present data clearly and draw meaningful conclusions."""
 **CRITICAL: You MUST use ONLY the exact data provided in "Knowledge Graph Data" above.**
 - The data is NUMBERED and SORTED - entry #1 is the TOP/BEST result
 - When asked "who is the most/top/best", ALWAYS answer with entry #1 from the data
+- If the top value is tied, mention all tied entries as co-leaders instead of only the first row
 - DO NOT select a different player because you recognize their name
 - Quote EXACT numbers from the data (e.g., if data shows "795,302", say "795,302")
 - DO NOT hallucinate or use your training knowledge - ONLY use the data above
