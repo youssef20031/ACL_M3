@@ -100,9 +100,7 @@ export function QAAssistant() {
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
             <div>
               <p className="font-medium text-yellow-900">Neo4j Not Connected</p>
-              <p className="text-sm text-yellow-700 mt-1">
-                Please connect to Neo4j in the Settings page to start asking questions.
-              </p>
+              <p className="text-sm text-yellow-700 mt-1">Connecting to Neo4j... Please wait.</p>
             </div>
           </div>
         )}

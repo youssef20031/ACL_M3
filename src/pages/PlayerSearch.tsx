@@ -76,7 +76,7 @@ export function PlayerSearch() {
         {!neo4jConnected && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
-            <p className="text-sm text-yellow-800">Connect to Neo4j in Settings to search players.</p>
+            <p className="text-sm text-yellow-800">Connecting to Neo4j... Please wait.</p>
           </div>
         )}
 

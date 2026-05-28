@@ -1,22 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { ArrowLeftRight, Loader2, AlertCircle, Search } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
-import {
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  ResponsiveContainer,
-  Tooltip,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Legend,
-} from 'recharts';
+import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
+
 
 const SEASONS = ['', '2020-21', '2021-22', '2022-23'];
 
@@ -32,6 +20,19 @@ export function PlayerComparison() {
   const { neo4jConnected } = useAppStore();
   const [player1, setPlayer1] = useState('');
   const [player2, setPlayer2] = useState('');
+  type Suggestion = { name: string; position?: string; season?: string; avatar?: string };
+  const [p1Suggestions, setP1Suggestions] = useState<Suggestion[]>([]);
+  const [p2Suggestions, setP2Suggestions] = useState<Suggestion[]>([]);
+  const [p1Index, setP1Index] = useState(-1);
+  const [p2Index, setP2Index] = useState(-1);
+  const p1Timer = useRef<number | null>(null);
+  const p2Timer = useRef<number | null>(null);
+  const p1SuppressSearch = useRef(false);
+  const p2SuppressSearch = useRef(false);
+  const p1InputRef = useRef<HTMLInputElement | null>(null);
+  const p2InputRef = useRef<HTMLInputElement | null>(null);
+  const p1ListId = 'p1-suggestions-list';
+  const p2ListId = 'p2-suggestions-list';
   const [season, setSeason] = useState('');
   const [comparisonData, setComparisonData] = useState<PlayerStats[]>([]);
 
@@ -55,6 +56,130 @@ export function PlayerComparison() {
     compareMutation.mutate({ p1, p2, s: season });
   };
 
+  // helper to run search and update suggestions
+  const runSearch = async (q: string, setSuggestions: (s: Suggestion[]) => void) => {
+    if (!q || q.trim().length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    try {
+      const res = await apiService.searchPlayers(q.trim());
+      const players = (res.players || []).map((p: any) => ({
+        name: p.player_name || p.name || '',
+        position: p.position || p.pos || undefined,
+        season: p.season || undefined,
+        avatar: p.avatar || p.image || p.photo || undefined,
+      })).filter((x: Suggestion) => x.name);
+      setSuggestions(players.slice(0, 10));
+    } catch (e) {
+      setSuggestions([]);
+    }
+  };
+
+  // debounce effects for player1
+  useEffect(() => {
+    if (p1Timer.current) window.clearTimeout(p1Timer.current);
+    p1Timer.current = window.setTimeout(() => {
+      if (p1SuppressSearch.current) {
+        p1SuppressSearch.current = false;
+        setP1Index(-1);
+        return;
+      }
+      runSearch(player1, setP1Suggestions);
+      setP1Index(-1);
+    }, 250) as unknown as number;
+
+    return () => {
+      if (p1Timer.current) window.clearTimeout(p1Timer.current);
+    };
+  }, [player1]);
+
+  // debounce effects for player2
+  useEffect(() => {
+    if (p2Timer.current) window.clearTimeout(p2Timer.current);
+    p2Timer.current = window.setTimeout(() => {
+      if (p2SuppressSearch.current) {
+        p2SuppressSearch.current = false;
+        setP2Index(-1);
+        return;
+      }
+      runSearch(player2, setP2Suggestions);
+      setP2Index(-1);
+    }, 250) as unknown as number;
+
+    return () => {
+      if (p2Timer.current) window.clearTimeout(p2Timer.current);
+    };
+  }, [player2]);
+
+  // auto-default when single last-name match
+  useEffect(() => {
+    const q = player1.trim();
+    if (q && !q.includes(' ') && p1Suggestions.length === 1) {
+      p1SuppressSearch.current = true;
+      setPlayer1(p1Suggestions[0].name);
+      setP1Suggestions([]);
+    }
+  }, [p1Suggestions]);
+
+  useEffect(() => {
+    const q = player2.trim();
+    if (q && !q.includes(' ') && p2Suggestions.length === 1) {
+      p2SuppressSearch.current = true;
+      setPlayer2(p2Suggestions[0].name);
+      setP2Suggestions([]);
+    }
+  }, [p2Suggestions]);
+
+  // keyboard handlers
+  const onP1KeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (p1Suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setP1Index((i) => Math.min(i + 1, p1Suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setP1Index((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (p1Index >= 0 && p1Index < p1Suggestions.length) {
+        e.preventDefault();
+        p1SuppressSearch.current = true;
+        setPlayer1(p1Suggestions[p1Index].name);
+        setP1Suggestions([]);
+        setP1Index(-1);
+        // return focus to input
+        p1InputRef.current?.focus();
+      }
+    } else if (e.key === 'Escape') {
+      setP1Suggestions([]);
+      setP1Index(-1);
+    }
+  };
+
+  const onP2KeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (p2Suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setP2Index((i) => Math.min(i + 1, p2Suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setP2Index((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      if (p2Index >= 0 && p2Index < p2Suggestions.length) {
+        e.preventDefault();
+        p2SuppressSearch.current = true;
+        setPlayer2(p2Suggestions[p2Index].name);
+        setP2Suggestions([]);
+        setP2Index(-1);
+        p2InputRef.current?.focus();
+      }
+    } else if (e.key === 'Escape') {
+      setP2Suggestions([]);
+      setP2Index(-1);
+    }
+  };
+
   const p1Data = comparisonData[0];
   const p2Data = comparisonData[1];
 
@@ -73,29 +198,122 @@ export function PlayerComparison() {
           </div>
         )}
 
-        <form onSubmit={handleCompare} className="bg-white border rounded-xl p-5 space-y-4">
+        <form onSubmit={handleCompare} className="bg-white border rounded-xl p-5 space-y-4" autoComplete="off">
+          {/* Hidden fields to deter browser autofill/credentials suggestions */}
+          <input aria-hidden="true" tabIndex={-1} style={{position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden'}} type="text" name="__fake_user" autoComplete="username" />
+          <input aria-hidden="true" tabIndex={-1} style={{position: 'absolute', left: '-9999px', width: '1px', height: '1px', overflow: 'hidden'}} type="password" name="__fake_pass" autoComplete="current-password" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">Player 1</label>
               <input
+                ref={(el) => (p1InputRef.current = el)}
+                id="p1-input"
+                name="player1_search"
                 type="text"
                 value={player1}
                 onChange={(e) => setPlayer1(e.target.value)}
+                onKeyDown={onP1KeyDown}
                 placeholder="e.g. Mohamed Salah"
                 disabled={!neo4jConnected}
+                aria-autocomplete="list"
+                aria-controls={p1ListId}
+                aria-expanded={p1Suggestions.length > 0}
+                aria-activedescendant={p1Index >= 0 ? `p1-suggestion-${p1Index}` : undefined}
+                role="combobox"
+                autoComplete="off"
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
               />
+              {p1Suggestions.length > 0 && (
+                <ul id={p1ListId} role="listbox" className="absolute z-20 bg-white border rounded shadow mt-1 w-full max-h-56 overflow-auto">
+                  {p1Suggestions.map((s, i) => (
+                    <li
+                      id={`p1-suggestion-${i}`}
+                      role="option"
+                      aria-selected={i === p1Index}
+                      key={s.name + i}
+                      title=""
+                      onClick={() => {
+                        p1SuppressSearch.current = true;
+                        setPlayer1(s.name);
+                        setP1Suggestions([]);
+                        p1InputRef.current?.focus();
+                      }}
+                      className={`px-3 py-2 cursor-pointer text-sm flex items-center justify-between gap-2 ${
+                        i === p1Index ? 'bg-purple-50' : 'hover:bg-purple-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {s.avatar && (
+                          <img src={s.avatar} alt={`${s.name} avatar`} title="" role="img" className="w-6 h-6 rounded-full" />
+                        )}
+                        <div>
+                          <div className="font-medium">{s.name}</div>
+                          {(s.position || s.season) && (
+                            <div className="text-xs text-gray-500">{[s.position, s.season].filter(Boolean).join(' · ')}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400">{i === p1Index ? '↵' : ''}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-            <div>
+            <div className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">Player 2</label>
               <input
+                ref={(el) => (p2InputRef.current = el)}
+                id="p2-input"
+                name="player2_search"
                 type="text"
                 value={player2}
                 onChange={(e) => setPlayer2(e.target.value)}
+                onKeyDown={onP2KeyDown}
                 placeholder="e.g. Son Heung-min"
                 disabled={!neo4jConnected}
+                aria-autocomplete="list"
+                aria-controls={p2ListId}
+                aria-expanded={p2Suggestions.length > 0}
+                aria-activedescendant={p2Index >= 0 ? `p2-suggestion-${p2Index}` : undefined}
+                role="combobox"
+                autoComplete="off"
                 className="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100"
               />
+              {p2Suggestions.length > 0 && (
+                <ul id={p2ListId} role="listbox" className="absolute z-20 bg-white border rounded shadow mt-1 w-full max-h-56 overflow-auto">
+                  {p2Suggestions.map((s, i) => (
+                    <li
+                      id={`p2-suggestion-${i}`}
+                      role="option"
+                      aria-selected={i === p2Index}
+                      key={s.name + i}
+                      title=""
+                      onClick={() => {
+                        p2SuppressSearch.current = true;
+                        setPlayer2(s.name);
+                        setP2Suggestions([]);
+                        p2InputRef.current?.focus();
+                      }}
+                      className={`px-3 py-2 cursor-pointer text-sm flex items-center justify-between gap-2 ${
+                        i === p2Index ? 'bg-purple-50' : 'hover:bg-purple-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {s.avatar && (
+                          <img src={s.avatar} alt={`${s.name} avatar`} title="" role="img" className="w-6 h-6 rounded-full" />
+                        )}
+                        <div>
+                          <div className="font-medium">{s.name}</div>
+                          {(s.position || s.season) && (
+                            <div className="text-xs text-gray-500">{[s.position, s.season].filter(Boolean).join(' · ')}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400">{i === p2Index ? '↵' : ''}</div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
 
@@ -300,6 +518,7 @@ function ComparisonResults({ p1, p2 }: { p1: PlayerStats; p2: PlayerStats }) {
           </RadarChart>
         </ResponsiveContainer>
       </div>
+
     </div>
   );
 }

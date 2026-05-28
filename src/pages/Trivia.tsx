@@ -108,9 +108,7 @@ export function Trivia() {
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium text-yellow-900">Neo4j Not Connected</p>
-              <p className="text-sm text-yellow-700 mt-1">
-                Go to Settings to connect to Neo4j before playing trivia.
-              </p>
+              <p className="text-sm text-yellow-700 mt-1">Connecting to Neo4j... Please wait.</p>
             </div>
           </div>
         )}
