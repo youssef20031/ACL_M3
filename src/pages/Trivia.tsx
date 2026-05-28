@@ -92,17 +92,6 @@ export function Trivia() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 max-w-2xl mx-auto w-full sm:px-6">
-        {/* Score cards */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
-          <ScoreCard label="Score" value={`${triviaScore} / ${triviaTotal}`} icon="🏆" />
-          <ScoreCard label="Accuracy" value={`${accuracy}%`} icon="🎯" />
-          <ScoreCard
-            label="Last"
-            value={triviaTotal === 0 ? '—' : answerState === 'correct' ? '✅' : answerState === 'wrong' ? '❌' : '—'}
-            icon="🔥"
-          />
-        </div>
-
         {!neo4jConnected && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 shrink-0" />
@@ -244,6 +233,13 @@ export function Trivia() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {currentQuestion && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+            <ScoreCard label="Score" value={`${triviaScore} / ${triviaTotal}`} icon="🏆" />
+            <ScoreCard label="Accuracy" value={`${accuracy}%`} icon="🎯" />
+          </div>
+        )}
       </div>
     </div>
   );
