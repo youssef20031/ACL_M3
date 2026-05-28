@@ -1,6 +1,8 @@
 import axios, { AxiosError } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL =
+  (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL ||
+  'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -76,6 +78,12 @@ export interface EmbeddingBuildResponse {
   success: boolean;
   count: number;
   message: string;
+}
+
+export interface ImageSearchResponse {
+  query: string;
+  image_url?: string | null;
+  source?: string | null;
 }
 
 // API functions
@@ -155,6 +163,13 @@ export const apiService = {
       player1,
       player2,
       season,
+    });
+    return data;
+  },
+
+  async searchImage(query: string): Promise<ImageSearchResponse> {
+    const { data } = await api.get<ImageSearchResponse>('/api/images/search', {
+      params: { query },
     });
     return data;
   },

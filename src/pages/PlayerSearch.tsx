@@ -121,9 +121,13 @@ export function PlayerSearch() {
                 className="w-full text-left bg-white border border-gray-200 hover:border-purple-400 hover:shadow-sm rounded-xl p-4 transition-all flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-sm">
-                    {(player.player_name ?? player.name ?? '?')[0].toUpperCase()}
-                  </div>
+                  {player.avatar ? (
+                    <img src={player.avatar} alt={player.player_name ?? player.name} className="w-10 h-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-sm">
+                      {(player.player_name ?? player.name ?? '?')[0].toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <p className="font-medium text-gray-900">{player.player_name ?? player.name}</p>
                     <div className="flex items-center gap-2 mt-0.5">
@@ -197,9 +201,13 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
       </button>
 
       <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white rounded-xl p-6 flex items-center gap-4">
-        <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
-          {name[0].toUpperCase()}
-        </div>
+        {player.avatar ? (
+          <img src={player.avatar} alt={name} className="w-16 h-16 rounded-full object-cover border-2 border-white/30" />
+        ) : (
+          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
+            {name[0].toUpperCase()}
+          </div>
+        )}
         <div>
           <h3 className="text-2xl font-bold">{name}</h3>
           <div className="flex items-center gap-2 mt-1">

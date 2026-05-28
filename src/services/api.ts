@@ -80,6 +80,12 @@ export interface EmbeddingBuildResponse {
   message: string;
 }
 
+export interface ImageSearchResponse {
+  query: string;
+  image_url?: string | null;
+  source?: string | null;
+}
+
 // API functions
 export const apiService = {
   // Health & Connection
@@ -157,6 +163,13 @@ export const apiService = {
       player1,
       player2,
       season,
+    });
+    return data;
+  },
+
+  async searchImage(query: string): Promise<ImageSearchResponse> {
+    const { data } = await api.get<ImageSearchResponse>('/api/images/search', {
+      params: { query },
     });
     return data;
   },

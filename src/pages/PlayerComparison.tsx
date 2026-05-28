@@ -441,9 +441,17 @@ function ComparisonResults({ p1, p2 }: { p1: PlayerStats; p2: PlayerStats }) {
           const color = i === 0 ? 'from-purple-600 to-indigo-700' : 'from-pink-500 to-rose-600';
           return (
             <div key={i} className={`bg-gradient-to-br ${color} text-white rounded-xl p-5 text-center`}>
-              <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-2">
-                {name[0].toUpperCase()}
-              </div>
+              {p.avatar ? (
+                <img
+                  src={p.avatar}
+                  alt={`${name} avatar`}
+                  className="w-14 h-14 rounded-full object-cover mx-auto mb-2 border-2 border-white/30"
+                />
+              ) : (
+                <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-2">
+                  {name[0].toUpperCase()}
+                </div>
+              )}
               <h3 className="font-bold text-lg leading-tight">{name}</h3>
               <div className="flex items-center justify-center gap-2 mt-1">
                 {p.position && (

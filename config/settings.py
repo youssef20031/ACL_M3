@@ -14,6 +14,10 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "password")
 # HuggingFace Configuration
 HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "")
 
+# Optional image lookup for player avatars
+GOOGLE_CUSTOM_SEARCH_API_KEY = os.getenv("GOOGLE_CUSTOM_SEARCH_API_KEY", "")
+GOOGLE_CUSTOM_SEARCH_CX = os.getenv("GOOGLE_CUSTOM_SEARCH_CX", "")
+
 # LLM Models Configuration
 LLM_MODELS = {
     "mistral-7b": {

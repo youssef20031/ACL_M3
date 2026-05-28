@@ -9,6 +9,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dataclasses import asdict
 from typing import List, Optional, Dict, Any
@@ -17,14 +18,21 @@ import inspect
 import time
 import hashlib
 import re
+import logging
+import io
 from contextlib import asynccontextmanager
+from urllib.parse import quote_plus
 
 # Import project modules
 from config.settings import (
     NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD,
-    HUGGINGFACE_API_TOKEN, DATA_PATH
+    HUGGINGFACE_API_TOKEN, DATA_PATH,
+    GOOGLE_CUSTOM_SEARCH_API_KEY, GOOGLE_CUSTOM_SEARCH_CX
 )
 from graph.connection import Neo4jConnection
+from typing import Optional
+
+
 from graph.queries import CypherQueries, QueryExecutor
 from graph.data_loader import FPLDataLoader
 from preprocessing.intent_classifier import IntentClassifier, Intent
@@ -39,6 +47,10 @@ from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as Generated
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
 
+import requests
+
+logger = logging.getLogger(__name__)
+
 # Global state
 app_state = {
     "neo4j_conn": None,
@@ -49,6 +61,46 @@ app_state = {
     "embeddings_built": False,
     "trivia_cache": None,
 }
+
+
+def get_wikipedia_player_image_url(player_name: str) -> Optional[str]:
+    """Fallback to the Wikimedia thumbnail for the player's Wikipedia page."""
+    normalized_name = " ".join(player_name.split()).strip().lower()
+    if not normalized_name:
+        return None
+
+    if normalized_name in PLAYER_AVATAR_CACHE:
+        return PLAYER_AVATAR_CACHE[normalized_name]
+
+    try:
+        response = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query",
+                "format": "json",
+                "prop": "pageimages",
+                "pithumbsize": 250,
+                "redirects": 1,
+                "titles": player_name,
+            },
+            headers={"User-Agent": "FPL FantasyTrivia/1.0 (local testing)"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        pages = response.json().get("query", {}).get("pages", {})
+        for page in pages.values():
+            thumbnail = page.get("thumbnail", {})
+            image_url = thumbnail.get("source")
+            if image_url:
+                PLAYER_AVATAR_CACHE[normalized_name] = image_url
+                return image_url
+    except Exception as exc:
+        logger.warning("Wikipedia avatar lookup failed for %s: %s", player_name, exc)
+
+    return None
+PLAYER_AVATAR_CACHE: Dict[str, Optional[str]] = {}
+FPL_PLAYER_PHOTO_CACHE: Dict[str, Optional[str]] = {}
+FPL_PLAYER_PHOTO_CACHE_READY = False
 
 
 class TriviaQuestionCache:
@@ -256,6 +308,12 @@ class QueryResponse(BaseModel):
     graph_data: Optional[Dict[str, Any]] = None
 
 
+class ImageSearchResponse(BaseModel):
+    query: str
+    image_url: Optional[str] = None
+    source: Optional[str] = None
+
+
 def looks_like_small_talk(question: str) -> bool:
     """Return True when the message is a normal chat response rather than an FPL query."""
     text = question.strip().lower()
@@ -270,6 +328,116 @@ def looks_like_small_talk(question: str) -> bool:
     ]
 
     return any(re.match(pattern, text) for pattern in small_talk_patterns)
+
+
+def build_proxy_image_url(source_url: str) -> str:
+    return f"/api/images/proxy?url={quote_plus(source_url)}"
+
+
+def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> Optional[str]:
+    """Return the best available avatar URL for a player."""
+    normalized_name = " ".join(player_name.split()).strip().lower()
+    if not normalized_name:
+        return None
+
+    if normalized_name in PLAYER_AVATAR_CACHE:
+        cached_url = PLAYER_AVATAR_CACHE[normalized_name]
+        return build_proxy_image_url(cached_url) if cached_url else None
+
+    # Try to find team name if not provided
+    if not team_name and app_state["neo4j_conn"]:
+        try:
+            team_query = "MATCH (p:Player {name: $name})-[:PLAYS_FOR]->(t:Team) RETURN t.name AS team_name LIMIT 1"
+            team_res = app_state["neo4j_conn"].execute_query(team_query, {"name": player_name})
+            if team_res:
+                team_name = team_res[0]["team_name"]
+        except Exception:
+            pass
+
+    image_url = None
+    search_query = f"{player_name} head"
+    if team_name:
+        search_query += f" {team_name}"
+    search_query += " official picture"
+
+    if GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_CX:
+        try:
+            response = requests.get(
+                "https://www.googleapis.com/customsearch/v1",
+                params={
+                    "key": GOOGLE_CUSTOM_SEARCH_API_KEY,
+                    "cx": GOOGLE_CUSTOM_SEARCH_CX,
+                    "q": search_query,
+                    "searchType": "image",
+                    "num": 1,
+                    "safe": "active",
+                },
+                timeout=10,
+            )
+            response.raise_for_status()
+            items = response.json().get("items", [])
+            if items:
+                image_info = items[0].get("image", {})
+                image_url = image_info.get("thumbnailLink") or items[0].get("link")
+        except Exception as exc:
+            logger.warning("Google avatar lookup failed for %s: %s", player_name, exc)
+
+    if not image_url:
+        image_url = get_wikipedia_player_image_url(player_name)
+
+    PLAYER_AVATAR_CACHE[normalized_name] = image_url
+    return build_proxy_image_url(image_url) if image_url else None
+
+
+def get_fpl_player_photo_url(player_name: str) -> Optional[str]:
+    """Fallback to the official FPL player photo when no Google image is available."""
+    global FPL_PLAYER_PHOTO_CACHE_READY
+
+    normalized_name = " ".join(player_name.split()).strip().lower()
+    if not normalized_name:
+        return None
+
+    if normalized_name in FPL_PLAYER_PHOTO_CACHE:
+        return FPL_PLAYER_PHOTO_CACHE[normalized_name]
+
+    if not FPL_PLAYER_PHOTO_CACHE_READY:
+        try:
+            response = requests.get("https://fantasy.premierleague.com/api/bootstrap-static/", timeout=15)
+            response.raise_for_status()
+            for element in response.json().get("elements", []):
+                photo = element.get("photo")
+                if not photo:
+                    continue
+
+                photo_url = f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{photo}"
+                aliases = {
+                    f"{element.get('first_name', '')} {element.get('second_name', '')}".strip(),
+                    f"{element.get('second_name', '')} {element.get('first_name', '')}".strip(),
+                    element.get("web_name", ""),
+                }
+                for alias in aliases:
+                    alias_key = " ".join(alias.split()).strip().lower()
+                    if alias_key:
+                        FPL_PLAYER_PHOTO_CACHE.setdefault(alias_key, photo_url)
+            FPL_PLAYER_PHOTO_CACHE_READY = True
+        except Exception as exc:
+            logger.warning("FPL photo cache could not be loaded: %s", exc)
+            FPL_PLAYER_PHOTO_CACHE_READY = True
+
+    return FPL_PLAYER_PHOTO_CACHE.get(normalized_name)
+
+
+def enrich_rows_with_avatars(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Attach avatar URLs to player rows when possible."""
+    enriched_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        enriched_row = dict(row)
+        player_name = enriched_row.get("player_name")
+        team_name = enriched_row.get("team_name")
+        if player_name and not enriched_row.get("avatar"):
+            enriched_row["avatar"] = get_player_avatar_url(str(player_name), team_name=team_name)
+        enriched_rows.append(enriched_row)
+    return enriched_rows
 
 
 class TriviaQuestion(BaseModel):
@@ -931,6 +1099,8 @@ async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_co
                 if normalized_query in normalize(r.get("player_name", ""))
             ][:10]
 
+        results = enrich_rows_with_avatars(results[:10])
+
         return {"players": results[:10]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -968,9 +1138,41 @@ async def compare_players(request: PlayerComparisonRequest, conn=Depends(get_neo
         p2 = resolve_name(request.player2, conn)
         query, params = CypherQueries.compare_players(p1, p2, request.season)
         results = conn.execute_query(query, params)
-        return {"comparison": results}
+        return {"comparison": enrich_rows_with_avatars(results)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/images/search", response_model=ImageSearchResponse)
+async def search_image(query: str):
+    """Return the first Google image result for a search term, if configured."""
+    image_url = get_player_avatar_url(query)
+    if not image_url:
+        source = None
+    elif "resources.premierleague.com" in image_url or "fantasy.premierleague.com" in image_url:
+        source = "fpl_official"
+    else:
+        source = "google_custom_search"
+    return ImageSearchResponse(query=query, image_url=image_url, source=source)
+
+
+@app.get("/api/images/proxy")
+async def proxy_image(url: str):
+    """Fetch an external image and stream it from the backend origin."""
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid image URL")
+
+    try:
+        # Some domains (like Wikipedia) block requests without a proper User-Agent
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "image/jpeg")
+        return StreamingResponse(io.BytesIO(response.content), media_type=content_type)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Image proxy failed: {exc}")
 
 
 @app.post("/api/data/load")
