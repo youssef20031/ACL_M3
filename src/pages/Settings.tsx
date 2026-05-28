@@ -349,33 +349,47 @@ export function Settings() {
             </label>
           ))}
         </div>
-        <div className="flex items-center gap-4 flex-wrap">
-          <button
-            onClick={() => buildEmbeddingsMutation.mutate()}
-            disabled={!neo4jConnected || buildEmbeddingsMutation.isPending}
-            className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {buildEmbeddingsMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" /> Building...
-              </>
-            ) : (
-              '🔮 Build Embeddings'
+        <div className="space-y-3">
+          <div className="flex items-center gap-4 flex-wrap">
+            <button
+              onClick={() => buildEmbeddingsMutation.mutate()}
+              disabled={!neo4jConnected || buildEmbeddingsMutation.isPending}
+              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {buildEmbeddingsMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Building...
+                </>
+              ) : (
+                '🔮 Build Embeddings'
+              )}
+            </button>
+            {embeddingsBuilt && (
+              <span className="text-sm text-green-600 flex items-center gap-1">
+                <CheckCircle className="w-4 h-4" />
+                {embeddingCount.toLocaleString()} vectors ready
+              </span>
             )}
-          </button>
-          {embeddingsBuilt && (
-            <span className="text-sm text-green-600 flex items-center gap-1">
-              <CheckCircle className="w-4 h-4" />
-              {embeddingCount.toLocaleString()} vectors ready
-            </span>
+            {buildEmbeddingsMutation.isError && (
+              <span className="text-sm text-red-600">{handleApiError(buildEmbeddingsMutation.error)}</span>
+            )}
+          </div>
+
+          {/* Clear, prominent in-progress message when building embeddings */}
+          {buildEmbeddingsMutation.isPending && (
+            <div className="mt-3 p-3 rounded-lg bg-purple-50 border border-purple-200 text-sm text-purple-900 flex items-start gap-3">
+              <Loader2 className="w-5 h-5 animate-spin mt-0.5" />
+              <div>
+                <div className="font-medium">Building embeddings — this may take several minutes</div>
+                <div className="text-xs text-purple-800 mt-1">Do not close this page. The process will continue to run on the server; you can navigate away but the operation may be cancelled by some environments.</div>
+              </div>
+            </div>
           )}
-          {buildEmbeddingsMutation.isError && (
-            <span className="text-sm text-red-600">{handleApiError(buildEmbeddingsMutation.error)}</span>
+
+          {buildEmbeddingsMutation.isSuccess && buildEmbeddingsMutation.data && (
+            <p className="text-sm text-gray-600">{buildEmbeddingsMutation.data.message}</p>
           )}
         </div>
-        {buildEmbeddingsMutation.isSuccess && buildEmbeddingsMutation.data && (
-          <p className="text-sm text-gray-600">{buildEmbeddingsMutation.data.message}</p>
-        )}
       </div>
     </div>
   );

@@ -12,6 +12,8 @@ const api = axios.create({
   timeout: 60000, // 60 seconds
 });
 
+const EMBEDDINGS_BUILD_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
 // Response types
 export interface ConnectionResponse {
   success: boolean;
@@ -118,9 +120,11 @@ export const apiService = {
 
   // Embeddings
   async buildEmbeddings(model: string = 'minilm'): Promise<EmbeddingBuildResponse> {
-    const { data } = await api.post<EmbeddingBuildResponse>('/api/embeddings/build', {
-      model,
-    });
+    const { data } = await api.post<EmbeddingBuildResponse>(
+      '/api/embeddings/build',
+      { model },
+      { timeout: EMBEDDINGS_BUILD_TIMEOUT_MS }
+    );
     return data;
   },
 
