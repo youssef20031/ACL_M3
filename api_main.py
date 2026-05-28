@@ -1070,6 +1070,61 @@ async def check_trivia_answer(request: TriviaAnswerRequest, conn=Depends(get_neo
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class PlayerStatsRequest(BaseModel):
+    player_name: str
+    season: Optional[str] = None
+
+
+@app.post("/api/players/stats")
+async def get_player_stats(request: PlayerStatsRequest, conn=Depends(get_neo4j_conn)):
+    """Fetch stats for a specific player, either for a single season or combined career."""
+    try:
+        player_name = request.player_name
+        season = request.season
+
+        if season:
+            query, params = CypherQueries.get_player_season_stats(player_name, season)
+            results = conn.execute_query(query, params)
+        else:
+            # Combined career stats
+            query = """
+            MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+            MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+            WITH p, pos, 
+                 SUM(r.total_points) AS total_points,
+                 SUM(r.goals_scored) AS goals,
+                 SUM(r.assists) AS assists,
+                 SUM(r.clean_sheets) AS clean_sheets,
+                 SUM(r.bonus) AS bonus,
+                 SUM(r.minutes) AS minutes,
+                 AVG(r.ict_index) AS avg_ict,
+                 MAX(r.value) AS max_value,
+                 MAX(r.selected) AS max_selected,
+                 COUNT(f) AS games
+            RETURN p.name AS player_name, pos.code AS position, 'All seasons' AS season,
+                   total_points, goals, assists, clean_sheets, bonus,
+                   minutes, round(avg_ict, 2) AS avg_ict_index, 
+                   round(max_value / 10.0, 2) AS avg_value_millions, 
+                   max_selected, games
+            """
+            results = conn.execute_query(query, {"player_name": player_name})
+
+        if not results:
+            return {"stats": None}
+
+        # Format ICT index to 2 decimal places if it's not already
+        stats = dict(results[0])
+        if "avg_ict" in stats and stats["avg_ict"] is not None:
+            stats["avg_ict_index"] = round(float(stats["avg_ict"]), 2)
+        
+        # Add avatar
+        stats["avatar"] = get_player_avatar_url(player_name)
+        
+        return {"stats": stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/players/search")
 async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_conn)):
     """Search for players by name, with accent-insensitive matching."""
@@ -1092,12 +1147,28 @@ async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_co
 
         # If no results, fall back to accent-stripped search across all players
         if not results:
-            all_query = "MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position) RETURN p.name AS player_name, pos.code AS position"
+            all_query = """
+            MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
+            OPTIONAL MATCH (p)-[:PLAYS_FOR]->(t:Team)
+            RETURN p.name AS player_name, pos.code AS position, t.name AS team_name
+            """
             all_players = conn.execute_query(all_query, {})
             results = [
                 r for r in all_players
                 if normalized_query in normalize(r.get("player_name", ""))
             ][:10]
+        else:
+            # Enrich results with team names if missing
+            enriched_results = []
+            for r in results:
+                row = dict(r)
+                if not row.get("team_name"):
+                    team_q = "MATCH (p:Player {name: $name})-[:PLAYS_FOR]->(t:Team) RETURN t.name AS team_name LIMIT 1"
+                    team_res = conn.execute_query(team_q, {"name": row["player_name"]})
+                    if team_res:
+                        row["team_name"] = team_res[0]["team_name"]
+                enriched_results.append(row)
+            results = enriched_results
 
         results = enrich_rows_with_avatars(results[:10])
 

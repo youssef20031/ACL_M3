@@ -164,8 +164,29 @@ export function PlayerSearch() {
 }
 
 function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => void }) {
-  const name = player.player_name ?? player.name ?? 'Unknown';
-  const pos = player.position ?? '—';
+  const [selectedSeason, setSelectedSeason] = useState<string>('All seasons');
+  const [stats, setStats] = useState<PlayerResult>(player);
+  
+  const statsMutation = useMutation({
+    mutationFn: ({ name, season }: { name: string; season?: string }) => 
+      apiService.getPlayerStats(name, season === 'All seasons' ? undefined : season),
+    onSuccess: (data) => {
+      if (data.stats) {
+        setStats(data.stats);
+      }
+    },
+  });
+
+  const handleSeasonChange = (season: string) => {
+    setSelectedSeason(season);
+    statsMutation.mutate({ 
+      name: player.player_name ?? player.name, 
+      season 
+    });
+  };
+
+  const name = stats.player_name ?? stats.name ?? 'Unknown';
+  const pos = stats.position ?? '—';
 
   const statFields = [
     { key: 'total_points', label: 'Points' },
@@ -175,34 +196,57 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
     { key: 'bonus', label: 'Bonus' },
   ];
   const chartData = statFields
-    .filter((s) => player[s.key] != null && player[s.key] > 0)
-    .map((s) => ({ name: s.label, value: player[s.key] }));
+    .filter((s) => stats[s.key] != null && stats[s.key] > 0)
+    .map((s) => ({ name: s.label, value: stats[s.key] }));
 
   const detailStats = [
-    { label: 'Total Points', value: player.total_points },
-    { label: 'Goals', value: player.goals },
-    { label: 'Assists', value: player.assists },
-    { label: 'Clean Sheets', value: player.clean_sheets },
-    { label: 'Bonus', value: player.bonus },
-    { label: 'Minutes', value: player.minutes?.toLocaleString() },
-    { label: 'Games', value: player.games },
-    { label: 'Avg ICT', value: player.avg_ict_index ?? player.avg_ict },
-    { label: 'Value (£m)', value: player.avg_value_millions ?? player.max_value },
-    { label: 'Max Selected', value: player.max_selected?.toLocaleString() },
+    { label: 'Total Points', value: stats.total_points },
+    { label: 'Goals', value: stats.goals },
+    { label: 'Assists', value: stats.assists },
+    { label: 'Clean Sheets', value: stats.clean_sheets },
+    { label: 'Bonus', value: stats.bonus },
+    { label: 'Minutes', value: stats.minutes?.toLocaleString() },
+    { label: 'Games', value: stats.games },
+    { label: 'Avg ICT', value: stats.avg_ict_index ?? stats.avg_ict },
+    { label: 'Value (£m)', value: stats.avg_value_millions ?? stats.max_value },
+    { label: 'Max Selected', value: stats.max_selected?.toLocaleString() },
   ].filter((s) => s.value != null);
+
+  const seasons = ['All seasons', '2022-23', '2021-22', '2020-21'];
 
   return (
     <div className="space-y-4">
-      <button
-        onClick={onBack}
-        className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"
-      >
-        ← Back to results
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={onBack}
+          className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"
+        >
+          ← Back to results
+        </button>
+        
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Select Season:</span>
+          <select
+            value={selectedSeason}
+            onChange={(e) => handleSeasonChange(e.target.value)}
+            disabled={statsMutation.isPending}
+            className="w-40 px-3 py-2 text-sm font-medium bg-gray-100 border border-gray-400 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:bg-white transition-all cursor-pointer disabled:opacity-50"
+          >
+            {seasons.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-      <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white rounded-xl p-6 flex items-center gap-4">
-        {player.avatar ? (
-          <img src={player.avatar} alt={name} className="w-16 h-16 rounded-full object-cover border-2 border-white/30" />
+      <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white rounded-xl p-6 flex items-center gap-4 relative overflow-hidden">
+        {statsMutation.isPending && (
+          <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px] flex items-center justify-center z-10">
+            <Loader2 className="w-8 h-8 animate-spin text-white" />
+          </div>
+        )}
+        {stats.avatar ? (
+          <img src={stats.avatar} alt={name} className="w-16 h-16 rounded-full object-cover border-2 border-white/30" />
         ) : (
           <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
             {name[0].toUpperCase()}
@@ -212,18 +256,21 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
           <h3 className="text-2xl font-bold">{name}</h3>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-purple-200 text-sm">{pos}</span>
-            {player.season && <span className="text-purple-200 text-sm">· {player.season}</span>}
+            <span className="text-purple-200 text-sm">· {stats.team_name ?? player.team_name ?? 'FPL'}</span>
+            <span className="text-white/80 text-sm font-medium bg-white/10 px-2 py-0.5 rounded ml-1">
+              {selectedSeason}
+            </span>
           </div>
         </div>
-        {player.total_points != null && (
+        {stats.total_points != null && (
           <div className="ml-auto text-right">
-            <p className="text-3xl font-bold">{player.total_points}</p>
+            <p className="text-3xl font-bold">{stats.total_points}</p>
             <p className="text-purple-200 text-sm">FPL Points</p>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {detailStats.map((s) => (
           <div key={s.label} className="bg-white border rounded-xl p-3 text-center">
             <p className="text-xl font-bold text-gray-900">{s.value}</p>

@@ -154,6 +154,11 @@ export const apiService = {
     return data;
   },
 
+  async getPlayerStats(playerName: string, season?: string): Promise<{ stats: Record<string, any> }> {
+    const { data } = await api.post('/api/players/stats', { player_name: playerName, season });
+    return data;
+  },
+
   async comparePlayers(
     player1: string,
     player2: string,

@@ -105,7 +105,7 @@ export function Layout() {
 
         {/* Footer */}
         <div className="p-4 text-xs text-purple-200 border-t border-purple-500/30">
-          <p>© 2024 FPL FantasyTrivia</p>
+          <p>© 2026 FPL FantasyTrivia</p>
           <p className="mt-1">Powered by Neo4j & FastAPI</p>
         </div>
       </aside>
