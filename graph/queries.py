@@ -557,11 +557,13 @@ class CypherQueries:
                  SUM(r.bonus) AS bonus,
                  SUM(r.minutes) AS minutes,
                  AVG(r.ict_index) AS avg_ict,
+                     AVG(r.form) AS avg_form,
                  AVG(r.value) AS avg_value,
                  COUNT(f) AS games
             RETURN p.name AS player_name, pos.code AS position,
                    total_points, goals, assists, clean_sheets, bonus, minutes,
-                   round(avg_ict, 2) AS avg_ict_index, 
+                         round(avg_ict, 2) AS avg_ict_index,
+                         round(avg_form, 2) AS avg_form,
                    round(avg_value / 10.0, 2) AS avg_value_millions,
                    games
             ORDER BY total_points DESC
@@ -580,11 +582,13 @@ class CypherQueries:
                  SUM(r.bonus) AS bonus,
                  SUM(r.minutes) AS minutes,
                  AVG(r.ict_index) AS avg_ict,
+                     AVG(r.form) AS avg_form,
                  AVG(r.value) AS avg_value,
                  COUNT(f) AS games
             RETURN p.name AS player_name, pos.code AS position,
                    total_points, goals, assists, clean_sheets, bonus, minutes,
-                   round(avg_ict, 2) AS avg_ict_index, 
+                         round(avg_ict, 2) AS avg_ict_index,
+                         round(avg_form, 2) AS avg_form,
                    round(avg_value / 10.0, 2) AS avg_value_millions,
                    games
             ORDER BY total_points DESC

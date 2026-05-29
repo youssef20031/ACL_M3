@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
+import { cn } from '../utils/cn';
 
 const MODELS = [
   { key: 'qwen-2.5-coder', label: 'Qwen 2.5 Coder', description: 'Good for structured data queries' },
@@ -49,7 +50,15 @@ export function Settings() {
     setSelectedModel,
     setRetrievalMethod,
     setEmbeddingModel,
+    theme,
   } = useAppStore();
+  const isDark = theme === 'dark';
+  const pageText = isDark ? 'text-slate-100' : 'text-gray-900';
+  const mutedText = isDark ? 'text-slate-400' : 'text-gray-600';
+  const panelClass = isDark ? 'border-slate-800 bg-slate-900/80 text-slate-100' : 'border-gray-200 bg-white text-gray-900';
+  const fieldClass = isDark ? 'border-slate-700 bg-slate-950/70 text-slate-100 placeholder:text-slate-500 focus:ring-violet-500' : 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-purple-500';
+  const optionSelectedClass = isDark ? 'border-violet-400/60 bg-violet-500/10' : 'border-purple-500 bg-purple-50';
+  const optionIdleClass = isDark ? 'border-slate-700 bg-slate-950/60 hover:border-slate-500' : 'border-gray-200 hover:border-gray-300';
 
   const [uri, setUri] = useState('');
   const [username, setUsername] = useState('neo4j');
@@ -104,19 +113,19 @@ export function Settings() {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">⚙️ Settings</h2>
-        <p className="text-sm text-gray-600 mt-1">Configure database, models, and retrieval options</p>
+        <h2 className={cn('text-2xl font-bold', pageText)}>⚙️ Settings</h2>
+        <p className={cn('text-sm mt-1', mutedText)}>Configure database, models, and retrieval options</p>
       </div>
 
       {/* API Status */}
-      <div className="bg-white rounded-xl border p-5 space-y-3">
+      <div className={cn('rounded-xl border p-5 space-y-3', panelClass)}>
         <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+          <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
             <Server className="w-4 h-4" /> API Status
           </h3>
           <button
             onClick={() => refetchHealth()}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className={cn('transition-colors', isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-400 hover:text-gray-600')}
             title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
@@ -124,60 +133,61 @@ export function Settings() {
         </div>
         {health ? (
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <StatusRow label="API" value={health.status === 'healthy' ? 'Online' : 'Error'} ok={health.status === 'healthy'} />
-            <StatusRow label="Neo4j" value={health.neo4j} ok={health.neo4j === 'connected'} />
-            <StatusRow label="LLM" value={health.llm_available ? 'Available' : 'Not configured'} ok={health.llm_available} />
+            <StatusRow label="API" value={health.status === 'healthy' ? 'Online' : 'Error'} ok={health.status === 'healthy'} theme={theme} />
+            <StatusRow label="Neo4j" value={health.neo4j} ok={health.neo4j === 'connected'} theme={theme} />
+            <StatusRow label="LLM" value={health.llm_available ? 'Available' : 'Not configured'} ok={health.llm_available} theme={theme} />
             <StatusRow
               label="Embeddings"
               value={health.embeddings_built ? `${health.embedding_count.toLocaleString()} vectors` : 'Not built'}
               ok={health.embeddings_built}
+              theme={theme}
             />
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Connecting to API...</p>
+          <p className={cn('text-sm', mutedText)}>Connecting to API...</p>
         )}
       </div>
 
       {/* Neo4j Connection */}
-      <div className="bg-white rounded-xl border p-5 space-y-4">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
+        <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
           <Database className="w-4 h-4" /> Neo4j Connection
         </h3>
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">URI</label>
+            <label className={cn('block text-sm font-medium mb-1', isDark ? 'text-slate-300' : 'text-gray-700')}>URI</label>
             <input
               type="text"
               value={uri}
               onChange={(e) => setUri(e.target.value)}
               placeholder="neo4j+s://xxxxxxxx.databases.neo4j.io"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className={cn('w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2', fieldClass)}
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <label className={cn('block text-sm font-medium mb-1', isDark ? 'text-slate-300' : 'text-gray-700')}>Username</label>
               <input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className={cn('w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2', fieldClass)}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label className={cn('block text-sm font-medium mb-1', isDark ? 'text-slate-300' : 'text-gray-700')}>Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 pr-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  className={cn('w-full rounded-lg border px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2', fieldClass)}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className={cn('absolute right-2 top-1/2 -translate-y-1/2 transition-colors', isDark ? 'text-slate-500 hover:text-slate-200' : 'text-gray-400 hover:text-gray-600')}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -187,17 +197,17 @@ export function Settings() {
         </div>
 
         {connectionError && (
-          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{connectionError}</p>
+          <p className={cn('text-sm px-3 py-2 rounded-lg', isDark ? 'bg-red-500/10 text-red-200' : 'bg-red-50 text-red-600')}>{connectionError}</p>
         )}
 
         <div className="flex items-center gap-3 flex-wrap">
           {neo4jConnected ? (
             <>
-              <div className="flex items-center gap-2 text-green-600 text-sm font-medium">
+              <div className={cn('flex items-center gap-2 text-sm font-medium', isDark ? 'text-emerald-300' : 'text-green-600')}>
                 <CheckCircle className="w-4 h-4" />
                 Connected
                 {neo4jStats && (
-                  <span className="text-gray-500 font-normal">
+                  <span className={cn('font-normal', isDark ? 'text-slate-400' : 'text-gray-500')}>
                     — {neo4jStats.total_nodes.toLocaleString()} nodes, {neo4jStats.total_relationships.toLocaleString()} relationships
                   </span>
                 )}
@@ -205,7 +215,7 @@ export function Settings() {
               <button
                 onClick={() => disconnectMutation.mutate()}
                 disabled={disconnectMutation.isPending}
-                className="ml-auto px-4 py-2 text-sm border border-red-200 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                className={cn('ml-auto rounded-lg border px-4 py-2 text-sm transition-colors', isDark ? 'border-red-500/30 text-red-200 hover:bg-red-500/10' : 'border-red-200 text-red-600 hover:bg-red-50')}
               >
                 Disconnect
               </button>
@@ -224,11 +234,11 @@ export function Settings() {
       </div>
 
       {/* Data Management */}
-      <div className="bg-white rounded-xl border p-5 space-y-4">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
+        <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
           <Download className="w-4 h-4" /> Data Management
         </h3>
-        <p className="text-sm text-gray-600">
+        <p className={mutedText}>
           Load the FPL CSV data into Neo4j. This clears existing data and re-imports everything.
         </p>
         <div className="flex items-center gap-4 flex-wrap">
@@ -246,31 +256,27 @@ export function Settings() {
             )}
           </button>
           {loadDataMutation.isSuccess && (
-            <span className="text-sm text-green-600 flex items-center gap-1">
+            <span className={cn('text-sm flex items-center gap-1', isDark ? 'text-emerald-300' : 'text-green-600')}>
               <CheckCircle className="w-4 h-4" />
               Loaded {(loadDataMutation.data as any)?.stats?.total_nodes?.toLocaleString()} nodes
             </span>
           )}
           {loadDataMutation.isError && (
-            <span className="text-sm text-red-600">{handleApiError(loadDataMutation.error)}</span>
+            <span className={cn('text-sm', isDark ? 'text-red-300' : 'text-red-600')}>{handleApiError(loadDataMutation.error)}</span>
           )}
         </div>
       </div>
 
       {/* LLM Model */}
-      <div className="bg-white rounded-xl border p-5 space-y-4">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
+        <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
           <Bot className="w-4 h-4" /> LLM Model
         </h3>
         <div className="grid grid-cols-1 gap-2">
           {MODELS.map((m) => (
             <label
               key={m.key}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                selectedModel === m.key
-                  ? 'border-purple-500 bg-purple-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
+              className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors', selectedModel === m.key ? optionSelectedClass : optionIdleClass)}
             >
               <input
                 type="radio"
@@ -281,8 +287,8 @@ export function Settings() {
                 className="mt-0.5 accent-purple-600"
               />
               <div>
-                <p className="text-sm font-medium text-gray-900">{m.label}</p>
-                <p className="text-xs text-gray-500">{m.description}</p>
+                <p className={cn('text-sm font-medium', pageText)}>{m.label}</p>
+                <p className={cn('text-xs', mutedText)}>{m.description}</p>
               </div>
             </label>
           ))}
@@ -290,17 +296,13 @@ export function Settings() {
       </div>
 
       {/* Retrieval Method */}
-      <div className="bg-white rounded-xl border p-5 space-y-4">
-        <h3 className="font-semibold text-gray-900">🔍 Retrieval Method</h3>
+      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
+        <h3 className={cn('font-semibold', pageText)}>🔍 Retrieval Method</h3>
         <div className="grid grid-cols-1 gap-2">
           {RETRIEVAL_METHODS.map((r) => (
             <label
               key={r.key}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                retrievalMethod === r.key
-                  ? 'border-purple-500 bg-purple-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
+              className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors', retrievalMethod === r.key ? optionSelectedClass : optionIdleClass)}
             >
               <input
                 type="radio"
@@ -311,8 +313,8 @@ export function Settings() {
                 className="mt-0.5 accent-purple-600"
               />
               <div>
-                <p className="text-sm font-medium text-gray-900">{r.label}</p>
-                <p className="text-xs text-gray-500">{r.description}</p>
+                <p className={cn('text-sm font-medium', pageText)}>{r.label}</p>
+                <p className={cn('text-xs', mutedText)}>{r.description}</p>
               </div>
             </label>
           ))}
@@ -320,19 +322,15 @@ export function Settings() {
       </div>
 
       {/* Embeddings */}
-      <div className="bg-white rounded-xl border p-5 space-y-4">
-        <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
+        <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
           <Sparkles className="w-4 h-4" /> Embeddings
         </h3>
         <div className="grid grid-cols-2 gap-2">
           {EMBEDDING_MODELS.map((m) => (
             <label
               key={m.key}
-              className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                embeddingModel === m.key
-                  ? 'border-purple-500 bg-purple-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
+              className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors', embeddingModel === m.key ? optionSelectedClass : optionIdleClass)}
             >
               <input
                 type="radio"
@@ -343,8 +341,8 @@ export function Settings() {
                 className="mt-0.5 accent-purple-600"
               />
               <div>
-                <p className="text-sm font-medium text-gray-900">{m.label}</p>
-                <p className="text-xs text-gray-500">{m.description}</p>
+                <p className={cn('text-sm font-medium', pageText)}>{m.label}</p>
+                <p className={cn('text-xs', mutedText)}>{m.description}</p>
               </div>
             </label>
           ))}
@@ -365,29 +363,29 @@ export function Settings() {
               )}
             </button>
             {embeddingsBuilt && (
-              <span className="text-sm text-green-600 flex items-center gap-1">
+              <span className={cn('text-sm flex items-center gap-1', isDark ? 'text-emerald-300' : 'text-green-600')}>
                 <CheckCircle className="w-4 h-4" />
                 {embeddingCount.toLocaleString()} vectors ready
               </span>
             )}
             {buildEmbeddingsMutation.isError && (
-              <span className="text-sm text-red-600">{handleApiError(buildEmbeddingsMutation.error)}</span>
+              <span className={cn('text-sm', isDark ? 'text-red-300' : 'text-red-600')}>{handleApiError(buildEmbeddingsMutation.error)}</span>
             )}
           </div>
 
           {/* Clear, prominent in-progress message when building embeddings */}
           {buildEmbeddingsMutation.isPending && (
-            <div className="mt-3 p-3 rounded-lg bg-purple-50 border border-purple-200 text-sm text-purple-900 flex items-start gap-3">
-              <Loader2 className="w-5 h-5 animate-spin mt-0.5" />
+            <div className={cn('mt-3 flex items-start gap-3 rounded-lg border p-3 text-sm', isDark ? 'border-violet-400/20 bg-violet-500/10 text-violet-100' : 'border-purple-200 bg-purple-50 text-purple-900')}>
+              <Loader2 className="mt-0.5 h-5 w-5 animate-spin" />
               <div>
                 <div className="font-medium">Building embeddings — this may take several minutes</div>
-                <div className="text-xs text-purple-800 mt-1">Do not close this page. The process will continue to run on the server; you can navigate away but the operation may be cancelled by some environments.</div>
+                <div className={cn('mt-1 text-xs', isDark ? 'text-violet-200' : 'text-purple-800')}>Do not close this page. The process will continue to run on the server; you can navigate away but the operation may be cancelled by some environments.</div>
               </div>
             </div>
           )}
 
           {buildEmbeddingsMutation.isSuccess && buildEmbeddingsMutation.data && (
-            <p className="text-sm text-gray-600">{buildEmbeddingsMutation.data.message}</p>
+            <p className={mutedText}>{buildEmbeddingsMutation.data.message}</p>
           )}
         </div>
       </div>
@@ -395,11 +393,13 @@ export function Settings() {
   );
 }
 
-function StatusRow({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+function StatusRow({ label, value, ok, theme }: { label: string; value: string; ok: boolean; theme: 'light' | 'dark' }) {
+  const isDark = theme === 'dark';
+
   return (
-    <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-      <span className="text-gray-600">{label}</span>
-      <span className={`flex items-center gap-1.5 font-medium ${ok ? 'text-green-600' : 'text-red-500'}`}>
+    <div className={cn('flex items-center justify-between rounded-lg px-3 py-2', isDark ? 'bg-slate-950/70' : 'bg-gray-50')}>
+      <span className={isDark ? 'text-slate-400' : 'text-gray-600'}>{label}</span>
+      <span className={cn('flex items-center gap-1.5 font-medium', ok ? (isDark ? 'text-emerald-300' : 'text-green-600') : isDark ? 'text-red-300' : 'text-red-500')}>
         {ok ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
         {value}
       </span>

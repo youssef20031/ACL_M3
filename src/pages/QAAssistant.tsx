@@ -7,6 +7,7 @@ import type { QueryResponse } from '../services/api';
 import ReactMarkdown from 'react-markdown';
 import { GraphVisualization } from '../components/GraphVisualization';
 import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '../utils/cn';
 
 export function QAAssistant() {
   const [input, setInput] = useState('');
@@ -22,7 +23,9 @@ export function QAAssistant() {
     selectedModel,
     retrievalMethod,
     embeddingModel,
+    theme,
   } = useAppStore();
+  const isDark = theme === 'dark';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -70,23 +73,23 @@ export function QAAssistant() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="bg-white border-b px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className={cn('border-b px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', isDark ? 'border-slate-800 bg-slate-950/80' : 'border-white bg-white')}>
         <div className="min-w-0">
-          <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">💬 FPL Q&A Assistant</h2>
-          <p className="text-sm text-gray-600">
+          <h2 className={cn('text-xl font-bold sm:text-2xl', isDark ? 'text-slate-100' : 'text-gray-900')}>💬 FPL Q&A Assistant</h2>
+          <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-600')}>
             Ask questions about Fantasy Premier League players and statistics
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowDetails(!showDetails)}
-            className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className={cn('rounded-lg px-4 py-2 text-sm transition-colors', isDark ? 'bg-white/5 text-slate-100 hover:bg-white/10' : 'bg-gray-100 text-gray-800 hover:bg-gray-200')}
           >
             {showDetails ? 'Hide Details' : 'Show Details'}
           </button>
           <button
             onClick={() => clearChat()}
-            className="px-4 py-2 text-sm bg-red-50 hover:bg-red-100 text-red-600 rounded-lg transition-colors"
+            className={cn('rounded-lg px-4 py-2 text-sm transition-colors', isDark ? 'bg-red-500/10 text-red-200 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100')}
           >
             Clear Chat
           </button>
@@ -96,27 +99,27 @@ export function QAAssistant() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 sm:px-6">
         {!neo4jConnected && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+          <div className={cn('rounded-lg border p-4 flex items-start gap-3', isDark ? 'border-amber-400/20 bg-amber-500/10' : 'border-yellow-200 bg-yellow-50')}>
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
             <div>
-              <p className="font-medium text-yellow-900">Neo4j Not Connected</p>
-              <p className="text-sm text-yellow-700 mt-1">Connecting to Neo4j... Please wait.</p>
+              <p className={cn('font-medium', isDark ? 'text-amber-100' : 'text-yellow-900')}>Neo4j Not Connected</p>
+              <p className={cn('mt-1 text-sm', isDark ? 'text-amber-200' : 'text-yellow-700')}>Connecting to Neo4j... Please wait.</p>
             </div>
           </div>
         )}
 
         {chatHistory.length === 0 && neo4jConnected && (
           <div className="text-center py-12">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-purple-100 rounded-full mb-4">
-              <MessageCircle className="w-8 h-8 text-purple-600" />
+            <div className={cn('mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full', isDark ? 'bg-violet-500/15' : 'bg-purple-100')}>
+              <MessageCircle className={cn('h-8 w-8', isDark ? 'text-violet-200' : 'text-purple-600')} />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className={cn('mb-2 text-lg font-semibold', isDark ? 'text-slate-100' : 'text-gray-900')}>
               Start a Conversation
             </h3>
-            <p className="text-gray-600 max-w-md mx-auto">
+            <p className={cn('mx-auto max-w-md', isDark ? 'text-slate-400' : 'text-gray-600')}>
               Ask me anything about FPL players, teams, and statistics. For example:
             </p>
-            <div className="mt-6 space-y-2 max-w-lg mx-auto">
+            <div className="mx-auto mt-6 max-w-lg space-y-2">
               {[
                 'Who scored the most goals in 2022-23?',
                 'Which midfielder had the best points per game?',
@@ -125,7 +128,7 @@ export function QAAssistant() {
                 <button
                   key={i}
                   onClick={() => setInput(example)}
-                  className="block w-full text-left px-4 py-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-sm text-gray-700"
+                  className={cn('block w-full rounded-lg px-4 py-3 text-left text-sm transition-colors', isDark ? 'border border-slate-800 bg-slate-900/80 text-slate-100 hover:border-violet-400/40 hover:bg-slate-900' : 'bg-gray-50 text-gray-700 hover:bg-gray-100')}
                 >
                   {example}
                 </button>
@@ -144,11 +147,14 @@ export function QAAssistant() {
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-3xl rounded-lg px-4 py-3 ${
+                className={cn(
+                  'max-w-3xl rounded-lg px-4 py-3',
                   message.role === 'user'
                     ? 'bg-purple-600 text-white'
-                    : 'bg-white border border-gray-200 text-gray-900'
-                }`}
+                    : isDark
+                      ? 'border border-slate-800 bg-slate-900/80 text-slate-100'
+                      : 'border border-gray-200 bg-white text-gray-900'
+                )}
               >
                 <ReactMarkdown className="prose prose-sm max-w-none">
                   {message.content}
@@ -160,9 +166,9 @@ export function QAAssistant() {
 
         {queryMutation.isPending && (
           <div className="flex justify-start">
-            <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center gap-2">
+            <div className={cn('flex items-center gap-2 rounded-lg border px-4 py-3', isDark ? 'border-slate-800 bg-slate-900/80' : 'border-gray-200 bg-white')}>
               <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
-              <span className="text-sm text-gray-600">Analyzing your question...</span>
+              <span className={cn('text-sm', isDark ? 'text-slate-300' : 'text-gray-600')}>Analyzing your question...</span>
             </div>
           </div>
         )}
@@ -172,40 +178,40 @@ export function QAAssistant() {
 
       {/* Query Details Panel */}
       {showDetails && lastQueryInfo && (
-        <div className="border-t bg-gray-50 p-6 max-h-96 overflow-y-auto">
-          <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <div className={cn('max-h-96 overflow-y-auto border-t p-6', isDark ? 'border-slate-800 bg-slate-950/80' : 'bg-gray-50')}>
+          <h3 className={cn('mb-3 flex items-center gap-2 font-semibold', isDark ? 'text-slate-100' : 'text-gray-900')}>
             <Info className="w-4 h-4" />
             Query Details
           </h3>
           
           <div className="space-y-4">
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Intent</h4>
-              <span className="inline-block px-2 py-1 bg-purple-100 text-purple-700 rounded text-sm">
+              <h4 className={cn('mb-1 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>Intent</h4>
+              <span className={cn('inline-block rounded px-2 py-1 text-sm', isDark ? 'bg-violet-500/15 text-violet-200' : 'bg-purple-100 text-purple-700')}>
                 {lastQueryInfo.intent}
               </span>
             </div>
 
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Entities</h4>
-              <pre className="bg-white border rounded p-2 text-xs overflow-x-auto">
+              <h4 className={cn('mb-1 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>Entities</h4>
+              <pre className={cn('overflow-x-auto rounded p-2 text-xs', isDark ? 'border border-slate-800 bg-slate-900/80 text-slate-200' : 'border bg-white')}>
                 {JSON.stringify(lastQueryInfo.entities, null, 2)}
               </pre>
             </div>
 
             <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-1">Cypher Query</h4>
-              <pre className="bg-gray-900 text-green-400 rounded p-3 text-xs overflow-x-auto">
+              <h4 className={cn('mb-1 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>Cypher Query</h4>
+              <pre className={cn('overflow-x-auto rounded p-3 text-xs', isDark ? 'bg-slate-950 text-emerald-300' : 'bg-gray-900 text-green-400')}>
                 {lastQueryInfo.cypher_query}
               </pre>
             </div>
 
             {lastQueryInfo.embedding_used && (
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-1">
+                <h4 className={cn('mb-1 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>
                   🔮 Embedding Search Active
                 </h4>
-                <p className="text-sm text-gray-600">
+                <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-600')}>
                   Similar players found using semantic search
                 </p>
               </div>
@@ -213,7 +219,7 @@ export function QAAssistant() {
 
             {lastQueryInfo.graph_data && (
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
+                <h4 className={cn('mb-2 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>
                   Knowledge Graph Visualization
                 </h4>
                 <GraphVisualization data={lastQueryInfo.graph_data} />
@@ -224,7 +230,7 @@ export function QAAssistant() {
       )}
 
       {/* Input Form */}
-      <div className="bg-white border-t px-4 py-4 sm:px-6">
+      <div className={cn('border-t px-4 py-4 sm:px-6', isDark ? 'border-slate-800 bg-slate-950/80' : 'border-white bg-white')}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
           <input
             type="text"
@@ -236,7 +242,7 @@ export function QAAssistant() {
                 : 'Connect to Neo4j first...'
             }
             disabled={!neo4jConnected || queryMutation.isPending}
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            className={cn('flex-1 rounded-lg border px-4 py-3 text-base focus:outline-none focus:ring-2', isDark ? 'border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:ring-violet-500 disabled:bg-slate-900 disabled:text-slate-500' : 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed')}
           />
           <button
             type="submit"

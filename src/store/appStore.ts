@@ -7,6 +7,8 @@ export interface Message {
   timestamp: number;
 }
 
+export type ThemeMode = 'light' | 'dark';
+
 export interface AppState {
   // Connection
   neo4jConnected: boolean;
@@ -35,6 +37,11 @@ export interface AppState {
   setSelectedModel: (model: string) => void;
   setRetrievalMethod: (method: 'Baseline' | 'Embeddings' | 'Hybrid') => void;
   setEmbeddingModel: (model: 'minilm' | 'mpnet') => void;
+
+  // Theme
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
+  toggleTheme: () => void;
 
   // Trivia
   triviaScore: number;
@@ -75,6 +82,12 @@ export const useAppStore = create<AppState>()(
       setRetrievalMethod: (method) => set({ retrievalMethod: method }),
       setEmbeddingModel: (model) => set({ embeddingModel: model }),
 
+      // Theme
+      theme: 'light',
+      setTheme: (theme) => set({ theme }),
+      toggleTheme: () =>
+        set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
+
       // Trivia
       triviaScore: 0,
       triviaTotal: 0,
@@ -88,6 +101,7 @@ export const useAppStore = create<AppState>()(
         selectedModel: state.selectedModel,
         retrievalMethod: state.retrievalMethod,
         embeddingModel: state.embeddingModel,
+        theme: state.theme,
         triviaScore: state.triviaScore,
         triviaTotal: state.triviaTotal,
       }),

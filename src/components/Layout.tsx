@@ -9,6 +9,8 @@ import {
   Settings as SettingsIcon,
   Database,
   Sparkles,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiService } from '../services/api';
@@ -20,10 +22,12 @@ export function Layout() {
     neo4jStats,
     embeddingsBuilt,
     embeddingCount,
+    theme,
     setNeo4jConnected,
     setNeo4jStats,
     setEmbeddingsBuilt,
     setEmbeddingCount,
+    toggleTheme,
   } = useAppStore();
 
   const { data: health } = useQuery({
@@ -43,6 +47,11 @@ export function Layout() {
     setEmbeddingCount(health.embedding_count);
   }, [health, setEmbeddingCount, setEmbeddingsBuilt, setNeo4jConnected, setNeo4jStats]);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
+
   const navItems = [
     { to: '/qa', icon: MessageCircle, label: 'Q&A Assistant' },
     { to: '/trivia', icon: Target, label: 'FantasyTrivia' },
@@ -52,14 +61,27 @@ export function Layout() {
   ];
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-gray-50 lg:flex-row">
+    <div className={cn('flex min-h-[100dvh] flex-col transition-colors lg:flex-row', theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-gray-50 text-slate-900')}>
       {/* Sidebar */}
-      <aside className="flex w-full flex-col bg-gradient-to-br from-purple-600 to-indigo-700 text-white lg:w-64 lg:min-h-[100dvh]">
+      <aside className={cn('flex w-full flex-col text-white transition-colors lg:w-64 lg:min-h-[100dvh]', theme === 'dark' ? 'bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950' : 'bg-gradient-to-br from-purple-600 to-indigo-700')}>
         <div className="px-4 py-4 sm:px-6 lg:p-6">
-          <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
-            ⚽ FPL FantasyTrivia
-          </h1>
-          <p className="mt-1 text-sm text-purple-200">Graph-RAG Q&A System</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
+                ⚽ FPL FantasyTrivia
+              </h1>
+              <p className="mt-1 text-sm text-purple-200">Graph-RAG Q&A System</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition-colors hover:bg-white/20"
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         {/* Status */}
@@ -142,7 +164,7 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className="min-w-0 flex-1 overflow-auto">
+      <main className={cn('min-w-0 flex-1 overflow-auto transition-colors', theme === 'dark' ? 'bg-slate-950' : 'bg-gray-50')}>
         <Outlet />
       </main>
     </div>
