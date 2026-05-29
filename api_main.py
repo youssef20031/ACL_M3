@@ -61,6 +61,7 @@ app_state = {
     "embedding_manager": None,
     "embeddings_built": False,
     "trivia_cache": None,
+    "player_search_cache": None,
 }
 
 
@@ -126,6 +127,12 @@ def build_image_search_variants(query: str) -> List[str]:
     if len(parts) > 2:
         add_variant(" ".join(parts[:2]))
         add_variant(" ".join(accent_free.split()[:2]))
+    if len(parts) > 1:
+        add_variant(parts[-1])
+        add_variant(accent_free.split()[-1])
+    if len(parts) > 3:
+        add_variant(" ".join(parts[-2:]))
+        add_variant(" ".join(accent_free.split()[-2:]))
 
     return variants
 
@@ -268,6 +275,11 @@ async def lifespan(app: FastAPI):
         if conn.test_connection():
             app_state["neo4j_conn"] = conn
             print("✅ Neo4j connected")
+            try:
+                get_player_search_cache(conn)
+                print("✅ Player search cache warmed")
+            except Exception as cache_error:
+                print(f"⚠️ Player search cache warm-up failed: {cache_error}")
     except Exception as e:
         print(f"⚠️  Neo4j connection failed: {e}")
     
@@ -378,6 +390,93 @@ def build_proxy_image_url(source_url: str) -> str:
     return f"/api/images/proxy?url={quote_plus(source_url)}"
 
 
+def normalize_text(text: str) -> str:
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', text)
+        if unicodedata.category(c) != 'Mn'
+    ).lower()
+
+
+def _tokenize_normalized_text(text: str) -> List[str]:
+    return [token for token in normalize_text(text).split() if token]
+
+
+def _tokens_appear_in_order(query_tokens: List[str], candidate_tokens: List[str]) -> bool:
+    if not query_tokens:
+        return False
+
+    candidate_index = 0
+    for query_token in query_tokens:
+        found = False
+        while candidate_index < len(candidate_tokens):
+            candidate_token = candidate_tokens[candidate_index]
+            candidate_index += 1
+            if candidate_token == query_token or candidate_token.startswith(query_token) or query_token in candidate_token:
+                found = True
+                break
+        if not found:
+            return False
+    return True
+
+
+def score_player_search_match(query: str, candidate_name: str) -> Optional[tuple]:
+    normalized_query = normalize_text(query)
+    normalized_candidate = normalize_text(candidate_name)
+
+    if not normalized_query or not normalized_candidate:
+        return None
+
+    if normalized_query == normalized_candidate:
+        return (4, 1, 1, 1, 0, 0)
+
+    query_tokens = _tokenize_normalized_text(normalized_query)
+    candidate_tokens = _tokenize_normalized_text(normalized_candidate)
+    if not query_tokens or not candidate_tokens:
+        return None
+
+    matched_tokens = 0
+    for query_token in query_tokens:
+        if any(candidate_token == query_token or candidate_token.startswith(query_token) or query_token in candidate_token for candidate_token in candidate_tokens):
+            matched_tokens += 1
+
+    if matched_tokens == 0:
+        return None
+
+    return (
+        matched_tokens,
+        1 if _tokens_appear_in_order(query_tokens, candidate_tokens) else 0,
+        1 if normalized_candidate.startswith(normalized_query) else 0,
+        1 if normalized_query in normalized_candidate else 0,
+        -len(candidate_tokens),
+        -len(normalized_candidate),
+    )
+
+
+def rank_player_search_results(rows: List[Dict[str, Any]], query: str, limit: int) -> List[Dict[str, Any]]:
+    ranked_rows = [
+        (score_player_search_match(query, str(row.get("player_name", ""))), row)
+        for row in rows
+    ]
+    ranked_rows = [item for item in ranked_rows if item[0] is not None]
+    ranked_rows.sort(key=lambda item: item[0], reverse=True)
+    return [row for _, row in ranked_rows[:limit]]
+
+
+def get_player_search_cache(conn) -> List[Dict[str, Any]]:
+    """Load and cache searchable player suggestions in memory."""
+    if app_state["player_search_cache"] is not None:
+        return app_state["player_search_cache"]
+
+    query = """
+    MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
+    RETURN p.name AS player_name, pos.code AS position, p.element_id AS element_id
+    ORDER BY p.name
+    """
+    results = conn.execute_query(query, {})
+    app_state["player_search_cache"] = results
+    return results
+
+
 def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> Optional[str]:
     """Return the best available avatar URL for a player."""
     player_name = repair_mojibake(player_name)
@@ -400,13 +499,22 @@ def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> 
             pass
 
     image_url = None
-    base_query = player_name
+    search_queries: List[str] = []
     if team_name:
-        base_query = f"{base_query} {team_name}"
-    base_query = f"{base_query} head official picture"
+        search_queries.extend(build_image_search_variants(f"{player_name} {team_name}"))
+        search_queries.extend(build_image_search_variants(f"{player_name} {team_name} official picture"))
+    search_queries.extend(build_image_search_variants(player_name))
+    search_queries.extend(build_image_search_variants(f"{player_name} official picture"))
+
+    deduped_queries: List[str] = []
+    seen_queries = set()
+    for search_query in search_queries:
+        if search_query not in seen_queries:
+            seen_queries.add(search_query)
+            deduped_queries.append(search_query)
 
     if GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_CX:
-        for search_query in build_image_search_variants(base_query):
+        for search_query in deduped_queries:
             try:
                 response = requests.get(
                     "https://www.googleapis.com/customsearch/v1",
@@ -431,7 +539,7 @@ def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> 
                 logger.warning("Google avatar lookup failed for %s with query %s: %s", player_name, search_query, exc)
 
     if not image_url:
-        for search_query in build_image_search_variants(player_name):
+        for search_query in deduped_queries:
             image_url = get_wikipedia_player_image_url(search_query)
             if image_url:
                 break
@@ -522,6 +630,8 @@ class EmbeddingBuildResponse(BaseModel):
 
 class PlayerSearchRequest(BaseModel):
     query: str
+    limit: int = 20
+    include_avatars: bool = True
 
 
 class PlayerComparisonRequest(BaseModel):
@@ -1181,21 +1291,16 @@ async def get_player_stats(request: PlayerStatsRequest, conn=Depends(get_neo4j_c
 @app.post("/api/players/search")
 async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_conn)):
     """Search for players by name, with accent-insensitive matching."""
-    import unicodedata
-
-    def normalize(text: str) -> str:
-        """Strip accents: é -> e, ü -> u, etc."""
-        return ''.join(
-            c for c in unicodedata.normalize('NFD', text)
-            if unicodedata.category(c) != 'Mn'
-        ).lower()
-
     try:
         raw_query = request.query
-        normalized_query = normalize(raw_query)
+
+        if not request.include_avatars:
+            all_players = get_player_search_cache(conn)
+            results = rank_player_search_results(all_players, raw_query, request.limit)
+            return {"players": results}
 
         # First try the standard query (exact accent match)
-        query, params = CypherQueries.search_players_by_name(raw_query)
+        query, params = CypherQueries.search_players_by_name(raw_query, limit=request.limit)
         results = conn.execute_query(query, params)
 
         # If no results, fall back to accent-stripped search across all players
@@ -1206,10 +1311,7 @@ async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_co
             RETURN p.name AS player_name, pos.code AS position, t.name AS team_name
             """
             all_players = conn.execute_query(all_query, {})
-            results = [
-                r for r in all_players
-                if normalized_query in normalize(r.get("player_name", ""))
-            ][:10]
+            results = rank_player_search_results(all_players, raw_query, request.limit)
         else:
             # Enrich results with team names if missing
             enriched_results = []
@@ -1221,11 +1323,14 @@ async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_co
                     if team_res:
                         row["team_name"] = team_res[0]["team_name"]
                 enriched_results.append(row)
-            results = enriched_results
+            results = rank_player_search_results(enriched_results, raw_query, request.limit)
 
-        results = enrich_rows_with_avatars(results[:10])
+        if request.include_avatars:
+            results = enrich_rows_with_avatars(results[: request.limit])
+        else:
+            results = results[: request.limit]
 
-        return {"players": results[:10]}
+        return {"players": results[: request.limit]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1347,6 +1452,9 @@ async def load_fpl_data(request: DataLoadRequest, conn=Depends(get_neo4j_conn)):
             if results:
                 players = {r['player_name'] for r in results}
                 app_state["entity_extractor"].set_known_players(players)
+
+        app_state["player_search_cache"] = None
+        get_player_search_cache(conn)
         
         return {"success": True, "stats": stats}
     except Exception as e:

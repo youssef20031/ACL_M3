@@ -1,6 +1,7 @@
-﻿import { useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Search, Loader2, AlertCircle, User, TrendingUp } from 'lucide-react';
+import { Search, Loader2, AlertCircle, User, TrendingUp, Target, Trophy, ArrowLeftRight, Gauge, Shield, Flame } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -16,13 +17,28 @@ const POSITION_COLORS: Record<string, string> = {
 const EXAMPLE_SEARCHES = ['Salah', 'Haaland', 'De Bruyne', 'Trent', 'Saka'];
 
 type PlayerResult = Record<string, any>;
+type PlayerSearchRouteState = {
+  player?: PlayerResult;
+  season?: string;
+  returnTo?: 'history' | 'results';
+  compare?: {
+    player1?: string;
+    player2?: string;
+    season?: string;
+  };
+};
 
 export function PlayerSearch() {
   const { neo4jConnected, theme } = useAppStore();
+  const location = useLocation();
+  const navigate = useNavigate();
   const isDark = theme === 'dark';
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlayerResult[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(null);
+  const [detailOrigin, setDetailOrigin] = useState<'history' | 'results' | null>(null);
+  const [detailSeason, setDetailSeason] = useState<string>('All seasons');
+  const [detailCompareState, setDetailCompareState] = useState<PlayerSearchRouteState['compare'] | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const headerClass = isDark ? 'border-slate-800 bg-slate-950/80' : 'border-white bg-white';
   const headerTitleClass = isDark ? 'text-slate-100' : 'text-gray-900';
@@ -51,6 +67,19 @@ export function PlayerSearch() {
     setQuery(name);
     searchMutation.mutate(name);
   };
+
+  useEffect(() => {
+    const state = location.state as PlayerSearchRouteState | null;
+    if (!state?.player) {
+      return;
+    }
+
+    setQuery(state.player.player_name ?? state.player.name ?? '');
+    setSelectedPlayer(state.player);
+    setDetailOrigin(state.returnTo ?? 'history');
+    setDetailSeason(state.season || 'All seasons');
+    setDetailCompareState(state.compare ?? null);
+  }, [location.state]);
 
   return (
     <div className="flex flex-col h-full">
@@ -165,15 +194,48 @@ export function PlayerSearch() {
         )}
 
         {selectedPlayer && (
-          <PlayerDetail player={selectedPlayer} onBack={() => setSelectedPlayer(null)} />
+          <PlayerDetail
+            player={selectedPlayer}
+            initialSeason={detailSeason}
+            onBack={
+              detailOrigin === 'history'
+                ? () => {
+                    if (detailCompareState?.player1 && detailCompareState?.player2) {
+                      navigate('/compare', {
+                        state: detailCompareState,
+                      });
+                      return;
+                    }
+
+                    navigate(-1);
+                  }
+                : () => {
+                    setSelectedPlayer(null);
+                    setDetailOrigin(null);
+                    setDetailSeason('All seasons');
+                    setDetailCompareState(null);
+                  }
+            }
+            backLabel={detailOrigin === 'history' ? 'Back to compare players' : 'Back to results'}
+          />
         )}
       </div>
     </div>
   );
 }
 
-function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => void }) {
-  const [selectedSeason, setSelectedSeason] = useState<string>('All seasons');
+function PlayerDetail({
+  player,
+  onBack,
+  backLabel,
+  initialSeason,
+}: {
+  player: PlayerResult;
+  onBack: () => void;
+  backLabel: string;
+  initialSeason: string;
+}) {
+  const [selectedSeason, setSelectedSeason] = useState<string>(initialSeason);
   const [stats, setStats] = useState<PlayerResult>(player);
   const { theme } = useAppStore();
   const isDark = theme === 'dark';
@@ -192,6 +254,19 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
     },
   });
 
+  useEffect(() => {
+    const playerName = player.player_name ?? player.name;
+    if (!playerName) {
+      return;
+    }
+
+    setStats(player);
+    statsMutation.mutate({
+      name: playerName,
+      season: initialSeason,
+    });
+  }, [player.player_name, player.name, initialSeason]);
+
   const handleSeasonChange = (season: string) => {
     setSelectedSeason(season);
     statsMutation.mutate({
@@ -202,6 +277,25 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
 
   const name = stats.player_name ?? stats.name ?? 'Unknown';
   const pos = stats.position ?? '—';
+
+  const toNumber = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+  const formatRate = (value: number) => (Number.isFinite(value) ? value.toFixed(2) : '0.00');
+
+  const totalPoints = toNumber(stats.total_points);
+  const goals = toNumber(stats.goals);
+  const assists = toNumber(stats.assists);
+  const cleanSheets = toNumber(stats.clean_sheets);
+  const bonus = toNumber(stats.bonus);
+  const minutes = toNumber(stats.minutes);
+  const games = toNumber(stats.games);
+  const avgIct = toNumber(stats.avg_ict_index ?? stats.avg_ict);
+  const valueMillions = toNumber(stats.avg_value_millions ?? stats.max_value);
+  const maxSelected = toNumber(stats.max_selected);
+
+  const pointsPerGame = games > 0 ? totalPoints / games : 0;
+  const goalsPerGame = games > 0 ? goals / games : 0;
+  const assistsPerGame = games > 0 ? assists / games : 0;
+  const minutesPerGame = games > 0 ? minutes / games : 0;
 
   const statFields = [
     { key: 'total_points', label: 'Points' },
@@ -214,18 +308,31 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
     .filter((s) => stats[s.key] != null && stats[s.key] > 0)
     .map((s) => ({ name: s.label, value: stats[s.key] }));
 
-  const detailStats = [
-    { label: 'Total Points', value: stats.total_points },
-    { label: 'Goals', value: stats.goals },
-    { label: 'Assists', value: stats.assists },
-    { label: 'Clean Sheets', value: stats.clean_sheets },
-    { label: 'Bonus', value: stats.bonus },
-    { label: 'Minutes', value: stats.minutes?.toLocaleString() },
-    { label: 'Games', value: stats.games },
-    { label: 'Avg ICT', value: stats.avg_ict_index ?? stats.avg_ict },
-    { label: 'Value (£m)', value: stats.avg_value_millions ?? stats.max_value },
-    { label: 'Max Selected', value: stats.max_selected?.toLocaleString() },
-  ].filter((s) => s.value != null);
+  const efficiencyData = [
+    { name: 'Pts/G', value: pointsPerGame },
+    { name: 'G/G', value: goalsPerGame },
+    { name: 'A/G', value: assistsPerGame },
+    { name: 'Mins/G', value: minutesPerGame },
+  ].filter((item) => item.value > 0);
+
+  const summaryCards = [
+    { label: 'Total Points', value: totalPoints, suffix: 'pts', icon: Target, accent: 'from-violet-500 to-fuchsia-500', note: `${formatRate(pointsPerGame)} pts/game` },
+    { label: 'Goals', value: goals, suffix: '', icon: Trophy, accent: 'from-amber-400 to-orange-500', note: `${formatRate(goalsPerGame)} per game` },
+    { label: 'Assists', value: assists, suffix: '', icon: ArrowLeftRight, accent: 'from-sky-400 to-cyan-500', note: `${formatRate(assistsPerGame)} per game` },
+    { label: 'Minutes', value: minutes, suffix: 'm', icon: Gauge, accent: 'from-emerald-400 to-teal-500', note: `${formatRate(minutesPerGame)} mins/game` },
+    { label: 'Clean Sheets', value: cleanSheets, suffix: '', icon: Shield, accent: 'from-blue-400 to-indigo-500', note: 'Defensive contribution' },
+    { label: 'Bonus', value: bonus, suffix: '', icon: Flame, accent: 'from-rose-400 to-red-500', note: 'Bonus point haul' },
+  ];
+
+  const snapshotRows = [
+    { label: 'Season', value: selectedSeason },
+    { label: 'Position', value: pos },
+    { label: 'Team', value: stats.team_name ?? player.team_name ?? 'FPL' },
+    { label: 'Games', value: games.toLocaleString() },
+    { label: 'Avg ICT', value: avgIct ? avgIct.toFixed(2) : '—' },
+    { label: 'Value (£m)', value: valueMillions ? valueMillions.toFixed(2) : '—' },
+    { label: 'Max Selected', value: maxSelected ? maxSelected.toLocaleString() : '—' },
+  ];
 
   const seasons = ['All seasons', '2022-23', '2021-22', '2020-21'];
 
@@ -236,7 +343,7 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
           onClick={onBack}
           className="flex items-center gap-1 text-sm text-purple-600 hover:text-purple-800"
         >
-          ← Back to results
+          ← {backLabel}
         </button>
 
         <div className="flex items-center gap-3">
@@ -254,62 +361,140 @@ function PlayerDetail({ player, onBack }: { player: PlayerResult; onBack: () => 
         </div>
       </div>
 
-      <div className={cn('relative flex items-center gap-4 overflow-hidden rounded-xl p-6', isDark ? 'bg-gradient-to-br from-slate-900 to-slate-950 text-slate-100' : 'bg-gradient-to-br from-purple-600 to-indigo-700 text-white')}>
+      <div className={cn('relative overflow-hidden rounded-2xl border p-5 sm:p-6', isDark ? 'border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 shadow-[0_20px_80px_rgba(2,6,23,0.45)]' : 'border-slate-200 bg-gradient-to-br from-purple-600 via-indigo-700 to-slate-900 text-white shadow-lg')}>
+        <div className="pointer-events-none absolute inset-0 opacity-40">
+          <div className="absolute -right-16 -top-12 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute left-1/3 top-8 h-28 w-28 rounded-full bg-fuchsia-400/20 blur-3xl" />
+        </div>
         {statsMutation.isPending && (
           <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px] flex items-center justify-center z-10">
             <Loader2 className="w-8 h-8 animate-spin text-white" />
           </div>
         )}
-        {stats.avatar ? (
-          <img src={stats.avatar} alt={name} className="h-16 w-16 rounded-full border-2 border-white/30 object-cover" />
-        ) : (
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/20 text-2xl font-bold">
-            {name[0].toUpperCase()}
+        <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            {stats.avatar ? (
+              <img src={stats.avatar} alt={name} className="h-20 w-20 rounded-full border-2 border-white/30 object-cover shadow-lg" />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/20 text-3xl font-bold shadow-lg">
+                {name[0].toUpperCase()}
+              </div>
+            )}
+            <div>
+              <p className={cn('text-xs font-semibold uppercase tracking-[0.24em]', isDark ? 'text-slate-300' : 'text-purple-100')}>
+                Player Dashboard
+              </p>
+              <h3 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">{name}</h3>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                <span className={cn('rounded-full px-3 py-1 font-medium', isDark ? 'bg-white/10 text-slate-100' : 'bg-white/15 text-white')}>
+                  {pos}
+                </span>
+                <span className={cn('rounded-full px-3 py-1 font-medium', isDark ? 'bg-white/10 text-slate-100' : 'bg-white/15 text-white')}>
+                  {stats.team_name ?? player.team_name ?? 'FPL'}
+                </span>
+                <span className={cn('rounded-full px-3 py-1 font-medium', isDark ? 'bg-white/10 text-slate-100' : 'bg-white/15 text-white')}>
+                  {selectedSeason}
+                </span>
+              </div>
+            </div>
           </div>
-        )}
-        <div>
-          <h3 className="text-2xl font-bold">{name}</h3>
-          <div className="flex items-center gap-2 mt-1">
-            <span className={cn('text-sm', isDark ? 'text-slate-300' : 'text-purple-200')}>{pos}</span>
-            <span className={cn('text-sm', isDark ? 'text-slate-300' : 'text-purple-200')}>· {stats.team_name ?? player.team_name ?? 'FPL'}</span>
-            <span className={cn('ml-1 rounded px-2 py-0.5 text-sm font-medium', isDark ? 'bg-white/10 text-slate-100' : 'bg-white/10 text-white/80')}>
-              {selectedSeason}
-            </span>
-          </div>
+          {stats.total_points != null && (
+            <div className={cn('rounded-2xl border px-4 py-3 text-left lg:text-right', isDark ? 'border-white/10 bg-white/5' : 'border-white/20 bg-white/10')}>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/70">FPL Points</p>
+              <p className="mt-1 text-4xl font-black leading-none">{stats.total_points}</p>
+              <p className="mt-1 text-sm text-white/70">{formatRate(pointsPerGame)} pts/game</p>
+            </div>
+          )}
         </div>
-        {stats.total_points != null && (
-          <div className="ml-auto text-right">
-            <p className="text-3xl font-bold">{stats.total_points}</p>
-            <p className={cn('text-sm', isDark ? 'text-slate-300' : 'text-purple-200')}>FPL Points</p>
-          </div>
-        )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {detailStats.map((s) => (
-          <div key={s.label} className={cn('rounded-xl border p-3 text-center', panelClass)}>
-            <p className={cn('text-xl font-bold', pageText)}>{s.value}</p>
-            <p className={cn('mt-0.5 text-xs', mutedText)}>{s.label}</p>
+      <div className="grid gap-4 xl:grid-cols-[1.55fr_0.95fr]">
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {summaryCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <div key={card.label} className={cn('rounded-2xl border p-4 shadow-sm', panelClass)}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className={cn('text-xs font-semibold uppercase tracking-[0.22em]', mutedText)}>{card.label}</p>
+                      <p className={cn('mt-2 text-3xl font-black', pageText)}>
+                        {typeof card.value === 'number' ? card.value.toLocaleString() : card.value}
+                        <span className="ml-1 text-sm font-semibold opacity-70">{card.suffix}</span>
+                      </p>
+                    </div>
+                    <div className={cn('rounded-2xl bg-gradient-to-br p-3 text-white shadow-lg', card.accent)}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                  </div>
+                  <p className={cn('mt-3 text-sm', mutedText)}>{card.note}</p>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
 
-      {chartData.length > 0 && (
-        <div className={cn('rounded-xl border p-4', panelClass)}>
-          <h4 className={cn('mb-3 flex items-center gap-2 text-sm font-semibold', mutedText)}>
-            <TrendingUp className="w-4 h-4" /> Performance Overview
-          </h4>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(148,163,184,0.12)' : '#f0f0f0'} />
-              <XAxis dataKey="name" tick={{ fontSize: 12, fill: isDark ? '#cbd5e1' : '#475569' }} />
-              <YAxis tick={{ fontSize: 12, fill: isDark ? '#cbd5e1' : '#475569' }} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: isDark ? '#020617' : '#ffffff', borderColor: isDark ? 'rgba(148,163,184,0.18)' : '#e2e8f0', color: isDark ? '#e2e8f0' : '#0f172a' }} cursor={{ fill: isDark ? 'rgba(124,58,237,0.12)' : '#f3f0ff' }} />
-              <Bar dataKey="value" fill="#7c3aed" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {chartData.length > 0 && (
+            <div className={cn('rounded-2xl border p-4 sm:p-5', panelClass)}>
+              <h4 className={cn('mb-3 flex items-center gap-2 text-sm font-semibold', mutedText)}>
+                <TrendingUp className="h-4 w-4" /> Production Breakdown
+              </h4>
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(148,163,184,0.12)' : '#f0f0f0'} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: isDark ? '#cbd5e1' : '#475569' }} />
+                  <YAxis tick={{ fontSize: 12, fill: isDark ? '#cbd5e1' : '#475569' }} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: isDark ? '#020617' : '#ffffff', borderColor: isDark ? 'rgba(148,163,184,0.18)' : '#e2e8f0', color: isDark ? '#e2e8f0' : '#0f172a' }} cursor={{ fill: isDark ? 'rgba(124,58,237,0.12)' : '#f3f0ff' }} />
+                  <Bar dataKey="value" fill="#7c3aed" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {efficiencyData.length > 0 && (
+            <div className={cn('rounded-2xl border p-4 sm:p-5', panelClass)}>
+              <h4 className={cn('mb-3 flex items-center gap-2 text-sm font-semibold', mutedText)}>
+                <Gauge className="h-4 w-4" /> Efficiency Snapshot
+              </h4>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={efficiencyData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? 'rgba(148,163,184,0.12)' : '#f0f0f0'} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12, fill: isDark ? '#cbd5e1' : '#475569' }} />
+                  <YAxis tick={{ fontSize: 12, fill: isDark ? '#cbd5e1' : '#475569' }} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, background: isDark ? '#020617' : '#ffffff', borderColor: isDark ? 'rgba(148,163,184,0.18)' : '#e2e8f0', color: isDark ? '#e2e8f0' : '#0f172a' }} cursor={{ fill: isDark ? 'rgba(14,165,233,0.12)' : '#e0f2fe' }} />
+                  <Bar dataKey="value" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
-      )}
+
+        <div className="space-y-4">
+          <div className={cn('rounded-2xl border p-4 sm:p-5', panelClass)}>
+            <h4 className={cn('mb-4 text-sm font-semibold', mutedText)}>Season Snapshot</h4>
+            <div className="space-y-3">
+              {snapshotRows.map((row) => (
+                <div key={row.label} className={cn('flex items-center justify-between rounded-xl px-3 py-2', isDark ? 'bg-white/5' : 'bg-slate-50')}>
+                  <span className={cn('text-sm', mutedText)}>{row.label}</span>
+                  <span className={cn('text-sm font-semibold', pageText)}>{row.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={cn('rounded-2xl border p-4 sm:p-5', panelClass)}>
+            <h4 className={cn('mb-4 text-sm font-semibold', mutedText)}>Quick Insight</h4>
+            <div className={cn('rounded-2xl p-4', isDark ? 'bg-violet-500/10' : 'bg-violet-50')}>
+              <p className={cn('text-xs font-semibold uppercase tracking-[0.22em]', isDark ? 'text-violet-200' : 'text-violet-700')}>
+                Fantasy summary
+              </p>
+              <p className={cn('mt-2 text-sm leading-6', pageText)}>
+                {name} has produced {totalPoints.toLocaleString()} points across {games.toLocaleString()} games, averaging {formatRate(pointsPerGame)} points per appearance.
+                {goals > 0 || assists > 0 ? ` The production mix is ${goals.toLocaleString()} goals and ${assists.toLocaleString()} assists.` : ''}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

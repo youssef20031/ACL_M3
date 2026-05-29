@@ -151,8 +151,15 @@ export const apiService = {
   },
 
   // Players
-  async searchPlayers(query: string): Promise<{ players: Array<Record<string, any>> }> {
-    const { data } = await api.post('/api/players/search', { query });
+  async searchPlayers(
+    query: string,
+    options?: { limit?: number; includeAvatars?: boolean }
+  ): Promise<{ players: Array<Record<string, any>> }> {
+    const { data } = await api.post('/api/players/search', {
+      query,
+      limit: options?.limit ?? 20,
+      include_avatars: options?.includeAvatars ?? true,
+    });
     return data;
   },
 

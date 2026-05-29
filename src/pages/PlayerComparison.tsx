@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeftRight,
   Loader2,
@@ -41,6 +42,11 @@ const EXAMPLE_PAIRS = [
 
 type PlayerStats = Record<string, any>;
 type Suggestion = { name: string; position?: string; season?: string; avatar?: string };
+type CompareRouteState = {
+  player1?: string;
+  player2?: string;
+  season?: string;
+};
 
 function formatMetricValue(value: number, options?: { prefix?: string; suffix?: string; decimals?: number }) {
   const decimals = options?.decimals;
@@ -51,6 +57,8 @@ function formatMetricValue(value: number, options?: { prefix?: string; suffix?: 
 export function PlayerComparison() {
   const { neo4jConnected, theme } = useAppStore();
   const isDark = theme === 'dark';
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [player1, setPlayer1] = useState('');
   const [player2, setPlayer2] = useState('');
@@ -62,12 +70,17 @@ export function PlayerComparison() {
   const p2Timer = useRef<number | null>(null);
   const p1SuppressSearch = useRef(false);
   const p2SuppressSearch = useRef(false);
+  const p1AutocompleteActive = useRef(false);
+  const p2AutocompleteActive = useRef(false);
+  const [avatarByName, setAvatarByName] = useState<Record<string, string | null>>({});
+  const avatarHydrationVersion = useRef(0);
   const p1InputRef = useRef<HTMLInputElement | null>(null);
   const p2InputRef = useRef<HTMLInputElement | null>(null);
   const p1ListId = 'p1-suggestions-list';
   const p2ListId = 'p2-suggestions-list';
   const [season, setSeason] = useState('');
   const [comparisonData, setComparisonData] = useState<PlayerStats[]>([]);
+  const restoreComparisonRef = useRef(false);
 
   const compareMutation = useMutation({
     mutationFn: ({ p1, p2, s }: { p1: string; p2: string; s?: string }) =>
@@ -84,8 +97,12 @@ export function PlayerComparison() {
   };
 
   const handleExample = (p1: string, p2: string) => {
+    p1AutocompleteActive.current = false;
+    p2AutocompleteActive.current = false;
     setPlayer1(p1);
     setPlayer2(p2);
+    setP1Suggestions([]);
+    setP2Suggestions([]);
     compareMutation.mutate({ p1, p2, s: season });
   };
 
@@ -96,7 +113,7 @@ export function PlayerComparison() {
     }
 
     try {
-      const res = await apiService.searchPlayers(q.trim());
+      const res = await apiService.searchPlayers(q.trim(), { limit: 10, includeAvatars: false });
       const players = (res.players || [])
         .map((p: any) => ({
           name: p.player_name || p.name || '',
@@ -112,8 +129,43 @@ export function PlayerComparison() {
   };
 
   useEffect(() => {
+    const visibleNames = Array.from(new Set([...p1Suggestions, ...p2Suggestions].map((s) => s.name).filter(Boolean)));
+    const namesToHydrate = visibleNames.filter((name) => avatarByName[name] === undefined).slice(0, 4);
+
+    if (namesToHydrate.length === 0) {
+      return;
+    }
+
+    const version = ++avatarHydrationVersion.current;
+
+    void Promise.allSettled(
+      namesToHydrate.map(async (name) => {
+        const result = await apiService.searchImage(name);
+        return { name, avatar: result.image_url ?? null };
+      })
+    ).then((settled) => {
+      if (version !== avatarHydrationVersion.current) return;
+
+      setAvatarByName((current) => {
+        const next = { ...current };
+        for (const item of settled) {
+          if (item.status === 'fulfilled') {
+            next[item.value.name] = item.value.avatar;
+          }
+        }
+        return next;
+      });
+    });
+  }, [avatarByName, p1Suggestions, p2Suggestions]);
+
+  useEffect(() => {
     if (p1Timer.current) window.clearTimeout(p1Timer.current);
     p1Timer.current = window.setTimeout(() => {
+      if (!p1AutocompleteActive.current) {
+        setP1Suggestions([]);
+        setP1Index(-1);
+        return;
+      }
       if (p1SuppressSearch.current) {
         p1SuppressSearch.current = false;
         setP1Index(-1);
@@ -121,7 +173,7 @@ export function PlayerComparison() {
       }
       runSearch(player1, setP1Suggestions);
       setP1Index(-1);
-    }, 250) as unknown as number;
+    }, 150) as unknown as number;
 
     return () => {
       if (p1Timer.current) window.clearTimeout(p1Timer.current);
@@ -131,6 +183,11 @@ export function PlayerComparison() {
   useEffect(() => {
     if (p2Timer.current) window.clearTimeout(p2Timer.current);
     p2Timer.current = window.setTimeout(() => {
+      if (!p2AutocompleteActive.current) {
+        setP2Suggestions([]);
+        setP2Index(-1);
+        return;
+      }
       if (p2SuppressSearch.current) {
         p2SuppressSearch.current = false;
         setP2Index(-1);
@@ -138,7 +195,7 @@ export function PlayerComparison() {
       }
       runSearch(player2, setP2Suggestions);
       setP2Index(-1);
-    }, 250) as unknown as number;
+    }, 150) as unknown as number;
 
     return () => {
       if (p2Timer.current) window.clearTimeout(p2Timer.current);
@@ -168,6 +225,26 @@ export function PlayerComparison() {
       compareMutation.mutate({ p1: player1.trim(), p2: player2.trim(), s: season });
     }
   }, [season]);
+
+  useEffect(() => {
+    const state = location.state as CompareRouteState | null;
+    if (!state?.player1 || !state?.player2) {
+      return;
+    }
+
+    restoreComparisonRef.current = true;
+    p1AutocompleteActive.current = false;
+    p2AutocompleteActive.current = false;
+    setPlayer1(state.player1);
+    setPlayer2(state.player2);
+    setSeason(state.season ?? '');
+    setP1Suggestions([]);
+    setP2Suggestions([]);
+
+    if (neo4jConnected) {
+      compareMutation.mutate({ p1: state.player1, p2: state.player2, s: state.season });
+    }
+  }, [location.state, neo4jConnected]);
 
   const onP1KeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (p1Suggestions.length === 0) return;
@@ -288,7 +365,10 @@ export function PlayerComparison() {
                 name="player1_search"
                 type="text"
                 value={player1}
-                onChange={(e) => setPlayer1(e.target.value)}
+                onChange={(e) => {
+                  p1AutocompleteActive.current = true;
+                  setPlayer1(e.target.value);
+                }}
                 onKeyDown={onP1KeyDown}
                 placeholder="e.g. Mohamed Salah"
                 disabled={!neo4jConnected}
@@ -309,6 +389,7 @@ export function PlayerComparison() {
                       aria-selected={i === p1Index}
                       key={s.name + i}
                       onClick={() => {
+                        p1AutocompleteActive.current = false;
                         p1SuppressSearch.current = true;
                         setPlayer1(s.name);
                         setP1Suggestions([]);
@@ -320,7 +401,10 @@ export function PlayerComparison() {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        {s.avatar && <img src={s.avatar} alt={`${s.name} avatar`} className="h-6 w-6 rounded-full" />}
+                        {(() => {
+                          const avatarUrl = s.avatar ?? avatarByName[s.name];
+                          return avatarUrl ? <img src={avatarUrl} alt={`${s.name} avatar`} className="h-6 w-6 rounded-full" /> : null;
+                        })()}
                         <div>
                           <div className="font-medium">{s.name}</div>
                           {(s.position || s.season) && <div className={cn('text-xs', mutedText)}>{[s.position, s.season].filter(Boolean).join(' · ')}</div>}
@@ -341,7 +425,10 @@ export function PlayerComparison() {
                 name="player2_search"
                 type="text"
                 value={player2}
-                onChange={(e) => setPlayer2(e.target.value)}
+                onChange={(e) => {
+                  p2AutocompleteActive.current = true;
+                  setPlayer2(e.target.value);
+                }}
                 onKeyDown={onP2KeyDown}
                 placeholder="e.g. Son Heung-min"
                 disabled={!neo4jConnected}
@@ -362,6 +449,7 @@ export function PlayerComparison() {
                       aria-selected={i === p2Index}
                       key={s.name + i}
                       onClick={() => {
+                        p2AutocompleteActive.current = false;
                         p2SuppressSearch.current = true;
                         setPlayer2(s.name);
                         setP2Suggestions([]);
@@ -373,7 +461,10 @@ export function PlayerComparison() {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        {s.avatar && <img src={s.avatar} alt={`${s.name} avatar`} className="h-6 w-6 rounded-full" />}
+                        {(() => {
+                          const avatarUrl = s.avatar ?? avatarByName[s.name];
+                          return avatarUrl ? <img src={avatarUrl} alt={`${s.name} avatar`} className="h-6 w-6 rounded-full" /> : null;
+                        })()}
                         <div>
                           <div className="font-medium">{s.name}</div>
                           {(s.position || s.season) && <div className={cn('text-xs', mutedText)}>{[s.position, s.season].filter(Boolean).join(' · ')}</div>}
@@ -443,7 +534,29 @@ export function PlayerComparison() {
           </div>
         )}
 
-        {p1Data && p2Data && <ComparisonResults p1={p1Data} p2={p2Data} isDark={isDark} onChangePlayers={() => p1InputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })} />}
+        {p1Data && p2Data && (
+          <ComparisonResults
+            p1={p1Data}
+            p2={p2Data}
+            isDark={isDark}
+            season={season}
+            onOpenDetails={(player) =>
+              navigate('/search', {
+                state: {
+                  player,
+                  season: season || 'All seasons',
+                  returnTo: 'history',
+                  compare: {
+                    player1,
+                    player2,
+                    season,
+                  },
+                },
+              })
+            }
+            onChangePlayers={() => p1InputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+          />
+        )}
 
         {comparisonData.length === 1 && (
           <div className={cn('rounded-2xl border p-4 text-sm', isDark ? 'border-amber-400/20 bg-amber-500/10 text-amber-200' : 'border-yellow-200 bg-yellow-50 text-yellow-800')}>
@@ -459,11 +572,15 @@ function ComparisonResults({
   p1,
   p2,
   isDark,
+  season,
+  onOpenDetails,
   onChangePlayers,
 }: {
   p1: PlayerStats;
   p2: PlayerStats;
   isDark: boolean;
+  season: string;
+  onOpenDetails: (player: PlayerStats) => void;
   onChangePlayers: () => void;
 }) {
   const p1Name = p1.player_name ?? 'Player 1';
@@ -555,6 +672,16 @@ function ComparisonResults({
                       <div className="mt-1 text-2xl font-bold">{p.games ?? 0}</div>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenDetails(p)}
+                    className={cn(
+                      'mt-5 self-start text-xs font-semibold uppercase tracking-[0.22em] underline underline-offset-4 transition',
+                      isDark ? 'text-violet-200 hover:text-white decoration-violet-300/80' : 'text-purple-100 hover:text-white decoration-white/80'
+                    )}
+                  >
+                    View details
+                  </button>
                 </div>
               </div>
             </div>
