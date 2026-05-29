@@ -235,7 +235,7 @@ class EmbeddingManager:
         """
         return self.model.encode(text, convert_to_numpy=True)
     
-    def encode_batch(self, texts: List[str]) -> np.ndarray:
+    def encode_batch(self, texts: List[str], batch_size: int = 32) -> np.ndarray:
         """
         Encode multiple texts into embeddings.
         
@@ -245,9 +245,14 @@ class EmbeddingManager:
         Returns:
             Numpy array with embeddings (shape: num_texts x dimension)
         """
-        return self.model.encode(texts, convert_to_numpy=True, show_progress_bar=True)
+        return self.model.encode(
+            texts,
+            convert_to_numpy=True,
+            show_progress_bar=False,
+            batch_size=batch_size,
+        )
     
-    def build_player_embeddings(self, players_data: List[Dict[str, Any]]):
+    def build_player_embeddings(self, players_data: List[Dict[str, Any]], batch_size: int = 32):
         """
         Build embeddings for all players.
         
@@ -255,6 +260,9 @@ class EmbeddingManager:
             players_data: List of player data dictionaries
         """
         logger.info(f"Building embeddings for {len(players_data)} players...")
+
+        self.player_embeddings = {}
+        self.player_metadata = {}
         
         descriptions = []
         player_keys = []
@@ -276,12 +284,14 @@ class EmbeddingManager:
                 **player
             }
         
-        # Batch encode all descriptions
-        embeddings = self.encode_batch(descriptions)
-        
-        # Store embeddings
-        for key, embedding in zip(player_keys, embeddings):
-            self.player_embeddings[key] = embedding
+        # Encode in smaller batches to keep memory usage stable in production.
+        for start in range(0, len(descriptions), batch_size):
+            batch_descriptions = descriptions[start:start + batch_size]
+            batch_keys = player_keys[start:start + batch_size]
+            embeddings = self.encode_batch(batch_descriptions, batch_size=batch_size)
+
+            for key, embedding in zip(batch_keys, embeddings):
+                self.player_embeddings[key] = embedding
         
         logger.info(f"Built {len(self.player_embeddings)} player embeddings")
     
