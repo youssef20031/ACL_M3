@@ -309,6 +309,7 @@ allowed_origins = [
     "http://localhost:5173",
     "http://localhost:3001",
     "https://aclm3-production.up.railway.app",
+    "https://acl-m3.vercel.app",
 ]
 
 # Add Vercel domains if deployed
