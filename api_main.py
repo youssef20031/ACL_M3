@@ -390,6 +390,21 @@ def build_proxy_image_url(source_url: str) -> str:
     return f"/api/images/proxy?url={quote_plus(source_url)}"
 
 
+def _looks_like_generic_wikimedia_image(url: str) -> bool:
+    """Return True for known generic/placeholder Wikimedia images we should ignore."""
+    if not url:
+        return False
+    lowered = url.lower()
+    generic_indicators = [
+        'image_created_with_a_mobile_phone',
+        'no_image_available',
+        'no_photo',
+        'default',
+        'placeholder',
+    ]
+    return any(ind in lowered for ind in generic_indicators)
+
+
 def normalize_text(text: str) -> str:
     return ''.join(
         c for c in unicodedata.normalize('NFD', text)
@@ -513,7 +528,22 @@ def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> 
             seen_queries.add(search_query)
             deduped_queries.append(search_query)
 
-    if GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_CX:
+    # First prefer official FPL player photos when available (more reliable).
+    # If the FPL photo URL is blocked (returns non-200), ignore it and fall back.
+    fpl_photo = get_fpl_player_photo_url(player_name)
+    if fpl_photo:
+        try:
+            # quick HEAD check to avoid choosing inaccessible URLs
+            head_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept": "image/*,*/*;q=0.8", "Referer": "https://fantasy.premierleague.com/"}
+            head_resp = requests.head(fpl_photo, headers=head_headers, timeout=6, allow_redirects=True)
+            if head_resp.status_code == 200:
+                image_url = fpl_photo
+            else:
+                logger.debug("FPL photo unreachable (%s): %s", head_resp.status_code, fpl_photo)
+        except Exception as exc:
+            logger.debug("FPL photo HEAD check failed for %s: %s", fpl_photo, exc)
+
+    if not image_url and GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_CX:
         for search_query in deduped_queries:
             try:
                 response = requests.get(
@@ -534,6 +564,10 @@ def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> 
                     image_info = items[0].get("image", {})
                     image_url = image_info.get("thumbnailLink") or items[0].get("link")
                     if image_url:
+                        # ignore clearly generic Wikimedia images
+                        if _looks_like_generic_wikimedia_image(image_url):
+                            image_url = None
+                            continue
                         break
             except Exception as exc:
                 logger.warning("Google avatar lookup failed for %s with query %s: %s", player_name, search_query, exc)
@@ -542,6 +576,10 @@ def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> 
         for search_query in deduped_queries:
             image_url = get_wikipedia_player_image_url(search_query)
             if image_url:
+                # discard generic Wikimedia placeholders
+                if _looks_like_generic_wikimedia_image(image_url):
+                    image_url = None
+                    continue
                 break
 
     PLAYER_AVATAR_CACHE[normalized_name] = image_url
@@ -1433,11 +1471,23 @@ async def proxy_image(url: str):
     try:
         # Some domains (like Wikipedia) block requests without a proper User-Agent
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "image/*,*/*;q=0.8",
         }
-        response = requests.get(url, headers=headers, timeout=15)
+        # Some CDNs (e.g., resources.premierleague.com) deny requests without a Referer.
+        # Add a sensible Referer when requesting known image hosts to avoid Access Denied.
+        try:
+            parsed = urlparse(url)
+            hostname = (parsed.hostname or '').lower()
+            if 'premierleague.com' in hostname or 'fantasy.premierleague.com' in hostname:
+                headers['Referer'] = 'https://fantasy.premierleague.com/'
+        except Exception:
+            pass
+        # Allow redirects and stream the response
+        response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "image/jpeg")
+        # Stream the content back to the client
         return StreamingResponse(io.BytesIO(response.content), media_type=content_type)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Image proxy failed: {exc}")
