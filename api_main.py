@@ -21,6 +21,7 @@ import re
 import unicodedata
 import logging
 import io
+from threading import Lock, Thread
 from contextlib import asynccontextmanager
 from urllib.parse import quote_plus
 
@@ -60,9 +61,13 @@ app_state = {
     "llm_manager": None,
     "embedding_manager": None,
     "embeddings_built": False,
+    "embedding_building": False,
+    "embedding_build_error": None,
     "trivia_cache": None,
     "player_search_cache": None,
 }
+
+embedding_build_lock = Lock()
 
 
 def get_wikipedia_player_image_url(player_name: str) -> Optional[str]:
@@ -665,6 +670,9 @@ class EmbeddingBuildResponse(BaseModel):
     success: bool
     count: int
     message: str
+    started: bool = False
+    building: bool = False
+    model: Optional[str] = None
 
 
 class PlayerSearchRequest(BaseModel):
@@ -719,6 +727,40 @@ def get_neo4j_conn():
     if not app_state["neo4j_conn"]:
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     return app_state["neo4j_conn"]
+
+
+def run_embedding_build(model_key: str, conn: Neo4jConnection) -> None:
+    """Build embeddings asynchronously so the HTTP request can return immediately."""
+    try:
+        logger.info("Starting background embedding build for model %s", model_key)
+        app_state["embedding_build_error"] = None
+
+        if not app_state["embedding_manager"]:
+            app_state["embedding_manager"] = EmbeddingManager(model_key=model_key)
+        elif app_state["embedding_manager"].model_key != model_key:
+            app_state["embedding_manager"].switch_model(model_key)
+
+        query, query_params = CypherQueries.get_player_embeddings_data()
+        results = conn.execute_query(query, query_params)
+
+        if not results:
+            app_state["embedding_build_error"] = "No player data found. Load FPL data first."
+            app_state["embeddings_built"] = False
+            return
+
+        app_state["embedding_manager"].build_player_embeddings(results)
+        app_state["embeddings_built"] = True
+        logger.info(
+            "Embedding build finished for model %s with %d vectors",
+            model_key,
+            len(app_state["embedding_manager"].player_embeddings),
+        )
+    except Exception as exc:
+        app_state["embeddings_built"] = False
+        app_state["embedding_build_error"] = str(exc)
+        logger.exception("Embedding build failed for model %s", model_key)
+    finally:
+        app_state["embedding_building"] = False
 
 
 def build_graph_data(results: List[Dict], limit: int = 20) -> Dict[str, Any]:
@@ -922,7 +964,9 @@ async def health_check():
         "neo4j_stats": stats,
         "llm_available": app_state["llm_manager"] is not None,
         "embeddings_built": app_state["embeddings_built"],
-        "embedding_count": len(app_state["embedding_manager"].player_embeddings) if app_state["embedding_manager"] else 0
+        "embedding_count": len(app_state["embedding_manager"].player_embeddings) if app_state["embedding_manager"] else 0,
+        "embeddings_building": app_state["embedding_building"],
+        "embedding_build_error": app_state["embedding_build_error"],
     }
 
 
@@ -1179,32 +1223,28 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
 async def build_embeddings(request: EmbeddingBuildRequest, conn=Depends(get_neo4j_conn)):
     """Build player embeddings from Neo4j data."""
     try:
-        # Initialize embedding manager
-        if not app_state["embedding_manager"]:
-            app_state["embedding_manager"] = EmbeddingManager(model_key=request.model)
-        elif app_state["embedding_manager"].model_key != request.model:
-            app_state["embedding_manager"].switch_model(request.model)
-        
-        # Get player data
-        query, query_params = CypherQueries.get_player_embeddings_data()
-        results = conn.execute_query(query, query_params)
-        
-        if not results:
-            return EmbeddingBuildResponse(
-                success=False,
-                count=0,
-                message="No player data found. Load FPL data first."
-            )
-        
-        # Build embeddings
-        app_state["embedding_manager"].build_player_embeddings(results)
-        app_state["embeddings_built"] = True
-        count = len(app_state["embedding_manager"].player_embeddings)
-        
+        with embedding_build_lock:
+            if app_state["embedding_building"]:
+                raise HTTPException(status_code=409, detail="Embedding build already in progress")
+
+            app_state["embedding_building"] = True
+            app_state["embedding_build_error"] = None
+
+        build_thread = Thread(
+            target=run_embedding_build,
+            args=(request.model, conn),
+            daemon=True,
+            name=f"embedding-build-{request.model}",
+        )
+        build_thread.start()
+
         return EmbeddingBuildResponse(
             success=True,
-            count=count,
-            message=f"Successfully built {count} embeddings"
+            count=len(app_state["embedding_manager"].player_embeddings) if app_state["embedding_manager"] else 0,
+            message=f"Embedding build started in the background for {request.model}. Refresh status to see progress.",
+            started=True,
+            building=True,
+            model=request.model,
         )
         
     except Exception as e:

@@ -99,9 +99,12 @@ export function Settings() {
   const buildEmbeddingsMutation = useMutation({
     mutationFn: () => apiService.buildEmbeddings(embeddingModel),
     onSuccess: (data) => {
-      if (data.success) {
+      void refetchHealth();
+      if (data.success && !data.started && !data.building && data.count > 0) {
         setEmbeddingsBuilt(true);
         setEmbeddingCount(data.count);
+      } else if (data.started) {
+        setEmbeddingsBuilt(false);
       }
     },
   });
@@ -132,17 +135,24 @@ export function Settings() {
           </button>
         </div>
         {health ? (
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <StatusRow label="API" value={health.status === 'healthy' ? 'Online' : 'Error'} ok={health.status === 'healthy'} theme={theme} />
-            <StatusRow label="Neo4j" value={health.neo4j} ok={health.neo4j === 'connected'} theme={theme} />
-            <StatusRow label="LLM" value={health.llm_available ? 'Available' : 'Not configured'} ok={health.llm_available} theme={theme} />
-            <StatusRow
-              label="Embeddings"
-              value={health.embeddings_built ? `${health.embedding_count.toLocaleString()} vectors` : 'Not built'}
-              ok={health.embeddings_built}
-              theme={theme}
-            />
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <StatusRow label="API" value={health.status === 'healthy' ? 'Online' : 'Error'} ok={health.status === 'healthy'} theme={theme} />
+              <StatusRow label="Neo4j" value={health.neo4j} ok={health.neo4j === 'connected'} theme={theme} />
+              <StatusRow label="LLM" value={health.llm_available ? 'Available' : 'Not configured'} ok={health.llm_available} theme={theme} />
+              <StatusRow
+                label="Embeddings"
+                value={health.embeddings_building ? 'Building...' : health.embeddings_built ? `${health.embedding_count.toLocaleString()} vectors` : 'Not built'}
+                ok={health.embeddings_built && !health.embeddings_building}
+                theme={theme}
+              />
+            </div>
+            {health.embedding_build_error && (
+              <p className={cn('text-xs', isDark ? 'text-red-300' : 'text-red-600')}>
+                Last build error: {health.embedding_build_error}
+              </p>
+            )}
+          </>
         ) : (
           <p className={cn('text-sm', mutedText)}>Connecting to API...</p>
         )}
@@ -351,10 +361,10 @@ export function Settings() {
           <div className="flex items-center gap-4 flex-wrap">
             <button
               onClick={() => buildEmbeddingsMutation.mutate()}
-              disabled={!neo4jConnected || buildEmbeddingsMutation.isPending}
+              disabled={!neo4jConnected || buildEmbeddingsMutation.isPending || !!health?.embeddings_building}
               className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {buildEmbeddingsMutation.isPending ? (
+              {buildEmbeddingsMutation.isPending || health?.embeddings_building ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" /> Building...
                 </>
@@ -374,12 +384,12 @@ export function Settings() {
           </div>
 
           {/* Clear, prominent in-progress message when building embeddings */}
-          {buildEmbeddingsMutation.isPending && (
+          {(buildEmbeddingsMutation.isPending || health?.embeddings_building) && (
             <div className={cn('mt-3 flex items-start gap-3 rounded-lg border p-3 text-sm', isDark ? 'border-violet-400/20 bg-violet-500/10 text-violet-100' : 'border-purple-200 bg-purple-50 text-purple-900')}>
               <Loader2 className="mt-0.5 h-5 w-5 animate-spin" />
               <div>
-                <div className="font-medium">Building embeddings — this may take several minutes</div>
-                <div className={cn('mt-1 text-xs', isDark ? 'text-violet-200' : 'text-purple-800')}>Do not close this page. The process will continue to run on the server; you can navigate away but the operation may be cancelled by some environments.</div>
+                <div className="font-medium">Building embeddings in the background</div>
+                <div className={cn('mt-1 text-xs', isDark ? 'text-violet-200' : 'text-purple-800')}>The request returns immediately now, so Railway does not drop the connection. Refresh in a minute or two to see the updated status.</div>
               </div>
             </div>
           )}

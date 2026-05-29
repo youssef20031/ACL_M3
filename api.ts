@@ -72,12 +72,17 @@ export interface HealthStatus {
   llm_available: boolean;
   embeddings_built: boolean;
   embedding_count: number;
+  embeddings_building?: boolean;
+  embedding_build_error?: string | null;
 }
 
 export interface EmbeddingBuildResponse {
   success: boolean;
   count: number;
   message: string;
+  started?: boolean;
+  building?: boolean;
+  model?: string | null;
 }
 
 export interface ImageSearchResponse {
