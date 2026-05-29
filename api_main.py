@@ -964,6 +964,11 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         # Step 1: Intent Classification (lazy load)
         intent_classifier = get_intent_classifier()
         intent_result = intent_classifier.classify(request.question)
+
+        # If the user's text explicitly mentions clean sheets, prefer the CLEAN_SHEETS intent
+        q_lower = request.question.lower()
+        if 'clean sheet' in q_lower or 'clean sheets' in q_lower:
+            intent_result.intent = Intent.CLEAN_SHEETS
         
         # Step 2: Entity Extraction (lazy load)
         entity_extractor = get_entity_extractor()
@@ -1020,7 +1025,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 if p.default == inspect.Parameter.empty
             ]
             missing_params = [p for p in required_params if p not in params]
-            
+
             if missing_params:
                 query, query_params = CypherQueries.get_top_players_all_positions(
                     season=params.get("season"),

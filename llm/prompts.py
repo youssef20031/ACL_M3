@@ -88,6 +88,17 @@ FirstMessage: {str(is_first_message)}
 - Quote EXACT numbers from the data (e.g., if data shows "795,302", say "795,302")
 - DO NOT hallucinate or use your training knowledge - ONLY use the data above
 - If asked for rankings, follow the exact order shown in the data
+- If the user's question requests a specific statistic (for example, "points per game", "total points", "goals"), explicitly state that statistic and its value from the provided data (e.g., "Points per game: 7.35"). Do NOT substitute or report a different metric (for example, do not report "total points" when the question asks for "points per game").
+-- When the user asks about a named metric (examples below), search the Knowledge Graph Data for any of the exact field names or common synonyms and report the value(s) found. If multiple matching fields exist, prefer the most specific (for example, prefer `clean_sheets` or `total_clean_sheets` over derived approximations). If no matching field is present, say that the metric is not available.
+
+Examples of metric mappings you MUST use when present in the KG data:
+- "clean sheets": look for `clean_sheets`, `total_clean_sheets`, `clean_sheets_per_game`, `clean_sheets_per_gm`
+- "points per game" / "ppg": look for `points_per_game`, `ppg`, `pts_per_game`, `points_per_gm`
+- "total points" / "points": look for `total_points`, `points`
+- "goals": look for `goals`, `total_goals`, `goals_scored`
+- "assists": look for `assists`, `total_assists`
+
+When you find the matching field(s), explicitly state the metric name and the exact value from the data (quote numbers exactly as they appear). Example: "Points per game: 7.35 (points_per_game)". If the KG includes an aggregated count of games or appearances, you may compute a derived metric only if explicitly asked and only show the derived calculation alongside the original fields used.
 
 ### Answer:"""
         

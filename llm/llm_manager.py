@@ -472,8 +472,9 @@ Provide a clear recommendation on which player would be the better FPL pick and 
         for i, result in enumerate(results[:max_items]):
             line_parts = []
             for key, value in result.items():
-                # Format key name
+                # Format key name and include original key for clarity
                 display_key = key.replace("_", " ").title()
+                display_key_with_key = f"{display_key} ({key})"
                 
                 # Format value based on type
                 if isinstance(value, float):
@@ -486,7 +487,7 @@ Provide a clear recommendation on which player would be the better FPL pick and 
                 else:
                     display_value = str(value)
                 
-                line_parts.append(f"{display_key}: {display_value}")
+                line_parts.append(f"{display_key_with_key}: {display_value}")
             
             context_lines.append(f"{i+1}. " + " | ".join(line_parts))
         

@@ -99,6 +99,7 @@ class CypherQueries:
         valid_sorts = {
             "total_points": "total_points",
             "points": "total_points",
+            "points_per_game": "points_per_game",
             "goals": "goals",
             "goals_scored": "goals",
             "assists": "assists",
@@ -121,8 +122,9 @@ class CypherQueries:
             {gw_match}
             {season_filter}
             WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
-                 SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
-            RETURN p.name AS player_name, pos.code AS position, total_points, goals, assists, bonus
+                 SUM(r.assists) AS assists, SUM(r.bonus) AS bonus, COUNT(f) AS games,
+                 (SUM(r.total_points) * 1.0 / CASE WHEN COUNT(f)=0 THEN 1 ELSE COUNT(f) END) AS points_per_game
+            RETURN p.name AS player_name, pos.code AS position, total_points, goals, assists, bonus, games, round(points_per_game, 2) AS points_per_game
             ORDER BY {sort_field} DESC
             LIMIT $limit
             """
@@ -139,8 +141,9 @@ class CypherQueries:
             {gw_match}
             {season_filter}
             WITH p, pos, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals, 
-                 SUM(r.assists) AS assists, SUM(r.bonus) AS bonus
-            RETURN pos.code AS position, p.name AS player_name, total_points, goals, assists, bonus
+                 SUM(r.assists) AS assists, SUM(r.bonus) AS bonus, COUNT(f) AS games,
+                 (SUM(r.total_points) * 1.0 / CASE WHEN COUNT(f)=0 THEN 1 ELSE COUNT(f) END) AS points_per_game
+            RETURN pos.code AS position, p.name AS player_name, total_points, goals, assists, bonus, games, round(points_per_game, 2) AS points_per_game
             ORDER BY {sort_field} DESC
             LIMIT $limit
             """
@@ -171,59 +174,63 @@ class CypherQueries:
         season_filter = "MATCH (gw)-[:IN_SEASON]->(s:Season {id: $season})" if season else "MATCH (gw)-[:IN_SEASON]->(s:Season)"
         
         query = f"""
-        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'GK'}})
-        {gw_match}
-        {season_filter}
-        WITH 'GK' AS position, p.name AS player_name, 
-             SUM(r.total_points) AS total_points, 
-             SUM(r.goals_scored) AS goals, 
-             SUM(r.assists) AS assists, 
-             SUM(r.bonus) AS bonus
-        ORDER BY total_points DESC
-        LIMIT $limit_per_position
-        RETURN position, player_name, total_points, goals, assists, bonus
+           MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'GK'}})
+           {gw_match}
+           {season_filter}
+           WITH 'GK' AS position, p.name AS player_name, 
+               SUM(r.total_points) AS total_points, 
+               SUM(r.goals_scored) AS goals, 
+               SUM(r.assists) AS assists, 
+               SUM(r.bonus) AS bonus, COUNT(f) AS games,
+               (SUM(r.total_points) * 1.0 / CASE WHEN COUNT(f)=0 THEN 1 ELSE COUNT(f) END) AS points_per_game
+           ORDER BY total_points DESC
+           LIMIT $limit_per_position
+           RETURN position, player_name, total_points, goals, assists, bonus, games, round(points_per_game, 2) AS points_per_game
         
         UNION ALL
         
-        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'DEF'}})
-        {gw_match}
-        {season_filter}
-        WITH 'DEF' AS position, p.name AS player_name, 
-             SUM(r.total_points) AS total_points, 
-             SUM(r.goals_scored) AS goals, 
-             SUM(r.assists) AS assists, 
-             SUM(r.bonus) AS bonus
-        ORDER BY total_points DESC
-        LIMIT $limit_per_position
-        RETURN position, player_name, total_points, goals, assists, bonus
+           MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'DEF'}})
+           {gw_match}
+           {season_filter}
+           WITH 'DEF' AS position, p.name AS player_name, 
+               SUM(r.total_points) AS total_points, 
+               SUM(r.goals_scored) AS goals, 
+               SUM(r.assists) AS assists, 
+               SUM(r.bonus) AS bonus, COUNT(f) AS games,
+               (SUM(r.total_points) * 1.0 / CASE WHEN COUNT(f)=0 THEN 1 ELSE COUNT(f) END) AS points_per_game
+           ORDER BY total_points DESC
+           LIMIT $limit_per_position
+           RETURN position, player_name, total_points, goals, assists, bonus, games, round(points_per_game, 2) AS points_per_game
         
         UNION ALL
         
-        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'MID'}})
-        {gw_match}
-        {season_filter}
-        WITH 'MID' AS position, p.name AS player_name, 
-             SUM(r.total_points) AS total_points, 
-             SUM(r.goals_scored) AS goals, 
-             SUM(r.assists) AS assists, 
-             SUM(r.bonus) AS bonus
-        ORDER BY total_points DESC
-        LIMIT $limit_per_position
-        RETURN position, player_name, total_points, goals, assists, bonus
+           MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'MID'}})
+           {gw_match}
+           {season_filter}
+           WITH 'MID' AS position, p.name AS player_name, 
+               SUM(r.total_points) AS total_points, 
+               SUM(r.goals_scored) AS goals, 
+               SUM(r.assists) AS assists, 
+               SUM(r.bonus) AS bonus, COUNT(f) AS games,
+               (SUM(r.total_points) * 1.0 / CASE WHEN COUNT(f)=0 THEN 1 ELSE COUNT(f) END) AS points_per_game
+           ORDER BY total_points DESC
+           LIMIT $limit_per_position
+           RETURN position, player_name, total_points, goals, assists, bonus, games, round(points_per_game, 2) AS points_per_game
         
         UNION ALL
         
-        MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'FWD'}})
-        {gw_match}
-        {season_filter}
-        WITH 'FWD' AS position, p.name AS player_name, 
-             SUM(r.total_points) AS total_points, 
-             SUM(r.goals_scored) AS goals, 
-             SUM(r.assists) AS assists, 
-             SUM(r.bonus) AS bonus
-        ORDER BY total_points DESC
-        LIMIT $limit_per_position
-        RETURN position, player_name, total_points, goals, assists, bonus
+           MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {{code: 'FWD'}})
+           {gw_match}
+           {season_filter}
+           WITH 'FWD' AS position, p.name AS player_name, 
+               SUM(r.total_points) AS total_points, 
+               SUM(r.goals_scored) AS goals, 
+               SUM(r.assists) AS assists, 
+               SUM(r.bonus) AS bonus, COUNT(f) AS games,
+               (SUM(r.total_points) * 1.0 / CASE WHEN COUNT(f)=0 THEN 1 ELSE COUNT(f) END) AS points_per_game
+           ORDER BY total_points DESC
+           LIMIT $limit_per_position
+           RETURN position, player_name, total_points, goals, assists, bonus, games, round(points_per_game, 2) AS points_per_game
         """
         params = {"limit_per_position": limit_per_position}
         if season:
@@ -479,21 +486,49 @@ class CypherQueries:
         return query, {"season": season, "limit": limit}
     
     @staticmethod
-    def get_clean_sheet_leaders(season: str, limit: int = 10) -> tuple:
+    def get_clean_sheet_leaders(season: str = None, position: str = None, limit: int = 10) -> tuple:
         """
         Query 12: Get players (DEF/GK) with most clean sheets.
         """
+        if position and position.upper() in ['GK', 'DEF']:
+            position_filter = "AND pos.code = $position"
+        else:
+            position_filter = "AND pos.code IN ['GK', 'DEF']"
+
+        if season:
+            query = """
+            MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
+            WHERE true
+            {position_filter}
+            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+            WITH p, pos, SUM(r.clean_sheets) AS total_clean_sheets, SUM(r.total_points) AS total_points, COUNT(f) AS games,
+                 (SUM(r.clean_sheets) * 1.0 / CASE WHEN COUNT(f)=0 THEN 1 ELSE COUNT(f) END) AS clean_sheets_per_game
+            WHERE total_clean_sheets > 0
+            RETURN p.name AS player_name, pos.code AS position, total_clean_sheets, total_points, games, round(clean_sheets_per_game, 2) AS clean_sheets_per_game
+            ORDER BY total_clean_sheets DESC
+            LIMIT $limit
+            """.replace("{position_filter}", position_filter)
+            params = {"season": season, "limit": limit}
+            if position and position.upper() in ['GK', 'DEF']:
+                params["position"] = position.upper()
+            return query, params
+
         query = """
         MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
-        WHERE pos.code IN ['GK', 'DEF']
-        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-        WITH p, pos, SUM(r.clean_sheets) AS total_clean_sheets, SUM(r.total_points) AS total_points
+        WHERE true
+        {position_filter}
+        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+        WITH p, pos, SUM(r.clean_sheets) AS total_clean_sheets, SUM(r.total_points) AS total_points, COUNT(f) AS games,
+             (SUM(r.clean_sheets) * 1.0 / CASE WHEN COUNT(f)=0 THEN 1 ELSE COUNT(f) END) AS clean_sheets_per_game
         WHERE total_clean_sheets > 0
-        RETURN p.name AS player_name, pos.code AS position, total_clean_sheets, total_points
+        RETURN p.name AS player_name, pos.code AS position, total_clean_sheets, total_points, games, round(clean_sheets_per_game, 2) AS clean_sheets_per_game
         ORDER BY total_clean_sheets DESC
         LIMIT $limit
-        """
-        return query, {"season": season, "limit": limit}
+        """.replace("{position_filter}", position_filter)
+        params = {"limit": limit}
+        if position and position.upper() in ['GK', 'DEF']:
+            params["position"] = position.upper()
+        return query, params
     
     @staticmethod
     def get_ict_index_leaders(season: str, limit: int = 10) -> tuple:

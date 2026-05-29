@@ -95,9 +95,12 @@ class EntityExtractor:
     # Position variations
     POSITIONS = {
         "goalkeeper": "GK",
+        "goalkeepers": "GK",
         "gk": "GK",
         "keeper": "GK",
+        "keepers": "GK",
         "goalie": "GK",
+        "goalies": "GK",
         "defender": "DEF",
         "def": "DEF",
         "defenders": "DEF",
