@@ -113,13 +113,15 @@ export const apiService = {
     question: string,
     model: string = 'qwen-2.5-coder',
     retrievalMethod: string = 'Hybrid',
-    embeddingModel: string = 'minilm'
+    embeddingModel: string = 'minilm',
+    isFirstMessage: boolean = false
   ): Promise<QueryResponse> {
     const { data } = await api.post<QueryResponse>('/api/query', {
       question,
       model,
       retrieval_method: retrievalMethod,
       embedding_model: embeddingModel,
+      is_first_message: isFirstMessage,
     });
     return data;
   },

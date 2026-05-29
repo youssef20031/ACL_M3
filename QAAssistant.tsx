@@ -32,8 +32,8 @@ export function QAAssistant() {
   }, [chatHistory]);
 
   const queryMutation = useMutation({
-    mutationFn: (question: string) =>
-      apiService.queryFPL(question, selectedModel, retrievalMethod, embeddingModel),
+    mutationFn: ({ question, isFirst }: { question: string; isFirst: boolean }) =>
+      apiService.queryFPL(question, selectedModel, retrievalMethod, embeddingModel, isFirst),
     onSuccess: (data) => {
       addMessage({
         role: 'assistant',
@@ -55,6 +55,7 @@ export function QAAssistant() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !neo4jConnected) return;
+    const isFirst = chatHistory.length === 0;
 
     addMessage({
       role: 'user',
@@ -62,7 +63,7 @@ export function QAAssistant() {
       timestamp: Date.now(),
     });
 
-    queryMutation.mutate(input);
+    queryMutation.mutate({ question: input, isFirst });
     setInput('');
   };
 

@@ -294,6 +294,7 @@ class QueryRequest(BaseModel):
     model: str = "qwen-2.5-coder"
     retrieval_method: str = "Hybrid"  # "Baseline", "Embeddings", "Hybrid"
     embedding_model: str = "minilm"  # "minilm" or "mpnet"
+    is_first_message: bool = False
 
 
 class QueryResponse(BaseModel):
@@ -786,9 +787,10 @@ async def disconnect_neo4j():
 async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
     """Process FPL query and return answer."""
     try:
-        if looks_like_small_talk(request.question):
+        # Only return the initial greeting when this is the user's first message in the session
+        if request.is_first_message and looks_like_small_talk(request.question):
             return QueryResponse(
-                answer="Glad you think so — ask me anything about FPL players, teams, or stats.",
+                answer="Hi! 👋 I'm your FPL assistant — ask about players, teams, stats, or say 'compare' to pit two players against each other. What would you like to know?",
                 intent=Intent.GENERAL_QUESTION.value,
                 entities={"players": [], "teams": [], "seasons": [], "stats": [], "positions": []},
                 cypher_query="",
@@ -925,7 +927,8 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 question=request.question,
                 kg_context=cypher_context,
                 embedding_context=embedding_context if embedding_context else None,
-                data_scope=data_scope
+                data_scope=data_scope,
+                is_first_message=request.is_first_message
             )
             
             response = app_state["llm_manager"].generate(

@@ -21,14 +21,22 @@ You consider form, fixtures, value, and team balance when making recommendations
         "stats_analyst": """You are a detailed FPL Statistics Analyst who excels at breaking down player and team performance metrics. 
 You present data clearly and draw meaningful conclusions."""
     }
+
+    # Friendly, conversational persona to improve user interactions
+    PERSONAS["conversational_fpl"] = (
+        "You are a friendly, conversational Fantasy Premier League (FPL) assistant. Speak naturally and warmly, acknowledge the user, "
+        "and ask a brief clarifying question if the query is ambiguous. Keep responses concise and helpful while using the provided data. "
+        "When appropriate, offer next steps or follow-up suggestions (e.g., 'Would you like a player comparison?')."
+    )
     
     @staticmethod
     def qa_template(
         question: str,
         kg_context: str,
         embedding_context: Optional[str] = None,
-        persona: str = "fpl_expert",
-        data_scope: Optional[str] = None
+        persona: str = "conversational_fpl",
+        data_scope: Optional[str] = None,
+        is_first_message: bool = False
     ) -> str:
         """
         Template for Q&A responses.
@@ -40,14 +48,22 @@ You present data clearly and draw meaningful conclusions."""
             persona: Persona key
             data_scope: Description of the data scope (e.g., "all seasons (2020-21, 2021-22, 2022-23)" or "2022-23 season")
         """
-        persona_text = PromptTemplates.PERSONAS.get(persona, PromptTemplates.PERSONAS["fpl_expert"])
+        persona_text = PromptTemplates.PERSONAS.get(persona, PromptTemplates.PERSONAS["conversational_fpl"])
         
         # Add data scope information
         scope_text = ""
         if data_scope:
             scope_text = f"\n**Data Scope**: This data covers {data_scope}.\n"
         
+        # Strong directive about greeting behavior and explicit flag
+        greeting_directive = (
+            "IMPORTANT: Never begin your response with a salutation or greeting (e.g., 'Hi', 'Hey', 'Hello') UNLESS the 'FirstMessage' flag below is True. "
+            "If 'FirstMessage' is True you may include a single brief friendly greeting at the start; otherwise go straight to the answer."
+        )
+
         template = f"""{persona_text}
+{greeting_directive}
+FirstMessage: {str(is_first_message)}
 
 ### Knowledge Graph Data:
 {scope_text}{kg_context}
@@ -192,7 +208,7 @@ You present data clearly and draw meaningful conclusions."""
         """
         Template for generating summaries.
         """
-        template = f"""{PromptTemplates.PERSONAS['fpl_expert']}
+        template = f"""{PromptTemplates.PERSONAS['conversational_fpl']}
 
 ### Topic: {topic}
 ### Period: {time_period}
@@ -259,7 +275,7 @@ Would you like to try rephrasing your question?"""
         """
         Template that combines both retrieval methods.
         """
-        template = f"""{PromptTemplates.PERSONAS['fpl_expert']}
+        template = f"""{PromptTemplates.PERSONAS['conversational_fpl']}
 
 ### Retrieval Method: {retrieval_method.upper()}
 
