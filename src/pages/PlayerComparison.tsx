@@ -539,7 +539,6 @@ export function PlayerComparison() {
             p1={p1Data}
             p2={p2Data}
             isDark={isDark}
-            season={season}
             onOpenDetails={(player) =>
               navigate('/search', {
                 state: {
@@ -572,14 +571,12 @@ function ComparisonResults({
   p1,
   p2,
   isDark,
-  season,
   onOpenDetails,
   onChangePlayers,
 }: {
   p1: PlayerStats;
   p2: PlayerStats;
   isDark: boolean;
-  season: string;
   onOpenDetails: (player: PlayerStats) => void;
   onChangePlayers: () => void;
 }) {
