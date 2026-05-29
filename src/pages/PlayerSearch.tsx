@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Search, Loader2, AlertCircle, User, TrendingUp, Target, Trophy, ArrowLeftRight, Gauge, Shield, Flame } from 'lucide-react';
+import { Search, Loader2, AlertCircle, User, TrendingUp, Target, ArrowLeftRight, Gauge, Shield, Flame, Aperture } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
@@ -317,7 +317,7 @@ function PlayerDetail({
 
   const summaryCards = [
     { label: 'Total Points', value: totalPoints, suffix: 'pts', icon: Target, accent: 'from-violet-500 to-fuchsia-500', note: `${formatRate(pointsPerGame)} pts/game` },
-    { label: 'Goals', value: goals, suffix: '', icon: Trophy, accent: 'from-amber-400 to-orange-500', note: `${formatRate(goalsPerGame)} per game` },
+    { label: 'Goals', value: goals, suffix: '', icon: Aperture, accent: 'from-amber-400 to-orange-500', note: `${formatRate(goalsPerGame)} per game` },
     { label: 'Assists', value: assists, suffix: '', icon: ArrowLeftRight, accent: 'from-sky-400 to-cyan-500', note: `${formatRate(assistsPerGame)} per game` },
     { label: 'Minutes', value: minutes, suffix: 'm', icon: Gauge, accent: 'from-emerald-400 to-teal-500', note: `${formatRate(minutesPerGame)} mins/game` },
     { label: 'Clean Sheets', value: cleanSheets, suffix: '', icon: Shield, accent: 'from-blue-400 to-indigo-500', note: 'Defensive contribution' },
