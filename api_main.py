@@ -18,6 +18,7 @@ import inspect
 import time
 import hashlib
 import re
+import unicodedata
 import logging
 import io
 from contextlib import asynccontextmanager
@@ -98,6 +99,48 @@ def get_wikipedia_player_image_url(player_name: str) -> Optional[str]:
         logger.warning("Wikipedia avatar lookup failed for %s: %s", player_name, exc)
 
     return None
+
+
+def build_image_search_variants(query: str) -> List[str]:
+    """Return a small set of progressively simpler search strings for image lookup."""
+    normalized = " ".join(query.split()).strip()
+    if not normalized:
+        return []
+
+    variants: List[str] = []
+    seen = set()
+
+    def add_variant(value: str) -> None:
+        value = " ".join(value.split()).strip()
+        if value and value not in seen:
+            seen.add(value)
+            variants.append(value)
+
+    add_variant(normalized)
+
+    accent_free = unicodedata.normalize("NFKD", normalized)
+    accent_free = "".join(char for char in accent_free if not unicodedata.combining(char))
+    add_variant(accent_free)
+
+    parts = normalized.split()
+    if len(parts) > 2:
+        add_variant(" ".join(parts[:2]))
+        add_variant(" ".join(accent_free.split()[:2]))
+
+    return variants
+
+
+def repair_mojibake(text: str) -> str:
+    """Repair common UTF-8/Latin-1 mojibake such as NÃºÃ±ez -> Núñez."""
+    if not text:
+        return text
+    if "Ã" not in text and "Â" not in text:
+        return text
+
+    try:
+        return text.encode("latin1").decode("utf-8")
+    except Exception:
+        return text
 PLAYER_AVATAR_CACHE: Dict[str, Optional[str]] = {}
 FPL_PLAYER_PHOTO_CACHE: Dict[str, Optional[str]] = {}
 FPL_PLAYER_PHOTO_CACHE_READY = False
@@ -337,6 +380,7 @@ def build_proxy_image_url(source_url: str) -> str:
 
 def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> Optional[str]:
     """Return the best available avatar URL for a player."""
+    player_name = repair_mojibake(player_name)
     normalized_name = " ".join(player_name.split()).strip().lower()
     if not normalized_name:
         return None
@@ -356,35 +400,41 @@ def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> 
             pass
 
     image_url = None
-    search_query = f"{player_name} head"
+    base_query = player_name
     if team_name:
-        search_query += f" {team_name}"
-    search_query += " official picture"
+        base_query = f"{base_query} {team_name}"
+    base_query = f"{base_query} head official picture"
 
     if GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_CX:
-        try:
-            response = requests.get(
-                "https://www.googleapis.com/customsearch/v1",
-                params={
-                    "key": GOOGLE_CUSTOM_SEARCH_API_KEY,
-                    "cx": GOOGLE_CUSTOM_SEARCH_CX,
-                    "q": search_query,
-                    "searchType": "image",
-                    "num": 1,
-                    "safe": "active",
-                },
-                timeout=10,
-            )
-            response.raise_for_status()
-            items = response.json().get("items", [])
-            if items:
-                image_info = items[0].get("image", {})
-                image_url = image_info.get("thumbnailLink") or items[0].get("link")
-        except Exception as exc:
-            logger.warning("Google avatar lookup failed for %s: %s", player_name, exc)
+        for search_query in build_image_search_variants(base_query):
+            try:
+                response = requests.get(
+                    "https://www.googleapis.com/customsearch/v1",
+                    params={
+                        "key": GOOGLE_CUSTOM_SEARCH_API_KEY,
+                        "cx": GOOGLE_CUSTOM_SEARCH_CX,
+                        "q": search_query,
+                        "searchType": "image",
+                        "num": 1,
+                        "safe": "active",
+                    },
+                    timeout=10,
+                )
+                response.raise_for_status()
+                items = response.json().get("items", [])
+                if items:
+                    image_info = items[0].get("image", {})
+                    image_url = image_info.get("thumbnailLink") or items[0].get("link")
+                    if image_url:
+                        break
+            except Exception as exc:
+                logger.warning("Google avatar lookup failed for %s with query %s: %s", player_name, search_query, exc)
 
     if not image_url:
-        image_url = get_wikipedia_player_image_url(player_name)
+        for search_query in build_image_search_variants(player_name):
+            image_url = get_wikipedia_player_image_url(search_query)
+            if image_url:
+                break
 
     PLAYER_AVATAR_CACHE[normalized_name] = image_url
     return build_proxy_image_url(image_url) if image_url else None
@@ -1218,16 +1268,50 @@ async def compare_players(request: PlayerComparisonRequest, conn=Depends(get_neo
 
 
 @app.get("/api/images/search", response_model=ImageSearchResponse)
-async def search_image(query: str):
+async def search_image(query: str, conn=Depends(get_neo4j_conn)):
     """Return the first Google image result for a search term, if configured."""
-    image_url = get_player_avatar_url(query)
+
+    def normalize(text: str) -> str:
+        return ''.join(
+            c for c in unicodedata.normalize('NFD', text)
+            if unicodedata.category(c) != 'Mn'
+        ).lower()
+
+    resolved_query = repair_mojibake(query)
+    try:
+        normalized_query = normalize(query)
+
+        exact_query = "MATCH (p:Player) WHERE toLower(p.name) = toLower($name) RETURN p.name AS player_name LIMIT 1"
+        exact_result = conn.execute_query(exact_query, {"name": query})
+        if exact_result:
+            resolved_query = repair_mojibake(exact_result[0]["player_name"])
+        else:
+            all_query = "MATCH (p:Player) RETURN p.name AS player_name"
+            all_players = conn.execute_query(all_query, {})
+            matching_names = [
+                repair_mojibake(row["player_name"])
+                for row in all_players
+                if normalize(row["player_name"]) in normalized_query
+            ]
+            if not matching_names:
+                matching_names = [
+                    repair_mojibake(row["player_name"])
+                    for row in all_players
+                    if normalized_query in normalize(row["player_name"])
+                ]
+            if matching_names:
+                resolved_query = max(matching_names, key=len)
+    except Exception:
+        resolved_query = query
+
+    image_url = get_player_avatar_url(resolved_query)
     if not image_url:
         source = None
     elif "resources.premierleague.com" in image_url or "fantasy.premierleague.com" in image_url:
         source = "fpl_official"
     else:
         source = "google_custom_search"
-    return ImageSearchResponse(query=query, image_url=image_url, source=source)
+    return ImageSearchResponse(query=resolved_query, image_url=image_url, source=source)
 
 
 @app.get("/api/images/proxy")
