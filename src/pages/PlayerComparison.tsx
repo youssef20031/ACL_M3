@@ -676,8 +676,10 @@ function ComparisonResults({
                     type="button"
                     onClick={() => onOpenDetails(p)}
                     className={cn(
-                      'mt-5 self-start text-xs font-semibold uppercase tracking-[0.22em] underline underline-offset-4 transition',
-                      isDark ? 'text-violet-200 hover:text-white decoration-violet-300/80' : 'text-purple-100 hover:text-white decoration-white/80'
+                      'relative z-20 mt-5 inline-flex self-start items-center rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] shadow-lg transition',
+                      isDark
+                        ? 'border-white/15 bg-white/10 text-white hover:bg-white/20'
+                        : 'border-white/20 bg-white/15 text-white hover:bg-white/25'
                     )}
                   >
                     View details

@@ -235,7 +235,8 @@ function PlayerDetail({
   backLabel: string;
   initialSeason: string;
 }) {
-  const [selectedSeason, setSelectedSeason] = useState<string>(initialSeason);
+  const resolvedInitialSeason = initialSeason === 'All seasons' ? '2022-23' : initialSeason;
+  const [selectedSeason, setSelectedSeason] = useState<string>(resolvedInitialSeason);
   const [stats, setStats] = useState<PlayerResult>(player);
   const { theme } = useAppStore();
   const isDark = theme === 'dark';
@@ -263,9 +264,9 @@ function PlayerDetail({
     setStats(player);
     statsMutation.mutate({
       name: playerName,
-      season: initialSeason,
+      season: resolvedInitialSeason,
     });
-  }, [player.player_name, player.name, initialSeason]);
+  }, [player.player_name, player.name, resolvedInitialSeason]);
 
   const handleSeasonChange = (season: string) => {
     setSelectedSeason(season);
