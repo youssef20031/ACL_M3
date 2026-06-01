@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type CSSProperties } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Send, Loader2, AlertCircle, Info } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -8,6 +8,18 @@ import ReactMarkdown from 'react-markdown';
 import { GraphVisualization } from '../components/GraphVisualization';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../utils/cn';
+import fplLogo from '../images/FPL_Logo.png';
+
+const chatWallpaperStyle: CSSProperties = {
+  backgroundImage: [
+    'radial-gradient(circle at 50% 36%, rgba(168, 85, 247, 0.34) 0%, rgba(88, 28, 135, 0.18) 24%, rgba(15, 23, 42, 0) 63%)',
+    'linear-gradient(180deg, rgba(5, 8, 20, 0.98) 0%, rgba(23, 8, 40, 0.94) 48%, rgba(72, 12, 92, 0.95) 100%)',
+  ].join(', '),
+  backgroundPosition: 'center center, center center',
+  backgroundRepeat: 'no-repeat, no-repeat',
+  backgroundSize: 'cover, cover',
+  backgroundAttachment: 'scroll',
+};
 
 export function QAAssistant() {
   const [input, setInput] = useState('');
@@ -71,9 +83,23 @@ export function QAAssistant() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="relative isolate flex flex-1 w-full min-h-0 flex-col overflow-hidden">
+      {isDark && (
+        <>
+          <div aria-hidden="true" className="absolute inset-0 md:hidden" style={chatWallpaperStyle} />
+          <div aria-hidden="true" className="absolute inset-0 flex md:hidden">
+            <img
+              src={fplLogo}
+              alt=""
+              className="w-full h-full object-cover opacity-15"
+            />
+          </div>
+          <div aria-hidden="true" className="absolute inset-0 md:hidden bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_36%),radial-gradient(circle_at_bottom,rgba(168,85,247,0.18),transparent_42%)]" />
+        </>
+      )}
+
       {/* Header */}
-      <div className={cn('border-b px-4 py-4 sm:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', isDark ? 'border-slate-800 bg-slate-950/80' : 'border-white bg-white')}>
+      <div className={cn('relative z-10 flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6', isDark ? 'border-white/10 bg-slate-950/70 backdrop-blur-xl' : 'border-white/30 bg-white/80 backdrop-blur-xl')}>
         <div className="min-w-0">
           <h2 className={cn('text-xl font-bold sm:text-2xl', isDark ? 'text-slate-100' : 'text-gray-900')}>💬 FPL Q&A Assistant</h2>
           <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-600')}>
@@ -97,9 +123,9 @@ export function QAAssistant() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 sm:px-6">
+      <div className="relative z-10 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
         {!neo4jConnected && (
-          <div className={cn('rounded-lg border p-4 flex items-start gap-3', isDark ? 'border-amber-400/20 bg-amber-500/10' : 'border-yellow-200 bg-yellow-50')}>
+          <div className={cn('flex items-start gap-3 rounded-lg border p-4 backdrop-blur-md', isDark ? 'border-amber-400/20 bg-amber-500/10' : 'border-yellow-200/90 bg-yellow-50/90')}>
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
             <div>
               <p className={cn('font-medium', isDark ? 'text-amber-100' : 'text-yellow-900')}>Neo4j Not Connected</p>
@@ -110,7 +136,7 @@ export function QAAssistant() {
 
         {chatHistory.length === 0 && neo4jConnected && (
           <div className="text-center py-12">
-            <div className={cn('mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full', isDark ? 'bg-violet-500/15' : 'bg-purple-100')}>
+            <div className={cn('mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full backdrop-blur-md', isDark ? 'bg-violet-500/15' : 'bg-purple-100/80')}>
               <MessageCircle className={cn('h-8 w-8', isDark ? 'text-violet-200' : 'text-purple-600')} />
             </div>
             <h3 className={cn('mb-2 text-lg font-semibold', isDark ? 'text-slate-100' : 'text-gray-900')}>
@@ -128,7 +154,7 @@ export function QAAssistant() {
                 <button
                   key={i}
                   onClick={() => setInput(example)}
-                  className={cn('block w-full rounded-lg px-4 py-3 text-left text-sm transition-colors', isDark ? 'border border-slate-800 bg-slate-900/80 text-slate-100 hover:border-violet-400/40 hover:bg-slate-900' : 'bg-gray-50 text-gray-700 hover:bg-gray-100')}
+                  className={cn('block w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors backdrop-blur-md', isDark ? 'border-white/10 bg-slate-900/75 text-slate-100 hover:border-violet-400/40 hover:bg-slate-900/90' : 'border-white/50 bg-white/75 text-gray-700 hover:bg-white/90')}
                 >
                   {example}
                 </button>
@@ -148,12 +174,12 @@ export function QAAssistant() {
             >
               <div
                 className={cn(
-                  'max-w-3xl rounded-lg px-4 py-3',
+                  'max-w-3xl rounded-lg px-4 py-3 backdrop-blur-md',
                   message.role === 'user'
                     ? 'bg-purple-600 text-white'
                     : isDark
-                      ? 'border border-slate-800 bg-slate-900/80 text-slate-100'
-                      : 'border border-gray-200 bg-white text-gray-900'
+                      ? 'border border-white/10 bg-slate-900/78 text-slate-100'
+                      : 'border border-white/70 bg-white/85 text-gray-900'
                 )}
               >
                 <ReactMarkdown className="prose prose-sm max-w-none">
@@ -166,7 +192,7 @@ export function QAAssistant() {
 
         {queryMutation.isPending && (
           <div className="flex justify-start">
-            <div className={cn('flex items-center gap-2 rounded-lg border px-4 py-3', isDark ? 'border-slate-800 bg-slate-900/80' : 'border-gray-200 bg-white')}>
+            <div className={cn('flex items-center gap-2 rounded-lg border px-4 py-3 backdrop-blur-md', isDark ? 'border-white/10 bg-slate-900/78' : 'border-white/70 bg-white/85')}>
               <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
               <span className={cn('text-sm', isDark ? 'text-slate-300' : 'text-gray-600')}>Analyzing your question...</span>
             </div>
@@ -178,7 +204,7 @@ export function QAAssistant() {
 
       {/* Query Details Panel */}
       {showDetails && lastQueryInfo && (
-        <div className={cn('max-h-96 overflow-y-auto border-t p-6', isDark ? 'border-slate-800 bg-slate-950/80' : 'bg-gray-50')}>
+        <div className={cn('relative z-10 max-h-96 overflow-y-auto border-t p-6 backdrop-blur-xl', isDark ? 'border-white/10 bg-slate-950/70' : 'border-white/30 bg-white/80')}>
           <h3 className={cn('mb-3 flex items-center gap-2 font-semibold', isDark ? 'text-slate-100' : 'text-gray-900')}>
             <Info className="w-4 h-4" />
             Query Details
@@ -230,7 +256,7 @@ export function QAAssistant() {
       )}
 
       {/* Input Form */}
-      <div className={cn('border-t px-4 py-4 sm:px-6', isDark ? 'border-slate-800 bg-slate-950/80' : 'border-white bg-white')}>
+      <div className={cn('relative z-10 border-t px-4 py-4 sm:px-6 backdrop-blur-xl', isDark ? 'border-white/10 bg-slate-950/70' : 'border-white/30 bg-white/80')}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
           <input
             type="text"

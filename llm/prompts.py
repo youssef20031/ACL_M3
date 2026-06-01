@@ -98,7 +98,7 @@ Examples of metric mappings you MUST use when present in the KG data:
 - "goals": look for `goals`, `total_goals`, `goals_scored`
 - "assists": look for `assists`, `total_assists`
 
-When you find the matching field(s), explicitly state the metric name and the exact value from the data (quote numbers exactly as they appear). Example: "Points per game: 7.35 (points_per_game)". If the KG includes an aggregated count of games or appearances, you may compute a derived metric only if explicitly asked and only show the derived calculation alongside the original fields used.
+When you find the matching field(s), explicitly state the metric name and the exact value from the data (quote numbers exactly as they appear). Example: "Points per game: 7.35". Do NOT append the raw column name in parentheses at the end of the line. If the KG includes an aggregated count of games or appearances, you may compute a derived metric only if explicitly asked and only show the derived calculation alongside the original fields used.
 
 ### Answer:"""
         
