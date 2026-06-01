@@ -82,7 +82,9 @@ export function Layout() {
   ];
 
   return (
-    <div className={cn('flex h-[120dvh] flex-col transition-colors lg:flex-row', theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-gray-50 text-slate-900')}>
+    <div className={cn('flex flex-col transition-colors lg:flex-row', 
+      location.pathname === '/qa' ? 'h-[120dvh] lg:h-[100dvh]' : 'min-h-[100dvh]',
+      theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-gray-50 text-slate-900')}>
       <header className={cn('sticky top-0 z-40 flex items-center justify-between border-b px-4 py-3 lg:hidden', theme === 'dark' ? 'border-slate-800 bg-slate-950/90 text-slate-100 backdrop-blur-xl' : 'border-white bg-white/90 text-slate-900 backdrop-blur-xl')}>
         <button
           type="button"
@@ -237,7 +239,9 @@ export function Layout() {
       </aside>
 
       {/* Main Content */}
-      <main className={cn('min-w-0 flex-1 flex flex-col overflow-hidden transition-colors', theme === 'dark' ? 'bg-slate-950' : 'bg-gray-50')}>
+      <main className={cn('min-w-0 flex-1 transition-colors',
+        location.pathname === '/qa' ? 'flex flex-col overflow-hidden' : 'overflow-auto',
+        theme === 'dark' ? 'bg-slate-950' : 'bg-gray-50')}>
         <Outlet />
       </main>
     </div>

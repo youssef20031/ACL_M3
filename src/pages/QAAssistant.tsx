@@ -123,7 +123,9 @@ export function QAAssistant() {
       </div>
 
       {/* Messages */}
-      <div className="relative z-10 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
+      <div className="relative z-10 flex-1 flex flex-col overflow-y-auto px-4 py-4 sm:px-6">
+        <div className="flex-1" />
+        <div className="flex flex-col space-y-4 mt-auto">
         {!neo4jConnected && (
           <div className={cn('flex items-start gap-3 rounded-lg border p-4 backdrop-blur-md', isDark ? 'border-amber-400/20 bg-amber-500/10' : 'border-yellow-200/90 bg-yellow-50/90')}>
             <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
@@ -200,6 +202,7 @@ export function QAAssistant() {
         )}
 
         <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Query Details Panel */}
@@ -275,11 +278,7 @@ export function QAAssistant() {
             disabled={!neo4jConnected || queryMutation.isPending || !input.trim()}
             className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:w-auto"
           >
-            {queryMutation.isPending ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
+            <Send className="w-5 h-5" />
             Send
           </button>
         </form>
