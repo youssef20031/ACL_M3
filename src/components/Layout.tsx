@@ -220,8 +220,8 @@ export function Layout() {
                   'flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
                   'hover:bg-purple-500/30',
                   isActive
-                    ? 'bg-slate-900 text-white font-medium shadow-lg'
-                    : 'text-purple-100'
+                    ? theme === 'dark' ? 'bg-slate-900 text-white font-medium shadow-lg' : 'bg-purple-700/50 text-white font-medium shadow-sm'
+                    : 'text-purple-100/80 hover:text-white'
                 )
               }
             >

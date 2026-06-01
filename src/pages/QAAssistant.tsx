@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type CSSProperties } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Send, Loader2, AlertCircle, Info } from 'lucide-react';
+import { Send, Loader2, AlertCircle, Info, ArrowUp } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
 import type { QueryResponse } from '../services/api';
@@ -176,7 +176,7 @@ export function QAAssistant() {
             >
               <div
                 className={cn(
-                  'max-w-3xl rounded-lg px-4 py-3 backdrop-blur-md',
+                  'max-w-3xl rounded-3xl px-5 py-4 backdrop-blur-md',
                   message.role === 'user'
                     ? 'bg-purple-600 text-white'
                     : isDark
@@ -194,7 +194,7 @@ export function QAAssistant() {
 
         {queryMutation.isPending && (
           <div className="flex justify-start">
-            <div className={cn('flex items-center gap-2 rounded-lg border px-4 py-3 backdrop-blur-md', isDark ? 'border-white/10 bg-slate-900/78' : 'border-white/70 bg-white/85')}>
+            <div className={cn('flex items-center gap-2 rounded-3xl border px-5 py-4 backdrop-blur-md', isDark ? 'border-white/10 bg-slate-900/78' : 'border-white/70 bg-white/85')}>
               <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
               <span className={cn('text-sm', isDark ? 'text-slate-300' : 'text-gray-600')}>Analyzing your question...</span>
             </div>
@@ -259,29 +259,30 @@ export function QAAssistant() {
       )}
 
       {/* Input Form */}
-      <div className={cn('relative z-10 border-t px-4 py-4 sm:px-6 backdrop-blur-xl', isDark ? 'border-white/10 bg-slate-950/70' : 'border-white/30 bg-white/80')}>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={
-              neo4jConnected
-                ? "Ask about FPL... (e.g., 'Who scored the most goals in 2022-23?')"
-                : 'Connect to Neo4j first...'
-            }
-            disabled={!neo4jConnected || queryMutation.isPending}
-            className={cn('flex-1 rounded-lg border px-4 py-3 text-base focus:outline-none focus:ring-2', isDark ? 'border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:ring-violet-500 disabled:bg-slate-900 disabled:text-slate-500' : 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed')}
-          />
-          <button
-            type="submit"
-            disabled={!neo4jConnected || queryMutation.isPending || !input.trim()}
-            className="w-full px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:w-auto"
-          >
-            <Send className="w-5 h-5" />
-            Send
-          </button>
-        </form>
+      <div className={cn('relative z-10 px-4 py-4 sm:px-6 backdrop-blur-xl', isDark ? 'bg-slate-950/70' : 'bg-white/80')}>
+        <div className="max-w-3xl mx-auto w-full">
+          <form onSubmit={handleSubmit} className="relative flex items-center">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={
+                neo4jConnected
+                  ? "Ask about FPL... (e.g., 'Who scored the most goals in 2022-23?')"
+                  : 'Connect to Neo4j first...'
+              }
+              disabled={!neo4jConnected || queryMutation.isPending}
+              className={cn('w-full rounded-full border px-6 py-3 pr-14 text-base focus:outline-none focus:ring-2 shadow-sm', isDark ? 'border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:ring-violet-500 disabled:bg-slate-900 disabled:text-slate-500' : 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed')}
+            />
+            <button
+              type="submit"
+              disabled={!neo4jConnected || queryMutation.isPending || !input.trim()}
+              className="absolute right-2 w-10 h-10 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              <ArrowUp className="w-5 h-5" />
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
