@@ -331,6 +331,12 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+# Add explicit OPTIONS handler for CORS preflight
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str):
+    """Handle CORS preflight requests."""
+    return {"status": "ok"}
+
 
 # ============================================================================
 # Pydantic Models
