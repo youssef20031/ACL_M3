@@ -206,57 +206,67 @@ export function QAAssistant() {
       </div>
 
       {/* Query Details Panel */}
-      {showDetails && lastQueryInfo && (
-        <div className={cn('relative z-10 max-h-96 overflow-y-auto border-t p-6 backdrop-blur-xl', isDark ? 'border-white/10 bg-slate-950/70' : 'border-white/30 bg-white/80')}>
-          <h3 className={cn('mb-3 flex items-center gap-2 font-semibold', isDark ? 'text-slate-100' : 'text-gray-900')}>
-            <Info className="w-4 h-4" />
-            Query Details
-          </h3>
-          
-          <div className="space-y-4">
-            <div>
-              <h4 className={cn('mb-1 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>Intent</h4>
-              <span className={cn('inline-block rounded px-2 py-1 text-sm', isDark ? 'bg-violet-500/15 text-violet-200' : 'bg-purple-100 text-purple-700')}>
-                {lastQueryInfo.intent}
-              </span>
-            </div>
+      <AnimatePresence>
+        {showDetails && lastQueryInfo && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className={cn('relative z-20 overflow-hidden border-t backdrop-blur-xl', isDark ? 'border-white/10 bg-slate-950/90' : 'border-white/30 bg-white/90')}
+          >
+            <div className="max-h-96 overflow-y-auto p-4 sm:p-6">
+              <h3 className={cn('mb-3 flex items-center gap-2 text-base font-semibold sm:text-lg', isDark ? 'text-slate-100' : 'text-gray-900')}>
+                <Info className="w-4 h-4 sm:w-5 sm:h-5" />
+                Query Details
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <h4 className={cn('mb-1 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>Intent</h4>
+                  <span className={cn('inline-block rounded px-2 py-1 text-xs sm:text-sm', isDark ? 'bg-violet-500/15 text-violet-200' : 'bg-purple-100 text-purple-700')}>
+                    {lastQueryInfo.intent}
+                  </span>
+                </div>
 
-            <div>
-              <h4 className={cn('mb-1 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>Entities</h4>
-              <pre className={cn('overflow-x-auto rounded p-2 text-xs', isDark ? 'border border-slate-800 bg-slate-900/80 text-slate-200' : 'border bg-white')}>
-                {JSON.stringify(lastQueryInfo.entities, null, 2)}
-              </pre>
-            </div>
+                <div>
+                  <h4 className={cn('mb-1 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>Entities</h4>
+                  <pre className={cn('overflow-x-auto rounded p-2 text-[10px] sm:text-xs', isDark ? 'border border-slate-800 bg-slate-900/80 text-slate-200' : 'border bg-white text-gray-900')}>
+                    {JSON.stringify(lastQueryInfo.entities, null, 2)}
+                  </pre>
+                </div>
 
-            <div>
-              <h4 className={cn('mb-1 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>Cypher Query</h4>
-              <pre className={cn('overflow-x-auto rounded p-3 text-xs', isDark ? 'bg-slate-950 text-emerald-300' : 'bg-gray-900 text-green-400')}>
-                {lastQueryInfo.cypher_query}
-              </pre>
-            </div>
+                <div>
+                  <h4 className={cn('mb-1 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>Cypher Query</h4>
+                  <pre className={cn('overflow-x-auto rounded p-2 sm:p-3 text-[10px] sm:text-xs', isDark ? 'bg-slate-950 text-emerald-300' : 'bg-gray-900 text-green-400')}>
+                    {lastQueryInfo.cypher_query}
+                  </pre>
+                </div>
 
-            {lastQueryInfo.embedding_used && (
-              <div>
-                <h4 className={cn('mb-1 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>
-                  🔮 Embedding Search Active
-                </h4>
-                <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-600')}>
-                  Similar players found using semantic search
-                </p>
+                {lastQueryInfo.embedding_used && (
+                  <div>
+                    <h4 className={cn('mb-1 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>
+                      🔮 Embedding Search Active
+                    </h4>
+                    <p className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-600')}>
+                      Similar players found using semantic search
+                    </p>
+                  </div>
+                )}
+
+                {lastQueryInfo.graph_data && (
+                  <div>
+                    <h4 className={cn('mb-2 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>
+                      Knowledge Graph Visualization
+                    </h4>
+                    <GraphVisualization data={lastQueryInfo.graph_data} />
+                  </div>
+                )}
               </div>
-            )}
-
-            {lastQueryInfo.graph_data && (
-              <div>
-                <h4 className={cn('mb-2 text-sm font-medium', isDark ? 'text-slate-300' : 'text-gray-700')}>
-                  Knowledge Graph Visualization
-                </h4>
-                <GraphVisualization data={lastQueryInfo.graph_data} />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Input Form */}
       <div className={cn('relative z-10 px-4 py-4 sm:px-6 backdrop-blur-xl', isDark ? 'bg-slate-950/70' : 'bg-white/80')}>

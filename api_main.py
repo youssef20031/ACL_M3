@@ -1230,6 +1230,10 @@ async def build_embeddings(request: EmbeddingBuildRequest, conn=Depends(get_neo4
             app_state["embedding_building"] = True
             app_state["embedding_build_error"] = None
 
+        # Initialize embedding manager if not already present
+        if not app_state["embedding_manager"]:
+            app_state["embedding_manager"] = EmbeddingManager(model_key=request.model)
+
         build_thread = Thread(
             target=run_embedding_build,
             args=(request.model, conn),
@@ -1248,7 +1252,9 @@ async def build_embeddings(request: EmbeddingBuildRequest, conn=Depends(get_neo4
         )
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        app_state["embedding_building"] = False
+        logger.error(f"Failed to start embedding build: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start embedding build: {str(e)}")
 
 
 @app.get("/api/trivia/new", response_model=TriviaQuestion)
