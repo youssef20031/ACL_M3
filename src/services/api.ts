@@ -119,7 +119,8 @@ export const apiService = {
     model: string = 'qwen-2.5-coder',
     retrievalMethod: string = 'Hybrid',
     embeddingModel: string = 'minilm',
-    isFirstMessage: boolean = false
+    isFirstMessage: boolean = false,
+    chatHistory: Array<{ role: string; content: string }> = []
   ): Promise<QueryResponse> {
     const { data } = await api.post<QueryResponse>('/api/query', {
       question,
@@ -127,6 +128,7 @@ export const apiService = {
       retrieval_method: retrievalMethod,
       embedding_model: embeddingModel,
       is_first_message: isFirstMessage,
+      chat_history: chatHistory,
     });
     return data;
   },

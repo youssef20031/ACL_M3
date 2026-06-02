@@ -36,7 +36,8 @@ You present data clearly and draw meaningful conclusions."""
         embedding_context: Optional[str] = None,
         persona: str = "conversational_fpl",
         data_scope: Optional[str] = None,
-        is_first_message: bool = False
+        is_first_message: bool = False,
+        chat_history: Optional[List[Dict[str, str]]] = None
     ) -> str:
         """
         Template for Q&A responses.
@@ -47,6 +48,7 @@ You present data clearly and draw meaningful conclusions."""
             embedding_context: Optional context from embedding search
             persona: Persona key
             data_scope: Description of the data scope (e.g., "all seasons (2020-21, 2021-22, 2022-23)" or "2022-23 season")
+            chat_history: Previous conversation messages for context
         """
         persona_text = PromptTemplates.PERSONAS.get(persona, PromptTemplates.PERSONAS["conversational_fpl"])
         
@@ -60,11 +62,23 @@ You present data clearly and draw meaningful conclusions."""
             "IMPORTANT: Never begin your response with a salutation or greeting (e.g., 'Hi', 'Hey', 'Hello') UNLESS the 'FirstMessage' flag below is True. "
             "If 'FirstMessage' is True you may include a single brief friendly greeting at the start; otherwise go straight to the answer."
         )
+        
+        # Format conversation history
+        history_text = ""
+        if chat_history and len(chat_history) > 0:
+            history_text = "\n### Conversation History:\n"
+            # Only include last 5 messages to avoid context bloat
+            recent_history = chat_history[-5:]
+            for msg in recent_history:
+                role = "User" if msg.get("role") == "user" else "Assistant"
+                content = msg.get("content", "")
+                history_text += f"{role}: {content}\n"
+            history_text += "\n**IMPORTANT**: When the user says 'him', 'her', 'them', or 'that player', they are referring to a player mentioned in the conversation history above. Use the conversation context to resolve these references.\n"
 
         template = f"""{persona_text}
 {greeting_directive}
 FirstMessage: {str(is_first_message)}
-
+{history_text}
 ### Knowledge Graph Data:
 {scope_text}{kg_context}
 """

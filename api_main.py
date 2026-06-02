@@ -360,6 +360,7 @@ class QueryRequest(BaseModel):
     retrieval_method: str = "Hybrid"  # "Baseline", "Embeddings", "Hybrid"
     embedding_model: str = "minilm"  # "minilm" or "mpnet"
     is_first_message: bool = False
+    chat_history: List[Dict[str, str]] = []  # List of {"role": "user"/"assistant", "content": "..."}
 
 
 class QueryResponse(BaseModel):
@@ -1180,7 +1181,8 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 kg_context=cypher_context,
                 embedding_context=embedding_context if embedding_context else None,
                 data_scope=data_scope,
-                is_first_message=request.is_first_message
+                is_first_message=request.is_first_message,
+                chat_history=request.chat_history
             )
             
             response = app_state["llm_manager"].generate(

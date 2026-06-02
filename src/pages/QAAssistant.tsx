@@ -48,8 +48,22 @@ export function QAAssistant() {
   }, [chatHistory]);
 
   const queryMutation = useMutation({
-    mutationFn: (question: string) =>
-      apiService.queryFPL(question, selectedModel, retrievalMethod, embeddingModel),
+    mutationFn: (question: string) => {
+      // Convert chat history to API format (exclude the current question)
+      const historyForAPI = chatHistory.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
+      return apiService.queryFPL(
+        question, 
+        selectedModel, 
+        retrievalMethod, 
+        embeddingModel,
+        chatHistory.length === 0, // is_first_message
+        historyForAPI
+      );
+    },
     onSuccess: (data) => {
       addMessage({
         role: 'assistant',
