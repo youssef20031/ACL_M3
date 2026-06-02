@@ -60,11 +60,17 @@ class EmbeddingManager:
         self._load_model()
     
     def _load_model(self):
-        """Load the sentence transformer model."""
+        """Load the sentence transformer model with memory optimization for production."""
         logger.info(f"Loading embedding model: {self.model_info['name']}")
         try:
-            self.model = SentenceTransformer(self.model_info['name'])
-            logger.info(f"Model loaded successfully. Dimension: {self.model_info['dimension']}")
+            import torch
+            # Force CPU-only mode to reduce memory usage in production
+            self.model = SentenceTransformer(self.model_info['name'], device='cpu')
+            # Set model to eval mode and optimize memory
+            self.model.eval()
+            if hasattr(torch, 'set_num_threads'):
+                torch.set_num_threads(2)  # Limit CPU threads for Railway
+            logger.info(f"Model loaded successfully on CPU. Dimension: {self.model_info['dimension']}")
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
             raise
@@ -252,14 +258,15 @@ class EmbeddingManager:
             batch_size=batch_size,
         )
     
-    def build_player_embeddings(self, players_data: List[Dict[str, Any]], batch_size: int = 32):
+    def build_player_embeddings(self, players_data: List[Dict[str, Any]], batch_size: int = 16):
         """
-        Build embeddings for all players.
+        Build embeddings for all players with memory-efficient batching.
         
         Args:
             players_data: List of player data dictionaries
+            batch_size: Reduced default to 16 for Railway's memory limits
         """
-        logger.info(f"Building embeddings for {len(players_data)} players...")
+        logger.info(f"Building embeddings for {len(players_data)} players with batch_size={batch_size}...")
 
         self.player_embeddings = {}
         self.player_metadata = {}
@@ -284,7 +291,8 @@ class EmbeddingManager:
                 **player
             }
         
-        # Encode in smaller batches to keep memory usage stable in production.
+        # Encode in smaller batches to keep memory usage stable in production
+        # Use batch_size=16 instead of 32 for Railway's memory constraints
         for start in range(0, len(descriptions), batch_size):
             batch_descriptions = descriptions[start:start + batch_size]
             batch_keys = player_keys[start:start + batch_size]
@@ -292,6 +300,10 @@ class EmbeddingManager:
 
             for key, embedding in zip(batch_keys, embeddings):
                 self.player_embeddings[key] = embedding
+            
+            # Log progress every 10 batches
+            if (start // batch_size) % 10 == 0:
+                logger.info(f"Processed {start + len(batch_descriptions)}/{len(descriptions)} players")
         
         logger.info(f"Built {len(self.player_embeddings)} player embeddings")
     

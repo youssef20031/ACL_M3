@@ -735,31 +735,41 @@ def run_embedding_build(model_key: str, conn: Neo4jConnection) -> None:
         app_state["embedding_build_error"] = None
 
         if not app_state["embedding_manager"]:
+            logger.info("Initializing embedding manager...")
             app_state["embedding_manager"] = EmbeddingManager(model_key=model_key)
         elif app_state["embedding_manager"].model_key != model_key:
+            logger.info("Switching embedding model...")
             app_state["embedding_manager"].switch_model(model_key)
 
+        logger.info("Fetching player data from Neo4j...")
         query, query_params = CypherQueries.get_player_embeddings_data()
         results = conn.execute_query(query, query_params)
 
         if not results:
             app_state["embedding_build_error"] = "No player data found. Load FPL data first."
             app_state["embeddings_built"] = False
+            logger.error("No player data found for embedding build")
             return
 
-        app_state["embedding_manager"].build_player_embeddings(results)
+        logger.info(f"Building embeddings for {len(results)} players...")
+        app_state["embedding_manager"].build_player_embeddings(results, batch_size=16)
         app_state["embeddings_built"] = True
         logger.info(
-            "Embedding build finished for model %s with %d vectors",
+            "✅ Embedding build finished for model %s with %d vectors",
             model_key,
             len(app_state["embedding_manager"].player_embeddings),
         )
+    except MemoryError as exc:
+        app_state["embeddings_built"] = False
+        app_state["embedding_build_error"] = "Out of memory. Try restarting the server or upgrading Railway plan."
+        logger.exception("Embedding build failed due to memory error for model %s", model_key)
     except Exception as exc:
         app_state["embeddings_built"] = False
         app_state["embedding_build_error"] = str(exc)
-        logger.exception("Embedding build failed for model %s", model_key)
+        logger.exception("Embedding build failed for model %s: %s", model_key, str(exc))
     finally:
         app_state["embedding_building"] = False
+        logger.info("Embedding build process completed (building flag reset)")
 
 
 def build_graph_data(results: List[Dict], limit: int = 20) -> Dict[str, Any]:
