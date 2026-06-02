@@ -1,8 +1,9 @@
 import axios, { AxiosError } from 'axios';
 
-// In development: falls back to localhost (proxied by Vite).
-// In production: set VITE_API_URL to your Railway backend URL.
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+// IMPORTANT: Always use relative URLs in production to leverage Vercel's proxy rewrites
+// This avoids CORS issues by making requests same-origin
+// Vercel rewrites /api/* and /health to Railway backend
+const API_BASE_URL = import.meta.env.MODE === 'production' ? '' : (import.meta.env.VITE_API_URL || '');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
