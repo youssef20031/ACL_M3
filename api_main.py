@@ -288,6 +288,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  Neo4j connection failed: {e}")
     
+    # Try to load prebuilt embeddings on startup (Railway optimization)
+    print("🔮 Checking for prebuilt embeddings...")
+    try:
+        # Try MPNet first, then MiniLM
+        for model_key in ["mpnet", "minilm"]:
+            prebuilt_path = f"embeddings/prebuilt/{model_key}_embeddings.pkl"
+            if os.path.exists(prebuilt_path):
+                print(f"   Found {model_key} embeddings, loading...")
+                manager = EmbeddingManager(model_key=model_key)
+                if manager.load_embeddings(prebuilt_path):
+                    app_state["embedding_manager"] = manager
+                    app_state["embeddings_built"] = True
+                    print(f"✅ Loaded {len(manager.player_embeddings)} prebuilt {model_key} embeddings")
+                    break
+        else:
+            print("   ℹ️  No prebuilt embeddings found (will build on request)")
+    except Exception as emb_error:
+        print(f"⚠️  Failed to load prebuilt embeddings: {emb_error}")
+    
     print("✅ API Ready!")
     
     # Defer heavy ML model initialization to first use
