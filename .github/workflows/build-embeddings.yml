@@ -22,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       
@@ -44,7 +44,7 @@ jobs:
           python build_embeddings_offline.py ${{ inputs.model }}
       
       - name: Upload embeddings artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.model }}-embeddings
           path: embeddings/prebuilt/${{ inputs.model }}_embeddings.pkl
