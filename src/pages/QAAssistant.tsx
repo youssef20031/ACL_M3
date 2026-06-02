@@ -96,6 +96,18 @@ export function QAAssistant() {
     setInput('');
   };
 
+  const handleSendQuestion = (question: string) => {
+    if (!neo4jConnected || queryMutation.isPending) return;
+
+    addMessage({
+      role: 'user',
+      content: question,
+      timestamp: Date.now(),
+    });
+
+    queryMutation.mutate(question);
+  };
+
   return (
     <div className="relative isolate flex flex-1 w-full min-h-0 flex-col overflow-hidden">
       {isDark && (
@@ -169,8 +181,9 @@ export function QAAssistant() {
               ].map((example, i) => (
                 <button
                   key={i}
-                  onClick={() => setInput(example)}
-                  className={cn('block w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors backdrop-blur-md', isDark ? 'border-white/10 bg-slate-900/75 text-slate-100 hover:border-violet-400/40 hover:bg-slate-900/90' : 'border-white/50 bg-white/75 text-gray-700 hover:bg-white/90')}
+                  onClick={() => handleSendQuestion(example)}
+                  disabled={queryMutation.isPending}
+                  className={cn('block w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors backdrop-blur-md', isDark ? 'border-white/10 bg-slate-900/75 text-slate-100 hover:border-violet-400/40 hover:bg-slate-900/90 disabled:opacity-50 disabled:cursor-not-allowed' : 'border-white/50 bg-white/75 text-gray-700 hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed')}
                 >
                   {example}
                 </button>
