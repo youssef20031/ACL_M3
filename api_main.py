@@ -320,9 +320,6 @@ allowed_origins = [
 # Add Vercel domains if deployed
 if os.getenv("VERCEL_URL"):
     allowed_origins.append(f"https://{os.getenv('VERCEL_URL')}")
-    
-# Allow all Vercel preview deployments
-allowed_origins.append("https://*.vercel.app")
 
 app.add_middleware(
     CORSMiddleware,
@@ -331,6 +328,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 

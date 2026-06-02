@@ -69,7 +69,11 @@ export function Settings() {
   const { data: health, refetch: refetchHealth } = useQuery({
     queryKey: ['health'],
     queryFn: () => apiService.getHealth(),
-    refetchInterval: 30000,
+    refetchInterval: (query) => {
+      // Poll more frequently (every 5 seconds) while embeddings are building
+      const data = query.state.data;
+      return data?.embeddings_building ? 5000 : 30000;
+    },
   });
 
   const connectMutation = useMutation({
