@@ -50,7 +50,6 @@ export function GraphVisualization({ data, isDark = false }: GraphVisualizationP
     // Set colors based on theme
     const edgeColor = isDark ? '#64748b' : '#cbd5e1';
     const labelColor = isDark ? '#f1f5f9' : '#1e293b';
-    const bgColor = isDark ? '#0f172a' : '#f9fafb';
 
     // Simple force-directed layout simulation
     const width = canvas.width;

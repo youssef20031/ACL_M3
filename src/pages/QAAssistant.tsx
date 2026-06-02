@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type CSSProperties } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Send, Loader2, AlertCircle, Info, ArrowUp } from 'lucide-react';
+import { Loader2, AlertCircle, Info, ArrowUp } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
 import type { QueryResponse } from '../services/api';
