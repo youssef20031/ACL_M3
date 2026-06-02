@@ -1,0 +1,67 @@
+name: Build Embeddings in Cloud
+
+# Manual trigger only - run when you need to rebuild embeddings
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: 'Model to build (minilm or mpnet)'
+        required: true
+        default: 'minilm'
+        type: choice
+        options:
+          - minilm
+          - mpnet
+
+jobs:
+  build-embeddings:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m spacy download en_core_web_sm
+      
+      - name: Create .env file
+        run: |
+          echo "NEO4J_URI=${{ secrets.NEO4J_URI }}" >> .env
+          echo "NEO4J_USER=${{ secrets.NEO4J_USER }}" >> .env
+          echo "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}" >> .env
+          echo "HUGGINGFACE_API_TOKEN=${{ secrets.HUGGINGFACE_API_TOKEN }}" >> .env
+      
+      - name: Build embeddings
+        run: |
+          python build_embeddings_offline.py ${{ inputs.model }}
+      
+      - name: Upload embeddings artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ inputs.model }}-embeddings
+          path: embeddings/prebuilt/${{ inputs.model }}_embeddings.pkl
+          retention-days: 30
+      
+      - name: Create Pull Request with embeddings
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'Add prebuilt ${{ inputs.model }} embeddings'
+          branch: embeddings-${{ inputs.model }}
+          title: 'Add prebuilt ${{ inputs.model }} embeddings'
+          body: |
+            🤖 Automated PR: Prebuilt embeddings for ${{ inputs.model }}
+            
+            Generated in GitHub Actions cloud environment.
+            
+            File: `embeddings/prebuilt/${{ inputs.model }}_embeddings.pkl`
+            
+            **Ready to merge and deploy to Railway!**
