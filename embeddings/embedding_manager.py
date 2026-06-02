@@ -307,6 +307,60 @@ class EmbeddingManager:
         
         logger.info(f"Built {len(self.player_embeddings)} player embeddings")
     
+    def save_embeddings(self, filepath: str):
+        """
+        Save embeddings and metadata to disk.
+        
+        Args:
+            filepath: Path to save the embeddings (e.g., 'embeddings/minilm_embeddings.pkl')
+        """
+        import pickle
+        import os
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        data = {
+            'model_key': self.model_key,
+            'embeddings': {k: v.tolist() for k, v in self.player_embeddings.items()},  # Convert to lists for JSON compatibility
+            'metadata': self.player_metadata,
+        }
+        with open(filepath, 'wb') as f:
+            pickle.dump(data, f)
+        logger.info(f"Saved {len(self.player_embeddings)} embeddings to {filepath}")
+    
+    def load_embeddings(self, filepath: str) -> bool:
+        """
+        Load prebuilt embeddings from disk.
+        
+        Args:
+            filepath: Path to the embeddings file
+            
+        Returns:
+            True if loaded successfully, False otherwise
+        """
+        import pickle
+        import os
+        
+        if not os.path.exists(filepath):
+            logger.warning(f"Embeddings file not found: {filepath}")
+            return False
+        
+        try:
+            with open(filepath, 'rb') as f:
+                data = pickle.load(f)
+            
+            # Verify model matches
+            if data.get('model_key') != self.model_key:
+                logger.warning(f"Model mismatch: file has {data.get('model_key')}, expected {self.model_key}")
+                return False
+            
+            # Convert lists back to numpy arrays
+            self.player_embeddings = {k: np.array(v) for k, v in data.get('embeddings', {}).items()}
+            self.player_metadata = data.get('metadata', {})
+            logger.info(f"Loaded {len(self.player_embeddings)} prebuilt embeddings from {filepath}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to load embeddings: {e}")
+            return False
+    
     def compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
         """
         Compute cosine similarity between two embeddings.

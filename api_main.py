@@ -729,7 +729,7 @@ def get_neo4j_conn():
 
 
 def run_embedding_build(model_key: str, conn: Neo4jConnection) -> None:
-    """Build embeddings asynchronously so the HTTP request can return immediately."""
+    """Build embeddings asynchronously or load prebuilt ones."""
     try:
         logger.info("Starting background embedding build for model %s", model_key)
         app_state["embedding_build_error"] = None
@@ -737,9 +737,27 @@ def run_embedding_build(model_key: str, conn: Neo4jConnection) -> None:
         if not app_state["embedding_manager"]:
             logger.info("Initializing embedding manager...")
             app_state["embedding_manager"] = EmbeddingManager(model_key=model_key)
+            
+            # Try to load prebuilt embeddings first (for Railway)
+            prebuilt_path = f"embeddings/prebuilt/{model_key}_embeddings.pkl"
+            if app_state["embedding_manager"].load_embeddings(prebuilt_path):
+                logger.info("Successfully loaded prebuilt embeddings from %s", prebuilt_path)
+                app_state["embeddings_built"] = True
+                app_state["embedding_building"] = False
+                return
+            else:
+                logger.info("No prebuilt embeddings found, building from scratch...")
         elif app_state["embedding_manager"].model_key != model_key:
             logger.info("Switching embedding model...")
             app_state["embedding_manager"].switch_model(model_key)
+            
+            # Try to load prebuilt for new model
+            prebuilt_path = f"embeddings/prebuilt/{model_key}_embeddings.pkl"
+            if app_state["embedding_manager"].load_embeddings(prebuilt_path):
+                logger.info("Successfully loaded prebuilt embeddings for %s", model_key)
+                app_state["embeddings_built"] = True
+                app_state["embedding_building"] = False
+                return
 
         logger.info("Fetching player data from Neo4j...")
         query, query_params = CypherQueries.get_player_embeddings_data()

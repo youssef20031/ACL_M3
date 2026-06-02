@@ -1,0 +1,2 @@
+# This directory will contain prebuilt embeddings
+# Run: python build_embeddings_offline.py
