@@ -259,7 +259,7 @@ export function QAAssistant() {
                     <h4 className={cn('mb-2 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>
                       Knowledge Graph Visualization
                     </h4>
-                    <GraphVisualization data={lastQueryInfo.graph_data} />
+                    <GraphVisualization data={lastQueryInfo.graph_data} isDark={isDark} />
                   </div>
                 )}
               </div>

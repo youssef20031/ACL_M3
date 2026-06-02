@@ -20,6 +20,7 @@ interface GraphData {
 
 interface GraphVisualizationProps {
   data: GraphData;
+  isDark?: boolean;
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -30,7 +31,7 @@ const NODE_COLORS: Record<string, string> = {
   fixture: '#8b5cf6',
 };
 
-export function GraphVisualization({ data }: GraphVisualizationProps) {
+export function GraphVisualization({ data, isDark = false }: GraphVisualizationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +46,11 @@ export function GraphVisualization({ data }: GraphVisualizationProps) {
     const container = containerRef.current;
     canvas.width = container.clientWidth;
     canvas.height = 400;
+    
+    // Set colors based on theme
+    const edgeColor = isDark ? '#64748b' : '#cbd5e1';
+    const labelColor = isDark ? '#f1f5f9' : '#1e293b';
+    const bgColor = isDark ? '#0f172a' : '#f9fafb';
 
     // Simple force-directed layout simulation
     const width = canvas.width;
@@ -122,7 +128,7 @@ export function GraphVisualization({ data }: GraphVisualizationProps) {
       ctx.clearRect(0, 0, width, height);
 
       // Draw edges
-      ctx.strokeStyle = '#cbd5e1';
+      ctx.strokeStyle = edgeColor;
       ctx.lineWidth = 2;
       data.edges.forEach((edge) => {
         const source = nodeMap.get(edge.from);
@@ -148,9 +154,9 @@ export function GraphVisualization({ data }: GraphVisualizationProps) {
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Label
-        ctx.fillStyle = '#1e293b';
-        ctx.font = '12px sans-serif';
+        // Label - white in dark mode, dark in light mode
+        ctx.fillStyle = labelColor;
+        ctx.font = 'bold 12px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         const label = node.node.label.length > 15 
@@ -174,10 +180,13 @@ export function GraphVisualization({ data }: GraphVisualizationProps) {
     };
 
     animate();
-  }, [data]);
+  }, [data, isDark]);
 
   return (
-    <div ref={containerRef} className="w-full bg-gray-50 rounded-lg p-4 border">
+    <div 
+      ref={containerRef} 
+      className={`w-full rounded-lg p-4 border ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-gray-50 border-gray-200'}`}
+    >
       <canvas ref={canvasRef} className="w-full" />
       <div className="mt-2 flex flex-wrap gap-3 text-xs">
         {Object.entries(NODE_COLORS).map(([type, color]) => (
@@ -186,7 +195,7 @@ export function GraphVisualization({ data }: GraphVisualizationProps) {
               className="w-3 h-3 rounded-full"
               style={{ backgroundColor: color }}
             />
-            <span className="capitalize text-gray-600">{type}</span>
+            <span className={`capitalize ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>{type}</span>
           </div>
         ))}
       </div>
