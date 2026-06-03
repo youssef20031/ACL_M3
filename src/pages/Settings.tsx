@@ -18,10 +18,10 @@ import { apiService, handleApiError } from '../services/api';
 import { cn } from '../utils/cn';
 
 const MODELS = [
-  { key: 'llama-3.3-70b', label: 'Llama 3.3 70B Versatile', description: 'High-performance model via Groq (recommended)' },
-  { key: 'qwen-2.5-coder', label: 'Qwen 2.5 Coder', description: 'Good for structured data queries' },
+  { key: 'llama-3.3-70b', label: 'Llama 3.3 70B Versatile', description: 'Highest performance model via Groq (recommended)' },
+  { key: 'qwen-2.5-coder', label: 'Qwen 2.5 Coder', description: 'Light model, Good for structured data queries' },
   { key: 'llama-3.2-3b', label: 'Llama 3.2 3B', description: 'Fast, lightweight responses' },
-  { key: 'qwen-2.5-7b', label: 'Qwen 2.5 7B', description: 'Higher quality, slower' },
+  { key: 'qwen-2.5-7b', label: 'Qwen 2.5 7B', description: 'medium quality model' },
 ];
 
 const RETRIEVAL_METHODS = [
