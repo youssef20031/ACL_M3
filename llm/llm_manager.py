@@ -70,7 +70,7 @@ class LLMManager:
     },
 }
     
-    def __init__(self, api_token: Optional[str] = None, default_model: str = "qwen-2.5-coder"):
+    def __init__(self, api_token: Optional[str] = None, default_model: str = "llama-3.3-70b"):
         """
         Initialize LLM manager.
         

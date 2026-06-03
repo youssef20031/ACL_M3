@@ -75,7 +75,7 @@ export const useAppStore = create<AppState>()(
       clearChat: () => set({ chatHistory: [] }),
 
       // Settings
-      selectedModel: 'qwen-2.5-coder',
+      selectedModel: 'llama-3.3-70b',
       retrievalMethod: 'Hybrid',
       embeddingModel: 'minilm',
       setSelectedModel: (model) => set({ selectedModel: model }),
