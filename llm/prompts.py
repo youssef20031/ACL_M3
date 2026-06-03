@@ -71,10 +71,21 @@ You present data clearly and draw meaningful conclusions."""
         else:
             persona_text = PromptTemplates.PERSONAS.get(persona, PromptTemplates.PERSONAS["conversational_fpl"])
         
-        # Add data scope information
+        # Add data scope information with strong emphasis
         scope_text = ""
         if data_scope:
-            scope_text = f"\n**Data Scope**: This data covers {data_scope}.\n"
+            if "all seasons" in data_scope.lower():
+                scope_text = f"""
+**⚠️ CRITICAL - Data Scope**: This data covers {data_scope}.
+**ALL STATISTICS BELOW ARE COMBINED/TOTAL ACROSS ALL THREE SEASONS (2020-21, 2021-22, 2022-23)**
+When you mention any number, you MUST say "across all three seasons" or "combined total".
+"""
+            else:
+                scope_text = f"""
+**⚠️ CRITICAL - Data Scope**: This data covers ONLY {data_scope}.
+**ALL STATISTICS BELOW ARE FOR {data_scope.upper()} ONLY - NOT COMBINED SEASONS**
+When you mention any number, you MUST say "in the {data_scope}" to be clear.
+"""
         
         # Strong directive about greeting behavior and explicit flag
         greeting_directive = (
@@ -113,6 +124,13 @@ FirstMessage: {str(is_first_message)}
 {question}
 
 ### Instructions:
+**CRITICAL - SEASON CLARITY:**
+- ALWAYS explicitly state which season(s) the statistics are from
+- If the data scope says "2022-23 season", ALL numbers you mention are ONLY for that season
+- If the data scope says "all seasons", the numbers are COMBINED across multiple seasons (2020-21, 2021-22, 2022-23)
+- NEVER say "Harry Kane scored 70 goals" without saying "across all three seasons" or "in the 2022-23 season"
+- Format: "[Player] scored [X] goals in [specific season]" OR "[Player] scored [X] goals across all three seasons (2020-21, 2021-22, 2022-23)"
+
 **UNDERSTANDING USER INTENT:**
 - Vague responses like "hmm", "i dont know", "not sure", "maybe" mean the user is UNCERTAIN - offer helpful choices
 - When user is uncertain, DON'T force information - instead say: "Would you like to hear about [specific option A] or [specific option B]?"
@@ -139,10 +157,19 @@ Good: "No worries! Would you like to hear about top midfielders, defenders with 
 Bad: "Trent Alexander-Arnold is a standout defender with..." (forcing information)
 
 User: "tell me more"
-Good: "He scored 36 goals across 35 games, averaging over a goal per game..." (providing requested detail)
+Good: "He scored 36 goals across 35 games in the 2022-23 season..." (clearly states season)
 
 User: "who scored the most?"
-Good: "Erling Haaland with 36 goals in the 2022-23 season." (direct answer)
+Good: "Erling Haaland with 36 goals in the 2022-23 season." (direct answer with season specified)
+
+User: "compare him to other top scorers"
+IF DATA SCOPE IS "2022-23 season":
+Good: "In the 2022-23 season specifically, Harry Kane scored 30 goals and Son scored 10 goals."
+Bad: "Harry Kane scored 70 goals" (WRONG - this is combined total, not 2022-23 only)
+
+IF DATA SCOPE IS "all seasons":
+Good: "Across all three seasons (2020-21, 2021-22, 2022-23), Harry Kane scored 70 goals total and Son scored 40 goals total."
+Bad: "Harry Kane scored 70 goals" (WRONG - doesn't clarify it's combined)
 
 ### Answer:"""
         
