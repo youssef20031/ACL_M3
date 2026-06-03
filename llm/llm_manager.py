@@ -1,6 +1,6 @@
 """
 LLM Manager for FPL Graph-RAG System
-Handles integration with multiple LLMs via HuggingFace
+Handles integration with multiple LLMs via HuggingFace and Groq
 """
 import os
 import time
@@ -8,7 +8,6 @@ import logging
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from huggingface_hub import InferenceClient
-import requests
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class LLMManager:
     """
     
     # Available models configuration
-    # Using models that support chat/conversational task on HuggingFace Inference API
+    # Using models that support chat/conversational task on HuggingFace Inference API and Groq
     MODELS = {
     "qwen-2.5-coder": {
         "name": "Qwen/Qwen2.5-Coder-32B-Instruct",
@@ -40,6 +39,7 @@ class LLMManager:
         "max_tokens": 1024,
         "temperature": 0.7,
         "use_chat": True,
+        "provider": "huggingface",
     },
     "llama-3.2-3b": {
         "name": "meta-llama/Llama-3.2-3B-Instruct",
@@ -48,6 +48,7 @@ class LLMManager:
         "max_tokens": 1024,
         "temperature": 0.7,
         "use_chat": True,
+        "provider": "huggingface",
     },
     "qwen-2.5-7b": {
         "name": "Qwen/Qwen2.5-7B-Instruct",
@@ -56,6 +57,16 @@ class LLMManager:
         "max_tokens": 1024,
         "temperature": 0.7,
         "use_chat": True,
+        "provider": "huggingface",
+    },
+    "llama-3.3-70b": {
+        "name": "llama-3.3-70b-versatile",
+        "display_name": "Llama 3.3 70B Versatile",
+        "description": "High-performance Meta model via Groq",
+        "max_tokens": 2048,
+        "temperature": 0.7,
+        "use_chat": True,
+        "provider": "groq",
     },
 }
     
@@ -68,14 +79,21 @@ class LLMManager:
             default_model: Default model to use
         """
         self.api_token = api_token or os.getenv("HUGGINGFACE_API_TOKEN", "")
+        self.groq_api_key = os.getenv("GROQ_API_KEY", "")
         self.default_model = default_model
         self.client = None
+        self.groq_client = None
         self.response_history: List[LLMResponse] = []
         
         if self.api_token:
             self._init_client()
         else:
             logger.warning("No HuggingFace API token provided. Set HUGGINGFACE_API_TOKEN environment variable.")
+        
+        if self.groq_api_key:
+            self._init_groq_client()
+        else:
+            logger.info("No Groq API key provided. Groq models will not be available.")
     
     def _init_client(self):
         """Initialize HuggingFace inference client."""
@@ -85,6 +103,18 @@ class LLMManager:
         except Exception as e:
             logger.error(f"Failed to initialize HuggingFace client: {e}")
             self.client = None
+    
+    def _init_groq_client(self):
+        """Initialize Groq client."""
+        try:
+            from groq import Groq
+            self.groq_client = Groq(api_key=self.groq_api_key)
+            logger.info("Groq client initialized successfully")
+        except ImportError:
+            logger.warning("Groq library not installed. Install with: pip install groq")
+        except Exception as e:
+            logger.error(f"Failed to initialize Groq client: {e}")
+            self.groq_client = None
     
     def set_api_token(self, token: str):
         """
@@ -135,10 +165,84 @@ class LLMManager:
             )
         
         model_config = self.MODELS[model_key]
-        model_name = model_config["name"]
-        max_tokens = max_tokens or model_config["max_tokens"]
-        temperature = temperature or model_config["temperature"]
+        provider = model_config.get("provider", "huggingface")
         
+        # Route to appropriate provider
+        if provider == "groq":
+            return self._generate_with_groq(prompt, model_key, model_config, max_tokens, temperature)
+        else:
+            return self._generate_with_huggingface(prompt, model_key, model_config, max_tokens, temperature)
+    
+    def _generate_with_groq(
+        self,
+        prompt: str,
+        model_key: str,
+        model_config: Dict[str, Any],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None
+    ) -> LLMResponse:
+        """Generate using Groq API."""
+        if not self.groq_client:
+            return LLMResponse(
+                text="",
+                model=model_key,
+                tokens_used=0,
+                response_time=0,
+                success=False,
+                error="Groq client not initialized. Please provide GROQ_API_KEY."
+            )
+        
+        model_name = model_config["name"]
+        max_tokens = max_tokens or model_config.get("max_tokens", 2048)
+        temperature = temperature or model_config.get("temperature", 0.7)
+        
+        start_time = time.time()
+        
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            response = self.groq_client.chat.completions.create(
+                model=model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+            generated_text = response.choices[0].message.content.strip()
+            response_time = time.time() - start_time
+            
+            # Get token usage from response
+            tokens_used = response.usage.total_tokens if hasattr(response, 'usage') else len(prompt.split()) + len(generated_text.split())
+            
+            result = LLMResponse(
+                text=generated_text,
+                model=model_key,
+                tokens_used=tokens_used,
+                response_time=response_time,
+                success=True
+            )
+            
+        except Exception as e:
+            logger.error(f"Groq generation failed: {e}")
+            result = LLMResponse(
+                text="",
+                model=model_key,
+                tokens_used=0,
+                response_time=time.time() - start_time,
+                success=False,
+                error=str(e)
+            )
+        
+        self.response_history.append(result)
+        return result
+    
+    def _generate_with_huggingface(
+        self,
+        prompt: str,
+        model_key: str,
+        model_config: Dict[str, Any],
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None
+    ) -> LLMResponse:
+        """Generate using HuggingFace API."""
         if not self.client:
             return LLMResponse(
                 text="",
@@ -148,6 +252,10 @@ class LLMManager:
                 success=False,
                 error="HuggingFace client not initialized. Please provide API token."
             )
+        
+        model_name = model_config["name"]
+        max_tokens = max_tokens or model_config["max_tokens"]
+        temperature = temperature or model_config["temperature"]
         
         start_time = time.time()
         
@@ -160,7 +268,6 @@ class LLMManager:
                     model=model_name,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    #timeout=timeout
                 )
                 generated_text = response.choices[0].message.content.strip()
             else:
@@ -171,7 +278,6 @@ class LLMManager:
                     max_new_tokens=max_tokens,
                     temperature=temperature,
                     do_sample=True,
-                    #timeout=timeout,
                     return_full_text=False
                 )
 
@@ -191,7 +297,7 @@ class LLMManager:
             )
             
         except Exception as e:
-            logger.error(f"LLM generation failed: {e}")
+            logger.error(f"HuggingFace generation failed: {e}")
             result = LLMResponse(
                 text="",
                 model=model_key,
