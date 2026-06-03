@@ -1232,7 +1232,8 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 embedding_context=embedding_context if embedding_context else None,
                 data_scope=data_scope,
                 is_first_message=request.is_first_message,
-                chat_history=request.chat_history
+                chat_history=request.chat_history,
+                model_key=request.model  # Pass model key for model-specific prompting
             )
             
             response = app_state["llm_manager"].generate(
