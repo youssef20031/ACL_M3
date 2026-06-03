@@ -43,12 +43,14 @@ python-dotenv>=1.0.0
 requests>=2.31.0
 tqdm>=4.66.1
 
-#fastapi for backend
 # FastAPI and ASGI server
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 python-multipart==0.0.12
 websockets==13.1
+
+# LLM providers
+groq>=1.4.0  # For Groq API access
 
 # Optional cache/session backend for trivia answers
 redis>=5.0.0
