@@ -1004,13 +1004,22 @@ async def health_check():
         except:
             neo4j_status = "error"
     
+    # Get embedding count safely
+    embedding_count = 0
+    if app_state["embedding_manager"]:
+        try:
+            embedding_count = len(app_state["embedding_manager"].player_embeddings)
+        except Exception as e:
+            logger.warning(f"Failed to get embedding count: {e}")
+            embedding_count = 0
+    
     return {
         "status": "healthy",
         "neo4j": neo4j_status,
         "neo4j_stats": stats,
         "llm_available": app_state["llm_manager"] is not None,
         "embeddings_built": app_state["embeddings_built"],
-        "embedding_count": len(app_state["embedding_manager"].player_embeddings) if app_state["embedding_manager"] else 0,
+        "embedding_count": embedding_count,
         "embeddings_building": app_state["embedding_building"],
         "embedding_build_error": app_state["embedding_build_error"],
     }
