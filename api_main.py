@@ -296,11 +296,18 @@ async def lifespan(app: FastAPI):
             prebuilt_path = f"embeddings/prebuilt/{model_key}_embeddings.pkl"
             if os.path.exists(prebuilt_path):
                 print(f"   Found {model_key} embeddings, loading...")
-                manager = EmbeddingManager(model_key=model_key)
+                # Load embeddings WITHOUT initializing the sentence-transformer model
+                # The model is only needed for search queries, not for loading prebuilt vectors
+                manager = EmbeddingManager.__new__(EmbeddingManager)
+                manager.model_key = model_key
+                manager.model_info = EmbeddingManager.MODELS[model_key]
+                manager.model = None  # Defer model loading until first search
+                manager.player_embeddings = {}
+                manager.player_metadata = {}
                 if manager.load_embeddings(prebuilt_path):
                     app_state["embedding_manager"] = manager
                     app_state["embeddings_built"] = True
-                    print(f"✅ Loaded {len(manager.player_embeddings)} prebuilt {model_key} embeddings")
+                    print(f"✅ Loaded {len(manager.player_embeddings)} prebuilt {model_key} embeddings (model deferred)")
                     break
         else:
             print("   ℹ️  No prebuilt embeddings found (will build on request)")

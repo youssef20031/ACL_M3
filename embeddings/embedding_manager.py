@@ -390,20 +390,15 @@ class EmbeddingManager:
     ) -> List[EmbeddingResult]:
         """
         Find players similar to a text query.
-        
-        Args:
-            query: Search query (player name or description)
-            top_k: Number of results to return
-            season_filter: Optional season to filter by
-            position_filter: Optional position to filter by
-            exclude_player: Optional player name to exclude from results
-            
-        Returns:
-            List of similar players with scores
         """
         if not self.player_embeddings:
             logger.warning("No player embeddings available. Build embeddings first.")
             return []
+        
+        # Lazy-load the sentence-transformer model on first search
+        if self.model is None:
+            logger.info(f"Lazy-loading embedding model for search: {self.model_info['name']}")
+            self._load_model()
         
         # Encode query
         query_embedding = self.encode_text(query)
