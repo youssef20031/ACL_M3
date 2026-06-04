@@ -1364,26 +1364,33 @@ async def build_embeddings(request: EmbeddingBuildRequest, conn=Depends(get_neo4
 
 
 @app.get("/api/trivia/new", response_model=TriviaQuestion)
-async def get_trivia_question(conn=Depends(get_neo4j_conn)):
-    """Generate a new trivia question."""
+async def get_trivia_question(difficulty: Optional[str] = None, conn=Depends(get_neo4j_conn)):
+    """Generate a new trivia question, optionally filtered by difficulty."""
     try:
         trivia_gen = TriviaGenerator(conn)
         trivia_cache: TriviaQuestionCache = app_state["trivia_cache"]
         if not trivia_cache:
             raise HTTPException(status_code=503, detail="Trivia cache not initialized")
 
+        # Map difficulty string to enum
+        difficulty_enum = None
+        if difficulty:
+            try:
+                difficulty_enum = Difficulty(difficulty.lower())
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid difficulty: {difficulty}. Use easy, medium, or hard.")
+
         # Avoid serving very recent duplicate questions.
         question = None
-        max_attempts = 8
+        max_attempts = 12
         for _ in range(max_attempts):
-            candidate = trivia_gen.generate_question()
+            candidate = trivia_gen.generate_question(difficulty=difficulty_enum)
             if not candidate:
                 continue
             if not trivia_cache.is_recent(candidate.question):
                 question = candidate
                 break
-            # Keep a fallback so we still return something if generation space is exhausted.
-            question = candidate
+            question = candidate  # fallback
         
         if not question:
             raise HTTPException(status_code=500, detail="Failed to generate question")

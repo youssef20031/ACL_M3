@@ -145,8 +145,9 @@ export const apiService = {
   },
 
   // Trivia
-  async getNewTriviaQuestion(): Promise<TriviaQuestion> {
-    const { data } = await api.get<TriviaQuestion>('/api/trivia/new');
+  async getNewTriviaQuestion(difficulty?: 'easy' | 'medium' | 'hard'): Promise<TriviaQuestion> {
+    const params = difficulty ? { difficulty } : {};
+    const { data } = await api.get<TriviaQuestion>('/api/trivia/new', { params });
     return data;
   },
 
