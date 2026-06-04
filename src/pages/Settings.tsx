@@ -1,20 +1,14 @@
-import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
-  Database,
   Sparkles,
   Bot,
-  Download,
   CheckCircle,
   XCircle,
-  Loader2,
-  Eye,
-  EyeOff,
   RefreshCw,
   Server,
 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { apiService, handleApiError } from '../services/api';
+import { apiService } from '../services/api';
 import { cn } from '../utils/cn';
 
 const MODELS = [
@@ -37,10 +31,6 @@ const EMBEDDING_MODELS = [
 
 export function Settings() {
   const {
-    neo4jConnected,
-    neo4jStats,
-    setNeo4jConnected,
-    setNeo4jStats,
     selectedModel,
     retrievalMethod,
     embeddingModel,
@@ -53,52 +43,13 @@ export function Settings() {
   const pageText = isDark ? 'text-slate-100' : 'text-gray-900';
   const mutedText = isDark ? 'text-slate-400' : 'text-gray-600';
   const panelClass = isDark ? 'border-slate-800 bg-slate-900/80 text-slate-100' : 'border-gray-200 bg-white text-gray-900';
-  const fieldClass = isDark ? 'border-slate-700 bg-slate-950/70 text-slate-100 placeholder:text-slate-500 focus:ring-violet-500' : 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-purple-500';
   const optionSelectedClass = isDark ? 'border-violet-400/60 bg-violet-500/10' : 'border-purple-500 bg-purple-50';
   const optionIdleClass = isDark ? 'border-slate-700 bg-slate-950/60 hover:border-slate-500' : 'border-gray-200 hover:border-gray-300';
-
-  const [uri, setUri] = useState('');
-  const [username, setUsername] = useState('neo4j');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [connectionError, setConnectionError] = useState('');
 
   const { data: health, refetch: refetchHealth } = useQuery({
     queryKey: ['health'],
     queryFn: () => apiService.getHealth(),
-    refetchInterval: (query) => {
-      // Poll more frequently (every 5 seconds) while embeddings are building
-      const data = query.state.data;
-      return data?.embeddings_building ? 5000 : 30000;
-    },
-  });
-
-  const connectMutation = useMutation({
-    mutationFn: () => apiService.connectNeo4j(uri, username, password),
-    onSuccess: (data) => {
-      if (data.success) {
-        setNeo4jConnected(true);
-        setNeo4jStats(data.stats ?? null);
-        setConnectionError('');
-      } else {
-        setConnectionError(data.message);
-      }
-    },
-    onError: (error) => {
-      setConnectionError(handleApiError(error));
-    },
-  });
-
-  const disconnectMutation = useMutation({
-    mutationFn: () => apiService.disconnectNeo4j(),
-    onSuccess: () => {
-      setNeo4jConnected(false);
-      setNeo4jStats(null);
-    },
-  });
-
-  const loadDataMutation = useMutation({
-    mutationFn: () => apiService.loadFPLData(true),
+    refetchInterval: 30000,
   });
 
   return (
@@ -146,124 +97,6 @@ export function Settings() {
         )}
       </div>
 
-      {/* Neo4j Connection */}
-      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
-        <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
-          <Database className="w-4 h-4" /> Neo4j Connection
-        </h3>
-
-        <div className="space-y-3">
-          <div>
-            <label className={cn('block text-sm font-medium mb-1', isDark ? 'text-slate-300' : 'text-gray-700')}>URI</label>
-            <input
-              type="text"
-              value={uri}
-              onChange={(e) => setUri(e.target.value)}
-              placeholder="neo4j+s://xxxxxxxx.databases.neo4j.io"
-              className={cn('w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2', fieldClass)}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={cn('block text-sm font-medium mb-1', isDark ? 'text-slate-300' : 'text-gray-700')}>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className={cn('w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2', fieldClass)}
-              />
-            </div>
-            <div>
-              <label className={cn('block text-sm font-medium mb-1', isDark ? 'text-slate-300' : 'text-gray-700')}>Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={cn('w-full rounded-lg border px-3 py-2 pr-9 text-sm focus:outline-none focus:ring-2', fieldClass)}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className={cn('absolute right-2 top-1/2 -translate-y-1/2 transition-colors', isDark ? 'text-slate-500 hover:text-slate-200' : 'text-gray-400 hover:text-gray-600')}
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {connectionError && (
-          <p className={cn('text-sm px-3 py-2 rounded-lg', isDark ? 'bg-red-500/10 text-red-200' : 'bg-red-50 text-red-600')}>{connectionError}</p>
-        )}
-
-        <div className="flex items-center gap-3 flex-wrap">
-          {neo4jConnected ? (
-            <>
-              <div className={cn('flex items-center gap-2 text-sm font-medium', isDark ? 'text-emerald-300' : 'text-green-600')}>
-                <CheckCircle className="w-4 h-4" />
-                Connected
-                {neo4jStats && (
-                  <span className={cn('font-normal', isDark ? 'text-slate-400' : 'text-gray-500')}>
-                    — {neo4jStats.total_nodes.toLocaleString()} nodes, {neo4jStats.total_relationships.toLocaleString()} relationships
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={() => disconnectMutation.mutate()}
-                disabled={disconnectMutation.isPending}
-                className={cn('ml-auto rounded-lg border px-4 py-2 text-sm transition-colors', isDark ? 'border-red-500/30 text-red-200 hover:bg-red-500/10' : 'border-red-200 text-red-600 hover:bg-red-50')}
-              >
-                Disconnect
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => connectMutation.mutate()}
-              disabled={connectMutation.isPending}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
-            >
-              {connectMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              Connect
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Data Management */}
-      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
-        <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
-          <Download className="w-4 h-4" /> Data Management
-        </h3>
-        <p className={mutedText}>
-          Load the FPL CSV data into Neo4j. This clears existing data and re-imports everything.
-        </p>
-        <div className="flex items-center gap-4 flex-wrap">
-          <button
-            onClick={() => loadDataMutation.mutate()}
-            disabled={!neo4jConnected || loadDataMutation.isPending}
-            className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loadDataMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading...
-              </>
-            ) : (
-              '📥 Load FPL Data'
-            )}
-          </button>
-          {loadDataMutation.isSuccess && (
-            <span className={cn('text-sm flex items-center gap-1', isDark ? 'text-emerald-300' : 'text-green-600')}>
-              <CheckCircle className="w-4 h-4" />
-              Loaded {(loadDataMutation.data as any)?.stats?.total_nodes?.toLocaleString()} nodes
-            </span>
-          )}
-          {loadDataMutation.isError && (
-            <span className={cn('text-sm', isDark ? 'text-red-300' : 'text-red-600')}>{handleApiError(loadDataMutation.error)}</span>
-          )}
-        </div>
-      </div>
 
       {/* LLM Model */}
       <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
