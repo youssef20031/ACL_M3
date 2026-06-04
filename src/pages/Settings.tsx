@@ -31,8 +31,8 @@ const RETRIEVAL_METHODS = [
 ] as const;
 
 const EMBEDDING_MODELS = [
-  { key: 'minilm', label: 'MiniLM (Fast)', description: '384-dim, quick to build' },
-  { key: 'mpnet', label: 'MPNet (Quality)', description: '768-dim, higher accuracy' },
+  { key: 'minilm', label: 'MiniLM (Fast)', description: '384-dim · faster, lighter' },
+  { key: 'mpnet', label: 'MPNet (Quality)', description: '768-dim · higher accuracy' },
 ] as const;
 
 export function Settings() {
@@ -41,10 +41,6 @@ export function Settings() {
     neo4jStats,
     setNeo4jConnected,
     setNeo4jStats,
-    embeddingsBuilt,
-    embeddingCount,
-    setEmbeddingsBuilt,
-    setEmbeddingCount,
     selectedModel,
     retrievalMethod,
     embeddingModel,
@@ -98,19 +94,6 @@ export function Settings() {
     onSuccess: () => {
       setNeo4jConnected(false);
       setNeo4jStats(null);
-    },
-  });
-
-  const buildEmbeddingsMutation = useMutation({
-    mutationFn: () => apiService.buildEmbeddings(embeddingModel),
-    onSuccess: (data) => {
-      void refetchHealth();
-      if (data.success && !data.started && !data.building && data.count > 0) {
-        setEmbeddingsBuilt(true);
-        setEmbeddingCount(data.count);
-      } else if (data.started) {
-        setEmbeddingsBuilt(false);
-      }
     },
   });
 
@@ -338,9 +321,14 @@ export function Settings() {
 
       {/* Embeddings */}
       <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
-        <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
-          <Sparkles className="w-4 h-4" /> Embeddings
-        </h3>
+        <div>
+          <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
+            <Sparkles className="w-4 h-4" /> Embedding Model
+          </h3>
+          <p className={cn('text-xs mt-1', mutedText)}>
+            Both models are prebuilt and ready. Switching takes effect on the next query.
+          </p>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           {EMBEDDING_MODELS.map((m) => (
             <label
@@ -362,47 +350,14 @@ export function Settings() {
             </label>
           ))}
         </div>
-        <div className="space-y-3">
-          <div className="flex items-center gap-4 flex-wrap">
-            <button
-              onClick={() => buildEmbeddingsMutation.mutate()}
-              disabled={!neo4jConnected || buildEmbeddingsMutation.isPending || !!health?.embeddings_building}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {buildEmbeddingsMutation.isPending || health?.embeddings_building ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" /> Building...
-                </>
-              ) : (
-                '🔮 Build Embeddings'
-              )}
-            </button>
-            {embeddingsBuilt && (
-              <span className={cn('text-sm flex items-center gap-1', isDark ? 'text-emerald-300' : 'text-green-600')}>
-                <CheckCircle className="w-4 h-4" />
-                {embeddingCount.toLocaleString()} vectors ready
-              </span>
-            )}
-            {buildEmbeddingsMutation.isError && (
-              <span className={cn('text-sm', isDark ? 'text-red-300' : 'text-red-600')}>{handleApiError(buildEmbeddingsMutation.error)}</span>
-            )}
+        {/* Status badge */}
+        {health?.embeddings_built && (
+          <div className={cn('flex items-center gap-2 text-sm', isDark ? 'text-emerald-300' : 'text-green-600')}>
+            <CheckCircle className="w-4 h-4" />
+            {health.embedding_count.toLocaleString()} vectors loaded
+            <span className={cn('text-xs', mutedText)}>· active model: {health.embedding_count > 0 ? embeddingModel : '—'}</span>
           </div>
-
-          {/* Clear, prominent in-progress message when building embeddings */}
-          {(buildEmbeddingsMutation.isPending || health?.embeddings_building) && (
-            <div className={cn('mt-3 flex items-start gap-3 rounded-lg border p-3 text-sm', isDark ? 'border-violet-400/20 bg-violet-500/10 text-violet-100' : 'border-purple-200 bg-purple-50 text-purple-900')}>
-              <Loader2 className="mt-0.5 h-5 w-5 animate-spin" />
-              <div>
-                <div className="font-medium">Building embeddings in the background</div>
-                <div className={cn('mt-1 text-xs', isDark ? 'text-violet-200' : 'text-purple-800')}>The request returns immediately now, so Railway does not drop the connection. Refresh in a minute or two to see the updated status.</div>
-              </div>
-            </div>
-          )}
-
-          {buildEmbeddingsMutation.isSuccess && buildEmbeddingsMutation.data && (
-            <p className={mutedText}>{buildEmbeddingsMutation.data.message}</p>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

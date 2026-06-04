@@ -1221,10 +1221,33 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         embedding_used = False
         
         if request.retrieval_method in ["Embeddings", "Hybrid"]:
-            if not app_state["embedding_manager"]:
-                app_state["embedding_manager"] = EmbeddingManager(model_key=request.embedding_model)
-            elif app_state["embedding_manager"].model_key != request.embedding_model:
-                app_state["embedding_manager"].switch_model(request.embedding_model)
+            current_manager = app_state["embedding_manager"]
+            if not current_manager:
+                # No manager yet — create a lazy one with prebuilt
+                manager = EmbeddingManager.__new__(EmbeddingManager)
+                manager.model_key = request.embedding_model
+                manager.model_info = EmbeddingManager.MODELS[request.embedding_model]
+                manager.model = None
+                manager.player_embeddings = {}
+                manager.player_metadata = {}
+                prebuilt_path = f"embeddings/prebuilt/{request.embedding_model}_embeddings.pkl"
+                manager.load_embeddings(prebuilt_path)
+                app_state["embedding_manager"] = manager
+                if manager.player_embeddings:
+                    app_state["embeddings_built"] = True
+            elif current_manager.model_key != request.embedding_model:
+                # Switch to different prebuilt model without loading transformer
+                manager = EmbeddingManager.__new__(EmbeddingManager)
+                manager.model_key = request.embedding_model
+                manager.model_info = EmbeddingManager.MODELS[request.embedding_model]
+                manager.model = None
+                manager.player_embeddings = {}
+                manager.player_metadata = {}
+                prebuilt_path = f"embeddings/prebuilt/{request.embedding_model}_embeddings.pkl"
+                manager.load_embeddings(prebuilt_path)
+                app_state["embedding_manager"] = manager
+                if manager.player_embeddings:
+                    app_state["embeddings_built"] = True
             
             if app_state["embeddings_built"]:
                 try:
