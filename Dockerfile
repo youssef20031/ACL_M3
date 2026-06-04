@@ -19,15 +19,8 @@ RUN python -m nltk.downloader punkt stopwords wordnet
 # Copy the rest of the application code
 COPY . .
 
-# Expose Streamlit port
-EXPOSE 8501
+# Expose FastAPI port
+EXPOSE 8000
 
-# Streamlit Environment Variables
-ENV STREAMLIT_SERVER_PORT=8501
-ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
-ENV STREAMLIT_SERVER_HEADLESS=true
-ENV STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-ENV STREAMLIT_SERVER_FILE_WATCHER_TYPE=none
-
-# Command to run the application
-CMD ["streamlit", "run", "app.py", "--server.enableCORS=false", "--server.enableXsrfProtection=false"]
+# Start FastAPI with uvicorn - PORT is injected by Railway at runtime
+CMD ["sh", "-c", "uvicorn api_main:app --host 0.0.0.0 --port ${PORT:-8000}"]
