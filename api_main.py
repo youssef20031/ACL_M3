@@ -999,6 +999,25 @@ async def debug_env():
     }
 
 
+@app.get("/debug/embeddings")
+async def debug_embeddings():
+    """Debug: show embedding state on Railway."""
+    import os
+    manager = app_state["embedding_manager"]
+    files = {}
+    for key in ["mpnet", "minilm"]:
+        path = f"embeddings/prebuilt/{key}_embeddings.pkl"
+        files[path] = {"exists": os.path.exists(path), "size_mb": round(os.path.getsize(path) / 1_000_000, 1) if os.path.exists(path) else 0}
+    return {
+        "embedding_manager_exists": manager is not None,
+        "model": getattr(manager, "model_key", None) if manager else None,
+        "model_loaded": getattr(manager, "model", None) is not None if manager else False,
+        "player_embeddings_count": len(getattr(manager, "player_embeddings", {})) if manager else 0,
+        "embeddings_built": app_state["embeddings_built"],
+        "prebuilt_files": files,
+    }
+
+
 @app.get("/health")
 async def health_check():
     """Detailed health check."""
