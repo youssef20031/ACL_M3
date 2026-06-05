@@ -61,7 +61,7 @@ You present data clearly and draw meaningful conclusions."""
             kg_context: Context from Cypher queries
             embedding_context: Optional context from embedding search
             persona: Persona key
-            data_scope: Description of the data scope (e.g., "all seasons (2020-21, 2021-22, 2022-23)" or "2022-23 season")
+            data_scope: Description of the data scope (e.g., "all seasons (2020-21 through 2025-26)" or "2025-26 season")
             chat_history: Previous conversation messages for context
             model_key: The model being used (to customize prompt)
         """
@@ -77,9 +77,9 @@ You present data clearly and draw meaningful conclusions."""
             if "all seasons" in data_scope.lower():
                 scope_text = f"""
 **⚠️ CRITICAL - Data Scope**: This data covers {data_scope}.
-**ALL STATISTICS BELOW ARE COMBINED/TOTAL ACROSS ALL THREE SEASONS (2020-21, 2021-22, 2022-23)**
-When you mention ANY statistic, you MUST say "across all three seasons (2020-21, 2021-22, 2022-23)" or "combined total across three seasons".
-NEVER quote a number without this qualifier. A player's combined goals across 3 seasons is NOT their goals in one season.
+**ALL STATISTICS BELOW ARE COMBINED/TOTAL ACROSS ALL SIX SEASONS (2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26)**
+When you mention ANY statistic, you MUST say "across all seasons (2020-21 through 2025-26)" or "combined total across six seasons".
+NEVER quote a number without this qualifier. A player's combined goals across 6 seasons is NOT their goals in one season.
 """
             else:
                 scope_text = f"""
@@ -129,10 +129,10 @@ FirstMessage: {str(is_first_message)}
 ### Instructions:
 **CRITICAL - SEASON CLARITY:**
 - ALWAYS explicitly state which season(s) the statistics are from
-- If the data scope says "2022-23 season", ALL numbers you mention are ONLY for that season
-- If the data scope says "all seasons", the numbers are COMBINED across multiple seasons (2020-21, 2021-22, 2022-23)
-- NEVER say "Harry Kane scored 70 goals" without saying "across all three seasons" or "in the 2022-23 season"
-- Format: "[Player] scored [X] goals in [specific season]" OR "[Player] scored [X] goals across all three seasons (2020-21, 2021-22, 2022-23)"
+- If the data scope says "2025-26 season", ALL numbers you mention are ONLY for that season
+- If the data scope says "all seasons", the numbers are COMBINED across all six seasons (2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26)
+- NEVER say "Harry Kane scored 70 goals" without saying "across all seasons" or "in the 2022-23 season"
+- Format: "[Player] scored [X] goals in [specific season]" OR "[Player] scored [X] goals across all seasons (2020-21 through 2025-26)"
 
 **UNDERSTANDING USER INTENT:**
 - Vague responses like "hmm", "i dont know", "not sure", "maybe" mean the user is UNCERTAIN - offer helpful choices
@@ -166,12 +166,12 @@ User: "who scored the most?"
 Good: "Erling Haaland with 36 goals in the 2022-23 season." (direct answer with season specified)
 
 User: "compare him to other top scorers"
-IF DATA SCOPE IS "2022-23 season":
-Good: "In the 2022-23 season specifically, Harry Kane scored 30 goals and Son scored 10 goals."
-Bad: "Harry Kane scored 70 goals" (WRONG - this is combined total, not 2022-23 only)
+IF DATA SCOPE IS "2025-26 season":
+Good: "In the 2025-26 season specifically, Harry Kane scored 30 goals and Son scored 10 goals."
+Bad: "Harry Kane scored 70 goals" (WRONG - this is a combined total, not one season)
 
 IF DATA SCOPE IS "all seasons":
-Good: "Across all three seasons (2020-21, 2021-22, 2022-23), Harry Kane scored 70 goals total and Son scored 40 goals total."
+Good: "Across all six seasons (2020-21 through 2025-26), Harry Kane scored 70 goals total and Son scored 40 goals total."
 Bad: "Harry Kane scored 70 goals" (WRONG - doesn't clarify it's combined)
 
 ### Answer:"""
@@ -341,7 +341,7 @@ Bad: "Harry Kane scored 70 goals" (WRONG - doesn't clarify it's combined)
 - Mention the team or position if relevant
 
 ### Example Queries:
-- "Who was the top scorer in 2022-23?"
+- "Who was the top scorer in 2025-26?"
 - "Compare Mohamed Salah and Erling Haaland"
 - "Best value midfielders last season"
 - "How many clean sheets did Arsenal keep?"

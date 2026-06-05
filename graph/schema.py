@@ -152,7 +152,10 @@ class GraphSchema:
         seasons = [
             {"id": "2020-21", "start_year": 2020, "end_year": 2021},
             {"id": "2021-22", "start_year": 2021, "end_year": 2022},
-            {"id": "2022-23", "start_year": 2022, "end_year": 2023}
+            {"id": "2022-23", "start_year": 2022, "end_year": 2023},
+            {"id": "2023-24", "start_year": 2023, "end_year": 2024},
+            {"id": "2024-25", "start_year": 2024, "end_year": 2025},
+            {"id": "2025-26", "start_year": 2025, "end_year": 2026}
         ]
         
         season_query = f"""

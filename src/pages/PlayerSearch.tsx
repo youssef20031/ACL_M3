@@ -235,7 +235,7 @@ function PlayerDetail({
   backLabel: string;
   initialSeason: string;
 }) {
-  const resolvedInitialSeason = initialSeason === 'All seasons' ? '2022-23' : initialSeason;
+  const resolvedInitialSeason = initialSeason === 'All seasons' ? '2025-26' : initialSeason;
   const [selectedSeason, setSelectedSeason] = useState<string>(resolvedInitialSeason);
   const [stats, setStats] = useState<PlayerResult>(player);
   const { theme } = useAppStore();
@@ -335,7 +335,7 @@ function PlayerDetail({
     { label: 'Max Selected', value: maxSelected ? maxSelected.toLocaleString() : '—' },
   ];
 
-  const seasons = ['All seasons', '2022-23', '2021-22', '2020-21'];
+  const seasons = ['All seasons', '2025-26', '2024-25', '2023-24', '2022-23', '2021-22', '2020-21'];
 
   return (
     <div className="space-y-4">

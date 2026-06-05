@@ -1274,7 +1274,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         # Step 6: Generate LLM response
         answer = ""
         if app_state["llm_manager"] and app_state["llm_manager"].client:
-            data_scope = f"the {params['season']} season" if "season" in params else "all seasons"
+            data_scope = f"the {params['season']} season" if "season" in params else "all seasons (2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26)"
             full_prompt = PromptTemplates.qa_template(
                 question=request.question,
                 kg_context=cypher_context,

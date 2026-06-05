@@ -32,7 +32,7 @@ import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
 import { cn } from '../utils/cn';
 
-const SEASONS = ['', '2020-21', '2021-22', '2022-23'];
+const SEASONS = ['', '2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26'];
 
 const EXAMPLE_PAIRS = [
   { p1: 'Mohamed Salah', p2: 'Son Heung-min' },
