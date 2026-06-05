@@ -47,13 +47,11 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      # ── 3. Install dependencies (CPU-only torch to keep install fast) ────
+      # ── 3. Install dependencies ──────────────────────────────────────────
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # Install CPU-only PyTorch first to avoid pulling the large CUDA build
-          pip install torch==2.2.2 torchvision==0.17.2 --index-url https://download.pytorch.org/whl/cpu
-          # Install all requirements (torch/torchvision already satisfied with CPU versions)
+          # Install requirements (will pull default torch with CPU support)
           pip install -r requirements.txt
           python -m spacy download en_core_web_sm
 
