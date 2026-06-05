@@ -154,14 +154,24 @@ class FPLDataLoader:
         logger.info(f"Found {len(fixtures)} unique fixtures")
         
         # Prepare player-fixture performance records
-        performances = df[[
+        # Base columns always expected
+        perf_columns = [
             'name', 'season', 'fixture', 'GW', 'minutes', 'goals_scored', 'assists',
             'clean_sheets', 'bonus', 'bps', 'total_points', 'ict_index',
             'influence', 'creativity', 'threat', 'value', 'form',
             'selected', 'transfers_in', 'transfers_out', 'transfers_balance',
             'goals_conceded', 'own_goals', 'penalties_missed', 'penalties_saved',
             'saves', 'yellow_cards', 'red_cards', 'home_team', 'away_team'
-        ]].to_dict('records')
+        ]
+        # Optional enrichment columns from newer seasons — include only if present
+        optional_perf_columns = [
+            'xP', 'expected_goals', 'expected_assists',
+            'expected_goal_involvements', 'expected_goals_conceded',
+            'starts', 'tackles', 'recoveries',
+            'clearances_blocks_interceptions', 'defensive_contribution',
+        ]
+        perf_columns += [c for c in optional_perf_columns if c in df.columns]
+        performances = df[perf_columns].to_dict('records')
         logger.info(f"Prepared {len(performances)} performance records")
         
         return {
@@ -333,7 +343,18 @@ class FPLDataLoader:
             r.saves = perf.saves,
             r.yellow_cards = perf.yellow_cards,
             r.red_cards = perf.red_cards,
-            r.gameweek = perf.GW
+            r.gameweek = perf.GW,
+            // Optional enrichment columns (null-safe — only set if key present in record)
+            r.xP = perf.xP,
+            r.expected_goals = perf.expected_goals,
+            r.expected_assists = perf.expected_assists,
+            r.expected_goal_involvements = perf.expected_goal_involvements,
+            r.expected_goals_conceded = perf.expected_goals_conceded,
+            r.starts = perf.starts,
+            r.tackles = perf.tackles,
+            r.recoveries = perf.recoveries,
+            r.clearances_blocks_interceptions = perf.clearances_blocks_interceptions,
+            r.defensive_contribution = perf.defensive_contribution
         """
         
         total = len(performances)

@@ -1,67 +1,101 @@
-name: Build Embeddings in Cloud
+name: Build & Commit Embeddings
 
-# Manual trigger only - run when you need to rebuild embeddings
+# Triggers:
+#   - Manual dispatch (choose which model to build)
+#   - Automatic on push to main when the master CSV or embedding code changes
 on:
   workflow_dispatch:
     inputs:
       model:
-        description: 'Model to build (minilm or mpnet)'
+        description: 'Model(s) to build'
         required: true
-        default: 'minilm'
+        default: 'both'
         type: choice
         options:
+          - both
           - minilm
           - mpnet
+
+  push:
+    branches: [main]
+    paths:
+      - 'cleaned_merged_seasons_cleaned.csv'
+      - 'embeddings/embedding_manager.py'
+      - 'build_embeddings_from_csv.py'
+      - 'preprocessing/merge_seasons.py'
 
 jobs:
   build-embeddings:
     runs-on: ubuntu-latest
-    
+
+    permissions:
+      contents: write   # needed to push the .pkl files back
+
     steps:
-      - name: Checkout code
+      # ── 1. Checkout ──────────────────────────────────────────────────────
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Set up Python
+        with:
+          # Use a PAT if you want the pushed commit to trigger other workflows,
+          # otherwise the default GITHUB_TOKEN is fine.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── 2. Python ────────────────────────────────────────────────────────
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+          cache: 'pip'
+
+      # ── 3. Install dependencies (CPU-only torch to keep install fast) ────
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r requirements.txt
+          # Install CPU-only PyTorch first to avoid pulling the large CUDA build
+          pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+          # Install remaining requirements (torch already satisfied above)
+          pip install -r requirements.txt --no-deps --quiet || pip install -r requirements.txt --quiet
           python -m spacy download en_core_web_sm
-      
-      - name: Create .env file
-        run: |
-          echo "NEO4J_URI=${{ secrets.NEO4J_URI }}" >> .env
-          echo "NEO4J_USER=${{ secrets.NEO4J_USER }}" >> .env
-          echo "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}" >> .env
-          echo "HUGGINGFACE_API_TOKEN=${{ secrets.HUGGINGFACE_API_TOKEN }}" >> .env
-      
+
+      # ── 4. Build embeddings from CSV (no Neo4j needed) ───────────────────
       - name: Build embeddings
         run: |
-          python build_embeddings_offline.py ${{ inputs.model }}
-      
-      - name: Upload embeddings artifact
+          MODEL="${{ github.event.inputs.model || 'both' }}"
+          echo "Building model(s): $MODEL"
+          python build_embeddings_from_csv.py "$MODEL"
+
+      # ── 5. Upload as artifacts (always available for download) ───────────
+      - name: Upload minilm artifact
+        if: ${{ github.event.inputs.model == 'minilm' || github.event.inputs.model == 'both' || github.event_name == 'push' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.model }}-embeddings
-          path: embeddings/prebuilt/${{ inputs.model }}_embeddings.pkl
+          name: minilm-embeddings
+          path: embeddings/prebuilt/minilm_embeddings.pkl
           retention-days: 30
-      
-      - name: Create Pull Request with embeddings
-        uses: peter-evans/create-pull-request@v5
+
+      - name: Upload mpnet artifact
+        if: ${{ github.event.inputs.model == 'mpnet' || github.event.inputs.model == 'both' || github.event_name == 'push' }}
+        uses: actions/upload-artifact@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: 'Add prebuilt ${{ inputs.model }} embeddings'
-          branch: embeddings-${{ inputs.model }}
-          title: 'Add prebuilt ${{ inputs.model }} embeddings'
-          body: |
-            🤖 Automated PR: Prebuilt embeddings for ${{ inputs.model }}
-            
-            Generated in GitHub Actions cloud environment.
-            
-            File: `embeddings/prebuilt/${{ inputs.model }}_embeddings.pkl`
-            
-            **Ready to merge and deploy to Railway!**
+          name: mpnet-embeddings
+          path: embeddings/prebuilt/mpnet_embeddings.pkl
+          retention-days: 30
+
+      # ── 6. Commit the .pkl files back to the repo ─────────────────────────
+      - name: Commit updated embeddings
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add embeddings/prebuilt/minilm_embeddings.pkl \
+                  embeddings/prebuilt/mpnet_embeddings.pkl
+
+          # Only commit if there are actual changes
+          if git diff --cached --quiet; then
+            echo "No embedding changes detected — skipping commit."
+          else
+            MODEL="${{ github.event.inputs.model || 'both' }}"
+            git commit -m "chore: rebuild prebuilt embeddings (model=$MODEL) [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+            echo "✅ Embeddings committed and pushed."
+          fi

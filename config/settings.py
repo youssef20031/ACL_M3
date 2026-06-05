@@ -57,7 +57,7 @@ POSITION_NAMES = {
     "FWD": "Forward"
 }
 
-SEASONS = ["2020-21", "2021-22", "2022-23"]
+SEASONS = ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26"]
 
 # Stats columns for embeddings
 STAT_COLUMNS = [
