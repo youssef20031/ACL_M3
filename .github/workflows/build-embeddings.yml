@@ -52,9 +52,9 @@ jobs:
         run: |
           pip install --upgrade pip
           # Install CPU-only PyTorch first to avoid pulling the large CUDA build
-          pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
-          # Install remaining requirements (torch already satisfied above)
-          pip install -r requirements.txt --no-deps --quiet || pip install -r requirements.txt --quiet
+          pip install torch==2.2.2 torchvision==0.17.2 --index-url https://download.pytorch.org/whl/cpu
+          # Install all requirements (torch/torchvision already satisfied with CPU versions)
+          pip install -r requirements.txt
           python -m spacy download en_core_web_sm
 
       # ── 4. Build embeddings from CSV (no Neo4j needed) ───────────────────
