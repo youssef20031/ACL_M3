@@ -97,6 +97,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'fpl-app-storage',
+      version: 2, // bump version to force migration
       partialize: (state) => ({
         selectedModel: state.selectedModel,
         retrievalMethod: state.retrievalMethod,
@@ -105,6 +106,16 @@ export const useAppStore = create<AppState>()(
         triviaScore: state.triviaScore,
         triviaTotal: state.triviaTotal,
       }),
+      migrate: (persistedState: any, version: number) => {
+        // v1 → v2: migrate legacy HuggingFace models to llama-3.3-70b
+        if (version < 2) {
+          const legacyModels = ['qwen-2.5-coder', 'qwen-2.5-7b', 'llama-3.2-3b', 'phi-3-mini', 'gemma-2-2b'];
+          if (legacyModels.includes(persistedState?.selectedModel)) {
+            persistedState.selectedModel = 'llama-3.3-70b';
+          }
+        }
+        return persistedState;
+      },
     }
   )
 );

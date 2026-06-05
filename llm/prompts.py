@@ -78,13 +78,16 @@ You present data clearly and draw meaningful conclusions."""
                 scope_text = f"""
 **⚠️ CRITICAL - Data Scope**: This data covers {data_scope}.
 **ALL STATISTICS BELOW ARE COMBINED/TOTAL ACROSS ALL THREE SEASONS (2020-21, 2021-22, 2022-23)**
-When you mention any number, you MUST say "across all three seasons" or "combined total".
+When you mention ANY statistic, you MUST say "across all three seasons (2020-21, 2021-22, 2022-23)" or "combined total across three seasons".
+NEVER quote a number without this qualifier. A player's combined goals across 3 seasons is NOT their goals in one season.
 """
             else:
                 scope_text = f"""
 **⚠️ CRITICAL - Data Scope**: This data covers ONLY {data_scope}.
-**ALL STATISTICS BELOW ARE FOR {data_scope.upper()} ONLY - NOT COMBINED SEASONS**
-When you mention any number, you MUST say "in the {data_scope}" to be clear.
+**ALL STATISTICS BELOW ARE FOR THE {data_scope.upper()} SEASON ONLY — NOT COMBINED ACROSS MULTIPLE SEASONS**
+When you mention ANY statistic, you MUST say "in the {data_scope} season".
+NEVER quote a number from this data as an all-time or multi-season total.
+Example: Say "Salah scored 19 goals in the 2022-23 season" NOT "Salah scored 64 goals" (which would be wrong).
 """
         
         # Strong directive about greeting behavior and explicit flag

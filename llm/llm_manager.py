@@ -32,19 +32,28 @@ class LLMManager:
     # Available models configuration
     # Using models that support chat/conversational task on HuggingFace Inference API and Groq
     MODELS = {
-    "qwen-2.5-coder": {
-        "name": "Qwen/Qwen2.5-Coder-32B-Instruct",
-        "display_name": "Qwen 2.5 Coder 32B",
-        "description": "Powerful coding and reasoning model",
+     "llama-3.3-70b": {
+        "name": "llama-3.3-70b-versatile",
+        "display_name": "Llama 3.3 70B Versatile",
+        "description": "High-performance Meta model via Groq",
+        "max_tokens": 2048,
+        "temperature": 0.7,
+        "use_chat": True,
+        "provider": "groq",
+    },   
+    "llama-3.2-3b": {
+        "name": "meta-llama/Llama-3.2-3B-Instruct",
+        "display_name": "Llama 3.2 3B",
+        "description": "Meta's efficient instruction model",
         "max_tokens": 1024,
         "temperature": 0.7,
         "use_chat": True,
         "provider": "huggingface",
     },
-    "llama-3.2-3b": {
-        "name": "meta-llama/Llama-3.2-3B-Instruct",
-        "display_name": "Llama 3.2 3B",
-        "description": "Meta's efficient instruction model",
+    "qwen-2.5-coder": {
+        "name": "Qwen/Qwen2.5-Coder-32B-Instruct",
+        "display_name": "Qwen 2.5 Coder 32B",
+        "description": "Powerful coding and reasoning model",
         "max_tokens": 1024,
         "temperature": 0.7,
         "use_chat": True,
@@ -58,18 +67,33 @@ class LLMManager:
         "temperature": 0.7,
         "use_chat": True,
         "provider": "huggingface",
-    },
-    "llama-3.3-70b": {
-        "name": "llama-3.3-70b-versatile",
-        "display_name": "Llama 3.3 70B Versatile",
-        "description": "High-performance Meta model via Groq",
-        "max_tokens": 2048,
-        "temperature": 0.7,
-        "use_chat": True,
-        "provider": "groq",
-    },
+    }
 }
+
+    # Fallback priority when a model hits a quota/billing error (first = highest priority)
+    FALLBACK_ORDER = ["llama-3.3-70b", "llama-3.2-3b"]
+
+    # Error strings that indicate quota/billing exhaustion — worth retrying on another model
+    _QUOTA_ERROR_MARKERS = [
+        "402", "payment required", "credits", "quota",
+        "rate limit", "429", "too many requests", "billing",
+    ]
+
+    @classmethod
+    def _is_quota_error(cls, error_str: str) -> bool:
+        """Return True if the error looks like a quota/billing/rate-limit issue."""
+        lowered = error_str.lower()
+        return any(marker in lowered for marker in cls._QUOTA_ERROR_MARKERS)
     
+    # Models tried as fallback when primary fails (in priority order)
+    FALLBACK_ORDER = ["llama-3.3-70b", "llama-3.2-3b"]
+
+    # Errors that indicate quota/billing exhaustion — worth retrying on another model
+    _QUOTA_ERROR_MARKERS = [
+        "402", "payment required", "credits", "quota", "rate limit",
+        "429", "too many requests", "billing", "subscription",
+    ]
+
     def __init__(self, api_token: Optional[str] = None, default_model: str = "llama-3.3-70b"):
         """
         Initialize LLM manager.
@@ -135,43 +159,57 @@ class LLMManager:
         timeout: int = 30
     ) -> LLMResponse:
         """
-        Generate a response from the LLM.
-        
-        Args:
-            prompt: Input prompt
-            model_key: Model to use (default if None)
-            max_tokens: Maximum tokens in response
-            temperature: Sampling temperature
-            timeout: Request timeout in seconds
-            
-        Returns:
-            LLMResponse with generated text and metadata
+        Generate a response from the LLM with automatic fallback on quota errors.
+        Tries the requested model first, then falls through FALLBACK_ORDER if it hits
+        a billing/quota/rate-limit error.
         """
         model_key = model_key or self.default_model
 
         # Backward compatibility for persisted legacy model keys.
         if model_key in {"phi-3-mini", "gemma-2-2b"}:
-            logger.warning("Model '%s' is deprecated. Falling back to 'qwen-2.5-coder'.", model_key)
-            model_key = "qwen-2.5-coder"
-        
+            logger.warning("Model '%s' is deprecated. Falling back to 'llama-3.3-70b'.", model_key)
+            model_key = "llama-3.3-70b"
+
         if model_key not in self.MODELS:
             return LLMResponse(
-                text="",
-                model=model_key,
-                tokens_used=0,
-                response_time=0,
-                success=False,
-                error=f"Unknown model: {model_key}"
+                text="", model=model_key, tokens_used=0, response_time=0,
+                success=False, error=f"Unknown model: {model_key}"
             )
-        
-        model_config = self.MODELS[model_key]
-        provider = model_config.get("provider", "huggingface")
-        
-        # Route to appropriate provider
-        if provider == "groq":
-            return self._generate_with_groq(prompt, model_key, model_config, max_tokens, temperature)
-        else:
-            return self._generate_with_huggingface(prompt, model_key, model_config, max_tokens, temperature)
+
+        # Build the sequence of models to try: requested model first, then fallbacks
+        candidates = [model_key] + [m for m in self.FALLBACK_ORDER if m != model_key]
+
+        last_result = None
+        for candidate in candidates:
+            if candidate not in self.MODELS:
+                continue
+            config = self.MODELS[candidate]
+            provider = config.get("provider", "huggingface")
+
+            if provider == "groq":
+                result = self._generate_with_groq(prompt, candidate, config, max_tokens, temperature)
+            else:
+                result = self._generate_with_huggingface(prompt, candidate, config, max_tokens, temperature)
+
+            last_result = result
+
+            if result.success:
+                if candidate != model_key:
+                    logger.info("Fell back to '%s' after '%s' failed.", candidate, model_key)
+                return result
+
+            # Only fall through to next model on quota/billing errors
+            if not self._is_quota_error(result.error or ""):
+                logger.error("Non-quota error on '%s': %s — not retrying.", candidate, result.error)
+                return result
+
+            logger.warning("Quota error on '%s', trying next fallback. Error: %s", candidate, result.error)
+
+        # All candidates exhausted
+        return last_result or LLMResponse(
+            text="", model=model_key, tokens_used=0, response_time=0,
+            success=False, error="All models exhausted."
+        )
     
     def _generate_with_groq(
         self,
