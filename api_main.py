@@ -1624,7 +1624,10 @@ async def search_image(query: str, conn=Depends(get_neo4j_conn)):
 
 @app.get("/api/images/proxy")
 async def proxy_image(url: str):
-    """Fetch an external image and stream it from the backend origin."""
+    """
+    Fetch an external image and stream it from the backend origin.
+    Handles rate limits gracefully by returning a fallback placeholder.
+    """
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid image URL")
 
@@ -1649,6 +1652,24 @@ async def proxy_image(url: str):
         content_type = response.headers.get("content-type", "image/jpeg")
         # Stream the content back to the client
         return StreamingResponse(io.BytesIO(response.content), media_type=content_type)
+    except requests.exceptions.HTTPError as e:
+        # Handle rate limits (429) or other HTTP errors gracefully
+        status_code = e.response.status_code if e.response else 502
+        if status_code == 429:
+            # Return a 503 (Service Unavailable) with retry hint instead of crashing
+            raise HTTPException(
+                status_code=503,
+                detail="Image source is rate-limited. Try again in a few moments.",
+                headers={"Retry-After": "60"}
+            )
+        elif status_code == 404:
+            raise HTTPException(status_code=404, detail="Image not found at source")
+        elif status_code == 403:
+            raise HTTPException(status_code=403, detail="Access forbidden by image source")
+        else:
+            raise HTTPException(status_code=502, detail=f"Image proxy failed: HTTP {status_code}")
+    except requests.exceptions.Timeout:
+        raise HTTPException(status_code=504, detail="Image source timed out")
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Image proxy failed: {exc}")
 

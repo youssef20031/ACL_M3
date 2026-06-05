@@ -138,10 +138,19 @@ export function PlayerComparison() {
 
     const version = ++avatarHydrationVersion.current;
 
+    // Fetch images with staggered delays to avoid rate limits (250ms between each)
     void Promise.allSettled(
-      namesToHydrate.map(async (name) => {
-        const result = await apiService.searchImage(name);
-        return { name, avatar: result.image_url ?? null };
+      namesToHydrate.map(async (name, index) => {
+        // Stagger requests by 250ms each to be gentler on image sources
+        await new Promise(resolve => setTimeout(resolve, index * 250));
+        try {
+          const result = await apiService.searchImage(name);
+          return { name, avatar: result.image_url ?? null };
+        } catch (err) {
+          // If rate-limited or errored, just return null (no avatar)
+          console.warn(`Failed to fetch avatar for ${name}:`, err);
+          return { name, avatar: null };
+        }
       })
     ).then((settled) => {
       if (version !== avatarHydrationVersion.current) return;
