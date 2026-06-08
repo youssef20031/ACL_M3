@@ -242,7 +242,20 @@ class FeatureEngineer:
             'team_a_score', 'team_h_score', 'opponent_team', 'xP',  # IMPROVEMENT 7: xP is lookahead
             'home_team', 'away_team', 'Unnamed: 0', 'index',
             'expected_assists', 'expected_goal_involvements', 'expected_goals',
-            'expected_goals_conceded'  # These are also predictive of target
+            'expected_goals_conceded',  # These are also predictive of target
+            # CRITICAL: Remove current GW outcome variables (LEAKAGE!)
+            'clean_sheets',  # Current GW clean sheet = direct leakage
+            'starts',  # Whether started this game = leakage
+            'goals_scored',  # Current GW goals = leakage
+            'assists',  # Current GW assists = leakage
+            'bonus',  # Current GW bonus = leakage
+            'goals_conceded',  # Current GW goals conceded = leakage
+            'saves',  # Current GW saves = leakage
+            'penalties_saved',  # Current GW penalties saved = leakage
+            'penalties_missed',  # Current GW penalties missed = leakage
+            'yellow_cards',  # Current GW yellows = leakage
+            'red_cards',  # Current GW reds = leakage
+            'own_goals',  # Current GW own goals = leakage
         ]
         
         # Get target if available
