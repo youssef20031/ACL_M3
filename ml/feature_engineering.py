@@ -220,7 +220,7 @@ class FeatureEngineer:
             'name', 'season_x', 'season', 'element', 'fixture', 'kickoff_time',
             'selected', 'transfers_in', 'transfers_out', 'transfers_balance',
             'round', 'total_points', 'bps',  # IMPROVEMENT: Removed from features
-            'team_a_score', 'team_h_score', 'opponent_team', 'xP',
+            'team_a_score', 'team_h_score', 'opponent_team', 'xP',  # IMPROVEMENT 7: xP is lookahead
             'home_team', 'away_team', 'Unnamed: 0', 'index',
             'expected_assists', 'expected_goal_involvements', 'expected_goals',
             'expected_goals_conceded'  # These are also predictive of target

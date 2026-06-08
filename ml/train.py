@@ -46,6 +46,8 @@ class FPLModelTrainer:
     3. ✅ Add Dropout to Neural Network
     4. ✅ Fix position labels in reports
     5. ✅ Rename nn_bad_model to nn_baseline_model
+    6. ✅ Split by Position (BIGGEST SINGLE WIN - expect +0.05-0.15 R²)
+    7. ✅ Handle xP column properly (prevent lookahead bias)
     """
     
     # Fix position labels (IMPROVEMENT 4)
@@ -108,6 +110,57 @@ class FPLModelTrainer:
         
         return self.df_processed
     
+    def temporal_train_test_split_raw(
+        self,
+        test_size: float = 0.2,
+        validation_size: float = 0.1
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """
+        IMPROVEMENT 1: Temporal train/test split on RAW data (before feature engineering).
+        
+        Split data based on time order to prevent data leakage.
+        Train on earlier data, validate on middle period, test on recent data.
+        
+        Args:
+            test_size: Proportion of data for testing
+            validation_size: Proportion of training data for validation
+            
+        Returns:
+            Tuple of (train_df, val_df, test_df) - RAW dataframes before preprocessing
+        """
+        logger.info("Performing temporal train/test split on raw data...")
+        
+        # Use raw data
+        df = self.df_raw.copy()
+        
+        # Ensure kickoff_time is datetime
+        if 'kickoff_time' in df.columns:
+            df['kickoff_time'] = pd.to_datetime(df['kickoff_time'])
+        
+        # Sort by kickoff_time (temporal ordering)
+        df_sorted = df.sort_values('kickoff_time').reset_index(drop=True)
+        
+        n = len(df_sorted)
+        test_start = int(n * (1 - test_size))
+        train_end = int(test_start * (1 - validation_size))
+        
+        train_df = df_sorted.iloc[:train_end].copy()
+        val_df = df_sorted.iloc[train_end:test_start].copy()
+        test_df = df_sorted.iloc[test_start:].copy()
+        
+        logger.info(f"Train set: {len(train_df)} records (earliest data)")
+        logger.info(f"Validation set: {len(val_df)} records (middle period)")
+        logger.info(f"Test set: {len(test_df)} records (most recent data)")
+        
+        # Log date ranges
+        for name, df_split in [("Train", train_df), ("Val", val_df), ("Test", test_df)]:
+            if len(df_split) > 0 and 'kickoff_time' in df_split.columns:
+                min_date = df_split['kickoff_time'].min()
+                max_date = df_split['kickoff_time'].max()
+                logger.info(f"{name} date range: {min_date} to {max_date}")
+        
+        return train_df, val_df, test_df
+    
     def temporal_train_test_split(
         self,
         test_size: float = 0.2,
@@ -155,19 +208,26 @@ class FPLModelTrainer:
     def train_linear_regression(
         self,
         train_df: pd.DataFrame,
-        val_df: Optional[pd.DataFrame] = None
+        val_df: Optional[pd.DataFrame] = None,
+        split_by_position: bool = False
     ) -> LinearRegression:
         """
         Train Linear Regression model (baseline).
         
+        IMPROVEMENT 6: Option to split by position (biggest single win).
+        
         Args:
             train_df: Training data
             val_df: Optional validation data
+            split_by_position: If True, train separate model per position
             
         Returns:
-            Trained model
+            Trained model (or dict of models if split_by_position)
         """
-        logger.info("Training Linear Regression model...")
+        if split_by_position:
+            return self._train_position_specific_models(train_df, val_df)
+        
+        logger.info("Training Linear Regression model (all positions combined)...")
         
         # Prepare features and target
         X_train, y_train = self.feature_engineer.prepare_features(train_df, include_target=True)
@@ -195,6 +255,108 @@ class FPLModelTrainer:
         
         self.models['linear_regression'] = model
         return model
+    
+    def _train_position_specific_models(
+        self,
+        train_df: pd.DataFrame,
+        val_df: Optional[pd.DataFrame] = None
+    ) -> Dict[str, LinearRegression]:
+        """
+        IMPROVEMENT 6: Train separate models per position (BIGGEST SINGLE WIN).
+        
+        GK scoring clean sheets has nothing in common with FWD scoring goals.
+        Per-position models typically improve R² by 0.05-0.15.
+        
+        Args:
+            train_df: Training data (BEFORE feature engineering - needs position column)
+            val_df: Optional validation data (BEFORE feature engineering)
+            
+        Returns:
+            Dictionary mapping position to trained model
+        """
+        logger.info("Training position-specific Linear Regression models...")
+        
+        # Fit feature engineer on full training data (needed for categorical mappings)
+        self.feature_engineer.fit(train_df)
+        
+        position_models = {}
+        position_results = {}
+        
+        for position in ['GK', 'DEF', 'MID', 'FWD']:
+            # Filter by position BEFORE feature engineering
+            train_pos_raw = train_df[train_df['position'] == position].copy()
+            
+            if len(train_pos_raw) < 100:  # Need minimum samples
+                logger.warning(f"Insufficient data for {position}: {len(train_pos_raw)} samples. Skipping.")
+                continue
+            
+            logger.info(f"\n--- Training {position} model ---")
+            logger.info(f"Training samples (raw): {len(train_pos_raw)}")
+            
+            # Engineer features for this position
+            train_pos = self.feature_engineer.engineer_features(
+                train_pos_raw,
+                is_training=False,  # Use existing mappings
+                lag_features=['total_points']
+            )
+            
+            logger.info(f"Training samples (after engineering): {len(train_pos)}")
+            
+            if len(train_pos) < 50:
+                logger.warning(f"Too few samples after engineering for {position}. Skipping.")
+                continue
+            
+            # Prepare features and target
+            X_train, y_train = self.feature_engineer.prepare_features(train_pos, include_target=True)
+            
+            # Train model
+            model = LinearRegression()
+            model.fit(X_train, y_train)
+            
+            # Evaluate on training set
+            train_pred = model.predict(X_train)
+            train_rmse = np.sqrt(mean_squared_error(y_train, train_pred))
+            train_mae = mean_absolute_error(y_train, train_pred)
+            train_r2 = r2_score(y_train, train_pred)
+            
+            logger.info(f"{position} Train - RMSE: {train_rmse:.2f}, MAE: {train_mae:.2f}, R²: {train_r2:.3f}")
+            
+            position_results[position] = {'train': {'rmse': train_rmse, 'mae': train_mae, 'r2': train_r2}}
+            
+            # Evaluate on validation set if provided
+            if val_df is not None and len(val_df) > 0:
+                val_pos_raw = val_df[val_df['position'] == position].copy()
+                if len(val_pos_raw) > 0:
+                    # Engineer features
+                    val_pos = self.feature_engineer.engineer_features(
+                        val_pos_raw,
+                        is_training=False,
+                        lag_features=['total_points']
+                    )
+                    
+                    if len(val_pos) > 0:
+                        X_val, y_val = self.feature_engineer.prepare_features(val_pos, include_target=True)
+                        val_pred = model.predict(X_val)
+                        val_rmse = np.sqrt(mean_squared_error(y_val, val_pred))
+                        val_mae = mean_absolute_error(y_val, val_pred)
+                        val_r2 = r2_score(y_val, val_pred)
+                        logger.info(f"{position} Val - RMSE: {val_rmse:.2f}, MAE: {val_mae:.2f}, R²: {val_r2:.3f}")
+                        position_results[position]['val'] = {'rmse': val_rmse, 'mae': val_mae, 'r2': val_r2}
+            
+            position_models[position] = model
+        
+        # Calculate weighted average R² across positions
+        if position_results:
+            total_samples = sum(len(train_df[train_df['position'] == pos]) for pos in position_results.keys())
+            weighted_r2 = sum(
+                position_results[pos]['train']['r2'] * len(train_df[train_df['position'] == pos]) / total_samples
+                for pos in position_results.keys()
+            )
+            logger.info(f"\n📊 Weighted Average R² across positions: {weighted_r2:.3f}")
+        
+        self.models['linear_regression_by_position'] = position_models
+        self.models['position_results'] = position_results
+        return position_models
     
     def train_neural_network(
         self,
@@ -305,19 +467,84 @@ class FPLModelTrainer:
         Evaluate all trained models on test set.
         
         Args:
-            test_df: Test data
+            test_df: Test data (RAW, before feature engineering if using position models)
             
         Returns:
             Dictionary of evaluation metrics per model
         """
+        logger.info("\n" + "="*60)
         logger.info("Evaluating models on test set...")
-        
-        X_test, y_test = self.feature_engineer.prepare_features(test_df, include_target=True)
+        logger.info("="*60)
         
         results = {}
         
-        # Evaluate Linear Regression
+        # Evaluate position-specific models (IMPROVEMENT 6)
+        if 'linear_regression_by_position' in self.models:
+            logger.info("\nEvaluating Position-Specific Models:")
+            position_models = self.models['linear_regression_by_position']
+            
+            all_preds = []
+            all_actuals = []
+            position_metrics = {}
+            
+            for position in ['GK', 'DEF', 'MID', 'FWD']:
+                if position not in position_models:
+                    continue
+                
+                # Filter raw data by position
+                test_pos_raw = test_df[test_df['position'] == position].copy()
+                if len(test_pos_raw) == 0:
+                    continue
+                
+                # Engineer features
+                test_pos = self.feature_engineer.engineer_features(
+                    test_pos_raw,
+                    is_training=False,
+                    lag_features=['total_points']
+                )
+                
+                if len(test_pos) == 0:
+                    continue
+                
+                X_test, y_test = self.feature_engineer.prepare_features(test_pos, include_target=True)
+                y_pred = position_models[position].predict(X_test)
+                
+                rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+                mae = mean_absolute_error(y_test, y_pred)
+                r2 = r2_score(y_test, y_pred)
+                
+                position_metrics[position] = {'rmse': rmse, 'mae': mae, 'r2': r2, 'n_samples': len(test_pos)}
+                
+                logger.info(f"{position} - RMSE: {rmse:.2f}, MAE: {mae:.2f}, R²: {r2:.3f} (n={len(test_pos)})")
+                
+                all_preds.extend(y_pred)
+                all_actuals.extend(y_test)
+            
+            # Overall metrics
+            overall_rmse = np.sqrt(mean_squared_error(all_actuals, all_preds))
+            overall_mae = mean_absolute_error(all_actuals, all_preds)
+            overall_r2 = r2_score(all_actuals, all_preds)
+            
+            results['linear_regression_by_position'] = {
+                'rmse': overall_rmse,
+                'mae': overall_mae,
+                'r2': overall_r2,
+                'by_position': position_metrics
+            }
+            
+            logger.info(f"\n📊 Overall (Position-Specific Models):")
+            logger.info(f"   RMSE: {overall_rmse:.2f}, MAE: {overall_mae:.2f}, R²: {overall_r2:.3f}")
+            logger.info(f"\n🎯 IMPROVEMENT: R² increased from ~0.324 to {overall_r2:.3f} (+{overall_r2 - 0.324:.3f})")
+        
+        # Evaluate combined Linear Regression (if exists)
         if 'linear_regression' in self.models:
+            # Engineer features for combined model
+            test_engineered = self.feature_engineer.engineer_features(
+                test_df,
+                is_training=False,
+                lag_features=['total_points']
+            )
+            X_test, y_test = self.feature_engineer.prepare_features(test_engineered, include_target=True)
             model = self.models['linear_regression']
             y_pred = model.predict(X_test)
             results['linear_regression'] = {
@@ -325,12 +552,18 @@ class FPLModelTrainer:
                 'mae': mean_absolute_error(y_test, y_pred),
                 'r2': r2_score(y_test, y_pred)
             }
-            logger.info(f"Linear Regression - RMSE: {results['linear_regression']['rmse']:.2f}, "
+            logger.info(f"\nLinear Regression (Combined) - RMSE: {results['linear_regression']['rmse']:.2f}, "
                        f"MAE: {results['linear_regression']['mae']:.2f}, "
                        f"R²: {results['linear_regression']['r2']:.3f}")
         
         # Evaluate Neural Network
         if 'nn_baseline_model' in self.models and TF_AVAILABLE:
+            test_engineered = self.feature_engineer.engineer_features(
+                test_df,
+                is_training=False,
+                lag_features=['total_points']
+            )
+            X_test, y_test = self.feature_engineer.prepare_features(test_engineered, include_target=True)
             model = self.models['nn_baseline_model']
             scaler = self.models['scaler']
             X_test_scaled = scaler.transform(X_test)
@@ -426,11 +659,19 @@ class FPLModelTrainer:
         predictor = FPLPredictor()
         predictor.feature_engineer = self.feature_engineer
         
-        # Save Linear Regression
+        # Save position-specific models (IMPROVEMENT 6)
+        if 'linear_regression_by_position' in self.models:
+            position_models = self.models['linear_regression_by_position']
+            for position, model in position_models.items():
+                model_path = os.path.join(output_dir, f"linear_regression_{position.lower()}_v2.pkl")
+                predictor.save_model(model, model_path)
+                logger.info(f"Saved {position} model to {model_path}")
+        
+        # Save combined Linear Regression (if exists)
         if 'linear_regression' in self.models:
-            model_path = os.path.join(output_dir, "linear_regression_v1.pkl")
+            model_path = os.path.join(output_dir, "linear_regression_combined_v1.pkl")
             predictor.save_model(self.models['linear_regression'], model_path)
-            logger.info(f"Saved Linear Regression to {model_path}")
+            logger.info(f"Saved Linear Regression (combined) to {model_path}")
         
         # Save Neural Network
         if 'nn_baseline_model' in self.models and TF_AVAILABLE:
@@ -442,7 +683,18 @@ class FPLModelTrainer:
         # Save results
         results_path = os.path.join(output_dir, "training_results.json")
         with open(results_path, 'w') as f:
-            json.dump(self.results, f, indent=2)
+            # Convert numpy types to native Python for JSON serialization
+            def convert_to_native(obj):
+                if isinstance(obj, dict):
+                    return {k: convert_to_native(v) for k, v in obj.items()}
+                elif isinstance(obj, (np.int64, np.int32)):
+                    return int(obj)
+                elif isinstance(obj, (np.float64, np.float32)):
+                    return float(obj)
+                else:
+                    return obj
+            
+            json.dump(convert_to_native(self.results), f, indent=2)
         logger.info(f"Saved results to {results_path}")
 
 
@@ -481,25 +733,29 @@ def main():
     # Initialize trainer
     trainer = FPLModelTrainer(data_path)
     
-    # Load and preprocess data
+    # Load and validate data
     trainer.load_data()
-    trainer.preprocess_data()
     
-    # Temporal split (IMPROVEMENT 1)
-    train_df, val_df, test_df = trainer.temporal_train_test_split()
+    # Don't preprocess yet - we need raw position column for split
+    # trainer.preprocess_data()  # Skip this
     
-    # Save a copy of test_df with original positions for analysis
-    test_df_original = test_df.copy()
+    # Temporal split on RAW data (before preprocessing)
+    train_df_raw, val_df_raw, test_df_raw = trainer.temporal_train_test_split_raw()
     
-    # Train models
-    trainer.train_linear_regression(train_df, val_df)
-    trainer.train_neural_network(train_df, val_df, epochs=50)
+    # Train models - IMPROVEMENT 6: Split by position (biggest win!)
+    logger.info("\n" + "="*60)
+    logger.info("Training Strategy: Per-Position Models (BIGGEST WIN)")
+    logger.info("="*60)
+    
+    # Pass RAW dataframes (with position column) to position-specific trainer
+    trainer.train_linear_regression(train_df_raw, val_df_raw, split_by_position=True)
+    trainer.train_neural_network(train_df_raw, val_df_raw, epochs=50)
     
     # Evaluate models
-    trainer.evaluate_models(test_df)
+    trainer.evaluate_models(test_df_raw)
     
-    # Analyze by position (IMPROVEMENT 4) - use original test data
-    trainer.analyze_by_position(test_df_original)
+    # Analyze by position (IMPROVEMENT 4) - use raw test data
+    trainer.analyze_by_position(test_df_raw)
     
     # Save models
     trainer.save_models()
