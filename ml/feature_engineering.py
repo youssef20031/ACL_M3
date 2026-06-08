@@ -59,7 +59,10 @@ class FeatureEngineer:
             'clean_sheets', 'bonus', 'goals_conceded', 'saves',
             'yellow_cards', 'red_cards', 'penalties_missed', 'penalties_saved',
             'own_goals', 'value', 'was_home', 'GW',
-            'form', 'team_goals'  # Engineered features
+            'form', 'team_goals',  # Engineered features
+            # IMPROVEMENT 8: High-signal features
+            'minutes_rolling5', 'points_per_90', 'home_form', 'away_form',
+            'gw_in_season', 'opp_def_strength'
         ]
         
         self.is_fitted = True
@@ -119,6 +122,9 @@ class FeatureEngineer:
             )
         else:
             df['team_goals'] = 0
+        
+        # IMPROVEMENT 8: Add high-signal features
+        df = self._add_high_signal_features(df)
         
         # IMPROVEMENT: Lag total_points for supervised learning (target = next gameweek points)
         if lag_features and 'total_points' in lag_features:
@@ -284,3 +290,129 @@ class FeatureEngineer:
             self.feature_names = data['feature_names']
             self.is_fitted = True
         logger.info(f"Loaded feature mappings from {filepath}")
+    
+    def _add_high_signal_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        IMPROVEMENT 8: Add high-signal features for better predictions.
+        
+        Features added:
+        1. minutes_rolling5 - Rolling 5-GW avg of minutes (rotation risk)
+        2. points_per_90 - Points normalized per 90 minutes
+        3. home_form - Rolling avg points at home
+        4. away_form - Rolling avg points away
+        5. gw_in_season - Normalized gameweek (fixture congestion)
+        6. opp_def_strength - Opponent defensive strength (rolling goals conceded)
+        
+        Args:
+            df: Input dataframe
+            
+        Returns:
+            Dataframe with new features
+        """
+        df = df.sort_values(['name', 'kickoff_time']).copy()
+        
+        # 1. Minutes rolling average (captures rotation risk)
+        df['minutes_rolling5'] = df.groupby('name')['minutes'].transform(
+            lambda x: x.rolling(5, min_periods=1).mean().shift(1)
+        ).fillna(0)
+        
+        # 2. Points per 90 minutes (normalizes for subs/benchings)
+        df['points_per_90'] = df.apply(
+            lambda row: (row['total_points'] / row['minutes'] * 90) if row['minutes'] > 0 else 0,
+            axis=1
+        )
+        # Shift to avoid leakage
+        df['points_per_90'] = df.groupby('name')['points_per_90'].shift(1).fillna(0)
+        
+        # 3. Home/Away form (position-dependent home advantage)
+        # Calculate home form
+        home_mask = df['was_home'] == True
+        df.loc[home_mask, 'home_form_temp'] = df.loc[home_mask, 'total_points']
+        df['home_form'] = df.groupby('name')['home_form_temp'].transform(
+            lambda x: x.rolling(4, min_periods=1).mean().shift(1)
+        )
+        df['home_form'] = df.groupby('name')['home_form'].ffill().fillna(0)
+        
+        # Calculate away form
+        away_mask = df['was_home'] == False
+        df.loc[away_mask, 'away_form_temp'] = df.loc[away_mask, 'total_points']
+        df['away_form'] = df.groupby('name')['away_form_temp'].transform(
+            lambda x: x.rolling(4, min_periods=1).mean().shift(1)
+        )
+        df['away_form'] = df.groupby('name')['away_form'].ffill().fillna(0)
+        
+        # Clean up temp columns
+        df = df.drop(columns=['home_form_temp', 'away_form_temp'], errors='ignore')
+        
+        # 4. GW in season (normalized 0-1, captures fixture congestion)
+        if 'GW' in df.columns:
+            df['gw_in_season'] = df['GW'] / 38.0
+        else:
+            df['gw_in_season'] = 0
+        
+        # 5. Opponent defensive strength
+        df = self._add_opponent_defensive_strength(df)
+        
+        logger.info("Added 6 high-signal features: minutes_rolling5, points_per_90, home_form, away_form, gw_in_season, opp_def_strength")
+        
+        return df
+    
+    def _add_opponent_defensive_strength(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        IMPROVEMENT 9: Add opponent defensive strength feature.
+        
+        Compresses 20 sparse opponent one-hot columns into 1 dense signal:
+        rolling 5-game average of goals conceded by opponent.
+        
+        Args:
+            df: Input dataframe
+            
+        Returns:
+            Dataframe with opp_def_strength feature
+        """
+        # Identify team column name
+        team_col = 'team' if 'team' in df.columns else 'team_x'
+        opp_col = None
+        for col in ['opp_team_name', 'opponent_team', 'opp_team']:
+            if col in df.columns:
+                opp_col = col
+                break
+        
+        if team_col not in df.columns or opp_col not in df.columns or 'goals_conceded' not in df.columns:
+            logger.warning("Cannot compute opponent defensive strength - missing required columns")
+            df['opp_def_strength'] = 0
+            return df
+        
+        # Calculate goals conceded by each team per match
+        # Group by team and calculate their defensive record
+        df_sorted = df.sort_values(['season_x', team_col, 'kickoff_time']).copy() if 'season_x' in df.columns else df.sort_values([team_col, 'kickoff_time']).copy()
+        
+        # Ensure consistent data types - convert both to string to avoid merge issues
+        df_sorted[team_col] = df_sorted[team_col].astype(str)
+        df_sorted[opp_col] = df_sorted[opp_col].astype(str)
+        
+        # Rolling average of goals conceded per team
+        group_cols = ['season_x', team_col] if 'season_x' in df.columns else [team_col]
+        df_sorted['team_def_strength'] = df_sorted.groupby(group_cols)['goals_conceded'].transform(
+            lambda x: x.rolling(5, min_periods=1).mean()
+        )
+        
+        # Create a mapping of team -> defensive strength per gameweek
+        merge_cols = ['season_x', team_col, 'GW'] if 'season_x' in df.columns else [team_col, 'GW']
+        team_defense = df_sorted[merge_cols + ['team_def_strength']].drop_duplicates()
+        
+        # Ensure df also has consistent types
+        df[opp_col] = df[opp_col].astype(str)
+        
+        # Merge as opponent's defensive strength
+        df = df.merge(
+            team_defense.rename(columns={team_col: opp_col, 'team_def_strength': 'opp_def_strength'}),
+            on=[col for col in merge_cols if col != team_col] + [opp_col],
+            how='left'
+        )
+        
+        df['opp_def_strength'] = df['opp_def_strength'].fillna(1.0)  # Default to league average ~1 goal/game
+        
+        logger.info("Added opponent defensive strength (rolling 5-game goals conceded)")
+        
+        return df

@@ -77,7 +77,13 @@
     "was_home",
     "GW",
     "form",
-    "team_goals"
+    "team_goals",
+    "minutes_rolling5",
+    "points_per_90",
+    "home_form",
+    "away_form",
+    "gw_in_season",
+    "opp_def_strength"
   ],
   "feature_names": [
     "assists",
@@ -114,6 +120,12 @@
     "tackles",
     "form",
     "team_goals",
+    "minutes_rolling5",
+    "points_per_90",
+    "home_form",
+    "away_form",
+    "gw_in_season",
+    "opp_def_strength",
     "position_AM",
     "position_DEF",
     "position_FWD",
