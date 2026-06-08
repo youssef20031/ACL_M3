@@ -62,7 +62,11 @@ class FeatureEngineer:
             'form', 'team_goals',  # Engineered features
             # IMPROVEMENT 8: High-signal features
             'minutes_rolling5', 'points_per_90', 'home_form', 'away_form',
-            'gw_in_season', 'opp_def_strength'
+            'gw_in_season',
+            # IMPROVEMENT 9: Opponent strength (for attackers)
+            'opp_def_strength',
+            # IMPROVEMENT 11: Defensive features (for GK/DEF clean sheets)
+            'opp_off_strength', 'team_def_strength'
         ]
         
         self.is_fitted = True
@@ -170,9 +174,18 @@ class FeatureEngineer:
         if team_col and 'team' in self.categorical_mappings:
             column_mapping[team_col] = 'team'
         
+        # IMPROVEMENT 11: Skip opponent one-hot encoding when using continuous opponent strength features
+        # This removes collinearity between opp_team_name_Manchester_City and opp_off_strength
+        # Only encode opponent if we're NOT using continuous strength features
+        skip_opponent_encoding = False
         for opp_col in ['opp_team_name', 'opponent_team', 'opp_team']:
-            if opp_col in df.columns and 'opponent' in self.categorical_mappings:
-                column_mapping[opp_col] = 'opponent'
+            if opp_col in df.columns:
+                # Check if opponent strength features exist
+                if 'opp_off_strength' in df.columns or 'opp_def_strength' in df.columns:
+                    skip_opponent_encoding = True
+                    logger.info(f"Skipping opponent one-hot encoding (using continuous strength features instead)")
+                elif 'opponent' in self.categorical_mappings:
+                    column_mapping[opp_col] = 'opponent'
                 break
         
         for actual_col, mapping_key in column_mapping.items():
@@ -301,7 +314,6 @@ class FeatureEngineer:
         3. home_form - Rolling avg points at home
         4. away_form - Rolling avg points away
         5. gw_in_season - Normalized gameweek (fixture congestion)
-        6. opp_def_strength - Opponent defensive strength (rolling goals conceded)
         
         Args:
             df: Input dataframe
@@ -350,10 +362,13 @@ class FeatureEngineer:
         else:
             df['gw_in_season'] = 0
         
-        # 5. Opponent defensive strength
+        # 5. Opponent defensive strength (IMPROVEMENT 9) - helps attackers
         df = self._add_opponent_defensive_strength(df)
         
-        logger.info("Added 6 high-signal features: minutes_rolling5, points_per_90, home_form, away_form, gw_in_season, opp_def_strength")
+        # 6 & 7. Defensive features (IMPROVEMENT 11) - helps GK/DEF with clean sheets
+        df = self._add_defensive_features(df)
+        
+        logger.info("Added 8 high-signal features: minutes_rolling5, points_per_90, home_form, away_form, gw_in_season, opp_def_strength, opp_off_strength, team_def_strength")
         
         return df
     
@@ -416,3 +431,102 @@ class FeatureEngineer:
         logger.info("Added opponent defensive strength (rolling 5-game goals conceded)")
         
         return df
+    
+    def _add_defensive_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        IMPROVEMENT 11: Add defensive features for GK/DEF clean sheet prediction.
+        
+        Adds TWO critical features:
+        1. opp_off_strength: How many goals opponent SCORES (their attack)
+        2. team_def_strength: How many goals own team CONCEDES (their defense)
+        
+        Both are crucial for predicting clean sheets:
+        - Strong opponent attack → less likely to keep clean sheet
+        - Strong own defense → more likely to keep clean sheet
+        
+        Args:
+            df: Input dataframe
+            
+        Returns:
+            Dataframe with opp_off_strength and team_def_strength features
+        """
+        # Identify column names
+        team_col = 'team' if 'team' in df.columns else 'team_x'
+        opp_col = None
+        for col in ['opp_team_name', 'opponent_team', 'opp_team']:
+            if col in df.columns:
+                opp_col = col
+                break
+        
+        if team_col not in df.columns or opp_col not in df.columns:
+            logger.warning("Cannot compute defensive features - missing team/opponent columns")
+            df['opp_off_strength'] = 1.5  # League average goals scored
+            df['team_def_strength'] = 1.0  # League average goals conceded
+            return df
+        
+        # Ensure consistent data types
+        df[team_col] = df[team_col].astype(str)
+        df[opp_col] = df[opp_col].astype(str)
+        
+        # Calculate ACTUAL GOALS (not just stats)
+        # For a player: goals scored AGAINST them = opponent's offensive output
+        if 'team_h_score' in df.columns and 'team_a_score' in df.columns:
+            # Goals scored BY opponent (what we face)
+            df['opp_goals_scored'] = df.apply(
+                lambda row: row['team_a_score'] if row.get('was_home', False) else row['team_h_score'],
+                axis=1
+            )
+            
+            # Goals conceded BY own team (our defensive weakness)
+            df['own_goals_conceded'] = df['opp_goals_scored'].copy()
+        else:
+            logger.warning("Missing team_h_score/team_a_score - using fallback")
+            df['opp_goals_scored'] = df.get('goals_conceded', 0)
+            df['own_goals_conceded'] = df.get('goals_conceded', 0)
+        
+        # Sort for temporal rolling averages
+        group_cols = ['season_x'] if 'season_x' in df.columns else []
+        df = df.sort_values(group_cols + [team_col, 'kickoff_time']).copy()
+        
+        # === FEATURE 1: Opponent Offensive Strength (goals they score per game) ===
+        # Group by opponent team and calculate their rolling goals scored
+        opp_group = group_cols + [opp_col]
+        
+        # Create temp df with opponent goals
+        opp_df = df[opp_group + ['GW', 'opp_goals_scored', team_col]].copy()
+        
+        # For each opponent, calculate rolling average of goals they score
+        opp_df = opp_df.sort_values(opp_group + ['GW'])
+        opp_df['opp_off_strength_temp'] = opp_df.groupby(opp_col)['opp_goals_scored'].transform(
+            lambda x: x.shift(1).rolling(5, min_periods=2).mean()
+        )
+        
+        # Merge back (match opponent team to get their offensive strength)
+        merge_cols = opp_group + ['GW']
+        opp_strength_map = opp_df[merge_cols + ['opp_off_strength_temp']].drop_duplicates()
+        df = df.merge(
+            opp_strength_map,
+            on=merge_cols,
+            how='left',
+            suffixes=('', '_drop')
+        )
+        df['opp_off_strength'] = df['opp_off_strength_temp'].fillna(1.5)  # League avg
+        df = df.drop(columns=['opp_off_strength_temp'], errors='ignore')
+        
+        # === FEATURE 2: Team Defensive Strength (goals own team concedes per game) ===
+        # Group by own team and calculate rolling goals conceded
+        team_group = group_cols + [team_col]
+        
+        df = df.sort_values(team_group + ['GW'])
+        df['team_def_strength'] = df.groupby(team_col)['own_goals_conceded'].transform(
+            lambda x: x.shift(1).rolling(5, min_periods=2).mean()
+        )
+        df['team_def_strength'] = df['team_def_strength'].fillna(1.0)  # League avg
+        
+        # Clean up temporary columns
+        df = df.drop(columns=['opp_goals_scored', 'own_goals_conceded'], errors='ignore')
+        
+        logger.info("Added defensive features (opp_off_strength & team_def_strength) - critical for GK/DEF clean sheet prediction")
+        
+        return df
+

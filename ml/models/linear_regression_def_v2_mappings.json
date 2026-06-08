@@ -83,7 +83,9 @@
     "home_form",
     "away_form",
     "gw_in_season",
-    "opp_def_strength"
+    "opp_def_strength",
+    "opp_off_strength",
+    "team_def_strength"
   ],
   "feature_names": [
     "assists",
@@ -126,6 +128,8 @@
     "away_form",
     "gw_in_season",
     "opp_def_strength",
+    "opp_off_strength",
+    "team_def_strength",
     "position_AM",
     "position_DEF",
     "position_FWD",
@@ -153,26 +157,6 @@
     "team_Southampton",
     "team_Spurs",
     "team_West Ham",
-    "team_Wolves",
-    "opponent_1",
-    "opponent_10",
-    "opponent_11",
-    "opponent_12",
-    "opponent_13",
-    "opponent_14",
-    "opponent_15",
-    "opponent_16",
-    "opponent_17",
-    "opponent_18",
-    "opponent_19",
-    "opponent_2",
-    "opponent_20",
-    "opponent_3",
-    "opponent_4",
-    "opponent_5",
-    "opponent_6",
-    "opponent_7",
-    "opponent_8",
-    "opponent_9"
+    "team_Wolves"
   ]
 }
