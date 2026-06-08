@@ -72,24 +72,20 @@ def load_and_prepare_data():
     print("\nEngineering features...")
     feature_engineer = FeatureEngineer()
     feature_engineer.fit(df)
-    df = feature_engineer.engineer_features(df, is_training=True, lag_features=['total_points'])
     
-    # Prepare features
-    X, y = feature_engineer.prepare_features(df, include_target=True)
+    # Keep original df with metadata before one-hot encoding
+    df_original = df.copy()
     
-    # Add back metadata for grouping
-    df_processed = X.copy()
-    for col in ['name', 'position', 'season_x', 'GW', 'kickoff_time', 'team_x', 
-                'was_home', 'minutes', 'value']:
-        if col in df.columns:
-            df_processed[col] = df[col].values[:len(X)]
+    # Engineer features (this modifies df in-place)
+    df_engineered = feature_engineer.engineer_features(df, is_training=True, lag_features=['total_points'])
     
-    if y is not None:
-        df_processed['total_points'] = y.values
+    print(f"Final dataset: {len(df_engineered):,} rows")
     
-    print(f"Final dataset: {len(df_processed):,} rows, {len(X.columns)} features")
+    # df_original has the metadata we need (position, name, etc.)
+    # df_engineered has the features after engineering
+    # They should have same length (just columns changed)
     
-    return df_processed, feature_engineer
+    return df_original, feature_engineer
 
 
 def main():
@@ -117,9 +113,6 @@ def main():
     # Load data
     df, feature_engineer = load_and_prepare_data()
     
-    # Initialize production readiness
-    prod_ready = ProductionReadiness(models_dir="ml/models")
-    
     # Prepare position-specific data and models
     position_data = {}
     for position in ['GK', 'DEF', 'MID', 'FWD']:
@@ -138,6 +131,9 @@ def main():
     print("Checking if predictions are well-calibrated...")
     print("Key question: Are high predictions (captain picks) trustworthy?\n")
     
+    # Initialize production readiness
+    prod_ready = ProductionReadiness(models_dir="ml/models")
+    
     calibration_results = {}
     
     for position, data in position_data.items():
@@ -147,26 +143,28 @@ def main():
         pos_df = data['df']
         model = data['model']
         
-        # Split data
-        split_idx = int(len(pos_df) * 0.8)
-        test_df = pos_df.iloc[split_idx:].copy()
+        # Need to engineer features for this position's data
+        pos_df_eng = feature_engineer.engineer_features(pos_df.copy(), is_training=False, lag_features=['total_points'])
+        X_pos, y_pos = feature_engineer.prepare_features(pos_df_eng, include_target=True)
         
-        if len(test_df) < 100:
-            print(f"⚠️  Skipping {position} (insufficient test data: {len(test_df)})")
+        if len(X_pos) < 100:
+            print(f"⚠️  Skipping {position} (insufficient data: {len(X_pos)})")
             continue
         
-        # Get features
-        feature_cols = [c for c in test_df.columns 
-                       if c not in ['total_points', 'upcoming', 'name', 'season_x',
-                                   'kickoff_time', 'GW', 'element', 'fixture', 'position']]
-        X_test = test_df[feature_cols].fillna(0)
-        y_test = test_df['total_points'].values
+        # Split data temporally
+        split_idx = int(len(X_pos) * 0.8)
+        X_test = X_pos.iloc[split_idx:]
+        y_test = y_pos.iloc[split_idx:] if y_pos is not None else None
+        
+        if y_test is None or len(y_test) < 50:
+            print(f"⚠️  Skipping {position} (insufficient test data)")
+            continue
         
         # Predict
         y_pred = model.predict(X_test)
         
         # Calibration analysis
-        cal_result = prod_ready.calibration_analysis(y_test, y_pred, position, 
+        cal_result = prod_ready.calibration_analysis(y_test.values, y_pred, position, 
                                                      n_bins=10, save_plot=True)
         calibration_results[position] = cal_result
     
@@ -180,7 +178,16 @@ def main():
     print("Critical for avoiding 0pt predictions on benched players\n")
     
     # Build start probability model on full dataset
-    start_model = prod_ready.build_start_probability_model(df, minutes_threshold=60)
+    # Need to engineer features first
+    df_for_start = feature_engineer.engineer_features(df.copy(), is_training=False, lag_features=['total_points'])
+    X_full, _ = feature_engineer.prepare_features(df_for_start, include_target=False)
+    
+    # Add back necessary columns
+    df_for_start_model = X_full.copy()
+    df_for_start_model['minutes'] = df['minutes'].values[:len(X_full)]
+    df_for_start_model['position'] = df['position'].values[:len(X_full)]
+    
+    start_model = prod_ready.build_start_probability_model(df_for_start_model, minutes_threshold=60)
     
     # ========================================================================
     # TASK 3: DOUBLE GAMEWEEK FEATURES
