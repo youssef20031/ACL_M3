@@ -29,6 +29,15 @@ except ImportError:
     TF_AVAILABLE = False
     print("WARNING: TensorFlow not available. Neural network model will be skipped.")
 
+# XGBoost import with error handling
+try:
+    import xgboost as xgb
+    from xgboost import XGBRegressor
+    XGB_AVAILABLE = True
+except ImportError:
+    XGB_AVAILABLE = False
+    print("WARNING: XGBoost not available. Gradient boosting model will be skipped.")
+
 from ml.feature_engineering import FeatureEngineer
 from ml.predictor import FPLPredictor
 
@@ -459,6 +468,242 @@ class FPLModelTrainer:
         
         return model
     
+    def train_xgboost(
+        self,
+        train_df: pd.DataFrame,
+        val_df: Optional[pd.DataFrame] = None,
+        split_by_position: bool = True
+    ):
+        """
+        IMPROVEMENT 10: Train XGBoost Gradient Boosting models.
+        
+        XGBoost captures non-linear relationships and feature interactions that
+        Linear Regression cannot. Expected improvement: +0.05-0.10 R².
+        
+        Args:
+            train_df: Training data (RAW, before feature engineering)
+            val_df: Optional validation data (RAW)
+            split_by_position: If True, train separate model per position (recommended)
+            
+        Returns:
+            Trained model(s) or None if XGBoost unavailable
+        """
+        if not XGB_AVAILABLE:
+            logger.warning("XGBoost not available. Skipping gradient boosting training.")
+            return None
+        
+        if split_by_position:
+            return self._train_xgboost_by_position(train_df, val_df)
+        else:
+            return self._train_xgboost_combined(train_df, val_df)
+    
+    def _train_xgboost_by_position(
+        self,
+        train_df: pd.DataFrame,
+        val_df: Optional[pd.DataFrame] = None
+    ) -> Dict[str, XGBRegressor]:
+        """
+        IMPROVEMENT 10: Train position-specific XGBoost models.
+        
+        Expected to outperform Linear Regression by capturing:
+        - Non-linear relationships (e.g., diminishing returns on minutes)
+        - Feature interactions (e.g., high form × weak opponent)
+        - Complex patterns in categorical encodings
+        
+        Args:
+            train_df: Training data (BEFORE feature engineering)
+            val_df: Optional validation data (BEFORE feature engineering)
+            
+        Returns:
+            Dictionary mapping position to trained XGBoost model
+        """
+        logger.info("Training position-specific XGBoost models...")
+        logger.info("Expected improvement: +0.05-0.10 R² over Linear Regression")
+        
+        # Fit feature engineer on full training data
+        self.feature_engineer.fit(train_df)
+        
+        position_models = {}
+        position_results = {}
+        
+        for position in ['GK', 'DEF', 'MID', 'FWD']:
+            # Filter by position BEFORE feature engineering
+            train_pos_raw = train_df[train_df['position'] == position].copy()
+            
+            if len(train_pos_raw) < 100:
+                logger.warning(f"Insufficient data for {position}: {len(train_pos_raw)} samples. Skipping.")
+                continue
+            
+            logger.info(f"\n--- Training {position} XGBoost model ---")
+            logger.info(f"Training samples (raw): {len(train_pos_raw)}")
+            
+            # Engineer features
+            train_pos = self.feature_engineer.engineer_features(
+                train_pos_raw,
+                is_training=False,
+                lag_features=['total_points']
+            )
+            
+            logger.info(f"Training samples (after engineering): {len(train_pos)}")
+            
+            if len(train_pos) < 50:
+                logger.warning(f"Too few samples after engineering for {position}. Skipping.")
+                continue
+            
+            # Prepare features and target
+            X_train, y_train = self.feature_engineer.prepare_features(train_pos, include_target=True)
+            
+            # Prepare validation set for early stopping
+            eval_set = None
+            if val_df is not None and len(val_df) > 0:
+                val_pos_raw = val_df[val_df['position'] == position].copy()
+                if len(val_pos_raw) > 0:
+                    val_pos = self.feature_engineer.engineer_features(
+                        val_pos_raw,
+                        is_training=False,
+                        lag_features=['total_points']
+                    )
+                    if len(val_pos) > 0:
+                        X_val, y_val = self.feature_engineer.prepare_features(val_pos, include_target=True)
+                        eval_set = [(X_val, y_val)]
+            
+            # Train XGBoost model
+            model = XGBRegressor(
+                n_estimators=500,
+                learning_rate=0.05,
+                max_depth=5,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                random_state=42,
+                n_jobs=-1,  # Use all CPU cores
+                early_stopping_rounds=50 if eval_set else None,
+                eval_metric='rmse'
+            )
+            
+            # Fit model
+            if eval_set:
+                model.fit(
+                    X_train, y_train,
+                    eval_set=eval_set,
+                    verbose=False
+                )
+            else:
+                model.fit(X_train, y_train, verbose=False)
+            
+            # Evaluate on training set
+            train_pred = model.predict(X_train)
+            train_rmse = np.sqrt(mean_squared_error(y_train, train_pred))
+            train_mae = mean_absolute_error(y_train, train_pred)
+            train_r2 = r2_score(y_train, train_pred)
+            
+            logger.info(f"{position} Train - RMSE: {train_rmse:.2f}, MAE: {train_mae:.2f}, R²: {train_r2:.3f}")
+            
+            position_results[position] = {'train': {'rmse': train_rmse, 'mae': train_mae, 'r2': train_r2}}
+            
+            # Evaluate on validation set if provided
+            if eval_set:
+                X_val, y_val = eval_set[0]
+                val_pred = model.predict(X_val)
+                val_rmse = np.sqrt(mean_squared_error(y_val, val_pred))
+                val_mae = mean_absolute_error(y_val, val_pred)
+                val_r2 = r2_score(y_val, val_pred)
+                logger.info(f"{position} Val - RMSE: {val_rmse:.2f}, MAE: {val_mae:.2f}, R²: {val_r2:.3f}")
+                position_results[position]['val'] = {'rmse': val_rmse, 'mae': val_mae, 'r2': val_r2}
+            
+            position_models[position] = model
+        
+        # Calculate weighted average R² across positions
+        if position_results:
+            total_samples = sum(len(train_df[train_df['position'] == pos]) for pos in position_results.keys())
+            weighted_r2 = sum(
+                position_results[pos]['train']['r2'] * len(train_df[train_df['position'] == pos]) / total_samples
+                for pos in position_results.keys()
+            )
+            logger.info(f"\n📊 XGBoost Weighted Average R² across positions: {weighted_r2:.3f}")
+        
+        self.models['xgboost_by_position'] = position_models
+        self.models['xgboost_position_results'] = position_results
+        return position_models
+    
+    def _train_xgboost_combined(
+        self,
+        train_df: pd.DataFrame,
+        val_df: Optional[pd.DataFrame] = None
+    ) -> XGBRegressor:
+        """
+        Train a single combined XGBoost model (all positions together).
+        
+        Note: Position-specific models are recommended for better performance.
+        
+        Args:
+            train_df: Training data (BEFORE feature engineering)
+            val_df: Optional validation data
+            
+        Returns:
+            Trained XGBoost model
+        """
+        logger.info("Training combined XGBoost model (all positions)...")
+        
+        # Fit feature engineer
+        self.feature_engineer.fit(train_df)
+        
+        # Engineer features
+        train_engineered = self.feature_engineer.engineer_features(
+            train_df,
+            is_training=False,
+            lag_features=['total_points']
+        )
+        
+        # Prepare features
+        X_train, y_train = self.feature_engineer.prepare_features(train_engineered, include_target=True)
+        
+        # Prepare validation set
+        eval_set = None
+        if val_df is not None and len(val_df) > 0:
+            val_engineered = self.feature_engineer.engineer_features(
+                val_df,
+                is_training=False,
+                lag_features=['total_points']
+            )
+            X_val, y_val = self.feature_engineer.prepare_features(val_engineered, include_target=True)
+            eval_set = [(X_val, y_val)]
+        
+        # Train model
+        model = XGBRegressor(
+            n_estimators=500,
+            learning_rate=0.05,
+            max_depth=5,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            n_jobs=-1,
+            early_stopping_rounds=50 if eval_set else None,
+            eval_metric='rmse'
+        )
+        
+        if eval_set:
+            model.fit(X_train, y_train, eval_set=eval_set, verbose=50)
+        else:
+            model.fit(X_train, y_train, verbose=False)
+        
+        # Evaluate
+        train_pred = model.predict(X_train)
+        train_rmse = np.sqrt(mean_squared_error(y_train, train_pred))
+        train_mae = mean_absolute_error(y_train, train_pred)
+        train_r2 = r2_score(y_train, train_pred)
+        
+        logger.info(f"Train - RMSE: {train_rmse:.2f}, MAE: {train_mae:.2f}, R²: {train_r2:.3f}")
+        
+        if eval_set:
+            val_pred = model.predict(X_val)
+            val_rmse = np.sqrt(mean_squared_error(y_val, val_pred))
+            val_mae = mean_absolute_error(y_val, val_pred)
+            val_r2 = r2_score(y_val, val_pred)
+            logger.info(f"Val - RMSE: {val_rmse:.2f}, MAE: {val_mae:.2f}, R²: {val_r2:.3f}")
+        
+        self.models['xgboost_combined'] = model
+        return model
+    
     def evaluate_models(
         self,
         test_df: pd.DataFrame
@@ -577,6 +822,95 @@ class FPLModelTrainer:
                        f"MAE: {results['nn_baseline_model']['mae']:.2f}, "
                        f"R²: {results['nn_baseline_model']['r2']:.3f}")
         
+        # Evaluate XGBoost position-specific models (IMPROVEMENT 10)
+        if 'xgboost_by_position' in self.models and XGB_AVAILABLE:
+            logger.info("\n🚀 Evaluating XGBoost Position-Specific Models:")
+            position_models = self.models['xgboost_by_position']
+            
+            all_preds = []
+            all_actuals = []
+            position_metrics = {}
+            
+            for position in ['GK', 'DEF', 'MID', 'FWD']:
+                if position not in position_models:
+                    continue
+                
+                # Filter raw data by position
+                test_pos_raw = test_df[test_df['position'] == position].copy()
+                if len(test_pos_raw) == 0:
+                    continue
+                
+                # Engineer features
+                test_pos = self.feature_engineer.engineer_features(
+                    test_pos_raw,
+                    is_training=False,
+                    lag_features=['total_points']
+                )
+                
+                if len(test_pos) == 0:
+                    continue
+                
+                X_test, y_test = self.feature_engineer.prepare_features(test_pos, include_target=True)
+                y_pred = position_models[position].predict(X_test)
+                
+                rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+                mae = mean_absolute_error(y_test, y_pred)
+                r2 = r2_score(y_test, y_pred)
+                
+                position_metrics[position] = {'rmse': rmse, 'mae': mae, 'r2': r2, 'n_samples': len(test_pos)}
+                
+                logger.info(f"{position} - RMSE: {rmse:.2f}, MAE: {mae:.2f}, R²: {r2:.3f} (n={len(test_pos)})")
+                
+                all_preds.extend(y_pred)
+                all_actuals.extend(y_test)
+            
+            # Overall metrics
+            overall_rmse = np.sqrt(mean_squared_error(all_actuals, all_preds))
+            overall_mae = mean_absolute_error(all_actuals, all_preds)
+            overall_r2 = r2_score(all_actuals, all_preds)
+            
+            results['xgboost_by_position'] = {
+                'rmse': overall_rmse,
+                'mae': overall_mae,
+                'r2': overall_r2,
+                'by_position': position_metrics
+            }
+            
+            logger.info(f"\n📊 Overall (XGBoost Position-Specific):")
+            logger.info(f"   RMSE: {overall_rmse:.2f}, MAE: {overall_mae:.2f}, R²: {overall_r2:.3f}")
+            
+            # Compare to Linear Regression baseline
+            if 'linear_regression_by_position' in results:
+                lr_r2 = results['linear_regression_by_position']['r2']
+                improvement = overall_r2 - lr_r2
+                logger.info(f"\n🎯 IMPROVEMENT over Linear Regression:")
+                logger.info(f"   ΔR²: {improvement:+.4f} ({improvement/lr_r2*100:+.2f}%)")
+                if improvement > 0.02:
+                    logger.info(f"   ✅ Significant improvement achieved!")
+                elif improvement > 0:
+                    logger.info(f"   ⚠️ Marginal improvement")
+                else:
+                    logger.info(f"   ❌ No improvement - Linear Regression performs better")
+        
+        # Evaluate XGBoost combined model (if exists)
+        if 'xgboost_combined' in self.models and XGB_AVAILABLE:
+            test_engineered = self.feature_engineer.engineer_features(
+                test_df,
+                is_training=False,
+                lag_features=['total_points']
+            )
+            X_test, y_test = self.feature_engineer.prepare_features(test_engineered, include_target=True)
+            model = self.models['xgboost_combined']
+            y_pred = model.predict(X_test)
+            results['xgboost_combined'] = {
+                'rmse': np.sqrt(mean_squared_error(y_test, y_pred)),
+                'mae': mean_absolute_error(y_test, y_pred),
+                'r2': r2_score(y_test, y_pred)
+            }
+            logger.info(f"\nXGBoost (Combined) - RMSE: {results['xgboost_combined']['rmse']:.2f}, "
+                       f"MAE: {results['xgboost_combined']['mae']:.2f}, "
+                       f"R²: {results['xgboost_combined']['r2']:.3f}")
+        
         self.results = results
         return results
     
@@ -680,6 +1014,20 @@ class FPLModelTrainer:
             predictor.save_model(self.models['nn_baseline_model'], model_path, scaler)
             logger.info(f"Saved Neural Network to {model_path}")
         
+        # Save XGBoost position-specific models (IMPROVEMENT 10)
+        if 'xgboost_by_position' in self.models:
+            position_models = self.models['xgboost_by_position']
+            for position, model in position_models.items():
+                model_path = os.path.join(output_dir, f"xgboost_{position.lower()}_v3.pkl")
+                predictor.save_model(model, model_path)
+                logger.info(f"Saved {position} XGBoost model to {model_path}")
+        
+        # Save combined XGBoost (if exists)
+        if 'xgboost_combined' in self.models:
+            model_path = os.path.join(output_dir, "xgboost_combined_v3.pkl")
+            predictor.save_model(self.models['xgboost_combined'], model_path)
+            logger.info(f"Saved XGBoost (combined) to {model_path}")
+        
         # Save results
         results_path = os.path.join(output_dir, "training_results.json")
         with open(results_path, 'w') as f:
@@ -749,7 +1097,16 @@ def main():
     
     # Pass RAW dataframes (with position column) to position-specific trainer
     trainer.train_linear_regression(train_df_raw, val_df_raw, split_by_position=True)
-    trainer.train_neural_network(train_df_raw, val_df_raw, epochs=50)
+    
+    # IMPROVEMENT 10: Train XGBoost models (expected +0.05-0.10 R² improvement)
+    logger.info("\n" + "="*60)
+    logger.info("IMPROVEMENT 10: Training XGBoost Models")
+    logger.info("Expected: Capture feature interactions Linear Regression cannot")
+    logger.info("="*60)
+    trainer.train_xgboost(train_df_raw, val_df_raw, split_by_position=True)
+    
+    # Optional: Train Neural Network (currently TensorFlow not available)
+    # trainer.train_neural_network(train_df_raw, val_df_raw, epochs=50)
     
     # Evaluate models
     trainer.evaluate_models(test_df_raw)
