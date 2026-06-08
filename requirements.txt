@@ -57,3 +57,9 @@ redis>=5.0.0
 # Add CORS support
 python-jose[cryptography]==3.3.0  # For JWT tokens if needed
 passlib[bcrypt]==1.7.4  # For password hashing if needed
+
+# ML Dependencies for Prediction Module
+tensorflow>=2.15.0  # Neural network models (optional)
+keras>=3.0.0  # High-level neural network API
+joblib>=1.3.0  # Model serialization (alternative to pickle)
+seaborn>=0.12.0  # Statistical visualization for training analysis
