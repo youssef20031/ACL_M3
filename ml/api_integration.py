@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class PlayerPredictionRequest(BaseModel):
     """Request for single player prediction."""
     player_name: str
-    player_data: Dict[str, Any]
+    player_data: Dict[str, Any] = {}  # Optional; fetched from Neo4j if empty
 
 
 class TopPerformersRequest(BaseModel):
@@ -97,88 +97,105 @@ class MLAPIIntegration:
     ) -> Dict[str, Any]:
         """
         Fetch player data from Neo4j for prediction.
-        
-        Args:
-            player_name: Player name
-            season: Optional season filter
-            
-        Returns:
-            Player data dictionary with recent stats
+
+        Stats are stored as properties on the :PLAYED_IN relationship.
+        Position is stored on the :PLAYS_POSITION -> Position node.
         """
-        # Query for recent player stats (last 4 games for form)
         query = """
-        MATCH (p:Player {name: $player_name})-[:PLAYED_IN]->(perf:Performance)
-        MATCH (perf)-[:IN_FIXTURE]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
-        WHERE CASE WHEN $season IS NOT NULL THEN s.id = $season ELSE true END
-        WITH p, perf, f, gw, s
+        MATCH (p:Player {name: $player_name})-[:PLAYS_POSITION]->(pos:Position)
+        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+        WHERE ($season IS NULL OR s.id = $season)
+          AND r.minutes > 0
+        WITH p, pos, r, f
         ORDER BY f.kickoff_time DESC
         LIMIT 4
-        RETURN 
-            p.name as name,
-            AVG(perf.minutes) as minutes,
-            AVG(perf.goals_scored) as goals_scored,
-            AVG(perf.assists) as assists,
-            AVG(perf.total_points) as form,
-            AVG(perf.bps) as bps,
-            AVG(perf.ict_index) as ict_index,
-            AVG(perf.influence) as influence,
-            AVG(perf.creativity) as creativity,
-            AVG(perf.threat) as threat,
-            SUM(perf.clean_sheets) as clean_sheets,
-            SUM(perf.bonus) as bonus,
-            SUM(perf.goals_conceded) as goals_conceded,
-            SUM(perf.saves) as saves,
-            SUM(perf.yellow_cards) as yellow_cards,
-            SUM(perf.red_cards) as red_cards,
-            AVG(perf.value) as value,
-            p.position as position
+        RETURN
+            p.name                  AS name,
+            pos.code                AS position,
+            AVG(r.minutes)          AS minutes,
+            AVG(r.goals_scored)     AS goals_scored,
+            AVG(r.assists)          AS assists,
+            AVG(r.total_points)     AS form,
+            AVG(r.bps)              AS bps,
+            AVG(r.ict_index)        AS ict_index,
+            AVG(r.influence)        AS influence,
+            AVG(r.creativity)       AS creativity,
+            AVG(r.threat)           AS threat,
+            SUM(r.clean_sheets)     AS clean_sheets,
+            SUM(r.bonus)            AS bonus,
+            SUM(r.goals_conceded)   AS goals_conceded,
+            SUM(r.saves)            AS saves,
+            SUM(r.yellow_cards)     AS yellow_cards,
+            SUM(r.red_cards)        AS red_cards,
+            AVG(r.value)            AS value
         """
-        
+
         results = self.neo4j_conn.execute_query(
             query,
             {"player_name": player_name, "season": season}
         )
-        
+
         if not results:
             raise HTTPException(
                 status_code=404,
                 detail=f"Player '{player_name}' not found or no recent data available"
             )
-        
+
         return results[0]
     
+    @staticmethod
+    def _prepare_for_inference(player_data: dict) -> dict:
+        """
+        Fill in columns that the FeatureEngineer pipeline expects but that
+        are not returned by the aggregated Neo4j query.
+
+        The feature engineer was designed for per-gameweek rows; during
+        inference we feed a single aggregated row, so we just set sentinel
+        values so that sort/groupby operations don't crash.
+        """
+        defaults = {
+            "kickoff_time": "2000-01-01 00:00:00",  # arbitrary past date for sorting
+            "was_home": 0,
+            "GW": 19,                                # mid-season default
+            "total_points": player_data.get("form", 0),  # form already is rolling avg
+        }
+        return {**defaults, **player_data}
+
     async def predict_player_next_gameweek(
         self,
         request: PlayerPredictionRequest
     ) -> PredictionResponse:
         """
         Predict points for a single player's next gameweek.
-        
+
         Args:
             request: Prediction request
-            
+
         Returns:
             Prediction response
         """
         self._check_predictor()
-        
+
         try:
             # Get player data if not provided
             if not request.player_data:
                 player_data = await self.get_player_data_for_prediction(request.player_name)
             else:
-                player_data = request.player_data
-            
+                player_data = dict(request.player_data)
+
+            # Fill sentinel columns required by the feature engineering pipeline
+            player_data = self._prepare_for_inference(player_data)
+
             # Predict
             prediction = self.predictor.predict_next_gameweek(player_data)
-            
+
             return PredictionResponse(
                 player_name=prediction.player_name,
                 predicted_points=prediction.predicted_points,
                 features_used=prediction.features_used,
                 model_version=prediction.model_version
             )
-            
+
         except HTTPException:
             raise
         except Exception as e:
@@ -191,62 +208,71 @@ class MLAPIIntegration:
     ) -> TopPerformersResponse:
         """
         Predict top K performers for next gameweek.
-        
+
         Args:
             request: Top performers request
-            
+
         Returns:
             List of predictions
         """
         self._check_predictor()
-        
+
         try:
-            # Query for all players with recent stats
-            position_filter = f"WHERE p.position = '{request.position}'" if request.position else ""
-            season_filter = f"AND s.id = '{request.season}'" if request.season else ""
-            
+            # Build optional filters — use parameterised query to avoid injection
+            position_clause = "AND pos.code = $position" if request.position else ""
+            season_clause   = "AND s.id = $season"      if request.season    else ""
+
             query = f"""
-            MATCH (p:Player)-[:PLAYED_IN]->(perf:Performance)
-            MATCH (perf)-[:IN_FIXTURE]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
-            {position_filter}
-            WHERE perf.minutes > 0 {season_filter}
-            WITH p, perf, f
+            MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
+            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
+            WHERE r.minutes > 0
+              {position_clause}
+              {season_clause}
+            WITH p, pos, r, f
             ORDER BY f.kickoff_time DESC
-            WITH p, COLLECT(perf)[..4] as recent_perfs
+            WITH p, pos, COLLECT(r)[..4] AS recent_perfs
             WHERE SIZE(recent_perfs) >= 2
-            RETURN 
-                p.name as name,
-                p.position as position,
-                AVG([perf IN recent_perfs | perf.minutes]) as minutes,
-                AVG([perf IN recent_perfs | perf.goals_scored]) as goals_scored,
-                AVG([perf IN recent_perfs | perf.assists]) as assists,
-                AVG([perf IN recent_perfs | perf.total_points]) as form,
-                AVG([perf IN recent_perfs | perf.bps]) as bps,
-                AVG([perf IN recent_perfs | perf.ict_index]) as ict_index,
-                AVG([perf IN recent_perfs | perf.influence]) as influence,
-                AVG([perf IN recent_perfs | perf.creativity]) as creativity,
-                AVG([perf IN recent_perfs | perf.threat]) as threat,
-                SUM([perf IN recent_perfs | perf.clean_sheets]) as clean_sheets,
-                SUM([perf IN recent_perfs | perf.bonus]) as bonus,
-                AVG([perf IN recent_perfs | perf.value]) as value
+            UNWIND recent_perfs AS perf
+            RETURN
+                p.name                                                   AS name,
+                pos.code                                                 AS position,
+                AVG(perf.minutes)                                        AS minutes,
+                AVG(perf.goals_scored)                                   AS goals_scored,
+                AVG(perf.assists)                                        AS assists,
+                AVG(perf.total_points)                                   AS form,
+                AVG(perf.bps)                                            AS bps,
+                AVG(perf.ict_index)                                      AS ict_index,
+                AVG(perf.influence)                                      AS influence,
+                AVG(perf.creativity)                                     AS creativity,
+                AVG(perf.threat)                                         AS threat,
+                SUM(perf.clean_sheets)                                   AS clean_sheets,
+                SUM(perf.bonus)                                          AS bonus,
+                AVG(perf.value)                                          AS value
             LIMIT 200
             """
-            
-            players_data = self.neo4j_conn.execute_query(query)
-            
+
+            params = {
+                "position": request.position,
+                "season":   request.season,
+            }
+            players_data = self.neo4j_conn.execute_query(query, params)
+
             if not players_data:
                 raise HTTPException(
                     status_code=404,
                     detail="No player data found for prediction"
                 )
-            
+
+            # Prepare for inference (adds total_points, etc.)
+            players_data = [self._prepare_for_inference(p) for p in players_data]
+
             # Predict
             predictions = self.predictor.predict_top_performers(
                 players_data,
                 position=request.position,
                 top_k=request.top_k
             )
-            
+
             # Convert to response format
             response_predictions = [
                 PredictionResponse(
@@ -257,7 +283,7 @@ class MLAPIIntegration:
                 )
                 for pred in predictions
             ]
-            
+
             return TopPerformersResponse(
                 predictions=response_predictions,
                 metadata={
@@ -266,7 +292,7 @@ class MLAPIIntegration:
                     "top_k": request.top_k
                 }
             )
-            
+
         except HTTPException:
             raise
         except Exception as e:
@@ -279,57 +305,67 @@ class MLAPIIntegration:
     ) -> List[Dict[str, Any]]:
         """
         Predict best value players (points per million).
-        
+
         Args:
             request: Best value request
-            
+
         Returns:
             List of best value players
         """
         self._check_predictor()
-        
+
         try:
-            # Query for players within price range
-            price_filter = f"AND AVG([perf IN recent_perfs | perf.value]) <= {request.max_price * 10}" if request.max_price else ""
-            position_filter = f"WHERE p.position = '{request.position}'" if request.position else ""
-            
+            position_clause = "AND pos.code = $position" if request.position else ""
+            # value in graph is stored as integer * 10 (e.g. 85 = £8.5m)
+            # We filter AFTER UNWINDING to correctly calculate averages
+            price_filter = (
+                f"WITH name, position, minutes, goals_scored, assists, form, bps, ict_index, value WHERE value <= {request.max_price * 10}"
+                if request.max_price else ""
+            )
+
             query = f"""
-            MATCH (p:Player)-[:PLAYED_IN]->(perf:Performance)
-            MATCH (perf)-[:IN_FIXTURE]->(f:Fixture)
-            {position_filter}
-            WHERE perf.minutes > 0
-            WITH p, perf, f
+            MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
+            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)
+            WHERE r.minutes > 0
+              {position_clause}
+            WITH p, pos, r, f
             ORDER BY f.kickoff_time DESC
-            WITH p, COLLECT(perf)[..4] as recent_perfs
+            WITH p, pos, COLLECT(r)[..4] AS recent_perfs
             WHERE SIZE(recent_perfs) >= 2
-            RETURN 
-                p.name as name,
-                p.position as position,
-                AVG([perf IN recent_perfs | perf.minutes]) as minutes,
-                AVG([perf IN recent_perfs | perf.goals_scored]) as goals_scored,
-                AVG([perf IN recent_perfs | perf.assists]) as assists,
-                AVG([perf IN recent_perfs | perf.total_points]) as form,
-                AVG([perf IN recent_perfs | perf.bps]) as bps,
-                AVG([perf IN recent_perfs | perf.ict_index]) as ict_index,
-                AVG([perf IN recent_perfs | perf.value]) as value
+            UNWIND recent_perfs AS perf
+            WITH 
+                p.name AS name, 
+                pos.code AS position, 
+                AVG(perf.minutes) AS minutes,
+                AVG(perf.goals_scored) AS goals_scored,
+                AVG(perf.assists) AS assists,
+                AVG(perf.total_points) AS form,
+                AVG(perf.bps) AS bps,
+                AVG(perf.ict_index) AS ict_index,
+                AVG(perf.value) AS value
             {price_filter}
+            RETURN name, position, minutes, goals_scored, assists, form, bps, ict_index, value
             LIMIT 200
             """
-            
-            players_data = self.neo4j_conn.execute_query(query)
-            
+
+            params = {"position": request.position}
+            players_data = self.neo4j_conn.execute_query(query, params)
+
             if not players_data:
                 return []
-            
+
+            # Prepare for inference
+            players_data = [self._prepare_for_inference(p) for p in players_data]
+
             # Predict best value
             results = self.predictor.predict_best_value(
                 players_data,
                 position=request.position,
                 top_k=request.top_k
             )
-            
+
             return results
-            
+
         except Exception as e:
             logger.error(f"Best value prediction failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))

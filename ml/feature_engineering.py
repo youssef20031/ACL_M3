@@ -334,7 +334,8 @@ class FeatureEngineer:
         Returns:
             Dataframe with new features
         """
-        df = df.sort_values(['name', 'kickoff_time']).copy()
+        sort_cols = ['name', 'kickoff_time'] if 'kickoff_time' in df.columns else ['name']
+        df = df.sort_values(sort_cols).copy()
         
         # 1. Minutes rolling average (captures rotation risk)
         df['minutes_rolling5'] = df.groupby('name')['minutes'].transform(

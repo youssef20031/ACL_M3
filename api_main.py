@@ -48,6 +48,7 @@ except Exception:
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
+from ml.api_integration import MLAPIIntegration, register_ml_routes
 
 import requests
 
@@ -65,6 +66,7 @@ app_state = {
     "embedding_build_error": None,
     "trivia_cache": None,
     "player_search_cache": None,
+    "ml_integration": None,
 }
 
 embedding_build_lock = Lock()
@@ -313,14 +315,34 @@ async def lifespan(app: FastAPI):
             print("   ℹ️  No prebuilt embeddings found (will build on request)")
     except Exception as emb_error:
         print(f"⚠️  Failed to load prebuilt embeddings: {emb_error}")
-    
+
+    # Initialize ML prediction integration
+    print("🤖 Initializing ML prediction engine...")
+    try:
+        ml_integration = MLAPIIntegration(
+            neo4j_conn=app_state["neo4j_conn"],
+            query_executor=None  # Not needed; queries run directly via neo4j_conn
+        )
+        # Try XGBoost models first (best performance), fall back to linear regression
+        model_loaded = False
+        for model_path in [
+            "ml/models/linear_regression_v1.pkl",
+        ]:
+            if os.path.exists(model_path):
+                ml_integration.load_predictor(model_path)
+                model_loaded = True
+                print(f"✅ ML model loaded: {model_path}")
+                break
+        if not model_loaded:
+            print("⚠️  No trained ML model found — prediction endpoints will be unavailable")
+        app_state["ml_integration"] = ml_integration
+    except Exception as ml_error:
+        print(f"⚠️  ML integration failed to initialize: {ml_error}")
+
     print("✅ API Ready!")
-    
-    # Defer heavy ML model initialization to first use
-    # This makes startup much faster
-    
+
     yield
-    
+
     # Shutdown
     if app_state["neo4j_conn"]:
         app_state["neo4j_conn"].close()
@@ -356,6 +378,49 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+
+# ============================================================================
+# ML Prediction Routes (registered at module load; integration resolved lazily)
+# ============================================================================
+
+class _LazyMLIntegration:
+    """Thin proxy that forwards calls to the MLAPIIntegration stored in app_state.
+    This lets us register routes at import time while the real instance is created
+    during the lifespan startup."""
+
+    @property
+    def _real(self):
+        return app_state.get("ml_integration")
+
+    @property
+    def predictor_loaded(self):
+        real = self._real
+        return real.predictor_loaded if real else False
+
+    @property
+    def predictor(self):
+        real = self._real
+        return real.predictor if real else None
+
+    async def predict_player_next_gameweek(self, request):
+        if not self._real:
+            raise HTTPException(status_code=503, detail="ML integration not initialized")
+        return await self._real.predict_player_next_gameweek(request)
+
+    async def predict_top_performers(self, request):
+        if not self._real:
+            raise HTTPException(status_code=503, detail="ML integration not initialized")
+        return await self._real.predict_top_performers(request)
+
+    async def predict_best_value(self, request):
+        if not self._real:
+            raise HTTPException(status_code=503, detail="ML integration not initialized")
+        return await self._real.predict_best_value(request)
+
+
+_lazy_ml = _LazyMLIntegration()
+register_ml_routes(app, _lazy_ml)
 
 
 # ============================================================================
