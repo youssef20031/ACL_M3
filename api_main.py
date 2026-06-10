@@ -323,16 +323,29 @@ async def lifespan(app: FastAPI):
             neo4j_conn=app_state["neo4j_conn"],
             query_executor=None  # Not needed; queries run directly via neo4j_conn
         )
-        # Try XGBoost models first (best performance), fall back to linear regression
+        # Try XGBoost models first (best performance)
+        xgb_models = {
+            "GK": "ml/models/xgboost_gk_v3.pkl",
+            "DEF": "ml/models/xgboost_def_v3.pkl",
+            "MID": "ml/models/xgboost_mid_v3.pkl",
+            "FWD": "ml/models/xgboost_fwd_v3.pkl"
+        }
+        
         model_loaded = False
-        for model_path in [
-            "ml/models/linear_regression_v1.pkl",
-        ]:
-            if os.path.exists(model_path):
-                ml_integration.load_predictor(model_path)
-                model_loaded = True
-                print(f"✅ ML model loaded: {model_path}")
-                break
+        if all(os.path.exists(p) for p in xgb_models.values()):
+            ml_integration.load_predictors_by_position(xgb_models)
+            model_loaded = True
+            print("✅ XGBoost position-specific ML models loaded")
+        else:
+            # Fall back to linear regression
+            for model_path in [
+                "ml/models/linear_regression_v1.pkl",
+            ]:
+                if os.path.exists(model_path):
+                    ml_integration.load_predictor(model_path)
+                    model_loaded = True
+                    print(f"✅ ML model loaded: {model_path}")
+                    break
         if not model_loaded:
             print("⚠️  No trained ML model found — prediction endpoints will be unavailable")
         app_state["ml_integration"] = ml_integration

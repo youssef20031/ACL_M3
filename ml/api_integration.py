@@ -71,6 +71,7 @@ class MLAPIIntegration:
         self.neo4j_conn = neo4j_conn
         self.query_executor = query_executor
         self.predictor = None
+        self.predictors = {}
         self.predictor_loaded = False
         
     def load_predictor(self, model_path: str = "ml/models/linear_regression_v1.pkl"):
@@ -87,10 +88,24 @@ class MLAPIIntegration:
         except Exception as e:
             logger.error(f"❌ Failed to load ML predictor: {e}")
             logger.warning("ML prediction endpoints will return errors")
+
+    def load_predictors_by_position(self, model_paths: dict):
+        """
+        Load multiple XGBoost predictors by position.
+        """
+        try:
+            for pos, path in model_paths.items():
+                self.predictors[pos] = FPLPredictor(model_path=path, model_type="xgboost")
+            self.predictor_loaded = len(self.predictors) > 0
+            if self.predictor_loaded:
+                logger.info(f"✅ XGBoost Predictors loaded for positions: {list(self.predictors.keys())}")
+        except Exception as e:
+            logger.error(f"❌ Failed to load XGBoost predictors: {e}")
+            logger.warning("ML prediction endpoints will return errors")
     
     def _check_predictor(self):
         """Ensure predictor is loaded."""
-        if not self.predictor_loaded or not self.predictor:
+        if not self.predictor_loaded:
             raise HTTPException(
                 status_code=503,
                 detail="ML predictor not loaded. Train a model first."
@@ -193,7 +208,9 @@ class MLAPIIntegration:
             player_data = self._prepare_for_inference(player_data)
 
             # Predict
-            prediction = self.predictor.predict_next_gameweek(player_data)
+            pos = player_data.get("position", "MID")
+            predictor = self.predictors.get(pos) or (list(self.predictors.values())[0] if self.predictors else self.predictor)
+            prediction = predictor.predict_next_gameweek(player_data)
 
             return PredictionResponse(
                 player_name=prediction.player_name,
@@ -273,11 +290,28 @@ class MLAPIIntegration:
             players_data = [self._prepare_for_inference(p) for p in players_data]
 
             # Predict
-            predictions = self.predictor.predict_top_performers(
-                players_data,
-                position=request.position,
-                top_k=request.top_k
-            )
+            if self.predictors:
+                from collections import defaultdict
+                grouped = defaultdict(list)
+                for p in players_data:
+                    grouped[p.get("position", "MID")].append(p)
+                
+                all_preds = []
+                for pos, group_players in grouped.items():
+                    predictor = self.predictors.get(pos) or list(self.predictors.values())[0]
+                    all_preds.extend(predictor.predict_top_performers(
+                        group_players,
+                        position=pos if request.position else None,
+                        top_k=len(group_players)
+                    ))
+                all_preds.sort(key=lambda x: x.predicted_points, reverse=True)
+                predictions = all_preds[:request.top_k]
+            else:
+                predictions = self.predictor.predict_top_performers(
+                    players_data,
+                    position=request.position,
+                    top_k=request.top_k
+                )
 
             # Convert to response format
             response_predictions = [
@@ -367,11 +401,28 @@ class MLAPIIntegration:
             players_data = [self._prepare_for_inference(p) for p in players_data]
 
             # Predict best value
-            results = self.predictor.predict_best_value(
-                players_data,
-                position=request.position,
-                top_k=request.top_k
-            )
+            if self.predictors:
+                from collections import defaultdict
+                grouped = defaultdict(list)
+                for p in players_data:
+                    grouped[p.get("position", "MID")].append(p)
+                
+                all_results = []
+                for pos, group_players in grouped.items():
+                    predictor = self.predictors.get(pos) or list(self.predictors.values())[0]
+                    all_results.extend(predictor.predict_best_value(
+                        group_players,
+                        position=pos if request.position else None,
+                        top_k=len(group_players)
+                    ))
+                all_results.sort(key=lambda x: x['points_per_million'], reverse=True)
+                results = all_results[:request.top_k]
+            else:
+                results = self.predictor.predict_best_value(
+                    players_data,
+                    position=request.position,
+                    top_k=request.top_k
+                )
 
             # Format results for consistency
             formatted_results = []
@@ -426,9 +477,16 @@ def register_ml_routes(app, ml_integration: MLAPIIntegration):
     @app.get("/api/ml/status")
     async def ml_status():
         """Check ML predictor status."""
+        if ml_integration.predictors:
+            model_type = "xgboost (position-specific)"
+        elif ml_integration.predictor:
+            model_type = ml_integration.predictor.model_type
+        else:
+            model_type = None
+            
         return {
             "predictor_loaded": ml_integration.predictor_loaded,
-            "model_type": ml_integration.predictor.model_type if ml_integration.predictor else None,
+            "model_type": model_type,
             "endpoints": [
                 "/api/ml/predict/player",
                 "/api/ml/predict/top-performers",
