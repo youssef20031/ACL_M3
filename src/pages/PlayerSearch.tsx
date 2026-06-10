@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Search, Loader2, AlertCircle, User, TrendingUp, Target, ArrowLeftRight, Gauge, Shield, Flame, Aperture } from 'lucide-react';
+import { Search, Loader2, AlertCircle, User, TrendingUp, Target, ArrowLeftRight, Gauge, Shield, Flame, Aperture, Sparkles } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
@@ -180,12 +180,21 @@ export function PlayerSearch() {
                     </div>
                   </div>
                 </div>
-                <div className="text-left sm:text-right">
+                <div className="text-left sm:text-right flex flex-col items-end gap-1">
                   {player.total_points != null && (
-                    <p className="font-bold text-purple-600">{player.total_points} pts</p>
+                    <p className={cn("font-bold", isDark ? "text-violet-400" : "text-purple-600")}>{player.total_points} pts</p>
+                  )}
+                  {player.predicted_points != null && (
+                    <div className={cn(
+                      "flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] font-black uppercase tracking-tighter",
+                      isDark ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    )}>
+                      <Sparkles className="w-3 h-3" />
+                      Next GW: {player.predicted_points.toFixed(1)}
+                    </div>
                   )}
                   {player.goals != null && (
-                    <p className="text-xs text-gray-500">{player.goals}G {player.assists ?? 0}A</p>
+                    <p className="text-xs opacity-50">{player.goals}G {player.assists ?? 0}A</p>
                   )}
                 </div>
               </button>
@@ -396,6 +405,12 @@ function PlayerDetail({
                 <span className={cn('rounded-full px-3 py-1 font-medium', isDark ? 'bg-white/10 text-slate-100' : 'bg-white/15 text-white')}>
                   {selectedSeason}
                 </span>
+                {stats.predicted_points != null && (
+                  <span className={cn('rounded-full px-3 py-1 font-black flex items-center gap-1.5 border shadow-lg', isDark ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'bg-emerald-500 text-white border-emerald-400')}>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Next GW: {stats.predicted_points.toFixed(1)} pts
+                  </span>
+                )}
               </div>
             </div>
           </div>

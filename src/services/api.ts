@@ -75,6 +75,26 @@ export interface HealthStatus {
   embedding_count: number;
   embeddings_building?: boolean;
   embedding_build_error?: string | null;
+  ml_available?: boolean;
+  ml_model_type?: string | null;
+}
+
+export interface MLPrediction {
+  player_name: string;
+  predicted_points: number;
+  confidence_interval?: [number, number];
+  features_used?: Record<string, any>;
+  model_version: string;
+}
+
+export interface TopPerformersResponse {
+  predictions: MLPrediction[];
+  metadata: Record<string, any>;
+}
+
+export interface BestValueResponse {
+  predictions: (MLPrediction & { value: number; cost: number })[];
+  metadata: Record<string, any>;
 }
 
 export interface EmbeddingBuildResponse {
@@ -111,6 +131,35 @@ export const apiService = {
 
   async disconnectNeo4j(): Promise<{ success: boolean; message: string }> {
     const { data } = await api.post('/api/connection/disconnect');
+    return data;
+  },
+
+  // ML Predictions
+  async predictPlayer(playerName: string): Promise<MLPrediction> {
+    const { data } = await api.post<MLPrediction>('/api/ml/predict/player', {
+      player_name: playerName,
+    });
+    return data;
+  },
+
+  async predictTopPerformers(position?: string, topK: number = 10): Promise<TopPerformersResponse> {
+    const { data } = await api.post<TopPerformersResponse>('/api/ml/predict/top-performers', {
+      position,
+      top_k: topK,
+    });
+    return data;
+  },
+
+  async predictBestValue(position?: string, topK: number = 10): Promise<BestValueResponse> {
+    const { data } = await api.post<BestValueResponse>('/api/ml/predict/best-value', {
+      position,
+      top_k: topK,
+    });
+    return data;
+  },
+
+  async getMLStatus(): Promise<any> {
+    const { data } = await api.get('/api/ml/status');
     return data;
   },
 

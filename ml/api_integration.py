@@ -48,6 +48,12 @@ class TopPerformersResponse(BaseModel):
     metadata: Dict[str, Any]
 
 
+class BestValueResponse(BaseModel):
+    """Response for best value players."""
+    predictions: List[Dict[str, Any]]
+    metadata: Dict[str, Any]
+
+
 class MLAPIIntegration:
     """
     Integration layer for ML predictions in the API.
@@ -302,7 +308,7 @@ class MLAPIIntegration:
     async def predict_best_value(
         self,
         request: BestValueRequest
-    ) -> List[Dict[str, Any]]:
+    ) -> BestValueResponse:
         """
         Predict best value players (points per million).
 
@@ -310,7 +316,7 @@ class MLAPIIntegration:
             request: Best value request
 
         Returns:
-            List of best value players
+            BestValueResponse
         """
         self._check_predictor()
 
@@ -352,7 +358,10 @@ class MLAPIIntegration:
             players_data = self.neo4j_conn.execute_query(query, params)
 
             if not players_data:
-                return []
+                return BestValueResponse(
+                    predictions=[],
+                    metadata={"position_filter": request.position, "total_players_analyzed": 0}
+                )
 
             # Prepare for inference
             players_data = [self._prepare_for_inference(p) for p in players_data]
@@ -364,7 +373,25 @@ class MLAPIIntegration:
                 top_k=request.top_k
             )
 
-            return results
+            # Format results for consistency
+            formatted_results = []
+            for r in results:
+                formatted_results.append({
+                    "player_name": r["name"],
+                    "predicted_points": r["predicted_points"],
+                    "cost": r["value"] / 10.0,
+                    "value": r["points_per_million"],
+                    "model_version": "v1"
+                })
+
+            return BestValueResponse(
+                predictions=formatted_results,
+                metadata={
+                    "position_filter": request.position,
+                    "total_players_analyzed": len(players_data),
+                    "top_k": request.top_k
+                }
+            )
 
         except Exception as e:
             logger.error(f"Best value prediction failed: {e}")
@@ -391,7 +418,7 @@ def register_ml_routes(app, ml_integration: MLAPIIntegration):
         """Predict top K performers for next gameweek."""
         return await ml_integration.predict_top_performers(request)
     
-    @app.post("/api/ml/predict/best-value")
+    @app.post("/api/ml/predict/best-value", response_model=BestValueResponse)
     async def predict_best_value(request: BestValueRequest):
         """Predict best value players (points per million)."""
         return await ml_integration.predict_best_value(request)

@@ -48,7 +48,7 @@ except Exception:
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
-from ml.api_integration import MLAPIIntegration, register_ml_routes
+from ml.api_integration import MLAPIIntegration, register_ml_routes, PlayerPredictionRequest, TopPerformersRequest
 
 import requests
 
@@ -455,9 +455,11 @@ class QueryResponse(BaseModel):
     cypher_query: str
     kg_context: str
     embedding_context: Optional[str] = None
+    ml_context: Optional[str] = None
     embedding_used: bool = False
     results: List[Dict[str, Any]]
     graph_data: Optional[Dict[str, Any]] = None
+    model_type: Optional[str] = None
 
 
 class ImageSearchResponse(BaseModel):
@@ -1113,6 +1115,8 @@ async def health_check():
         "embedding_count": embedding_count,
         "embeddings_building": app_state["embedding_building"],
         "embedding_build_error": app_state["embedding_build_error"],
+        "ml_available": app_state["ml_integration"].predictor_loaded if app_state["ml_integration"] else False,
+        "ml_model_type": app_state["ml_integration"].predictor.model_type if app_state["ml_integration"] and app_state["ml_integration"].predictor else None,
     }
 
 
@@ -1270,18 +1274,28 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
             executed_query = query
         
-        if not results:
-            query, query_params = CypherQueries.get_top_players_all_positions(
-                season=params.get("season"),
-                gameweek=params.get("gameweek"),
-                limit_per_position=5
-            )
-            results = conn.execute_query(query, query_params)
-            cypher_context = PromptBuilder.format_kg_context(results)
-            cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
-            executed_query = query
-        
-        # Step 5: Embedding search
+        # Step 5: ML Predictions
+        ml_context = None
+        if intent_result.intent == Intent.PREDICTION:
+            ml_integration = app_state.get("ml_integration")
+            if ml_integration and ml_integration.predictor_loaded:
+                try:
+                    # If a player was extracted, get single player prediction
+                    if entities.players:
+                        pred_req = PlayerPredictionRequest(player_name=entities.players[0])
+                        pred = await ml_integration.predict_player_next_gameweek(pred_req)
+                        ml_context = f"- {pred.player_name}: {pred.predicted_points:.1f} predicted points for the next gameweek"
+                    else:
+                        # Otherwise get top performers for the detected position or overall
+                        pos = entities.positions[0] if entities.positions else None
+                        top_req = TopPerformersRequest(position=pos, top_k=5)
+                        top_preds = await ml_integration.predict_top_performers(top_req)
+                        ml_context = "Top predicted performers for the next gameweek:\n" + \
+                                     "\n".join([f"- {p.player_name}: {p.predicted_points:.1f} pts" for p in top_preds.predictions])
+                except Exception as ml_err:
+                    logger.error(f"ML prediction failed during query: {ml_err}")
+
+        # Step 6: Embedding search
         embedding_context = ""
         embedding_used = False
         
@@ -1336,7 +1350,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 except Exception as e:
                     print(f"Embedding search failed: {e}")
         
-        # Step 6: Generate LLM response
+        # Step 7: Generate LLM response
         answer = ""
         if app_state["llm_manager"] and app_state["llm_manager"].client:
             data_scope = f"the {params['season']} season" if "season" in params else "all seasons (2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26)"
@@ -1344,6 +1358,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 question=request.question,
                 kg_context=cypher_context,
                 embedding_context=embedding_context if embedding_context else None,
+                ml_context=ml_context,
                 data_scope=data_scope,
                 is_first_message=request.is_first_message,
                 chat_history=request.chat_history,
@@ -1381,9 +1396,11 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             cypher_query=executed_query,
             kg_context=cypher_context,
             embedding_context=embedding_context,
+            ml_context=ml_context,
             embedding_used=embedding_used,
             results=results[:50],  # Limit results sent to frontend
-            graph_data=graph_data
+            graph_data=graph_data,
+            model_type=app_state["ml_integration"].predictor.model_type if app_state["ml_integration"] and app_state["ml_integration"].predictor else None
         )
         
     except Exception as e:
@@ -1597,6 +1614,20 @@ async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_co
             results = enrich_rows_with_avatars(results[: request.limit])
         else:
             results = results[: request.limit]
+
+        # Enrich with ML predictions if available
+        ml_integration = app_state.get("ml_integration")
+        if ml_integration and ml_integration.predictor_loaded:
+            for row in results:
+                try:
+                    p_name = row.get("player_name")
+                    if p_name:
+                        pred = await ml_integration.predict_player_next_gameweek(
+                            PlayerPredictionRequest(player_name=p_name)
+                        )
+                        row["predicted_points"] = pred.predicted_points
+                except Exception:
+                    pass
 
         return {"players": results[: request.limit]}
     except Exception as e:

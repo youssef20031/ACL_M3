@@ -32,6 +32,9 @@ class Intent(Enum):
     TRANSFERS = "transfers"
     MOST_SELECTED = "most_selected"
     
+    # ML Predictions
+    PREDICTION = "prediction"
+    
     # Trivia
     TRIVIA = "trivia"
     
@@ -187,6 +190,15 @@ class IntentClassifier:
                 r"template",
                 r"essential",
             ],
+
+            Intent.PREDICTION: [
+                r"predict(?:ions?)?",
+                r"forecast",
+                r"who will score",
+                r"next (?:gw|gameweek)",
+                r"expected (?:points|performance)",
+                r"who (?:should|is likely to) perform",
+            ],
             
             Intent.TRIVIA: [
                 r"trivia",
@@ -298,6 +310,7 @@ class IntentClassifier:
             Intent.SEASON_SUMMARY: "get_season_summary",
             Intent.RECOMMENDATION: "get_best_value_players",  # Default recommendation strategy
             Intent.TRIVIA: "get_highest_single_gameweek_score", # Default trivia
+            Intent.PREDICTION: "get_ml_predictions",
         }
         
         return intent_to_query.get(intent, "")
@@ -320,6 +333,7 @@ class IntentClassifier:
             Intent.ICT_INDEX: "Find players with highest ICT index",
             Intent.TRANSFERS: "Find most transferred players",
             Intent.MOST_SELECTED: "Find most selected players",
+            Intent.PREDICTION: "Get ML model predictions for future gameweeks",
             Intent.TRIVIA: "Play FPL trivia",
             Intent.RECOMMENDATION: "Get player recommendations",
             Intent.SEASON_SUMMARY: "Get season overview and statistics",
