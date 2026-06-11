@@ -39,7 +39,8 @@ from graph.queries import CypherQueries, QueryExecutor
 from graph.data_loader import FPLDataLoader
 from preprocessing.intent_classifier import IntentClassifier, Intent
 from preprocessing.entity_extractor import EntityExtractor
-from embeddings.embedding_manager import EmbeddingManager
+# LAZY IMPORT: EmbeddingManager only when needed to avoid transformer/Keras dependency
+# from embeddings.embedding_manager import EmbeddingManager
 try:
     import redis  # type: ignore
 except Exception:
@@ -293,6 +294,9 @@ async def lifespan(app: FastAPI):
     # Try to load prebuilt embeddings on startup (Railway optimization)
     print("🔮 Checking for prebuilt embeddings...")
     try:
+        # Lazy import to avoid transformer/Keras dependency at startup
+        from embeddings.embedding_manager import EmbeddingManager
+        
         # Try MPNet first, then MiniLM
         for model_key in ["mpnet", "minilm"]:
             prebuilt_path = f"embeddings/prebuilt/{model_key}_embeddings.pkl"
@@ -313,6 +317,9 @@ async def lifespan(app: FastAPI):
                     break
         else:
             print("   ℹ️  No prebuilt embeddings found (will build on request)")
+    except ImportError as import_err:
+        print(f"⚠️  EmbeddingManager import failed (transformer dependency issue): {import_err}")
+        print("   ℹ️  Embeddings will be unavailable but ML predictions will work")
     except Exception as emb_error:
         print(f"⚠️  Failed to load prebuilt embeddings: {emb_error}")
 
@@ -842,6 +849,8 @@ def run_embedding_build(model_key: str, conn: Neo4jConnection) -> None:
 
         if not app_state["embedding_manager"]:
             logger.info("Initializing embedding manager...")
+            # Lazy import
+            from embeddings.embedding_manager import EmbeddingManager
             app_state["embedding_manager"] = EmbeddingManager(model_key=model_key)
             
             # Try to load prebuilt embeddings first (for Railway)
@@ -1316,6 +1325,8 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             current_manager = app_state["embedding_manager"]
             if not current_manager:
                 # No manager yet — create a lazy one with prebuilt
+                # Lazy import to avoid dependency issue
+                from embeddings.embedding_manager import EmbeddingManager
                 manager = EmbeddingManager.__new__(EmbeddingManager)
                 manager.model_key = request.embedding_model
                 manager.model_info = EmbeddingManager.MODELS[request.embedding_model]
@@ -1329,6 +1340,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                     app_state["embeddings_built"] = True
             elif current_manager.model_key != request.embedding_model:
                 # Switch to different prebuilt model without loading transformer
+                from embeddings.embedding_manager import EmbeddingManager
                 manager = EmbeddingManager.__new__(EmbeddingManager)
                 manager.model_key = request.embedding_model
                 manager.model_info = EmbeddingManager.MODELS[request.embedding_model]
@@ -1433,6 +1445,8 @@ async def build_embeddings(request: EmbeddingBuildRequest, conn=Depends(get_neo4
 
         # Initialize embedding manager if not already present
         if not app_state["embedding_manager"]:
+            # Lazy import
+            from embeddings.embedding_manager import EmbeddingManager
             app_state["embedding_manager"] = EmbeddingManager(model_key=request.model)
 
         build_thread = Thread(

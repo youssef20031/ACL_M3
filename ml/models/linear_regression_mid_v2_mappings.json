@@ -85,7 +85,8 @@
     "gw_in_season",
     "opp_def_strength",
     "opp_off_strength",
-    "team_def_strength"
+    "team_def_strength",
+    "fixtures_this_gw"
   ],
   "feature_names": [
     "creativity",
@@ -118,6 +119,7 @@
     "opp_def_strength",
     "opp_off_strength",
     "team_def_strength",
+    "fixtures_this_gw",
     "position_AM",
     "position_DEF",
     "position_FWD",
