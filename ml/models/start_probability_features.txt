@@ -1,0 +1,41 @@
+minutes_rolling5
+form
+was_home
+gw_in_season
+value
+ict_index
+influence
+creativity
+threat
+position_AM
+position_DEF
+position_FWD
+position_GK
+position_MID
+team_goals
+team_def_strength
+team_Arsenal
+team_Aston Villa
+team_Bournemouth
+team_Brentford
+team_Brighton
+team_Burnley
+team_Chelsea
+team_Crystal Palace
+team_Everton
+team_Fulham
+team_Ipswich
+team_Leeds
+team_Leicester
+team_Liverpool
+team_Luton
+team_Man City
+team_Man Utd
+team_Newcastle
+team_Nott'm Forest
+team_Sheffield Utd
+team_Southampton
+team_Spurs
+team_Sunderland
+team_West Ham
+team_Wolves
