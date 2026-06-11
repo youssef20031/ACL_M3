@@ -66,7 +66,9 @@ class FeatureEngineer:
             # IMPROVEMENT 9: Opponent strength (for attackers)
             'opp_def_strength',
             # IMPROVEMENT 11: Defensive features (for GK/DEF clean sheets)
-            'opp_off_strength', 'team_def_strength'
+            'opp_off_strength', 'team_def_strength',
+            # IMPROVEMENT 12: Double gameweek feature
+            'fixtures_this_gw'
         ]
         
         self.is_fitted = True
@@ -382,7 +384,10 @@ class FeatureEngineer:
         # 6 & 7. Defensive features (IMPROVEMENT 11) - helps GK/DEF with clean sheets
         df = self._add_defensive_features(df)
         
-        logger.info("Added 8 high-signal features: minutes_rolling5, points_per_90, home_form, away_form, gw_in_season, opp_def_strength, opp_off_strength, team_def_strength")
+        # 8. Double Gameweek (DGW) feature (IMPROVEMENT 12) - captures biggest FPL edge
+        df = self._add_dgw_feature(df)
+        
+        logger.info("Added 9 high-signal features: minutes_rolling5, points_per_90, home_form, away_form, gw_in_season, opp_def_strength, opp_off_strength, team_def_strength, fixtures_this_gw")
         
         return df
     
@@ -544,3 +549,56 @@ class FeatureEngineer:
         
         return df
 
+
+    
+    def _add_dgw_feature(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        IMPROVEMENT 12: Add Double Gameweek (DGW) feature.
+        
+        In FPL, some gameweeks have teams playing multiple fixtures (double/triple gameweeks).
+        This is the BIGGEST edge in FPL as players can score points in multiple matches.
+        
+        Feature: fixtures_this_gw = number of fixtures player has in this gameweek
+        - Normal gameweek: 1 fixture
+        - Double gameweek: 2 fixtures (points × 1.5-1.8 typical)
+        - Triple gameweek: 3 fixtures (rare, points × 2.0-2.5)
+        
+        Args:
+            df: Input dataframe
+            
+        Returns:
+            Dataframe with fixtures_this_gw feature
+        """
+        # Check if we have the required columns
+        required_cols = ['name', 'GW']
+        if 'season_x' in df.columns:
+            required_cols.append('season_x')
+        
+        if not all(col in df.columns for col in ['name', 'GW']):
+            logger.warning("Cannot compute DGW feature - missing name or GW column")
+            df['fixtures_this_gw'] = 1
+            return df
+        
+        # Count fixtures per player per gameweek
+        # Group by player + GW (+ season if available) and count rows
+        group_cols = ['name', 'GW']
+        if 'season_x' in df.columns:
+            group_cols.append('season_x')
+        
+        df['fixtures_this_gw'] = df.groupby(group_cols)['name'].transform('count')
+        
+        # Log statistics - calculate BEFORE duplication per fixture
+        fixture_counts = df.groupby(group_cols).size()
+        single_gw_count = (fixture_counts == 1).sum()
+        dgw_count = (fixture_counts == 2).sum()
+        tgw_count = (fixture_counts >= 3).sum()
+        total_player_gw_combinations = len(fixture_counts)
+        
+        dgw_pct = dgw_count / total_player_gw_combinations * 100 if total_player_gw_combinations > 0 else 0
+        tgw_pct = tgw_count / total_player_gw_combinations * 100 if total_player_gw_combinations > 0 else 0
+        
+        max_fixtures = df['fixtures_this_gw'].max()
+        
+        logger.info(f"Added DGW feature: {single_gw_count:,} single GWs ({100-dgw_pct-tgw_pct:.1f}%), {dgw_count:,} DGWs ({dgw_pct:.1f}%), {tgw_count:,} TGWs ({tgw_pct:.1f}%) - max {max_fixtures} fixtures/GW")
+        
+        return df

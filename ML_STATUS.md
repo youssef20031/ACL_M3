@@ -57,13 +57,17 @@
 - Fast inference (<2ms per player)
 - Validated performance (no overfitting)
 - Reproducible pipeline
+- ✅ Start probability model (V6.1 calibrated)
+- ✅ Double gameweek feature (fixtures_this_gw)
 
-### ⚠️ Before Deployment (Priority 1)
-1. **Calibration analysis** - Check predicted vs actual bins
-2. **Start probability model** - Handle rotation/benching
-3. **Double gameweek feature** - Add fixtures_this_gw counter
+### ⚠️ Before Deployment
+1. ~~**Calibration analysis**~~ ✅ DONE (V6.1)
+2. ~~**Start probability model**~~ ✅ DONE (V6.1 calibrated)
+3. ~~**Double gameweek feature**~~ ✅ DONE (fixtures_this_gw added)
+4. **API Integration** - Integrate ML endpoints
+5. **End-to-end testing** - Test full prediction pipeline
 
-**Estimated effort**: 1-2 days
+**Status**: All Priority 1 features complete! Ready for API integration.
 
 ---
 
@@ -150,9 +154,9 @@ python ml/validate_no_leakage.py
 - [x] ✅ Cross-validation confirms performance
 - [x] ✅ Feature importance realistic (no >50% features)
 - [x] ✅ No overfitting (test R² ≈ validation R²)
-- [ ] ⚠️ Calibration verified (predicted bins match actual)
-- [ ] ⚠️ Start probability added (rotation handling)
-- [ ] ⚠️ DGW feature added (fixtures_this_gw)
+- [x] ✅ Calibration verified (V6.1 avg gap 5.0%)
+- [x] ✅ Start probability added (V6.1 calibrated model)
+- [x] ✅ DGW feature added (fixtures_this_gw)
 
 ---
 
@@ -160,6 +164,7 @@ python ml/validate_no_leakage.py
 
 **Main Docs**:
 - `ML_V6_LEAKAGE_CORRECTED.md` - Comprehensive V6 documentation
+- `ML_V6.1_START_PROBABILITY_CALIBRATED.md` - Start probability calibration ✅
 - `ml/LEAKAGE_SUMMARY.md` - Leakage discovery & fix details
 - `ml/README.md` - Module overview & API integration
 
