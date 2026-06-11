@@ -5,6 +5,7 @@ import { QAAssistant } from './pages/QAAssistant';
 import { Trivia } from './pages/Trivia';
 import { PlayerSearch } from './pages/PlayerSearch';
 import { PlayerComparison } from './pages/PlayerComparison';
+import { Predictions } from './pages/Predictions';
 import { Settings } from './pages/Settings';
 import './App.css';
 
@@ -26,6 +27,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/qa" replace />} />
             <Route path="qa" element={<QAAssistant />} />
+            <Route path="predictions" element={<Predictions />} />
             <Route path="trivia" element={<Trivia />} />
             <Route path="search" element={<PlayerSearch />} />
             <Route path="compare" element={<PlayerComparison />} />

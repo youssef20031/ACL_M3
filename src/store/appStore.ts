@@ -25,6 +25,12 @@ export interface AppState {
   setEmbeddingsBuilt: (built: boolean) => void;
   setEmbeddingCount: (count: number) => void;
 
+  // ML Predictions
+  mlAvailable: boolean;
+  mlModelType: string | null;
+  setMlAvailable: (available: boolean) => void;
+  setMlModelType: (modelType: string | null) => void;
+
   // Chat
   chatHistory: Message[];
   addMessage: (message: Message) => void;
@@ -65,6 +71,12 @@ export const useAppStore = create<AppState>()(
       embeddingCount: 0,
       setEmbeddingsBuilt: (built) => set({ embeddingsBuilt: built }),
       setEmbeddingCount: (count) => set({ embeddingCount: count }),
+
+      // ML Predictions
+      mlAvailable: false,
+      mlModelType: null,
+      setMlAvailable: (available) => set({ mlAvailable: available }),
+      setMlModelType: (modelType) => set({ mlModelType: modelType }),
 
       // Chat
       chatHistory: [],

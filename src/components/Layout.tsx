@@ -49,6 +49,14 @@ export function Layout() {
     setNeo4jStats(health.neo4j_stats ?? null);
     setEmbeddingsBuilt(health.embeddings_built);
     setEmbeddingCount(health.embedding_count);
+    
+    // ML integration updates
+    if (health.ml_available !== undefined) {
+      useAppStore.getState().setMlAvailable(health.ml_available);
+    }
+    if (health.ml_model_type !== undefined) {
+      useAppStore.getState().setMlModelType(health.ml_model_type);
+    }
   }, [health, setEmbeddingCount, setEmbeddingsBuilt, setNeo4jConnected, setNeo4jStats]);
 
   useEffect(() => {
@@ -75,6 +83,7 @@ export function Layout() {
 
   const navItems = [
     { to: '/qa', icon: MessageCircle, label: 'Q&A Assistant' },
+    { to: '/predictions', icon: Sparkles, label: 'ML Predictions' },
     { to: '/trivia', icon: Target, label: 'FantasyTrivia' },
     { to: '/search', icon: Search, label: 'Player Search' },
     { to: '/compare', icon: ArrowLeftRight, label: 'Compare Players' },

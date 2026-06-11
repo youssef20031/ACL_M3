@@ -39,7 +39,8 @@ from graph.queries import CypherQueries, QueryExecutor
 from graph.data_loader import FPLDataLoader
 from preprocessing.intent_classifier import IntentClassifier, Intent
 from preprocessing.entity_extractor import EntityExtractor
-from embeddings.embedding_manager import EmbeddingManager
+# LAZY IMPORT: EmbeddingManager only when needed to avoid transformer/Keras dependency
+# from embeddings.embedding_manager import EmbeddingManager
 try:
     import redis  # type: ignore
 except Exception:
@@ -48,6 +49,7 @@ except Exception:
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
+from ml.api_integration import MLAPIIntegration, register_ml_routes, PlayerPredictionRequest, TopPerformersRequest
 
 import requests
 
@@ -65,6 +67,7 @@ app_state = {
     "embedding_build_error": None,
     "trivia_cache": None,
     "player_search_cache": None,
+    "ml_integration": None,
 }
 
 embedding_build_lock = Lock()
@@ -291,6 +294,9 @@ async def lifespan(app: FastAPI):
     # Try to load prebuilt embeddings on startup (Railway optimization)
     print("🔮 Checking for prebuilt embeddings...")
     try:
+        # Lazy import to avoid transformer/Keras dependency at startup
+        from embeddings.embedding_manager import EmbeddingManager
+        
         # Try MPNet first, then MiniLM
         for model_key in ["mpnet", "minilm"]:
             prebuilt_path = f"embeddings/prebuilt/{model_key}_embeddings.pkl"
@@ -311,16 +317,52 @@ async def lifespan(app: FastAPI):
                     break
         else:
             print("   ℹ️  No prebuilt embeddings found (will build on request)")
+    except ImportError as import_err:
+        print(f"⚠️  EmbeddingManager import failed (transformer dependency issue): {import_err}")
+        print("   ℹ️  Embeddings will be unavailable but ML predictions will work")
     except Exception as emb_error:
         print(f"⚠️  Failed to load prebuilt embeddings: {emb_error}")
-    
+
+    # Initialize ML prediction integration
+    print("🤖 Initializing ML prediction engine...")
+    try:
+        ml_integration = MLAPIIntegration(
+            neo4j_conn=app_state["neo4j_conn"],
+            query_executor=None  # Not needed; queries run directly via neo4j_conn
+        )
+        # Try XGBoost models first (best performance)
+        xgb_models = {
+            "GK": "ml/models/xgboost_gk_v3.pkl",
+            "DEF": "ml/models/xgboost_def_v3.pkl",
+            "MID": "ml/models/xgboost_mid_v3.pkl",
+            "FWD": "ml/models/xgboost_fwd_v3.pkl"
+        }
+        
+        model_loaded = False
+        if all(os.path.exists(p) for p in xgb_models.values()):
+            ml_integration.load_predictors_by_position(xgb_models)
+            model_loaded = True
+            print("✅ XGBoost position-specific ML models loaded")
+        else:
+            # Fall back to linear regression
+            for model_path in [
+                "ml/models/linear_regression_v1.pkl",
+            ]:
+                if os.path.exists(model_path):
+                    ml_integration.load_predictor(model_path)
+                    model_loaded = True
+                    print(f"✅ ML model loaded: {model_path}")
+                    break
+        if not model_loaded:
+            print("⚠️  No trained ML model found — prediction endpoints will be unavailable")
+        app_state["ml_integration"] = ml_integration
+    except Exception as ml_error:
+        print(f"⚠️  ML integration failed to initialize: {ml_error}")
+
     print("✅ API Ready!")
-    
-    # Defer heavy ML model initialization to first use
-    # This makes startup much faster
-    
+
     yield
-    
+
     # Shutdown
     if app_state["neo4j_conn"]:
         app_state["neo4j_conn"].close()
@@ -359,6 +401,54 @@ app.add_middleware(
 
 
 # ============================================================================
+# ML Prediction Routes (registered at module load; integration resolved lazily)
+# ============================================================================
+
+class _LazyMLIntegration:
+    """Thin proxy that forwards calls to the MLAPIIntegration stored in app_state.
+    This lets us register routes at import time while the real instance is created
+    during the lifespan startup."""
+
+    @property
+    def _real(self):
+        return app_state.get("ml_integration")
+
+    @property
+    def predictor_loaded(self):
+        real = self._real
+        return real.predictor_loaded if real else False
+
+    @property
+    def predictor(self):
+        real = self._real
+        return real.predictor if real else None
+
+    @property
+    def predictors(self):
+        real = self._real
+        return real.predictors if real else {}
+
+    async def predict_player_next_gameweek(self, request):
+        if not self._real:
+            raise HTTPException(status_code=503, detail="ML integration not initialized")
+        return await self._real.predict_player_next_gameweek(request)
+
+    async def predict_top_performers(self, request):
+        if not self._real:
+            raise HTTPException(status_code=503, detail="ML integration not initialized")
+        return await self._real.predict_top_performers(request)
+
+    async def predict_best_value(self, request):
+        if not self._real:
+            raise HTTPException(status_code=503, detail="ML integration not initialized")
+        return await self._real.predict_best_value(request)
+
+
+_lazy_ml = _LazyMLIntegration()
+register_ml_routes(app, _lazy_ml)
+
+
+# ============================================================================
 # Pydantic Models
 # ============================================================================
 
@@ -390,9 +480,11 @@ class QueryResponse(BaseModel):
     cypher_query: str
     kg_context: str
     embedding_context: Optional[str] = None
+    ml_context: Optional[str] = None
     embedding_used: bool = False
     results: List[Dict[str, Any]]
     graph_data: Optional[Dict[str, Any]] = None
+    model_type: Optional[str] = None
 
 
 class ImageSearchResponse(BaseModel):
@@ -762,6 +854,8 @@ def run_embedding_build(model_key: str, conn: Neo4jConnection) -> None:
 
         if not app_state["embedding_manager"]:
             logger.info("Initializing embedding manager...")
+            # Lazy import
+            from embeddings.embedding_manager import EmbeddingManager
             app_state["embedding_manager"] = EmbeddingManager(model_key=model_key)
             
             # Try to load prebuilt embeddings first (for Railway)
@@ -1039,6 +1133,14 @@ async def health_check():
             logger.warning(f"Failed to get embedding count: {e}")
             embedding_count = 0
     
+    ml_integration = app_state.get("ml_integration")
+    ml_model_type = None
+    if ml_integration:
+        if ml_integration.predictors:
+            ml_model_type = "xgboost (position-specific)"
+        elif ml_integration.predictor:
+            ml_model_type = ml_integration.predictor.model_type
+            
     return {
         "status": "healthy",
         "neo4j": neo4j_status,
@@ -1048,6 +1150,8 @@ async def health_check():
         "embedding_count": embedding_count,
         "embeddings_building": app_state["embedding_building"],
         "embedding_build_error": app_state["embedding_build_error"],
+        "ml_available": ml_integration.predictor_loaded if ml_integration else False,
+        "ml_model_type": ml_model_type,
     }
 
 
@@ -1205,18 +1309,28 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
             executed_query = query
         
-        if not results:
-            query, query_params = CypherQueries.get_top_players_all_positions(
-                season=params.get("season"),
-                gameweek=params.get("gameweek"),
-                limit_per_position=5
-            )
-            results = conn.execute_query(query, query_params)
-            cypher_context = PromptBuilder.format_kg_context(results)
-            cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
-            executed_query = query
-        
-        # Step 5: Embedding search
+        # Step 5: ML Predictions
+        ml_context = None
+        if intent_result.intent == Intent.PREDICTION:
+            ml_integration = app_state.get("ml_integration")
+            if ml_integration and ml_integration.predictor_loaded:
+                try:
+                    # If a player was extracted, get single player prediction
+                    if entities.players:
+                        pred_req = PlayerPredictionRequest(player_name=entities.players[0])
+                        pred = await ml_integration.predict_player_next_gameweek(pred_req)
+                        ml_context = f"- {pred.player_name}: {pred.predicted_points:.1f} predicted points for the next gameweek"
+                    else:
+                        # Otherwise get top performers for the detected position or overall
+                        pos = entities.positions[0] if entities.positions else None
+                        top_req = TopPerformersRequest(position=pos, top_k=5)
+                        top_preds = await ml_integration.predict_top_performers(top_req)
+                        ml_context = "Top predicted performers for the next gameweek:\n" + \
+                                     "\n".join([f"- {p.player_name}: {p.predicted_points:.1f} pts" for p in top_preds.predictions])
+                except Exception as ml_err:
+                    logger.error(f"ML prediction failed during query: {ml_err}")
+
+        # Step 6: Embedding search
         embedding_context = ""
         embedding_used = False
         
@@ -1224,6 +1338,8 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             current_manager = app_state["embedding_manager"]
             if not current_manager:
                 # No manager yet — create a lazy one with prebuilt
+                # Lazy import to avoid dependency issue
+                from embeddings.embedding_manager import EmbeddingManager
                 manager = EmbeddingManager.__new__(EmbeddingManager)
                 manager.model_key = request.embedding_model
                 manager.model_info = EmbeddingManager.MODELS[request.embedding_model]
@@ -1237,6 +1353,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                     app_state["embeddings_built"] = True
             elif current_manager.model_key != request.embedding_model:
                 # Switch to different prebuilt model without loading transformer
+                from embeddings.embedding_manager import EmbeddingManager
                 manager = EmbeddingManager.__new__(EmbeddingManager)
                 manager.model_key = request.embedding_model
                 manager.model_info = EmbeddingManager.MODELS[request.embedding_model]
@@ -1271,7 +1388,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 except Exception as e:
                     print(f"Embedding search failed: {e}")
         
-        # Step 6: Generate LLM response
+        # Step 7: Generate LLM response
         answer = ""
         if app_state["llm_manager"] and app_state["llm_manager"].client:
             data_scope = f"the {params['season']} season" if "season" in params else "all seasons (2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26)"
@@ -1279,6 +1396,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 question=request.question,
                 kg_context=cypher_context,
                 embedding_context=embedding_context if embedding_context else None,
+                ml_context=ml_context,
                 data_scope=data_scope,
                 is_first_message=request.is_first_message,
                 chat_history=request.chat_history,
@@ -1309,6 +1427,14 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         # Build graph visualization data
         graph_data = build_graph_data(results)
         
+        ml_integration = app_state.get("ml_integration")
+        ml_model_type = None
+        if ml_integration:
+            if ml_integration.predictors:
+                ml_model_type = "xgboost (position-specific)"
+            elif ml_integration.predictor:
+                ml_model_type = ml_integration.predictor.model_type
+
         return QueryResponse(
             answer=answer,
             intent=intent_result.intent.value,
@@ -1316,9 +1442,11 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             cypher_query=executed_query,
             kg_context=cypher_context,
             embedding_context=embedding_context,
+            ml_context=ml_context,
             embedding_used=embedding_used,
             results=results[:50],  # Limit results sent to frontend
-            graph_data=graph_data
+            graph_data=graph_data,
+            model_type=ml_model_type
         )
         
     except Exception as e:
@@ -1338,6 +1466,8 @@ async def build_embeddings(request: EmbeddingBuildRequest, conn=Depends(get_neo4
 
         # Initialize embedding manager if not already present
         if not app_state["embedding_manager"]:
+            # Lazy import
+            from embeddings.embedding_manager import EmbeddingManager
             app_state["embedding_manager"] = EmbeddingManager(model_key=request.model)
 
         build_thread = Thread(
@@ -1532,6 +1662,20 @@ async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_co
             results = enrich_rows_with_avatars(results[: request.limit])
         else:
             results = results[: request.limit]
+
+        # Enrich with ML predictions if available
+        ml_integration = app_state.get("ml_integration")
+        if ml_integration and ml_integration.predictor_loaded:
+            for row in results:
+                try:
+                    p_name = row.get("player_name")
+                    if p_name:
+                        pred = await ml_integration.predict_player_next_gameweek(
+                            PlayerPredictionRequest(player_name=p_name)
+                        )
+                        row["predicted_points"] = pred.predicted_points
+                except Exception:
+                    pass
 
         return {"players": results[: request.limit]}
     except Exception as e:

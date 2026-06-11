@@ -85,6 +85,12 @@ export function Settings() {
                 ok={health.embeddings_built && !health.embeddings_building}
                 theme={theme}
               />
+              <StatusRow 
+                label="ML Engine" 
+                value={health.ml_available ? `Online (${health.ml_model_type || 'XGBoost'})` : 'Offline'} 
+                ok={health.ml_available || false} 
+                theme={theme} 
+              />
             </div>
             {health.embedding_build_error && (
               <p className={cn('text-xs', isDark ? 'text-red-300' : 'text-red-600')}>

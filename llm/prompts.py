@@ -47,6 +47,7 @@ You present data clearly and draw meaningful conclusions."""
         question: str,
         kg_context: str,
         embedding_context: Optional[str] = None,
+        ml_context: Optional[str] = None,
         persona: str = "conversational_fpl",
         data_scope: Optional[str] = None,
         is_first_message: bool = False,
@@ -60,6 +61,7 @@ You present data clearly and draw meaningful conclusions."""
             question: User's question
             kg_context: Context from Cypher queries
             embedding_context: Optional context from embedding search
+            ml_context: Optional context from ML prediction engine (XGBoost forecasts)
             persona: Persona key
             data_scope: Description of the data scope (e.g., "all seasons (2020-21 through 2025-26)" or "2025-26 season")
             chat_history: Previous conversation messages for context
@@ -112,7 +114,7 @@ Example: Say "Salah scored 19 goals in the 2022-23 season" NOT "Salah scored 64 
 {greeting_directive}
 FirstMessage: {str(is_first_message)}
 {history_text}
-### Knowledge Graph Data:
+### Knowledge Graph Data (Historical Stats):
 {scope_text}{kg_context}
 """
         
@@ -120,6 +122,12 @@ FirstMessage: {str(is_first_message)}
             template += f"""
 ### Similar Players (Semantic Search):
 {embedding_context}
+"""
+
+        if ml_context:
+            template += f"""
+### ML Predictions (XGBoost Forecast):
+{ml_context}
 """
         
         template += f"""
@@ -134,6 +142,12 @@ FirstMessage: {str(is_first_message)}
 - NEVER say "Harry Kane scored 70 goals" without saying "across all seasons" or "in the 2022-23 season"
 - Format: "[Player] scored [X] goals in [specific season]" OR "[Player] scored [X] goals across all seasons (2020-21 through 2025-26)"
 
+**ML FORECAST RULES:**
+- If "ML Predictions" are provided, prioritize them for questions about FUTURE performance.
+- Always distinguish between "Historical Stats" (from Knowledge Graph) and "Forecasts" (from ML).
+- Example: "Based on historical data, Salah has 5 goals, but our ML model predicts he will score 7.2 points next gameweek."
+- Only reference ML predictions when they are present in the context above.
+
 **UNDERSTANDING USER INTENT:**
 - Vague responses like "hmm", "i dont know", "not sure", "maybe" mean the user is UNCERTAIN - offer helpful choices
 - When user is uncertain, DON'T force information - instead say: "Would you like to hear about [specific option A] or [specific option B]?"
@@ -141,7 +155,7 @@ FirstMessage: {str(is_first_message)}
 - If user says "I don't care" or "no thanks", acknowledge and ask what they'd prefer to know about instead
 
 **DATA USAGE RULES:**
-- Use ONLY the exact data provided in "Knowledge Graph Data" above
+- Use ONLY the exact data provided in "Knowledge Graph Data" and "ML Predictions" above
 - The data is NUMBERED and SORTED - entry #1 is the TOP/BEST result
 - When asked "who is the most/top/best", answer with entry #1 from the data
 - Quote EXACT numbers from the data - never make up statistics
@@ -164,6 +178,9 @@ Good: "He scored 36 goals across 35 games in the 2022-23 season..." (clearly sta
 
 User: "who scored the most?"
 Good: "Erling Haaland with 36 goals in the 2022-23 season." (direct answer with season specified)
+
+User: "who will score next gameweek?"
+Good: "Based on our ML model, Haaland is forecast for 7.2 points next gameweek." (uses ML predictions)
 
 User: "compare him to other top scorers"
 IF DATA SCOPE IS "2025-26 season":
