@@ -423,6 +423,11 @@ class _LazyMLIntegration:
         real = self._real
         return real.predictor if real else None
 
+    @property
+    def predictors(self):
+        real = self._real
+        return real.predictors if real else {}
+
     async def predict_player_next_gameweek(self, request):
         if not self._real:
             raise HTTPException(status_code=503, detail="ML integration not initialized")
@@ -1128,6 +1133,14 @@ async def health_check():
             logger.warning(f"Failed to get embedding count: {e}")
             embedding_count = 0
     
+    ml_integration = app_state.get("ml_integration")
+    ml_model_type = None
+    if ml_integration:
+        if ml_integration.predictors:
+            ml_model_type = "xgboost (position-specific)"
+        elif ml_integration.predictor:
+            ml_model_type = ml_integration.predictor.model_type
+            
     return {
         "status": "healthy",
         "neo4j": neo4j_status,
@@ -1137,8 +1150,8 @@ async def health_check():
         "embedding_count": embedding_count,
         "embeddings_building": app_state["embedding_building"],
         "embedding_build_error": app_state["embedding_build_error"],
-        "ml_available": app_state["ml_integration"].predictor_loaded if app_state["ml_integration"] else False,
-        "ml_model_type": app_state["ml_integration"].predictor.model_type if app_state["ml_integration"] and app_state["ml_integration"].predictor else None,
+        "ml_available": ml_integration.predictor_loaded if ml_integration else False,
+        "ml_model_type": ml_model_type,
     }
 
 
@@ -1414,6 +1427,14 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         # Build graph visualization data
         graph_data = build_graph_data(results)
         
+        ml_integration = app_state.get("ml_integration")
+        ml_model_type = None
+        if ml_integration:
+            if ml_integration.predictors:
+                ml_model_type = "xgboost (position-specific)"
+            elif ml_integration.predictor:
+                ml_model_type = ml_integration.predictor.model_type
+
         return QueryResponse(
             answer=answer,
             intent=intent_result.intent.value,
@@ -1425,7 +1446,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             embedding_used=embedding_used,
             results=results[:50],  # Limit results sent to frontend
             graph_data=graph_data,
-            model_type=app_state["ml_integration"].predictor.model_type if app_state["ml_integration"] and app_state["ml_integration"].predictor else None
+            model_type=ml_model_type
         )
         
     except Exception as e:

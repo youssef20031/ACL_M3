@@ -317,7 +317,7 @@ class FeatureEngineer:
             self.numeric_features = data['numeric_features']
             self.feature_names = data['feature_names']
             self.is_fitted = True
-        logger.info(f"Loaded feature mappings from {filepath}")
+        print(f"✅ Loaded feature mappings from {filepath}")
     
     def _add_high_signal_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """

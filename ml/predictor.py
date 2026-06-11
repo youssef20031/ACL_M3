@@ -59,13 +59,13 @@ class FPLPredictor:
         try:
             with open(model_path, 'rb') as f:
                 self.model = pickle.load(f)
-            logger.info(f"Loaded model from {model_path}")
+            print(f"✅ Loaded model from {model_path}")
             
             # Load scaler if provided (for neural networks)
             if scaler_path and os.path.exists(scaler_path):
                 with open(scaler_path, 'rb') as f:
                     self.scaler = pickle.load(f)
-                logger.info(f"Loaded scaler from {scaler_path}")
+                print(f"✅ Loaded scaler from {scaler_path}")
             
             # Load feature mappings
             mappings_path = model_path.replace('.pkl', '_mappings.json')
@@ -75,7 +75,7 @@ class FPLPredictor:
             self.model_loaded = True
             
         except Exception as e:
-            logger.error(f"Failed to load model: {e}")
+            print(f"❌ Failed to load model: {e}")
             raise
     
     def save_model(self, model, model_path: str, scaler=None):

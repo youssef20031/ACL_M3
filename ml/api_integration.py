@@ -98,10 +98,10 @@ class MLAPIIntegration:
                 self.predictors[pos] = FPLPredictor(model_path=path, model_type="xgboost")
             self.predictor_loaded = len(self.predictors) > 0
             if self.predictor_loaded:
-                logger.info(f"✅ XGBoost Predictors loaded for positions: {list(self.predictors.keys())}")
+                print(f"✅ XGBoost Predictors loaded for positions: {list(self.predictors.keys())}")
         except Exception as e:
-            logger.error(f"❌ Failed to load XGBoost predictors: {e}")
-            logger.warning("ML prediction endpoints will return errors")
+            print(f"❌ Failed to load XGBoost predictors: {e}")
+            self.predictor_loaded = False
     
     def _check_predictor(self):
         """Ensure predictor is loaded."""

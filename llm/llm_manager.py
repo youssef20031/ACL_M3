@@ -121,21 +121,36 @@ class LLMManager:
     
     def _init_client(self):
         """Initialize HuggingFace inference client."""
+        if not self.api_token:
+            logger.warning("No HuggingFace API token provided. HuggingFace models will be unavailable.")
+            self.client = None
+            return
+
         try:
+            from huggingface_hub import InferenceClient
             self.client = InferenceClient(token=self.api_token)
             logger.info("HuggingFace client initialized successfully")
+        except ImportError:
+            logger.warning("huggingface_hub library not installed. Install with: pip install huggingface-hub")
+            self.client = None
         except Exception as e:
             logger.error(f"Failed to initialize HuggingFace client: {e}")
             self.client = None
     
     def _init_groq_client(self):
         """Initialize Groq client."""
+        if not self.groq_api_key:
+            logger.info("No Groq API key provided. Groq models will not be available.")
+            self.groq_client = None
+            return
+
         try:
             from groq import Groq
             self.groq_client = Groq(api_key=self.groq_api_key)
             logger.info("Groq client initialized successfully")
         except ImportError:
             logger.warning("Groq library not installed. Install with: pip install groq")
+            self.groq_client = None
         except Exception as e:
             logger.error(f"Failed to initialize Groq client: {e}")
             self.groq_client = None
