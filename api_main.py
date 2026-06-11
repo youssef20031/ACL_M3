@@ -1077,7 +1077,9 @@ async def root():
     """Health check endpoint - lightweight for Railway."""
     return {
         "message": "FPL FantasyTrivia API",
-        "status": "running"
+        "status": "running",
+        "version": "v6.2-ml-integration",
+        "commit": "aa9606b"
     }
 
 
