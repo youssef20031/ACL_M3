@@ -1,0 +1,59 @@
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+1	Ryan Allsop	eng ENG	GK	Birmingham City	33	1992	11	11	990	11.0	1.36	1.36	3.09	1.73	55.9	0.27	0.27	0.45	0.18	18.2	0.09	0.09	0.00	0.00	0.0	Matches
+2	Nathan Baxter	eng ENG	GK	Watford	26	1998	7	6	585	6.5	1.38	1.38	3.08	1.69	55.0	0.46	0.31	0.15	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+3	Gavin Bazunu	ie IRL	GK	Stoke City	23	2002	6	6	540	6.0	1.33	1.33	3.17	1.83	57.9	0.17	0.33	0.50	0.33	33.3	0.00	0.00	0.00	0.00		Matches
+4	Gavin Bazunu	ie IRL	GK	Southampton	23	2002	19	19	1,710	19.0	1.47	1.47	3.79	2.32	61.1	0.37	0.32	0.32	0.16	15.8	0.05	0.05	0.00	0.00	0.0	Matches
+5	James Beadle	eng ENG	GK	Birmingham City	21	2004	35	35	3,150	35.0	1.17	1.17	3.69	2.51	68.2	0.40	0.29	0.31	0.23	22.9	0.06	0.03	0.03	0.00	50.0	Matches
+6	Asmir Begović	ba BIH	GK	Leicester City	38	1987	11	10	945	10.5	2.00	2.00	4.48	2.48	55.3	0.19	0.29	0.48	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+7	Steven Benda	de GER	GK	Millwall	26	1998	9	9	810	9.0	1.33	1.33	3.11	1.78	57.1	0.44	0.22	0.33	0.33	33.3	0.00	0.00	0.00	0.00		Matches
+8	Solomon Brynn	eng ENG	GK	Middlesbrough	24	2000	46	46	4,140	46.0	1.02	1.02	3.26	2.20	68.7	0.48	0.30	0.22	0.28	28.3	0.17	0.15	0.02	0.00	12.5	Matches
+9	Josef Bursik	eng ENG	GK	Portsmouth	25	2000	10	10	813	9.0	1.67	1.66	4.33	2.67	61.5	0.22	0.33	0.56	0.22	20.0	0.11	0.00	0.11	0.00	100.0	Matches
+10	Pierce Charles	nir NIR	GK	Sheffield Weds	20	2005	19	19	1,710	19.0	1.95	1.95	6.26	4.32	68.9	0.05	0.37	0.58	0.11	10.5	0.11	0.05	0.00	0.05	0.0	Matches
+11	Michael Cooper	eng ENG	GK	Sheffield United	25	1999	34	34	3,015	33.5	1.34	1.34	4.12	2.78	67.4	0.42	0.09	0.51	0.24	23.5	0.12	0.09	0.00	0.03	0.0	Matches
+12	Murphy Cooper	eng ENG	GK	Sheffield Weds	23	2001	8	8	720	8.0	1.75	1.75	5.63	3.88	68.9	0.00	0.00	1.00	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+13	David Cornell	wls WAL	GK	Preston	34	1991	8	7	675	7.5	1.60	1.60	4.53	2.93	64.7	0.13	0.40	0.40	0.13	14.3	0.13	0.13	0.00	0.00	0.0	Matches
+14	Max Crocombe	nz NZL	GK	Millwall	31	1993	23	23	2,070	23.0	1.09	1.09	4.48	3.39	75.7	0.52	0.26	0.22	0.39	39.1	0.04	0.04	0.00	0.00	0.0	Matches
+15	Jamie Cumming	eng ENG	GK	Oxford United	25	1999	46	46	4,140	46.0	1.28	1.28	4.20	2.89	69.4	0.24	0.30	0.46	0.17	17.4	0.04	0.04	0.00	0.00	0.0	Matches
+16	Adam Davies	wls WAL	GK	Sheffield United	33	1992	13	12	1,125	12.5	1.68	1.68	4.48	2.80	62.5	0.32	0.24	0.40	0.16	16.7	0.08	0.08	0.00	0.00	0.0	Matches
+17	Seny Dieng	sn SEN	GK	Sheffield Weds	30	1994	3	3	270	3.0	2.33	2.33	5.33	3.00	56.3	0.00	0.00	1.00	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+18	Andy Fisher	eng ENG	GK	Swansea City	27	1998	1	1	90	1.0	1.00	1.00	3.00	2.00	66.7	1.00	0.00	0.00	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+19	Joshua Griffiths	eng ENG	GK	West Brom	23	2001	24	23	2,095	23.3	1.46	1.46	3.65	2.15	60.0	0.34	0.21	0.43	0.26	26.1	0.04	0.00	0.04	0.00	100.0	Matches
+20	Daniel Grimshaw	eng ENG	GK	Norwich City	27	1998	1	1	90	1.0	0.00	0.00	1.00	1.00	100.0	1.00	0.00	0.00	1.00	100.0	0.00	0.00	0.00	0.00		Matches
+21	Ben Hamer	eng ENG	GK	QPR	37	1987	7	7	558	6.2	0.97	0.97	2.74	1.77	64.7	0.65	0.32	0.16	0.48	42.9	0.16	0.00	0.00	0.16		Matches
+22	Ethan Horvath	us USA	GK	Sheffield Weds	30	1995	14	14	1,259	14.0	2.00	2.00	5.57	3.57	64.1	0.07	0.36	0.57	0.14	14.3	0.07	0.07	0.00	0.00	0.0	Matches
+23	Daniel Iversen	dk DEN	GK	Preston	28	1997	36	36	3,195	35.5	1.18	1.18	4.00	2.79	70.4	0.39	0.34	0.28	0.23	22.2	0.08	0.06	0.03	0.00	33.3	Matches
+24	Viktor Johansson	se SWE	GK	Stoke City	26	1998	25	25	2,250	25.0	1.00	1.00	3.92	2.92	74.5	0.40	0.16	0.44	0.32	32.0	0.04	0.04	0.00	0.00	0.0	Matches
+25	Thomas Kaminski	be BEL	GK	Charlton Athletic	32	1992	37	37	3,330	37.0	1.32	1.32	4.14	2.81	68.0	0.30	0.30	0.41	0.30	29.7	0.14	0.08	0.03	0.03	25.0	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+26	Ben Killip	eng ENG	GK	Portsmouth	29	1995	4	2	332	3.7	1.08	1.08	4.59	3.51	76.5	0.00	0.27	0.27	0.27	50.0	0.00	0.00	0.00	0.00		Matches
+27	Vladan Kovačević	ba BIH	GK	Norwich City	27	1998	45	45	4,050	45.0	1.24	1.24	3.82	2.58	67.4	0.40	0.18	0.42	0.18	17.8	0.11	0.07	0.04	0.00	40.0	Matches
+28	Joe Lumley	eng ENG	GK	Sheffield Weds	30	1995	2	2	180	2.0	1.50	1.50	5.50	4.00	72.7	0.00	0.00	1.00	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+29	William Mannion	eng ENG	GK	Charlton Athletic	27	1998	9	9	810	9.0	1.00	1.00	4.56	3.56	78.0	0.22	0.33	0.44	0.22	22.2	0.11	0.11	0.00	0.00	0.0	Matches
+30	Alex McCarthy	eng ENG	GK	Southampton	35	1989	7	7	630	7.0	1.43	1.43	3.57	2.14	60.0	0.14	0.43	0.43	0.14	14.3	0.00	0.00	0.00	0.00		Matches
+31	Paul Nardi	fr FRA	GK	QPR	31	1994	17	16	1,512	16.8	1.49	1.49	3.75	2.26	60.3	0.36	0.12	0.48	0.24	25.0	0.06	0.06	0.00	0.00	0.0	Matches
+32	Richard O'Donnell	eng ENG	GK	Derby County	36	1988	8	7	635	7.1	0.85	0.85	3.66	2.82	76.9	0.70	0.00	0.28	0.56	57.1	0.00	0.00	0.00	0.00		Matches
+33	Max O'Leary	ie IRL	GK	Bristol City	28	1996	5	5	450	5.0	1.00	1.00	2.60	1.60	61.5	0.60	0.00	0.40	0.40	40.0	0.00	0.00	0.00	0.00		Matches
+34	Max O'Leary	ie IRL	GK	West Brom	28	1996	16	16	1,415	15.7	0.83	0.83	2.80	1.97	70.5	0.19	0.57	0.25	0.51	50.0	0.00	0.00	0.00	0.00		Matches
+35	Arthur Okonkwo	ng NGA	GK	Wrexham	23	2001	39	38	3,421	38.0	1.39	1.39	4.32	2.92	67.7	0.42	0.32	0.26	0.26	26.3	0.05	0.03	0.03	0.00	50.0	Matches
+36	Alex Palmer	eng ENG	GK	Ipswich Town	28	1996	10	10	833	9.3	1.08	1.08	3.01	1.94	64.3	0.32	0.43	0.32	0.11	10.0	0.22	0.22	0.00	0.00	0.0	Matches
+37	Ivor Pandur	hr CRO	GK	Hull City	25	2000	45	45	4,050	45.0	1.44	1.44	4.60	3.16	68.6	0.47	0.20	0.33	0.24	24.4	0.11	0.07	0.04	0.00	40.0	Matches
+38	Anthony Patterson	eng ENG	GK	Millwall	25	2000	14	14	1,260	14.0	0.86	0.86	3.14	2.29	72.7	0.57	0.21	0.21	0.43	42.9	0.00	0.00	0.00	0.00		Matches
+39	Aynsley Pears	eng ENG	GK	Blackburn	27	1998	13	12	1,082	12.0	1.08	1.08	2.83	1.75	61.8	0.17	0.50	0.33	0.33	33.3	0.08	0.08	0.00	0.00	0.0	Matches
+40	Daniel Peretz	il ISR	GK	Southampton	25	2000	20	20	1,800	20.0	0.90	0.90	3.80	2.90	76.3	0.70	0.25	0.05	0.35	35.0	0.05	0.05	0.00	0.00	0.0	Matches
+41	Dillon Phillips	eng ENG	GK	Hull City	30	1995	1	1	90	1.0	1.00	1.00	4.00	3.00	75.0	0.00	1.00	0.00	0.00	0.0	1.00	1.00	0.00	0.00	0.0	Matches
+42	Carl Rushworth	eng ENG	GK	Coventry City	24	2001	46	46	4,140	46.0	0.98	0.98	3.63	2.63	73.1	0.61	0.24	0.15	0.37	37.0	0.07	0.07	0.00	0.00	0.0	Matches
+43	Nicolas Schmid	at AUT	GK	Portsmouth	28	1997	34	34	2,995	33.3	1.35	1.35	3.72	2.37	63.7	0.36	0.27	0.39	0.24	23.5	0.06	0.06	0.00	0.00	0.0	Matches
+44	Egil Selvik	no NOR	GK	Watford	28	1997	40	40	3,555	39.5	1.42	1.42	4.23	2.81	66.5	0.28	0.33	0.41	0.18	17.5	0.05	0.03	0.03	0.00	50.0	Matches
+45	Tommy Simkin	eng ENG	GK	Stoke City	20	2004	15	15	1,350	15.0	1.53	1.53	3.93	2.40	61.0	0.27	0.27	0.47	0.20	20.0	0.00	0.00	0.00	0.00		Matches
+46	Jakub Stolarczyk	pl POL	GK	Leicester City	24	2000	36	36	3,195	35.5	1.32	1.32	3.97	2.62	66.7	0.28	0.37	0.37	0.17	16.7	0.08	0.03	0.06	0.00	66.7	Matches
+47	Balázs Tóth	hu HUN	GK	Blackburn	27	1997	34	34	3,058	34.0	1.26	1.27	4.15	2.85	69.5	0.32	0.21	0.47	0.26	26.5	0.06	0.06	0.00	0.00	0.0	Matches
+48	Josh Vickers	eng ENG	GK	Derby County	29	1995	7	7	625	6.9	1.59	1.58	4.49	2.90	64.5	0.43	0.00	0.58	0.14	14.3	0.00	0.00	0.00	0.00		Matches
+49	Lawrence Vigouroux	cl CHI	GK	Swansea City	31	1993	45	45	4,050	45.0	1.29	1.29	4.51	3.22	71.4	0.38	0.22	0.40	0.27	26.7	0.09	0.09	0.00	0.00	0.0	Matches
+50	Radek Vítek		GK	Bristol City	21	2003	41	41	3,690	41.0	1.32	1.32	4.59	3.24	71.3	0.34	0.27	0.39	0.29	29.3	0.05	0.05	0.00	0.00	0.0	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+51	Joe Walsh	eng ENG	GK	QPR	23	2002	23	23	2,070	23.0	1.83	1.83	4.74	2.91	61.5	0.26	0.26	0.48	0.17	17.4	0.09	0.09	0.00	0.00	0.0	Matches
+52	Christian Walton	eng ENG	GK	Ipswich Town	29	1995	37	36	3,307	36.7	1.01	1.01	3.60	2.59	72.0	0.54	0.30	0.14	0.44	44.4	0.08	0.05	0.03	0.00	33.3	Matches
+53	Jack Walton	eng ENG	GK	Preston	27	1998	3	3	270	3.0	2.67	2.67	7.33	4.67	63.6	0.00	0.00	1.00	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+54	Danny Ward	wls WAL	GK	Wrexham	32	1993	8	8	719	8.0	1.50	1.50	4.63	3.13	67.6	0.38	0.25	0.38	0.38	37.5	0.00	0.00	0.00	0.00		Matches
+55	Jacob Widell Zetterström	se SWE	GK	Derby County	27	1998	32	32	2,880	32.0	1.31	1.31	4.53	3.13	71.0	0.38	0.28	0.34	0.22	21.9	0.16	0.13	0.03	0.00	20.0	Matches
+56	Joe Wildsmith	eng ENG	GK	West Brom	29	1995	7	7	630	7.0	1.57	1.57	2.86	1.29	45.0	0.29	0.00	0.71	0.14	14.3	0.14	0.14	0.00	0.00	0.0	Matches

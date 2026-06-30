@@ -1,0 +1,54 @@
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+1	Daniel Bentley	eng ENG	GK	Bristol City	26	1993	43	42	3,843	42.7	61	1.43	191	134	70.2	17	10	15	10	23.8	4	4	0	0	0.0	Matches
+2	Marcus Bettinelli	eng ENG	GK	Fulham	27	1992	14	13	1,242	13.8	15	1.09	35	21	60.0	5	4	4	4	30.8	1	1	0	0	0.0	Matches
+3	Bartosz Białkowski	pl POL	GK	Millwall	32	1987	46	45	4,098	45.5	51	1.12	190	141	74.2	16	17	12	16	35.6	3	2	1	0	33.3	Matches
+4	Jack Butland	eng ENG	GK	Stoke City	26	1993	35	35	3,150	35.0	56	1.60	125	73	58.4	11	7	17	9	25.7	4	4	0	0	0.0	Matches
+5	Rafael Cabral	br BRA	GK	Reading	29	1990	44	44	3,960	44.0	53	1.20	198	148	74.7	15	11	18	13	29.5	3	3	0	0	0.0	Matches
+6	Lee Camp	nir NIR	GK	Birmingham City	34	1984	36	36	3,240	36.0	53	1.47	120	76	60.8	11	10	15	7	19.4	9	6	3	0	33.3	Matches
+7	Kiko Casilla	es ESP	GK	Leeds United	32	1986	36	36	3,240	36.0	31	0.86	99	71	71.7	20	8	8	15	41.7	3	3	0	0	0.0	Matches
+8	Joel Coleman	eng ENG	GK	Huddersfield	23	1995	3	2	188	2.1	7	3.35	13	6	46.2	0	0	2	0	0.0	0	0	0	0		Matches
+9	Bradley Collins	eng ENG	GK	Barnsley	22	1997	19	19	1,710	19.0	31	1.63	84	56	66.7	3	6	10	4	21.1	3	3	0	0	0.0	Matches
+10	Adam Davies	wls WAL	GK	Stoke City	27	1992	4	4	360	4.0	2	0.50	9	7	77.8	3	1	0	2	50.0	0	0	0	0		Matches
+11	Cameron Dawson	eng ENG	GK	Sheffield Weds	24	1995	24	23	2,079	23.1	34	1.47	83	51	61.4	8	6	9	7	30.4	3	2	0	1	0.0	Matches
+12	Joe Day	eng ENG	GK	Cardiff City	28	1990	1	0	35	0.4	3	7.71	4	1	25.0	0	0	0	0		0	0	0	0		Matches
+13	Neil Etheridge	ph PHI	GK	Cardiff City	29	1990	16	16	1,405	15.6	24	1.54	61	38	62.3	5	6	5	3	18.8	2	1	0	1	0.0	Matches
+14	Adam Federici	au AUS	GK	Stoke City	34	1985	7	7	630	7.0	10	1.43	31	22	71.0	2	0	5	1	14.3	1	1	0	0	0.0	Matches
+15	Frank Fielding	eng ENG	GK	Millwall	31	1988	1	1	42	0.5	0	0.00	0	0		1	0	0	1	100.0	0	0	0	0		Matches
+16	Kamil Grabara	pl POL	GK	Huddersfield	20	1999	28	28	2,512	27.9	45	1.61	104	61	58.7	8	7	13	5	17.9	2	2	0	0	0.0	Matches
+17	Ben Hamer	eng ENG	GK	Derby County	31	1987	25	24	2,235	24.8	34	1.37	96	67	69.8	10	6	8	4	16.7	5	5	0	0	0.0	Matches
+18	Matt Ingram	eng ENG	GK	Hull City	25	1993	1	1	90	1.0	1	1.00	4	3	75.0	0	0	1	0	0.0	0	0	0	0		Matches
+19	Sam Johnstone	eng ENG	GK	West Brom	26	1993	46	46	4,140	46.0	45	0.98	153	113	73.2	22	17	7	14	30.4	5	4	1	0	20.0	Matches
+20	Jamie Jones	eng ENG	GK	Wigan Athletic	30	1989	7	7	630	7.0	8	1.14	23	15	65.2	1	4	2	1	14.3	0	0	0	0		Matches
+21	Liam Kelly	sct SCO	GK	QPR	23	1996	19	19	1,710	19.0	29	1.53	72	48	65.3	6	4	9	3	15.8	5	4	1	0	20.0	Matches
+22	George Long	eng ENG	GK	Hull City	25	1993	45	45	4,050	45.0	86	1.91	193	115	59.6	12	9	24	7	15.6	8	8	0	0	0.0	Matches
+23	Jonas Lössl	dk DEN	GK	Huddersfield	30	1989	15	15	1,350	15.0	18	1.20	56	38	67.9	5	4	6	6	40.0	0	0	0	0		Matches
+24	Joe Lumley	eng ENG	GK	QPR	24	1995	27	27	2,430	27.0	47	1.74	111	68	62.2	10	6	11	3	11.1	5	5	0	0	0.0	Matches
+25	Niki Mäenpää	fi FIN	GK	Bristol City	34	1985	4	4	297	3.3	4	1.21	14	10	71.4	0	2	2	0	0.0	0	0	0	0		Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+26	David Marshall	sct SCO	GK	Wigan Athletic	34	1985	39	39	3,510	39.0	48	1.23	133	86	64.7	14	10	15	15	38.5	1	1	0	0	0.0	Matches
+27	Illan Meslier	fr FRA	GK	Leeds United	19	2000	10	10	900	10.0	4	0.40	25	21	84.0	8	1	1	7	70.0	0	0	0	0		Matches
+28	Erwin Mulder	nl NED	GK	Swansea City	30	1989	4	3	271	3.0	3	1.00	8	6	75.0	2	1	0	1	33.3	2	1	0	1	0.0	Matches
+29	Arijanet Muric	xk KVX	GK	Nottingham	20	1998	4	4	360	4.0	4	1.00	12	8	66.7	1	2	1	1	25.0	0	0	0	0		Matches
+30	Aynsley Pears	eng ENG	GK	Middlesbrough	21	1998	24	24	2,160	24.0	30	1.25	93	64	68.8	7	8	9	7	29.2	1	1	0	0	0.0	Matches
+31	Dillon Phillips	eng ENG	GK	Charlton Athletic	24	1995	46	46	4,140	46.0	65	1.41	213	154	71.4	12	12	22	9	19.6	6	4	2	0	33.3	Matches
+32	Darren Randolph	ie IRL	GK	Middlesbrough	32	1987	14	14	1,260	14.0	21	1.50	59	39	66.1	2	6	6	2	14.3	1	1	0	0	0.0	Matches
+33	David Raya	es ESP	GK	Brentford	23	1995	46	46	4,140	46.0	38	0.83	134	98	73.9	24	9	13	16	34.8	3	3	0	0	0.0	Matches
+34	Marek Rodák	sk SVK	GK	Fulham	22	1996	33	33	2,896	32.2	33	1.03	129	98	76.7	18	8	7	14	42.4	4	3	0	1	0.0	Matches
+35	Kelle Roos	nl NED	GK	Derby County	27	1992	22	22	1,905	21.2	30	1.42	91	65	70.3	7	7	8	5	22.7	5	3	1	1	25.0	Matches
+36	Declan Rudd	eng ENG	GK	Preston	28	1991	46	46	4,140	46.0	54	1.17	157	108	68.8	18	12	16	9	19.6	5	5	0	0	0.0	Matches
+37	Samuel Şahin-Radlinger	at AUT	GK	Barnsley	26	1992	18	18	1,620	18.0	31	1.72	73	43	58.9	5	4	9	2	11.1	1	1	0	0	0.0	Matches
+38	Brice Samba	fr FRA	GK	Nottingham	25	1994	40	40	3,600	40.0	41	1.02	147	109	74.1	17	14	9	13	32.5	4	3	1	0	25.0	Matches
+39	Ryan Schofield	eng ENG	GK	Huddersfield	19	1999	1	1	90	1.0	0	0.00	3	2	100.0	0	1	0	1	100.0	0	0	0	0		Matches
+40	James Shea	eng ENG	GK	Luton Town	28	1991	13	13	1,170	13.0	32	2.46	76	48	61.8	3	0	10	1	7.7	4	3	1	0	25.0	Matches
+41	Simon Sluga	hr CRO	GK	Luton Town	26	1993	33	33	2,970	33.0	50	1.52	146	97	67.1	11	9	13	6	18.2	3	2	0	1	0.0	Matches
+42	Jordan Smith	eng ENG	GK	Nottingham	24	1994	2	2	180	2.0	5	2.50	10	5	50.0	0	0	2	0	0.0	0	0	0	0		Matches
+43	Alex Smithies	eng ENG	GK	Cardiff City	29	1990	30	30	2,700	30.0	31	1.03	94	67	70.2	14	10	6	11	36.7	4	3	1	0	25.0	Matches
+44	Dejan Stojanović	at AUT	GK	Middlesbrough	26	1993	8	8	720	8.0	10	1.25	32	23	71.9	4	0	4	3	37.5	1	1	0	0	0.0	Matches
+45	Connal Trueman	eng ENG	GK	Birmingham City	23	1996	10	10	900	10.0	22	2.20	46	25	54.3	1	4	5	0	0.0	1	1	0	0	0.0	Matches
+46	João Virgínia	pt POR	GK	Reading	19	1999	2	2	180	2.0	5	2.50	11	6	54.5	0	0	2	0	0.0	0	0	0	0		Matches
+47	Christian Walton	eng ENG	GK	Blackburn	23	1995	46	46	4,140	46.0	63	1.37	175	121	69.1	17	12	17	12	26.1	10	9	1	0	10.0	Matches
+48	Jack Walton	eng ENG	GK	Barnsley	21	1998	9	9	810	9.0	7	0.78	27	20	74.1	4	3	2	5	55.6	0	0	0	0		Matches
+49	Keiren Westwood	ie IRL	GK	Sheffield Weds	34	1984	14	14	1,249	13.9	15	1.08	43	31	72.1	5	3	6	4	28.6	3	3	0	0	0.0	Matches
+50	Joe Wildsmith	eng ENG	GK	Sheffield Weds	23	1995	9	9	810	9.0	17	1.89	30	16	53.3	2	2	5	2	22.2	3	3	0	0	0.0	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+51	Freddie Woodman	eng ENG	GK	Swansea City	22	1997	43	43	3,869	43.0	50	1.16	152	107	68.4	16	15	12	12	27.9	5	2	3	0	60.0	Matches

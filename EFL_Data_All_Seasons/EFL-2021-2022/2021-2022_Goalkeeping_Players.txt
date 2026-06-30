@@ -1,0 +1,68 @@
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+1	Ryan Allsop	eng ENG	GK	Derby County	29	1992	30	29	2,624	29.2	1.23	1.23	4.04	2.84	70.3	0.34	0.21	0.45	0.31	31.0	0.03	0.03	0.00	0.00	0.0	Matches
+2	Nathan Baxter	eng ENG	GK	Hull City	22	1998	16	16	1,440	16.0	1.06	1.06	4.94	4.06	82.3	0.50	0.19	0.31	0.44	43.8	0.19	0.19	0.00	0.00	0.0	Matches
+3	Steven Benda	de GER	GK	Peterborough	22	1998	9	9	810	9.0	2.00	2.00	5.22	3.33	63.8	0.00	0.22	0.78	0.11	11.1	0.11	0.11	0.00	0.00	0.0	Matches
+4	Steven Benda	de GER	GK	Swansea City	22	1998	5	5	450	5.0	1.60	1.60	5.40	4.00	74.1	0.20	0.20	0.60	0.40	40.0	0.20	0.20	0.00	0.00	0.0	Matches
+5	Daniel Bentley	eng ENG	GK	Bristol City	28	1993	38	37	3,358	37.3	1.50	1.50	4.69	3.35	70.3	0.32	0.24	0.43	0.16	16.2	0.16	0.11	0.05	0.00	33.3	Matches
+6	Bartosz Białkowski	pl POL	GK	Millwall	34	1987	46	46	4,140	46.0	0.98	0.98	3.59	2.67	73.9	0.39	0.33	0.28	0.30	30.4	0.09	0.04	0.02	0.02	33.3	Matches
+7	Jamal Blackman	eng ENG	GK	Huddersfield	27	1993	1	1	90	1.0	0.00	0.00	3.00	3.00	100.0	1.00	0.00	0.00	1.00	100.0	0.00	0.00	0.00	0.00		Matches
+8	Jack Bonham	ie IRL	GK	Stoke City	27	1993	15	15	1,350	15.0	1.13	1.13	3.33	2.33	68.0	0.33	0.20	0.47	0.27	26.7	0.13	0.07	0.07	0.00	50.0	Matches
+9	Josef Bursik	eng ENG	GK	Stoke City	21	2000	19	19	1,710	19.0	1.32	1.32	3.16	1.89	58.3	0.42	0.32	0.26	0.32	31.6	0.05	0.00	0.05	0.00	100.0	Matches
+10	David Button	eng ENG	GK	West Brom	32	1989	10	10	900	10.0	1.20	1.20	2.80	1.70	60.7	0.40	0.20	0.40	0.40	40.0	0.10	0.10	0.00	0.00	0.0	Matches
+11	Rafael Cabral	br BRA	GK	Reading	31	1990	6	6	540	6.0	2.67	2.67	6.00	3.50	58.3	0.17	0.17	0.67	0.00	0.0	0.17	0.17	0.00	0.00	0.0	Matches
+12	Harvey Cartwright	eng ENG	GK	Hull City	19	2002	2	1	114	1.3	2.31	2.37	5.38	3.08	57.1	0.00	0.00	0.77	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+13	Bradley Collins	eng ENG	GK	Barnsley	24	1997	40	40	3,533	39.3	1.40	1.40	4.45	3.16	69.7	0.15	0.28	0.59	0.18	17.5	0.10	0.05	0.05	0.00	50.0	Matches
+14	Murphy Cooper	eng ENG	GK	QPR	19	2001	2	2	180	2.0	2.50	2.50	7.50	5.00	66.7	0.00	0.00	1.00	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+15	David Cornell	wls WAL	GK	Peterborough	30	1991	30	30	2,700	30.0	1.73	1.73	4.47	2.80	62.7	0.27	0.23	0.50	0.17	16.7	0.10	0.07	0.00	0.03	0.0	Matches
+16	Luke Daniels	eng ENG	GK	Middlesbrough	33	1988	12	12	1,080	12.0	1.33	1.33	3.83	2.58	67.4	0.33	0.33	0.33	0.25	25.0	0.08	0.08	0.00	0.00	0.0	Matches
+17	Adam Davies	wls WAL	GK	Stoke City	29	1992	12	12	1,080	12.0	0.83	0.83	3.00	2.25	72.2	0.33	0.17	0.50	0.42	41.7	0.08	0.00	0.08	0.00	100.0	Matches
+18	Seny Dieng	sn SEN	GK	QPR	26	1994	28	28	2,475	27.5	1.16	1.16	3.56	2.47	69.4	0.51	0.22	0.29	0.29	28.6	0.07	0.07	0.00	0.00	0.0	Matches
+19	Neil Etheridge	ph PHI	GK	Birmingham City	31	1990	21	21	1,869	20.8	1.68	1.69	4.62	3.17	67.7	0.19	0.38	0.43	0.19	19.0	0.24	0.19	0.05	0.00	20.0	Matches
+20	Andy Fisher	eng ENG	GK	Swansea City	23	1998	20	20	1,800	20.0	1.70	1.70	4.55	3.05	67.0	0.40	0.25	0.35	0.25	25.0	0.20	0.20	0.00	0.00	0.0	Matches
+21	Wes Foderingham	eng ENG	GK	Sheffield United	30	1991	32	32	2,880	32.0	0.72	0.72	2.88	2.25	76.1	0.53	0.28	0.19	0.56	56.3	0.09	0.03	0.06	0.00	66.7	Matches
+22	Paulo Gazzaniga	ar ARG	GK	Fulham	29	1992	13	13	1,170	13.0	1.31	1.31	3.00	1.85	61.5	0.46	0.23	0.31	0.23	23.1	0.15	0.15	0.00	0.00	0.0	Matches
+23	Daniel Grimshaw	eng ENG	GK	Blackpool	23	1998	26	26	2,269	25.2	1.07	1.07	3.49	2.46	69.3	0.40	0.28	0.36	0.32	30.8	0.04	0.00	0.04	0.00	100.0	Matches
+24	Ben Hamer	eng ENG	GK	Swansea City	33	1987	21	21	1,890	21.0	1.24	1.24	3.67	2.48	67.5	0.33	0.33	0.33	0.43	42.9	0.05	0.05	0.00	0.00	0.0	Matches
+25	Ethan Horvath	us USA	GK	Nottingham	26	1995	6	6	540	6.0	0.67	0.67	3.33	2.67	80.0	0.50	0.33	0.17	0.50	50.0	0.00	0.00	0.00	0.00		Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+26	Matt Ingram	eng ENG	GK	Luton Town	27	1993	2	2	180	2.0	3.50	3.50	6.50	3.00	46.2	0.50	0.00	0.50	0.50	50.0	0.00	0.00	0.00	0.00		Matches
+27	Matt Ingram	eng ENG	GK	Hull City	27	1993	29	29	2,586	28.7	1.18	1.18	4.32	3.21	73.4	0.21	0.21	0.59	0.28	27.6	0.07	0.03	0.03	0.00	50.0	Matches
+28	Harvey Isted	eng ENG	GK	Luton Town	24	1997	2	1	136	1.5	0.67	0.66	2.00	2.00	100.0	0.00	0.67	0.00	0.67	100.0	0.67	0.67	0.00	0.00	0.0	Matches
+29	Daniel Iversen	dk DEN	GK	Preston	24	1997	46	45	4,128	45.9	1.22	1.22	3.92	2.75	70.6	0.35	0.35	0.28	0.28	28.9	0.07	0.07	0.00	0.00	0.0	Matches
+30	Karl Jakob Hein	ee EST	GK	Reading	19	2002	5	5	450	5.0	1.60	1.60	5.40	3.80	70.4	0.40	0.20	0.40	0.20	20.0	0.00	0.00	0.00	0.00		Matches
+31	Zach Jeacock	eng ENG	GK	Birmingham City	20	2001	2	2	180	2.0	5.00	5.00	6.50	2.00	30.8	0.00	0.00	1.00	0.00	0.0	0.50	0.50	0.00	0.00	0.0	Matches
+32	Sam Johnstone	eng ENG	GK	West Brom	28	1993	36	36	3,239	36.0	0.92	0.92	2.39	1.53	64.0	0.39	0.31	0.31	0.42	41.7	0.08	0.06	0.03	0.00	33.3	Matches
+33	Thomas Kaminski	be BEL	GK	Blackburn	28	1992	44	44	3,925	43.6	1.15	1.15	3.94	2.82	71.5	0.39	0.28	0.34	0.30	29.5	0.02	0.02	0.00	0.00	0.0	Matches
+34	Joe Lumley	eng ENG	GK	Middlesbrough	26	1995	34	34	3,060	34.0	1.00	1.00	2.97	1.97	66.3	0.47	0.18	0.35	0.38	38.2	0.00	0.00	0.00	0.00		Matches
+35	David Marshall	sct SCO	GK	QPR	36	1985	11	10	945	10.5	1.24	1.24	5.52	4.29	77.6	0.38	0.19	0.38	0.29	30.0	0.00	0.00	0.00	0.00		Matches
+36	Chris Maxwell	wls WAL	GK	Blackpool	31	1990	21	20	1,842	20.5	1.51	1.51	4.68	3.17	67.7	0.29	0.24	0.44	0.15	15.0	0.00	0.00	0.00	0.00		Matches
+37	Simon Moore	eng ENG	GK	Coventry City	31	1990	41	41	3,690	41.0	1.32	1.32	3.49	2.27	65.7	0.39	0.27	0.34	0.22	22.0	0.12	0.12	0.00	0.00	0.0	Matches
+38	Stuart Moore	eng ENG	GK	Blackpool	26	1994	1	0	29	0.3	0.00	0.00	3.33	3.33	100.0	0.00	0.00	0.00	0.00		0.00	0.00	0.00	0.00		Matches
+39	Lee Nicholls	eng ENG	GK	Huddersfield	28	1992	43	43	3,870	43.0	0.95	0.95	4.07	3.19	78.3	0.51	0.28	0.21	0.42	41.9	0.09	0.07	0.00	0.02	0.0	Matches
+40	Ørjan Nyland	no NOR	GK	Reading	30	1990	10	10	900	10.0	1.50	1.50	3.70	2.30	62.2	0.30	0.30	0.40	0.10	10.0	0.10	0.10	0.00	0.00	0.0	Matches
+41	Ørjan Nyland	no NOR	GK	Bournemouth	30	1990	1	1	90	1.0	0.00	0.00	0.00	0.00		0.00	1.00	0.00	1.00	100.0	0.00	0.00	0.00	0.00		Matches
+42	Max O'Leary	ie IRL	GK	Bristol City	24	1996	9	9	782	8.7	2.41	2.42	4.02	1.95	48.6	0.34	0.11	0.57	0.00	0.0	0.34	0.34	0.00	0.00	0.0	Matches
+43	Robin Olsen	se SWE	GK	Sheffield United	31	1990	11	11	990	11.0	1.55	1.55	3.91	2.45	62.8	0.36	0.18	0.45	0.09	9.1	0.09	0.09	0.00	0.00	0.0	Matches
+44	Alex Palmer	eng ENG	GK	Luton Town	24	1996	2	2	180	2.0	1.00	1.00	2.50	2.00	80.0	0.50	0.00	0.50	0.50	50.0	0.50	0.50	0.00	0.00	0.0	Matches
+45	Aynsley Pears	eng ENG	GK	Blackburn	23	1998	3	2	215	2.4	0.00	0.00	3.33	3.33	100.0	0.83	0.00	0.00	1.25	150.0	0.00	0.00	0.00	0.00		Matches
+46	Dillon Phillips	eng ENG	GK	Cardiff City	26	1995	17	17	1,530	17.0	1.53	1.53	4.00	2.53	63.2	0.29	0.18	0.53	0.12	11.8	0.06	0.06	0.00	0.00	0.0	Matches
+47	Christy Pym	eng ENG	GK	Peterborough	26	1995	7	7	630	7.0	2.43	2.43	5.14	2.71	52.8	0.14	0.14	0.71	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+48	Aaron Ramsdale	eng ENG	GK	Sheffield United	23	1998	2	2	180	2.0	0.50	0.50	1.50	1.00	66.7	0.00	0.50	0.50	0.50	50.0	0.00	0.00	0.00	0.00		Matches
+49	Marek Rodák	sk SVK	GK	Fulham	24	1996	33	33	2,970	33.0	0.79	0.79	2.79	2.09	75.0	0.64	0.18	0.18	0.42	42.4	0.09	0.09	0.00	0.00	0.0	Matches
+50	Kelle Roos	nl NED	GK	Derby County	29	1992	18	17	1,515	16.8	1.01	1.01	3.81	2.92	75.0	0.24	0.42	0.36	0.30	29.4	0.12	0.06	0.06	0.00	50.0	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	MP	Starts	Min	90s	GA	GA90	SoTA	Saves	Save%	W	D	L	CS	CS%	PKatt	PKA	PKsv	PKm	Save%	Matches
+51	Declan Rudd	eng ENG	GK	Preston	30	1991	1	1	12	0.1	0.00	0.00	0.00	0.00		0.00	0.00	10.0	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+52	Brice Samba	fr FRA	GK	Nottingham	27	1994	40	40	3,594	39.9	0.88	0.88	3.53	2.81	78.7	0.50	0.23	0.28	0.35	35.0	0.15	0.13	0.03	0.00	16.7	Matches
+53	Matija Šarkić	me MNE	GK	Birmingham City	24	1997	23	23	2,070	23.0	1.26	1.26	3.52	2.39	67.9	0.30	0.26	0.43	0.43	43.5	0.13	0.13	0.00	0.00	0.0	Matches
+54	Ryan Schofield	eng ENG	GK	Huddersfield	21	1999	2	2	180	2.0	3.00	3.00	7.00	4.00	57.1	0.00	0.50	0.50	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+55	James Shea	eng ENG	GK	Luton Town	30	1991	19	19	1,664	18.5	0.97	0.97	3.68	2.76	75.0	0.54	0.27	0.22	0.43	42.1	0.05	0.05	0.00	0.00	0.0	Matches
+56	Simon Sluga	hr CRO	GK	Luton Town	28	1993	19	19	1,710	19.0	1.37	1.37	2.95	1.68	55.4	0.32	0.32	0.37	0.37	36.8	0.11	0.05	0.05	0.00	50.0	Matches
+57	Alex Smithies	eng ENG	GK	Cardiff City	31	1990	29	29	2,610	29.0	1.45	1.45	3.28	1.86	56.8	0.34	0.17	0.48	0.17	17.2	0.03	0.03	0.00	0.00	0.0	Matches
+58	Luke Southwood	nir NIR	GK	Reading	23	1997	25	25	2,250	25.0	1.92	1.92	5.52	3.68	66.7	0.28	0.12	0.60	0.12	12.0	0.08	0.08	0.00	0.00	0.0	Matches
+59	Jed Steer	eng ENG	GK	Luton Town	28	1992	3	3	270	3.0	0.33	0.33	2.67	2.33	87.5	1.00	0.00	0.00	0.67	66.7	0.00	0.00	0.00	0.00		Matches
+60	Mark Travers	ie IRL	GK	Bournemouth	22	1999	45	45	4,050	45.0	0.87	0.87	3.47	2.67	76.9	0.56	0.27	0.18	0.44	44.4	0.07	0.07	0.00	0.00	0.0	Matches
+61	Connal Trueman	eng ENG	GK	Birmingham City	25	1996	1	0	21	0.2	5.00	4.29	5.00	0.00	0.0	0.00	0.00	0.00	0.00		0.00	0.00	0.00	0.00		Matches
+62	Michael Verrips	nl NED	GK	Sheffield United	24	1996	1	1	90	1.0	4.00	4.00	5.00	1.00	20.0	0.00	0.00	1.00	0.00	0.0	0.00	0.00	0.00	0.00		Matches
+63	Jack Walton	eng ENG	GK	Barnsley	23	1998	7	6	607	6.7	2.69	2.67	5.82	3.43	56.4	0.00	0.15	0.75	0.00	0.0	0.30	0.15	0.15	0.00	50.0	Matches
+64	Keiren Westwood	ie IRL	GK	QPR	36	1984	6	6	540	6.0	1.50	1.50	4.33	3.17	73.1	0.17	0.17	0.67	0.17	16.7	0.33	0.33	0.00	0.00	0.0	Matches
+65	Ben Wilson	eng ENG	GK	Coventry City	28	1992	5	5	450	5.0	1.00	1.00	2.40	1.80	66.7	0.20	0.40	0.40	0.20	20.0	0.40	0.20	0.20	0.00	50.0	Matches

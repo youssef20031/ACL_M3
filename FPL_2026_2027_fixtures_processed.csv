@@ -1,0 +1,381 @@
+gameweek,kickoff_time,home_team,away_team
+1,2026-08-21T20:00:00Z,Arsenal,Coventry City
+1,2026-08-22T12:30:00Z,Hull City,Man Utd
+1,2026-08-22T15:00:00Z,Everton,Crystal Palace
+1,2026-08-22T15:00:00Z,Ipswich,Sunderland
+1,2026-08-22T15:00:00Z,Nott'm Forest,Leeds
+1,2026-08-22T17:30:00Z,Brentford,Spurs
+1,2026-08-23T14:00:00Z,Brighton,Aston Villa
+1,2026-08-23T14:00:00Z,Man City,Bournemouth
+1,2026-08-23T16:30:00Z,Newcastle,Liverpool
+1,2026-08-24T20:00:00Z,Fulham,Chelsea
+2,2026-08-29T15:00:00Z,Bournemouth,Everton
+2,2026-08-29T15:00:00Z,Aston Villa,Arsenal
+2,2026-08-29T15:00:00Z,Chelsea,Brighton
+2,2026-08-29T15:00:00Z,Coventry City,Hull City
+2,2026-08-29T15:00:00Z,Crystal Palace,Man City
+2,2026-08-29T15:00:00Z,Leeds,Brentford
+2,2026-08-29T15:00:00Z,Liverpool,Nott'm Forest
+2,2026-08-29T15:00:00Z,Man Utd,Ipswich
+2,2026-08-29T15:00:00Z,Sunderland,Fulham
+2,2026-08-29T15:00:00Z,Spurs,Newcastle
+3,2026-09-05T15:00:00Z,Arsenal,Chelsea
+3,2026-09-05T15:00:00Z,Brentford,Sunderland
+3,2026-09-05T15:00:00Z,Brighton,Leeds
+3,2026-09-05T15:00:00Z,Everton,Man Utd
+3,2026-09-05T15:00:00Z,Fulham,Crystal Palace
+3,2026-09-05T15:00:00Z,Hull City,Aston Villa
+3,2026-09-05T15:00:00Z,Ipswich,Liverpool
+3,2026-09-05T15:00:00Z,Man City,Coventry City
+3,2026-09-05T15:00:00Z,Newcastle,Bournemouth
+3,2026-09-05T15:00:00Z,Nott'm Forest,Spurs
+4,2026-09-12T15:00:00Z,Bournemouth,Brentford
+4,2026-09-12T15:00:00Z,Aston Villa,Nott'm Forest
+4,2026-09-12T15:00:00Z,Chelsea,Hull City
+4,2026-09-12T15:00:00Z,Coventry City,Brighton
+4,2026-09-12T15:00:00Z,Crystal Palace,Ipswich
+4,2026-09-12T15:00:00Z,Leeds,Newcastle
+4,2026-09-12T15:00:00Z,Liverpool,Fulham
+4,2026-09-12T15:00:00Z,Man Utd,Man City
+4,2026-09-12T15:00:00Z,Sunderland,Arsenal
+4,2026-09-12T15:00:00Z,Spurs,Everton
+5,2026-09-19T15:00:00Z,Bournemouth,Liverpool
+5,2026-09-19T15:00:00Z,Brentford,Chelsea
+5,2026-09-19T15:00:00Z,Brighton,Arsenal
+5,2026-09-19T15:00:00Z,Everton,Ipswich
+5,2026-09-19T15:00:00Z,Fulham,Man Utd
+5,2026-09-19T15:00:00Z,Leeds,Crystal Palace
+5,2026-09-19T15:00:00Z,Man City,Sunderland
+5,2026-09-19T15:00:00Z,Newcastle,Hull City
+5,2026-09-19T15:00:00Z,Nott'm Forest,Coventry City
+5,2026-09-19T15:00:00Z,Spurs,Aston Villa
+6,2026-10-10T15:00:00Z,Arsenal,Leeds
+6,2026-10-10T15:00:00Z,Aston Villa,Brentford
+6,2026-10-10T15:00:00Z,Chelsea,Bournemouth
+6,2026-10-10T15:00:00Z,Coventry City,Newcastle
+6,2026-10-10T15:00:00Z,Crystal Palace,Nott'm Forest
+6,2026-10-10T15:00:00Z,Hull City,Everton
+6,2026-10-10T15:00:00Z,Ipswich,Fulham
+6,2026-10-10T15:00:00Z,Liverpool,Man City
+6,2026-10-10T15:00:00Z,Man Utd,Spurs
+6,2026-10-10T15:00:00Z,Sunderland,Brighton
+7,2026-10-17T15:00:00Z,Bournemouth,Sunderland
+7,2026-10-17T15:00:00Z,Brentford,Liverpool
+7,2026-10-17T15:00:00Z,Brighton,Crystal Palace
+7,2026-10-17T15:00:00Z,Everton,Chelsea
+7,2026-10-17T15:00:00Z,Fulham,Hull City
+7,2026-10-17T15:00:00Z,Leeds,Man Utd
+7,2026-10-17T15:00:00Z,Man City,Ipswich
+7,2026-10-17T15:00:00Z,Newcastle,Aston Villa
+7,2026-10-17T15:00:00Z,Nott'm Forest,Arsenal
+7,2026-10-17T15:00:00Z,Spurs,Coventry City
+8,2026-10-24T15:00:00Z,Arsenal,Everton
+8,2026-10-24T15:00:00Z,Aston Villa,Man City
+8,2026-10-24T15:00:00Z,Chelsea,Spurs
+8,2026-10-24T15:00:00Z,Coventry City,Fulham
+8,2026-10-24T15:00:00Z,Crystal Palace,Newcastle
+8,2026-10-24T15:00:00Z,Hull City,Brentford
+8,2026-10-24T15:00:00Z,Ipswich,Nott'm Forest
+8,2026-10-24T15:00:00Z,Liverpool,Brighton
+8,2026-10-24T15:00:00Z,Man Utd,Bournemouth
+8,2026-10-24T15:00:00Z,Sunderland,Leeds
+9,2026-10-31T15:00:00Z,Bournemouth,Leeds
+9,2026-10-31T15:00:00Z,Aston Villa,Fulham
+9,2026-10-31T15:00:00Z,Brentford,Nott'm Forest
+9,2026-10-31T15:00:00Z,Chelsea,Man Utd
+9,2026-10-31T15:00:00Z,Coventry City,Sunderland
+9,2026-10-31T15:00:00Z,Hull City,Ipswich
+9,2026-10-31T15:00:00Z,Liverpool,Arsenal
+9,2026-10-31T15:00:00Z,Man City,Brighton
+9,2026-10-31T15:00:00Z,Newcastle,Everton
+9,2026-10-31T15:00:00Z,Spurs,Crystal Palace
+10,2026-11-07T15:00:00Z,Arsenal,Hull City
+10,2026-11-07T15:00:00Z,Brighton,Brentford
+10,2026-11-07T15:00:00Z,Crystal Palace,Liverpool
+10,2026-11-07T15:00:00Z,Everton,Coventry City
+10,2026-11-07T15:00:00Z,Fulham,Newcastle
+10,2026-11-07T15:00:00Z,Ipswich,Bournemouth
+10,2026-11-07T15:00:00Z,Leeds,Spurs
+10,2026-11-07T15:00:00Z,Man Utd,Aston Villa
+10,2026-11-07T15:00:00Z,Nott'm Forest,Man City
+10,2026-11-07T15:00:00Z,Sunderland,Chelsea
+11,2026-11-21T15:00:00Z,Bournemouth,Nott'm Forest
+11,2026-11-21T15:00:00Z,Aston Villa,Sunderland
+11,2026-11-21T15:00:00Z,Brentford,Everton
+11,2026-11-21T15:00:00Z,Chelsea,Leeds
+11,2026-11-21T15:00:00Z,Coventry City,Crystal Palace
+11,2026-11-21T15:00:00Z,Hull City,Brighton
+11,2026-11-21T15:00:00Z,Liverpool,Man Utd
+11,2026-11-21T15:00:00Z,Man City,Fulham
+11,2026-11-21T15:00:00Z,Newcastle,Arsenal
+11,2026-11-21T15:00:00Z,Spurs,Ipswich
+12,2026-11-28T15:00:00Z,Arsenal,Man City
+12,2026-11-28T15:00:00Z,Brighton,Newcastle
+12,2026-11-28T15:00:00Z,Crystal Palace,Hull City
+12,2026-11-28T15:00:00Z,Everton,Liverpool
+12,2026-11-28T15:00:00Z,Fulham,Bournemouth
+12,2026-11-28T15:00:00Z,Ipswich,Aston Villa
+12,2026-11-28T15:00:00Z,Leeds,Coventry City
+12,2026-11-28T15:00:00Z,Man Utd,Brentford
+12,2026-11-28T15:00:00Z,Nott'm Forest,Chelsea
+12,2026-11-28T15:00:00Z,Sunderland,Spurs
+13,2026-12-02T20:00:00Z,Bournemouth,Brighton
+13,2026-12-02T20:00:00Z,Aston Villa,Everton
+13,2026-12-02T20:00:00Z,Brentford,Arsenal
+13,2026-12-02T20:00:00Z,Chelsea,Crystal Palace
+13,2026-12-02T20:00:00Z,Coventry City,Ipswich
+13,2026-12-02T20:00:00Z,Hull City,Nott'm Forest
+13,2026-12-02T20:00:00Z,Liverpool,Sunderland
+13,2026-12-02T20:00:00Z,Man City,Leeds
+13,2026-12-02T20:00:00Z,Newcastle,Man Utd
+13,2026-12-02T20:00:00Z,Spurs,Fulham
+14,2026-12-05T15:00:00Z,Bournemouth,Hull City
+14,2026-12-05T15:00:00Z,Aston Villa,Crystal Palace
+14,2026-12-05T15:00:00Z,Brentford,Man City
+14,2026-12-05T15:00:00Z,Chelsea,Liverpool
+14,2026-12-05T15:00:00Z,Everton,Fulham
+14,2026-12-05T15:00:00Z,Leeds,Ipswich
+14,2026-12-05T15:00:00Z,Man Utd,Coventry City
+14,2026-12-05T15:00:00Z,Newcastle,Sunderland
+14,2026-12-05T15:00:00Z,Nott'm Forest,Brighton
+14,2026-12-05T15:00:00Z,Spurs,Arsenal
+15,2026-12-12T15:00:00Z,Arsenal,Bournemouth
+15,2026-12-12T15:00:00Z,Brighton,Everton
+15,2026-12-12T15:00:00Z,Coventry City,Aston Villa
+15,2026-12-12T15:00:00Z,Crystal Palace,Man Utd
+15,2026-12-12T15:00:00Z,Fulham,Brentford
+15,2026-12-12T15:00:00Z,Hull City,Spurs
+15,2026-12-12T15:00:00Z,Ipswich,Newcastle
+15,2026-12-12T15:00:00Z,Liverpool,Leeds
+15,2026-12-12T15:00:00Z,Man City,Chelsea
+15,2026-12-12T15:00:00Z,Sunderland,Nott'm Forest
+16,2026-12-19T15:00:00Z,Bournemouth,Coventry City
+16,2026-12-19T15:00:00Z,Arsenal,Man Utd
+16,2026-12-19T15:00:00Z,Brentford,Newcastle
+16,2026-12-19T15:00:00Z,Brighton,Ipswich
+16,2026-12-19T15:00:00Z,Chelsea,Aston Villa
+16,2026-12-19T15:00:00Z,Leeds,Fulham
+16,2026-12-19T15:00:00Z,Liverpool,Spurs
+16,2026-12-19T15:00:00Z,Man City,Hull City
+16,2026-12-19T15:00:00Z,Nott'm Forest,Everton
+16,2026-12-19T15:00:00Z,Sunderland,Crystal Palace
+17,2026-12-26T15:00:00Z,Aston Villa,Leeds
+17,2026-12-26T15:00:00Z,Coventry City,Chelsea
+17,2026-12-26T15:00:00Z,Crystal Palace,Arsenal
+17,2026-12-26T15:00:00Z,Everton,Sunderland
+17,2026-12-26T15:00:00Z,Fulham,Brighton
+17,2026-12-26T15:00:00Z,Hull City,Liverpool
+17,2026-12-26T15:00:00Z,Ipswich,Brentford
+17,2026-12-26T15:00:00Z,Man Utd,Nott'm Forest
+17,2026-12-26T15:00:00Z,Newcastle,Man City
+17,2026-12-26T15:00:00Z,Spurs,Bournemouth
+18,2026-12-30T20:00:00Z,Aston Villa,Liverpool
+18,2026-12-30T20:00:00Z,Coventry City,Brentford
+18,2026-12-30T20:00:00Z,Crystal Palace,Bournemouth
+18,2026-12-30T20:00:00Z,Everton,Man City
+18,2026-12-30T20:00:00Z,Fulham,Arsenal
+18,2026-12-30T20:00:00Z,Hull City,Leeds
+18,2026-12-30T20:00:00Z,Ipswich,Chelsea
+18,2026-12-30T20:00:00Z,Man Utd,Sunderland
+18,2026-12-30T20:00:00Z,Newcastle,Nott'm Forest
+18,2026-12-30T20:00:00Z,Spurs,Brighton
+19,2027-01-02T15:00:00Z,Bournemouth,Aston Villa
+19,2027-01-02T15:00:00Z,Arsenal,Ipswich
+19,2027-01-02T15:00:00Z,Brentford,Crystal Palace
+19,2027-01-02T15:00:00Z,Brighton,Man Utd
+19,2027-01-02T15:00:00Z,Chelsea,Newcastle
+19,2027-01-02T15:00:00Z,Leeds,Everton
+19,2027-01-02T15:00:00Z,Liverpool,Coventry City
+19,2027-01-02T15:00:00Z,Man City,Spurs
+19,2027-01-02T15:00:00Z,Nott'm Forest,Fulham
+19,2027-01-02T15:00:00Z,Sunderland,Hull City
+20,2027-01-06T20:00:00Z,Arsenal,Brentford
+20,2027-01-06T20:00:00Z,Brighton,Bournemouth
+20,2027-01-06T20:00:00Z,Crystal Palace,Chelsea
+20,2027-01-06T20:00:00Z,Everton,Aston Villa
+20,2027-01-06T20:00:00Z,Fulham,Spurs
+20,2027-01-06T20:00:00Z,Ipswich,Coventry City
+20,2027-01-06T20:00:00Z,Leeds,Man City
+20,2027-01-06T20:00:00Z,Man Utd,Newcastle
+20,2027-01-06T20:00:00Z,Nott'm Forest,Hull City
+20,2027-01-06T20:00:00Z,Sunderland,Liverpool
+21,2027-01-16T15:00:00Z,Bournemouth,Ipswich
+21,2027-01-16T15:00:00Z,Aston Villa,Man Utd
+21,2027-01-16T15:00:00Z,Brentford,Brighton
+21,2027-01-16T15:00:00Z,Chelsea,Sunderland
+21,2027-01-16T15:00:00Z,Coventry City,Everton
+21,2027-01-16T15:00:00Z,Hull City,Arsenal
+21,2027-01-16T15:00:00Z,Liverpool,Crystal Palace
+21,2027-01-16T15:00:00Z,Man City,Nott'm Forest
+21,2027-01-16T15:00:00Z,Newcastle,Fulham
+21,2027-01-16T15:00:00Z,Spurs,Leeds
+22,2027-01-23T15:00:00Z,Arsenal,Newcastle
+22,2027-01-23T15:00:00Z,Brighton,Man City
+22,2027-01-23T15:00:00Z,Crystal Palace,Spurs
+22,2027-01-23T15:00:00Z,Everton,Brentford
+22,2027-01-23T15:00:00Z,Fulham,Aston Villa
+22,2027-01-23T15:00:00Z,Ipswich,Hull City
+22,2027-01-23T15:00:00Z,Leeds,Chelsea
+22,2027-01-23T15:00:00Z,Man Utd,Liverpool
+22,2027-01-23T15:00:00Z,Nott'm Forest,Bournemouth
+22,2027-01-23T15:00:00Z,Sunderland,Coventry City
+23,2027-01-30T15:00:00Z,Bournemouth,Fulham
+23,2027-01-30T15:00:00Z,Aston Villa,Ipswich
+23,2027-01-30T15:00:00Z,Brentford,Man Utd
+23,2027-01-30T15:00:00Z,Chelsea,Nott'm Forest
+23,2027-01-30T15:00:00Z,Coventry City,Leeds
+23,2027-01-30T15:00:00Z,Hull City,Crystal Palace
+23,2027-01-30T15:00:00Z,Liverpool,Everton
+23,2027-01-30T15:00:00Z,Man City,Arsenal
+23,2027-01-30T15:00:00Z,Newcastle,Brighton
+23,2027-01-30T15:00:00Z,Spurs,Sunderland
+24,2027-02-06T15:00:00Z,Arsenal,Liverpool
+24,2027-02-06T15:00:00Z,Brighton,Hull City
+24,2027-02-06T15:00:00Z,Crystal Palace,Coventry City
+24,2027-02-06T15:00:00Z,Everton,Newcastle
+24,2027-02-06T15:00:00Z,Fulham,Man City
+24,2027-02-06T15:00:00Z,Ipswich,Spurs
+24,2027-02-06T15:00:00Z,Leeds,Bournemouth
+24,2027-02-06T15:00:00Z,Man Utd,Chelsea
+24,2027-02-06T15:00:00Z,Nott'm Forest,Brentford
+24,2027-02-06T15:00:00Z,Sunderland,Aston Villa
+25,2027-02-10T20:00:00Z,Aston Villa,Bournemouth
+25,2027-02-10T20:00:00Z,Coventry City,Liverpool
+25,2027-02-10T20:00:00Z,Crystal Palace,Brentford
+25,2027-02-10T20:00:00Z,Everton,Leeds
+25,2027-02-10T20:00:00Z,Fulham,Nott'm Forest
+25,2027-02-10T20:00:00Z,Hull City,Sunderland
+25,2027-02-10T20:00:00Z,Ipswich,Arsenal
+25,2027-02-10T20:00:00Z,Man Utd,Brighton
+25,2027-02-10T20:00:00Z,Newcastle,Chelsea
+25,2027-02-10T20:00:00Z,Spurs,Man City
+26,2027-02-20T15:00:00Z,Bournemouth,Crystal Palace
+26,2027-02-20T15:00:00Z,Arsenal,Fulham
+26,2027-02-20T15:00:00Z,Brentford,Coventry City
+26,2027-02-20T15:00:00Z,Brighton,Spurs
+26,2027-02-20T15:00:00Z,Chelsea,Ipswich
+26,2027-02-20T15:00:00Z,Leeds,Aston Villa
+26,2027-02-20T15:00:00Z,Liverpool,Hull City
+26,2027-02-20T15:00:00Z,Man City,Newcastle
+26,2027-02-20T15:00:00Z,Nott'm Forest,Man Utd
+26,2027-02-20T15:00:00Z,Sunderland,Everton
+27,2027-02-27T15:00:00Z,Aston Villa,Chelsea
+27,2027-02-27T15:00:00Z,Coventry City,Bournemouth
+27,2027-02-27T15:00:00Z,Crystal Palace,Sunderland
+27,2027-02-27T15:00:00Z,Everton,Nott'm Forest
+27,2027-02-27T15:00:00Z,Fulham,Leeds
+27,2027-02-27T15:00:00Z,Hull City,Man City
+27,2027-02-27T15:00:00Z,Ipswich,Brighton
+27,2027-02-27T15:00:00Z,Man Utd,Arsenal
+27,2027-02-27T15:00:00Z,Newcastle,Brentford
+27,2027-02-27T15:00:00Z,Spurs,Liverpool
+28,2027-03-03T20:00:00Z,Bournemouth,Spurs
+28,2027-03-03T20:00:00Z,Arsenal,Crystal Palace
+28,2027-03-03T20:00:00Z,Brentford,Ipswich
+28,2027-03-03T20:00:00Z,Brighton,Fulham
+28,2027-03-03T20:00:00Z,Chelsea,Coventry City
+28,2027-03-03T20:00:00Z,Leeds,Hull City
+28,2027-03-03T20:00:00Z,Liverpool,Aston Villa
+28,2027-03-03T20:00:00Z,Man City,Everton
+28,2027-03-03T20:00:00Z,Nott'm Forest,Newcastle
+28,2027-03-03T20:00:00Z,Sunderland,Man Utd
+29,2027-03-13T15:00:00Z,Bournemouth,Newcastle
+29,2027-03-13T15:00:00Z,Aston Villa,Hull City
+29,2027-03-13T15:00:00Z,Chelsea,Arsenal
+29,2027-03-13T15:00:00Z,Coventry City,Man City
+29,2027-03-13T15:00:00Z,Crystal Palace,Fulham
+29,2027-03-13T15:00:00Z,Leeds,Brighton
+29,2027-03-13T15:00:00Z,Liverpool,Ipswich
+29,2027-03-13T15:00:00Z,Man Utd,Everton
+29,2027-03-13T15:00:00Z,Sunderland,Brentford
+29,2027-03-13T15:00:00Z,Spurs,Nott'm Forest
+30,2027-03-20T15:00:00Z,Arsenal,Sunderland
+30,2027-03-20T15:00:00Z,Brentford,Bournemouth
+30,2027-03-20T15:00:00Z,Brighton,Coventry City
+30,2027-03-20T15:00:00Z,Everton,Spurs
+30,2027-03-20T15:00:00Z,Fulham,Liverpool
+30,2027-03-20T15:00:00Z,Hull City,Chelsea
+30,2027-03-20T15:00:00Z,Ipswich,Crystal Palace
+30,2027-03-20T15:00:00Z,Man City,Man Utd
+30,2027-03-20T15:00:00Z,Newcastle,Leeds
+30,2027-03-20T15:00:00Z,Nott'm Forest,Aston Villa
+31,2027-04-10T15:00:00Z,Bournemouth,Man City
+31,2027-04-10T15:00:00Z,Aston Villa,Brighton
+31,2027-04-10T15:00:00Z,Chelsea,Fulham
+31,2027-04-10T15:00:00Z,Coventry City,Arsenal
+31,2027-04-10T15:00:00Z,Crystal Palace,Everton
+31,2027-04-10T15:00:00Z,Leeds,Nott'm Forest
+31,2027-04-10T15:00:00Z,Liverpool,Newcastle
+31,2027-04-10T15:00:00Z,Man Utd,Hull City
+31,2027-04-10T15:00:00Z,Sunderland,Ipswich
+31,2027-04-10T15:00:00Z,Spurs,Brentford
+32,2027-04-17T15:00:00Z,Arsenal,Aston Villa
+32,2027-04-17T15:00:00Z,Brentford,Leeds
+32,2027-04-17T15:00:00Z,Brighton,Chelsea
+32,2027-04-17T15:00:00Z,Everton,Bournemouth
+32,2027-04-17T15:00:00Z,Fulham,Sunderland
+32,2027-04-17T15:00:00Z,Hull City,Coventry City
+32,2027-04-17T15:00:00Z,Ipswich,Man Utd
+32,2027-04-17T15:00:00Z,Man City,Crystal Palace
+32,2027-04-17T15:00:00Z,Newcastle,Spurs
+32,2027-04-17T15:00:00Z,Nott'm Forest,Liverpool
+33,2027-04-24T15:00:00Z,Bournemouth,Arsenal
+33,2027-04-24T15:00:00Z,Aston Villa,Coventry City
+33,2027-04-24T15:00:00Z,Brentford,Fulham
+33,2027-04-24T15:00:00Z,Chelsea,Man City
+33,2027-04-24T15:00:00Z,Everton,Brighton
+33,2027-04-24T15:00:00Z,Leeds,Liverpool
+33,2027-04-24T15:00:00Z,Man Utd,Crystal Palace
+33,2027-04-24T15:00:00Z,Newcastle,Ipswich
+33,2027-04-24T15:00:00Z,Nott'm Forest,Sunderland
+33,2027-04-24T15:00:00Z,Spurs,Hull City
+34,2027-05-01T15:00:00Z,Arsenal,Spurs
+34,2027-05-01T15:00:00Z,Brighton,Nott'm Forest
+34,2027-05-01T15:00:00Z,Coventry City,Man Utd
+34,2027-05-01T15:00:00Z,Crystal Palace,Aston Villa
+34,2027-05-01T15:00:00Z,Fulham,Everton
+34,2027-05-01T15:00:00Z,Hull City,Bournemouth
+34,2027-05-01T15:00:00Z,Ipswich,Leeds
+34,2027-05-01T15:00:00Z,Liverpool,Chelsea
+34,2027-05-01T15:00:00Z,Man City,Brentford
+34,2027-05-01T15:00:00Z,Sunderland,Newcastle
+35,2027-05-08T15:00:00Z,Bournemouth,Man Utd
+35,2027-05-08T15:00:00Z,Brentford,Aston Villa
+35,2027-05-08T15:00:00Z,Brighton,Sunderland
+35,2027-05-08T15:00:00Z,Everton,Hull City
+35,2027-05-08T15:00:00Z,Fulham,Ipswich
+35,2027-05-08T15:00:00Z,Leeds,Arsenal
+35,2027-05-08T15:00:00Z,Man City,Liverpool
+35,2027-05-08T15:00:00Z,Newcastle,Coventry City
+35,2027-05-08T15:00:00Z,Nott'm Forest,Crystal Palace
+35,2027-05-08T15:00:00Z,Spurs,Chelsea
+36,2027-05-15T15:00:00Z,Arsenal,Nott'm Forest
+36,2027-05-15T15:00:00Z,Aston Villa,Newcastle
+36,2027-05-15T15:00:00Z,Chelsea,Everton
+36,2027-05-15T15:00:00Z,Coventry City,Spurs
+36,2027-05-15T15:00:00Z,Crystal Palace,Brighton
+36,2027-05-15T15:00:00Z,Hull City,Fulham
+36,2027-05-15T15:00:00Z,Ipswich,Man City
+36,2027-05-15T15:00:00Z,Liverpool,Brentford
+36,2027-05-15T15:00:00Z,Man Utd,Leeds
+36,2027-05-15T15:00:00Z,Sunderland,Bournemouth
+37,2027-05-23T15:00:00Z,Bournemouth,Chelsea
+37,2027-05-23T15:00:00Z,Brentford,Hull City
+37,2027-05-23T15:00:00Z,Brighton,Liverpool
+37,2027-05-23T15:00:00Z,Everton,Arsenal
+37,2027-05-23T15:00:00Z,Fulham,Coventry City
+37,2027-05-23T15:00:00Z,Leeds,Sunderland
+37,2027-05-23T15:00:00Z,Man City,Aston Villa
+37,2027-05-23T15:00:00Z,Newcastle,Crystal Palace
+37,2027-05-23T15:00:00Z,Nott'm Forest,Ipswich
+37,2027-05-23T15:00:00Z,Spurs,Man Utd
+38,2027-05-30T15:00:00Z,Arsenal,Brighton
+38,2027-05-30T15:00:00Z,Aston Villa,Spurs
+38,2027-05-30T15:00:00Z,Chelsea,Brentford
+38,2027-05-30T15:00:00Z,Coventry City,Nott'm Forest
+38,2027-05-30T15:00:00Z,Crystal Palace,Leeds
+38,2027-05-30T15:00:00Z,Hull City,Newcastle
+38,2027-05-30T15:00:00Z,Ipswich,Everton
+38,2027-05-30T15:00:00Z,Liverpool,Bournemouth
+38,2027-05-30T15:00:00Z,Man Utd,Fulham
+38,2027-05-30T15:00:00Z,Sunderland,Man City

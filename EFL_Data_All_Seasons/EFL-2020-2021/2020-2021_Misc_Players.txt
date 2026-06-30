@@ -1,0 +1,766 @@
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+1	Max Aarons	eng ENG	DF	Norwich City	20	2000	45.0	0.11	0.00	0.00	0.47	1.44	0.09	2.96	0.89	0.42			0.00	Matches
+2	Rolando Aarons	eng ENG	FW,MF	Huddersfield	24	1995	5.5	0.00	0.00	0.00	1.09	1.09	0.18	2.73	1.09	2.00			0.00	Matches
+3	Elijah Adebayo	eng ENG	FW	Luton Town	22	1998	14.4	0.00	0.00	0.00	2.43	1.32	0.76	0.90	0.35	0.28			0.00	Matches
+4	Victor Adeboyejo	eng ENG	MF,FW	Barnsley	22	1998	13.5	0.00	0.00	0.00	2.07	1.19	0.30	0.89	0.67	0.74			0.07	Matches
+5	Hakeeb Adelakun	eng ENG	MF	Bristol City	24	1996	1.6	0.00	0.00	0.00	0.63	0.00	0.00	1.88	1.25	0.00			0.00	Matches
+6	Dennis Adeniran	eng ENG	MF	Wycombe	21	1999	16.4	0.12	0.00	0.00	1.34	1.52	0.00	0.18	1.95	0.73			0.00	Matches
+7	Albert Adomah	gh GHA	MF	QPR	32	1987	9.6	0.10	0.00	0.00	1.46	0.63	0.31	6.04	1.88	1.56			0.00	Matches
+8	Joost van Aken	nl NED	DF	Sheffield Weds	26	1994	14.1	0.14	0.07	0.00	0.99	0.71	0.00	0.00	1.49	1.13			0.00	Matches
+9	Adebayo Akinfenwa	eng ENG	FW	Wycombe	38	1982	14.4	0.00	0.00	0.00	3.06	0.35	0.63	0.07	0.00	0.21			0.00	Matches
+10	Chuba Akpom	eng ENG	FW	Middlesbrough	24	1995	21.4	0.09	0.00	0.00	0.98	1.45	0.75	0.28	0.05	0.14			0.00	Matches
+11	Jamie Allen	eng ENG	MF,FW	Coventry City	25	1995	14.8	0.00	0.00	0.00	0.74	1.01	0.07	1.22	0.74	0.54			0.00	Matches
+12	Joe Allen	wls WAL	MF	Stoke City	30	1990	15.3	0.13	0.00	0.00	1.05	0.92	0.00	1.50	1.83	0.52			0.00	Matches
+13	Ryan Allsop	eng ENG	GK	Wycombe	28	1992	29.0	0.14	0.00	0.00	0.00	0.10	0.00	0.00	0.14	0.00			0.00	Matches
+14	Sone Aluko	ng NGA	MF,FW	Reading	31	1989	11.0	0.00	0.00	0.00	1.45	1.64	0.18	5.00	1.18	1.09			0.00	Matches
+15	Sammy Ameobi	eng ENG	MF	Nottingham	28	1992	24.7	0.12	0.00	0.00	1.62	0.93	0.40	2.43	1.30	1.42			0.00	Matches
+16	Luke Amos	eng ENG	MF	QPR	23	1997	4.4	0.00	0.00	0.00	0.68	1.14	0.45	0.68	0.68	1.82			0.00	Matches
+17	Miguel Ángel Guerrero	es ESP	MF,FW	Nottingham	30	1990	4.4	0.23	0.00	0.00	2.27	0.45	0.23	0.45	0.00	0.23			0.00	Matches
+18	Jaidon Anthony	eng ENG	FW,MF	Bournemouth	20	1999	0.8	0.00	0.00	0.00	2.50	0.00	0.00	6.25	0.00	2.50			0.00	Matches
+19	Felipe Araruna	br BRA	DF	Reading	24	1996	1.7	0.00	0.00	0.00	0.59	1.76	0.00	1.18	0.00	2.35			0.00	Matches
+20	Jordan Archer	sct SCO	GK	Middlesbrough	27	1993	5.0	0.00	0.00	0.00	0.00	1.00	0.00	0.00	0.00	0.00			0.00	Matches
+21	Adam Armstrong	eng ENG	FW	Blackburn	23	1997	38.4	0.08	0.00	0.00	1.33	0.86	1.04	1.15	0.18	0.21			0.00	Matches
+22	Paul Arriola	us USA	FW,MF	Swansea City	25	1995	0.2	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+23	Harry Arter	ie IRL	MF,FW	Nottingham	30	1989	8.0	0.38	0.00	0.00	1.63	0.88	0.00	3.25	0.63	1.38			0.00	Matches
+24	Britt Assombalonga	cd COD	FW	Middlesbrough	27	1992	19.2	0.10	0.00	0.00	2.71	1.41	0.99	0.16	0.05	0.10			0.00	Matches
+25	Charlie Austin	eng ENG	FW	QPR	31	1989	15.7	0.19	0.00	0.00	1.59	1.53	0.57	1.15	0.32	0.38			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+26	Daniel Ayala	es ESP	DF	Blackburn	29	1990	8.7	0.00	0.00	0.00	0.80	0.80	0.23	0.00	1.26	1.03			0.00	Matches
+27	André Ayew	gh GHA	FW	Swansea City	30	1989	40.6	0.10	0.00	0.00	0.94	1.77	0.62	0.94	0.27	0.39			0.00	Matches
+28	Femi Azeez	ng NGA	MF	Reading	19	2001	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+29	Fouad Bachirou	km COM	MF	Nottingham	30	1990	0.4	0.00	0.00	0.00	0.00	0.00	0.00	2.50	2.50	0.00			0.00	Matches
+30	Daniel Bachmann	at AUT	GK	Watford	26	1994	23.0	0.09	0.00	0.00	0.09	0.09	0.00	0.00	0.00	0.00			0.00	Matches
+31	Juninho Bacuna	cw CUW	MF,FW	Huddersfield	22	1997	36.8	0.14	0.00	0.00	1.49	1.74	0.00	2.26	0.87	0.76			0.00	Matches
+32	Leandro Bacuna	cw CUW	DF,MF	Cardiff City	28	1991	32.4	0.25	0.00	0.00	1.11	0.46	0.28	1.02	0.96	1.17			0.00	Matches
+33	Joel Bagan	ie IRL	DF,MF	Cardiff City	20	2000	5.2	0.00	0.00	0.00	0.77	0.38	0.00	1.73	0.58	1.15			0.00	Matches
+34	Amadou Bakayoko	sl SLE	FW	Coventry City	24	1996	3.5	0.00	0.00	0.00	2.86	0.57	0.29	0.00	0.00	0.29			0.00	Matches
+35	Nathan Baker	eng ENG	DF	Bristol City	29	1991	2.2	0.91	0.00	0.00	1.36	1.82	0.00	0.00	3.18	0.00			0.00	Matches
+36	Tyreeq Bakinson	eng ENG	MF	Bristol City	21	1998	22.9	0.09	0.00	0.00	1.27	0.87	0.00	0.31	1.40	0.70			0.00	Matches
+37	Sam Baldock	eng ENG	FW	Reading	31	1989	5.7	0.18	0.00	0.00	2.11	1.23	0.53	1.40	0.53	0.70			0.00	Matches
+38	Dominic Ball	eng ENG	MF	QPR	24	1995	24.3	0.37	0.00	0.00	2.10	1.23	0.08	0.62	1.11	0.91			0.00	Matches
+39	Sol Bamba	ci CIV	DF	Cardiff City	35	1985	0.3	0.00	0.00	0.00	3.33	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+40	Beni Baningime	cd COD	MF	Derby County	21	1998	1.0	0.00	0.00	0.00	0.00	4.00	0.00	0.00	0.00	2.00			0.00	Matches
+41	Barry Bannan	sct SCO	MF	Sheffield Weds	30	1989	44.6	0.20	0.00	0.00	0.67	0.56	0.04	5.99	1.23	0.92			0.00	Matches
+42	Will Bapaga	eng ENG	MF	Coventry City	17	2002	0.3	0.00	0.00	0.00	3.33	6.67	0.00	0.00	0.00	3.33			0.00	Matches
+43	Shandon Baptiste	gd GRN	MF	Brentford	22	1998	0.1	0.00	0.00	0.00	10.0	10.0	0.00	0.00	0.00	0.00			0.00	Matches
+44	Yoann Barbet	fr FRA	DF	QPR	27	1993	46.0	0.15	0.00	0.00	0.85	0.74	0.00	1.13	2.43	0.59			0.04	Matches
+45	Daniel Barden	wls WAL	GK	Norwich City	19	2001	1.5	0.00	0.00	0.00	0.00	0.67	0.00	0.00	0.00	0.00			0.00	Matches
+46	Tom Barkhuizen	eng ENG	MF,FW	Preston	27	1993	29.8	0.00	0.03	0.00	0.64	0.47	0.37	2.58	0.94	0.67			0.00	Matches
+47	Daniel Barlaser	tr TUR	MF	Rotherham	23	1997	26.6	0.11	0.00	0.00	1.09	0.94	0.00	4.77	1.54	1.20			0.00	Matches
+48	Danny Batth	eng ENG	DF	Stoke City	29	1990	26.0	0.27	0.00	0.00	1.42	0.46	0.00	0.00	1.62	0.42			0.00	Matches
+49	Patrick Bauer	de GER	DF	Preston	27	1992	11.5	0.09	0.00	0.00	1.22	0.87	0.00	0.26	2.26	0.87			0.00	Matches
+50	Tom Bayliss	eng ENG	MF	Preston	21	1999	2.9	0.00	0.00	0.00	0.69	1.03	0.00	1.72	0.34	1.03			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+51	Mads Bech Sørensen	dk DEN	DF	Brentford	21	1999	29.8	0.07	0.00	0.00	0.87	0.84	0.00	0.47	1.01	0.84			0.00	Matches
+52	Asmir Begović	ba BIH	GK	Bournemouth	33	1987	45.0	0.04	0.00	0.00	0.02	0.13	0.00	0.00	0.02	0.02			0.00	Matches
+53	Jérémie Bela	ao ANG	MF	Birmingham City	27	1993	25.0	0.08	0.00	0.00	0.96	1.48	0.44	6.76	0.68	0.52			0.00	Matches
+54	Amari'i Bell	jm JAM	DF	Blackburn	26	1994	17.0	0.06	0.00	0.00	1.24	1.18	0.06	2.24	0.88	1.24			0.00	Matches
+55	Sam Bell	eng ENG	FW	Bristol City	18	2002	0.4	0.00	0.00	0.00	0.00	0.00	0.00	2.50	0.00	0.00			0.00	Matches
+56	Steven Benda	de GER	GK	Swansea City	21	1998	1.0	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+57	Filip Benković	hr CRO	DF	Cardiff City	23	1997	0.8	0.00	0.00	0.00	0.00	2.50	1.25	0.00	3.75	0.00			0.00	Matches
+58	Elliott Bennett	eng ENG	MF,DF	Blackburn	31	1988	2.8	0.36	0.00	0.00	0.36	2.14	0.00	1.43	2.14	0.36			0.00	Matches
+59	Joe Bennett	eng ENG	DF,MF	Cardiff City	30	1990	26.5	0.23	0.00	0.00	0.79	0.79	0.26	2.11	1.32	0.94			0.00	Matches
+60	Mason Bennett	eng ENG	FW,MF	Millwall	24	1996	25.5	0.00	0.00	0.00	1.80	1.84	0.31	1.37	0.47	0.63			0.00	Matches
+61	Ryan Bennett	eng ENG	DF	Swansea City	30	1990	26.9	0.30	0.00	0.00	0.86	0.37	0.04	0.00	2.08	0.56			0.00	Matches
+62	Saïd Benrahma	dz ALG	FW,MF	Brentford	24	1995	0.5	0.00	0.00	0.00	2.00	0.00	0.00	4.00	0.00	0.00			0.00	Matches
+63	Daniel Bentley	eng ENG	GK	Bristol City	27	1993	43.0	0.00	0.00	0.00	0.02	0.30	0.00	0.00	0.00	0.00			0.02	Matches
+64	Luke Berry	eng ENG	MF	Luton Town	28	1992	20.8	0.19	0.00	0.00	1.68	1.83	0.00	4.86	0.82	0.67			0.00	Matches
+65	Faysal Bettache	eng ENG	MF	QPR	20	2000	0.8	0.00	0.00	0.00	1.25	0.00	0.00	2.50	0.00	1.25			0.00	Matches
+66	Marcus Bettinelli	eng ENG	GK	Middlesbrough	28	1992	41.0	0.07	0.00	0.00	0.02	0.10	0.00	0.00	0.00	0.00			0.00	Matches
+67	Maxime Biamou	fr FRA	FW	Coventry City	29	1990	22.4	0.13	0.00	0.00	1.52	1.88	1.03	0.71	0.40	0.71			0.00	Matches
+68	Bartosz Białkowski	pl POL	GK	Millwall	33	1987	46.0	0.00	0.00	0.00	0.00	0.17	0.00	0.00	0.02	0.00			0.00	Matches
+69	Mads Bidstrup	dk DEN	MF	Brentford	19	2001	1.3	0.77	0.00	0.00	2.31	0.77	0.00	0.00	0.00	1.54			0.00	Matches
+70	Jake Bidwell	eng ENG	MF,DF	Swansea City	27	1993	34.9	0.14	0.00	0.00	1.09	0.66	0.20	3.18	0.83	0.34			0.00	Matches
+71	Krystian Bielik	pl POL	MF	Derby County	22	1998	12.1	0.33	0.00	0.00	1.74	2.07	0.00	0.33	2.40	1.57			0.00	Matches
+72	Philip Billing	dk DEN	MF	Bournemouth	24	1996	23.0	0.39	0.00	0.00	1.65	1.43	0.04	0.74	0.91	1.22			0.00	Matches
+73	Max Bird	eng ENG	MF	Derby County	19	2000	23.0	0.09	0.00	0.00	0.83	0.35	0.04	1.30	1.48	1.57			0.00	Matches
+74	Tyler Blackett	eng ENG	DF	Nottingham	26	1994	9.4	0.00	0.00	0.00	0.96	0.43	0.11	2.55	1.49	0.74			0.00	Matches
+75	Jamal Blackman	eng ENG	GK	Rotherham	26	1993	25.9	0.04	0.00	0.00	0.04	0.27	0.00	0.00	0.00	0.04			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+76	Matt Bloomfield	eng ENG	MF	Wycombe	36	1984	7.7	0.13	0.00	0.00	1.69	0.78	0.00	0.78	0.91	0.65			0.00	Matches
+77	Billy Bodin	wls WAL	MF	Preston	28	1992	1.0	0.00	0.00	0.00	1.00	0.00	1.00	1.00	0.00	1.00			0.00	Matches
+78	Marc Bola	eng ENG	DF,MF	Middlesbrough	22	1997	40.1	0.17	0.00	0.00	0.92	1.12	0.10	3.22	1.62	1.07			0.00	Matches
+79	Yannick Bolasie	cd COD	FW,MF	Middlesbrough	31	1989	10.3	0.10	0.00	0.00	2.33	0.97	0.39	3.98	0.10	0.39			0.00	Matches
+80	Gaëtan Bong	cm CMR	DF	Nottingham	32	1988	8.7	0.34	0.00	0.00	1.26	0.57	0.11	3.10	1.72	0.57			0.00	Matches
+81	Macauley Bonne	zw ZIM	FW,MF	QPR	24	1995	12.2	0.49	0.00	0.00	1.80	0.66	1.39	0.74	0.41	0.25			0.00	Matches
+82	Julian Börner	de GER	DF	Sheffield Weds	29	1991	23.3	0.21	0.04	0.00	1.24	1.20	0.00	0.34	2.10	0.94			0.00	Matches
+83	Caolan Boyd-Munce	nir NIR	MF	Birmingham City	20	2000	1.0	0.00	0.00	0.00	0.00	0.00	0.00	2.00	2.00	2.00			0.00	Matches
+84	Sonny Bradley	eng ENG	DF	Luton Town	28	1991	36.5	0.16	0.00	0.00	0.68	1.10	0.05	0.11	1.56	0.71			0.03	Matches
+85	Tom Bradshaw	wls WAL	FW,MF	Millwall	28	1992	11.7	0.00	0.00	0.00	1.28	1.71	0.17	0.85	0.51	0.43			0.00	Matches
+86	Jarrad Branthwaite	eng ENG	DF	Blackburn	18	2002	10.0	0.00	0.00	0.00	1.10	1.00	0.10	0.10	2.60	1.30			0.00	Matches
+87	James Bree	eng ENG	DF,MF	Luton Town	22	1997	17.8	0.00	0.00	0.00	0.67	0.67	0.11	5.11	0.96	0.67			0.00	Matches
+88	Luke Brennan	eng ENG	FW	Blackburn	18	2001	0.1	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	10.0			0.00	Matches
+89	Ben Brereton	cl CHI	FW,MF	Blackburn	21	1999	27.0	0.04	0.00	0.00	1.11	2.26	0.67	0.96	0.63	0.89			0.00	Matches
+90	Callum Brittain	eng ENG	MF	Barnsley	22	1998	39.4	0.08	0.00	0.00	0.36	0.28	0.05	4.11	0.94	1.04			0.00	Matches
+91	Louis Britton	eng ENG	FW	Bristol City	19	2001	0.2	5.00	0.00	0.00	5.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+92	David Brooks	wls WAL	FW,MF	Bournemouth	23	1997	23.8	0.13	0.00	0.00	0.92	1.85	0.25	3.07	0.59	0.59			0.00	Matches
+93	Ciaron Brown	nir NIR	DF,MF	Cardiff City	22	1998	11.6	0.26	0.00	0.00	0.86	1.38	0.09	1.12	1.47	0.78			0.00	Matches
+94	Izzy Brown	eng ENG	MF	Sheffield Weds	23	1997	6.0	0.17	0.00	0.00	1.50	1.00	0.17	4.83	2.00	1.83			0.00	Matches
+95	Jacob Brown	sct SCO	FW,MF	Stoke City	22	1998	26.9	0.30	0.00	0.00	1.64	1.60	0.48	1.56	0.26	0.41			0.00	Matches
+96	Jaden Brown	eng ENG	FW	Huddersfield	21	1999	2.7	1.11	0.37	0.37	4.44	1.85	1.48	1.48	0.37	2.22			0.00	Matches
+97	Alan Browne	ie IRL	MF,DF	Preston	25	1995	36.0	0.17	0.03	0.00	1.39	1.39	0.03	1.53	1.64	1.28			0.00	Matches
+98	Marcus Browne	eng ENG	MF	Middlesbrough	22	1997	1.6	0.00	0.00	0.00	1.88	3.75	1.88	2.50	0.00	0.00			0.00	Matches
+99	Chris Brunt	nir NIR	MF	Bristol City	35	1984	5.7	0.00	0.00	0.00	0.88	0.88	0.00	3.51	1.58	1.23			0.00	Matches
+100	Lee Buchanan	eng ENG	DF,MF	Derby County	19	2001	28.7	0.24	0.00	0.00	1.29	1.22	0.07	3.34	1.25	1.08			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+101	John Buckley	eng ENG	MF,FW	Blackburn	20	1999	11.1	0.09	0.00	0.00	1.53	1.35	0.00	1.89	0.81	1.98			0.00	Matches
+102	Emi Buendía	ar ARG	MF	Norwich City	23	1996	36.8	0.22	0.05	0.05	1.66	2.12	0.11	4.57	1.22	1.74			0.00	Matches
+103	Ajani Burchall	bm BER	FW	Bournemouth	15	2004	0.0	0	0	0	0	2	0	0	0	0			0	Matches
+104	Tyler Burey	eng ENG	FW	Millwall	18	2001	1.6	0.00	0.00	0.00	2.50	4.38	0.63	6.25	0.63	0.63			0.00	Matches
+105	Jack Burroughs	sct SCO	DF,MF	Coventry City	19	2001	1.0	0.00	0.00	0.00	0.00	2.00	0.00	1.00	0.00	2.00			0.00	Matches
+106	Josef Bursik	eng ENG	GK	Stoke City	20	2000	15.0	0.00	0.00	0.00	0.07	0.20	0.00	0.00	0.07	0.00			0.00	Matches
+107	Daniel Butterworth	eng ENG	FW,MF	Blackburn	20	1999	0.3	0.00	0.00	0.00	3.33	0.00	0.00	3.33	0.00	0.00			0.00	Matches
+108	Nathan Byrne	eng ENG	DF,MF	Derby County	28	1992	38.5	0.26	0.00	0.00	1.32	1.25	0.05	6.00	1.12	1.01			0.00	Matches
+109	Ben Cabango	wls WAL	DF	Swansea City	20	2000	28.2	0.14	0.00	0.00	1.10	0.64	0.07	0.07	1.95	0.85			0.00	Matches
+110	Rafael Cabral	br BRA	GK	Reading	30	1990	45.0	0.02	0.00	0.00	0.00	0.09	0.00	0.00	0.02	0.02			0.00	Matches
+111	Cafú	pt POR	MF	Nottingham	27	1993	26.0	0.19	0.00	0.00	0.81	2.00	0.19	1.46	0.85	0.27			0.00	Matches
+112	Mamadi Camará	gw GNB	FW,MF	Reading	16	2003	0.1	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+113	Geoff Cameron	us USA	MF,DF	QPR	35	1985	30.9	0.13	0.00	0.00	1.23	1.04	0.00	0.06	1.72	1.10			0.00	Matches
+114	Fraizer Campbell	eng ENG	FW	Huddersfield	32	1987	33.1	0.12	0.00	0.00	1.75	1.66	0.24	0.33	0.60	0.66			0.00	Matches
+115	Tyrese Campbell	eng ENG	MF,FW	Stoke City	20	1999	12.1	0.08	0.00	0.00	1.57	1.07	0.58	3.47	0.41	0.25			0.00	Matches
+116	Sergi Canós	es ESP	FW,MF	Brentford	23	1997	31.9	0.16	0.00	0.00	1.85	1.41	0.06	3.23	0.91	1.07			0.00	Matches
+117	Todd Cantwell	eng ENG	MF	Norwich City	22	1998	29.0	0.14	0.00	0.00	0.69	3.07	0.34	0.59	0.55	1.07			0.00	Matches
+118	Étienne Capoue	fr FRA	MF	Watford	32	1988	7.8	0.38	0.00	0.00	1.15	1.03	0.00	0.26	3.97	1.54			0.13	Matches
+119	Tom Carroll	eng ENG	MF	QPR	28	1992	18.3	0.16	0.00	0.00	1.31	0.60	0.05	2.46	0.82	0.77			0.00	Matches
+120	Hayden Carter	eng ENG	DF	Blackburn	20	1999	0.2	0.00	0.00	0.00	5.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+121	Cameron Carter-Vickers	us USA	DF	Bournemouth	22	1997	20.5	0.00	0.00	0.00	0.59	0.39	0.00	0.00	1.17	0.68			0.00	Matches
+122	Joel Castro Pereira	pt POR	GK	Huddersfield	24	1996	2.0	0.00	0.00	0.00	0.00	0.50	0.00	0.00	0.00	0.00			0.00	Matches
+123	Craig Cathcart	nir NIR	DF	Watford	31	1989	21.3	0.05	0.00	0.00	0.94	0.28	0.00	0.42	0.99	0.89			0.00	Matches
+124	Ilias Chair	ma MAR	MF	QPR	22	1997	38.9	0.15	0.00	0.00	1.16	0.77	0.59	6.84	0.31	0.57			0.00	Matches
+125	Nathaniel Chalobah	eng ENG	MF	Watford	25	1994	29.2	0.41	0.00	0.00	2.16	1.61	0.03	0.51	1.92	1.03			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+126	Conor Chaplin	eng ENG	FW,MF	Barnsley	23	1997	23.5	0.09	0.00	0.00	0.81	1.57	0.34	1.96	0.72	0.81			0.00	Matches
+127	Harry Chapman	eng ENG	FW,MF	Blackburn	22	1997	1.0	0.00	0.00	0.00	0.00	1.00	0.00	9.00	1.00	0.00			0.00	Matches
+128	Darius Charles	eng ENG	DF	Wycombe	32	1987	4.6	0.00	0.22	0.00	1.30	1.52	0.43	0.00	0.87	0.22			0.00	Matches
+129	James Chester	wls WAL	DF	Stoke City	31	1989	31.0	0.19	0.03	0.00	0.74	0.42	0.03	0.03	1.23	1.13			0.03	Matches
+130	Cyrus Christie	ie IRL	DF	Nottingham	27	1992	43.9	0.07	0.00	0.00	0.80	0.68	0.00	3.62	1.69	1.14			0.00	Matches
+131	Jordan Clark	eng ENG	MF,DF	Luton Town	26	1993	24.3	0.00	0.00	0.00	0.95	1.44	0.12	2.96	1.23	1.11			0.00	Matches
+132	Jack Clarke	eng ENG	MF,FW	Stoke City	19	2000	6.5	0.31	0.00	0.00	1.23	2.62	0.15	3.54	0.46	1.08			0.00	Matches
+133	Matthew Clarke	eng ENG	DF	Derby County	23	1996	41.0	0.07	0.00	0.00	0.71	0.83	0.02	0.12	1.49	1.00			0.02	Matches
+134	Trevor Clarke	ie IRL	MF	Rotherham	22	1998	2.2	0.00	0.00	0.00	1.82	2.27	0.45	7.27	3.18	2.73			0.00	Matches
+135	Jake Clarke-Salter	eng ENG	DF	Birmingham City	22	1997	8.8	0.23	0.00	0.00	1.48	0.45	0.11	0.45	1.59	1.14			0.00	Matches
+136	Adam Clayton	eng ENG	MF	Birmingham City	31	1989	9.7	0.52	0.10	0.10	2.58	0.93	0.00	0.52	1.75	0.93			0.00	Matches
+137	Tom Cleverley	eng ENG	MF	Watford	30	1989	28.9	0.21	0.00	0.00	1.45	1.18	0.00	3.46	1.00	1.18			0.00	Matches
+138	Sam Clucas	eng ENG	MF	Stoke City	29	1990	17.9	0.22	0.00	0.00	1.34	1.17	0.17	6.48	1.51	0.73			0.00	Matches
+139	Josh Coburn	eng ENG	FW	Middlesbrough	17	2002	0.6	0.00	0.00	0.00	3.33	1.67	0.00	0.00	0.00	0.00			0.00	Matches
+140	Josh Cogley	eng ENG	DF,MF	Birmingham City	24	1996	4.3	0.00	0.00	0.00	0.93	1.16	0.00	2.79	1.63	0.47			0.00	Matches
+141	Jack Colback	eng ENG	MF	Nottingham	30	1989	12.2	0.16	0.00	0.00	2.70	1.72	0.00	0.33	2.30	1.64			0.00	Matches
+142	Maxime Colin	fr FRA	DF,MF	Birmingham City	28	1991	39.0	0.13	0.00	0.00	1.28	0.49	0.05	2.26	1.62	1.15			0.00	Matches
+143	Bradley Collins	eng ENG	GK	Barnsley	23	1997	22.0	0.05	0.00	0.00	0.00	0.14	0.00	0.00	0.00	0.00			0.00	Matches
+144	James Collins	ie IRL	FW	Luton Town	29	1990	29.5	0.14	0.00	0.00	2.71	2.07	0.98	0.64	0.37	0.51			0.00	Matches
+145	Nathan Collins	ie IRL	DF	Stoke City	19	2001	19.6	0.10	0.05	0.00	0.87	0.51	0.00	1.58	1.17	0.87			0.00	Matches
+146	Rubin Colwill	wls WAL	MF	Cardiff City	18	2002	2.1	0.00	0.00	0.00	2.38	1.43	0.95	1.90	0.00	0.48			0.00	Matches
+147	Tommy Conway	sct SCO	FW,MF	Bristol City	17	2002	3.0	0.00	0.00	0.00	0.67	1.67	1.00	0.00	0.00	0.33			0.00	Matches
+148	Lewis Cook	eng ENG	MF	Bournemouth	23	1997	27.8	0.18	0.00	0.00	1.51	1.29	0.04	0.86	1.62	0.83			0.00	Matches
+149	Steve Cook	eng ENG	DF	Bournemouth	29	1991	40.6	0.10	0.02	0.00	0.67	0.62	0.02	0.07	1.55	0.37			0.00	Matches
+150	Brandon Cooper	wls WAL	DF	Swansea City	20	2000	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+151	Jake Cooper	eng ENG	DF	Millwall	25	1995	41.2	0.12	0.00	0.00	1.29	0.90	0.12	0.32	1.77	0.63			0.02	Matches
+152	Oliver Cooper	wls WAL	MF	Swansea City	20	1999	0.6	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+153	Harry Cornick	eng ENG	FW,MF	Luton Town	25	1995	28.4	0.04	0.00	0.00	0.74	0.81	1.13	4.40	0.28	0.81			0.00	Matches
+154	Sam Cosgrove	eng ENG	FW	Birmingham City	23	1996	2.6	0.00	0.00	0.00	2.69	2.69	1.92	0.38	0.38	0.00			0.00	Matches
+155	Nuno da Costa	cv CPV	MF	Nottingham	29	1991	1.1	0.00	0.00	0.00	0.91	1.82	0.00	1.82	0.00	2.73			0.00	Matches
+156	Hayden Coulson	eng ENG	MF,FW	Middlesbrough	22	1998	7.0	0.00	0.00	0.00	1.86	2.57	0.29	2.57	0.86	0.43			0.00	Matches
+157	Jordan Cousins	eng ENG	MF	Stoke City	26	1994	9.4	0.21	0.00	0.00	1.17	1.28	0.11	0.21	1.06	1.17			0.00	Matches
+158	Martin Cranie	eng ENG	DF,MF	Luton Town	33	1986	19.3	0.26	0.00	0.00	1.40	0.88	0.05	0.93	1.66	1.14			0.05	Matches
+159	Cameron Cresswell	eng ENG	FW	Derby County	20	1999	0.1	10.0	0.00	0.00	10.0	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+160	Romoney Crichlow-Noble	eng ENG	DF	Huddersfield	21	1999	2.7	0.37	0.00	0.00	1.11	0.37	0.00	0.00	1.48	0.74			0.00	Matches
+161	Matt Crooks	eng ENG	MF,FW	Rotherham	26	1994	34.3	0.20	0.03	0.00	2.27	0.99	0.32	0.58	0.58	0.87			0.00	Matches
+162	Daniel Crowley	eng ENG	MF	Birmingham City	22	1997	1.2	0.00	0.00	0.00	0.00	0.00	0.00	2.50	0.83	0.83			0.00	Matches
+163	Liam Cullen	wls WAL	FW	Swansea City	21	1999	5.6	0.00	0.00	0.00	2.50	3.04	1.07	1.61	0.36	0.54			0.00	Matches
+164	Greg Cunningham	ie IRL	MF,DF	Preston	29	1991	10.1	0.20	0.00	0.00	0.79	1.19	0.00	1.78	0.79	1.19			0.00	Matches
+165	Greg Cunningham	ie IRL	DF	Cardiff City	29	1991	3.2	0.31	0.00	0.00	0.63	0.31	0.00	2.19	1.56	1.88			0.00	Matches
+166	Fankaty Dabo	eng ENG	MF,DF	Coventry City	24	1995	22.1	0.14	0.00	0.00	1.09	1.40	0.05	3.57	1.00	1.22			0.00	Matches
+167	Bradley Dack	eng ENG	MF,FW	Blackburn	26	1993	9.0	0.00	0.00	0.00	0.78	1.44	1.00	1.00	0.22	0.44			0.00	Matches
+168	Julien Dacosta	fr FRA	MF	Coventry City	24	1996	10.3	0.10	0.00	0.00	2.14	0.97	0.19	4.27	1.36	1.36			0.00	Matches
+169	Henrik Dalsgaard	dk DEN	DF	Brentford	31	1989	33.5	0.15	0.00	0.00	1.22	1.04	0.03	1.76	1.16	1.07			0.00	Matches
+170	Matty Daly	eng ENG	FW	Huddersfield	19	2001	0.8	0.00	0.00	0.00	1.25	0.00	0.00	1.25	0.00	0.00			0.00	Matches
+171	Luke Daniels	eng ENG	GK	Brentford	32	1988	4.0	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+172	Arnaut Danjuma	nl NED	FW,MF	Bournemouth	23	1997	27.7	0.04	0.00	0.00	0.54	1.62	0.83	2.82	0.25	0.29			0.00	Matches
+173	Jay Dasilva	wls WAL	MF,DF	Bristol City	22	1998	9.0	0.00	0.00	0.00	0.44	0.56	0.00	1.11	0.78	0.89			0.00	Matches
+174	Josh Dasilva	eng ENG	MF	Brentford	21	1998	23.7	0.08	0.00	0.00	0.59	1.60	0.04	1.31	0.38	0.51			0.00	Matches
+175	Jacob Davenport	eng ENG	MF	Blackburn	21	1998	6.8	0.44	0.00	0.00	1.76	1.03	0.00	0.29	2.50	1.76			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+176	Adam Davies	wls WAL	GK	Stoke City	28	1992	16.5	0.06	0.00	0.00	0.00	0.18	0.00	0.00	0.00	0.00			0.00	Matches
+177	Ben Davies	eng ENG	DF	Preston	24	1995	18.8	0.05	0.00	0.00	0.53	0.53	0.00	0.27	1.49	0.48			0.00	Matches
+178	Curtis Davies	sl SLE	DF	Derby County	35	1985	10.8	0.00	0.00	0.00	0.65	0.65	0.09	0.37	1.94	0.83			0.00	Matches
+179	Cameron Dawson	eng ENG	GK	Sheffield Weds	25	1995	8.0	0.00	0.00	0.00	0.13	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+180	Jón Daði Böðvarsson	is ISL	FW	Millwall	28	1992	15.4	0.06	0.00	0.00	1.30	1.36	0.45	0.65	0.32	0.71			0.00	Matches
+181	Harlee Dean	eng ENG	DF	Birmingham City	29	1991	41.9	0.19	0.02	0.02	0.86	0.69	0.05	0.38	1.58	0.55			0.00	Matches
+182	Troy Deeney	eng ENG	FW	Watford	32	1988	14.2	0.14	0.00	0.00	1.13	1.27	0.42	0.70	0.35	0.49			0.00	Matches
+183	Fisayo Dele-Bashiru	ng NGA	MF	Sheffield Weds	19	2001	3.2	0.00	0.00	0.00	2.50	1.56	0.31	1.25	0.94	0.00			0.00	Matches
+184	Tom Dele-Bashiru	ng NGA	MF	Watford	20	1999	0.7	0.00	0.00	0.00	4.29	2.86	0.00	0.00	1.43	0.00			0.00	Matches
+185	Sepp van den Berg	nl NED	DF,MF	Preston	18	2001	15.0	0.00	0.00	0.00	1.47	0.40	0.00	0.80	1.47	0.93			0.00	Matches
+186	Kiernan Dewsbury-Hall	eng ENG	MF	Luton Town	21	1998	35.8	0.08	0.00	0.00	0.75	0.87	0.06	5.61	1.45	1.01			0.00	Matches
+187	Yan Dhanda	eng ENG	MF	Swansea City	21	1998	14.6	0.14	0.00	0.00	1.03	1.51	0.21	2.88	0.27	0.27			0.00	Matches
+188	Adama Diakhaby	fr FRA	FW	Huddersfield	24	1996	6.7	0.15	0.00	0.00	1.19	1.79	0.60	2.39	1.94	0.60			0.00	Matches
+189	Brahima Diarra	ml MLI	MF	Huddersfield	17	2003	0.4	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	2.50			0.00	Matches
+190	Robert Dickie	eng ENG	DF	QPR	24	1996	42.3	0.21	0.02	0.00	1.04	1.61	0.05	0.54	2.22	0.64			0.00	Matches
+191	Famara Diedhiou	sn SEN	FW	Bristol City	27	1992	23.6	0.25	0.04	0.04	1.40	1.40	0.68	0.04	0.25	0.30			0.00	Matches
+192	Seny Dieng	sn SEN	GK	QPR	25	1994	41.6	0.02	0.02	0.00	0.02	0.24	0.00	0.00	0.02	0.00			0.00	Matches
+193	Anfernee Dijksteel	sr SUR	DF	Middlesbrough	23	1996	28.1	0.14	0.00	0.00	0.93	1.25	0.00	0.75	2.06	1.35			0.04	Matches
+194	Daryl Dike	us USA	FW	Barnsley	20	2000	14.3	0.21	0.00	0.00	2.73	2.31	0.63	0.70	0.07	0.28			0.00	Matches
+195	Tyrhys Dolan	eng ENG	FW,MF	Blackburn	18	2001	14.1	0.00	0.00	0.00	1.35	1.99	0.07	1.91	0.78	0.64			0.00	Matches
+196	Barry Douglas	sct SCO	DF	Blackburn	30	1989	27.0	0.19	0.00	0.00	0.93	1.41	0.11	5.44	1.59	1.63			0.00	Matches
+197	Kieran Dowell	eng ENG	MF	Norwich City	22	1997	10.4	0.10	0.00	0.00	1.54	1.25	0.19	3.56	0.38	0.96			0.00	Matches
+198	Stewart Downing	eng ENG	MF	Blackburn	36	1984	6.1	0.00	0.00	0.00	0.33	0.33	0.00	4.43	1.48	0.49			0.00	Matches
+199	Demeaco Duhaney	eng ENG	DF,MF	Huddersfield	21	1998	7.3	0.00	0.00	0.00	0.41	1.37	0.27	0.82	1.37	0.27			0.00	Matches
+200	Stephen Duke-McKenna	gy GUY	MF	QPR	19	2000	0.1	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+201	Chey Dunkley	eng ENG	DF	Sheffield Weds	28	1992	9.3	0.22	0.00	0.00	1.51	0.65	0.00	0.00	2.15	0.22			0.00	Matches
+202	Lyndon Dykes	sct SCO	FW	QPR	24	1995	34.0	0.06	0.00	0.00	1.82	0.94	0.35	0.47	0.15	0.35			0.00	Matches
+203	Josh Earl	eng ENG	DF,MF	Preston	21	1998	3.9	0.26	0.00	0.00	1.79	1.54	0.00	2.31	1.54	0.51			0.00	Matches
+204	Festy Ebosele	ie IRL	DF,MF	Derby County	17	2002	0.3	3.33	0.00	0.00	0.00	0.00	3.33	3.33	0.00	0.00			0.00	Matches
+205	Josh Eccles	eng ENG	MF	Coventry City	20	2000	3.9	0.00	0.00	0.00	2.05	1.79	0.00	0.77	1.54	1.03			0.00	Matches
+206	Rarmani Edmonds-Green	eng ENG	DF	Huddersfield	21	1999	16.4	0.06	0.00	0.00	0.98	0.30	0.00	0.00	1.95	0.73			0.00	Matches
+207	George Edmundson	eng ENG	DF,MF	Derby County	22	1997	8.3	0.00	0.00	0.00	0.84	0.96	0.12	0.36	0.48	1.08			0.00	Matches
+208	Opi Edwards	eng ENG	DF	Bristol City	21	1999	0.3	0.00	0.00	0.00	3.33	3.33	0.00	0.00	0.00	0.00			0.00	Matches
+209	Owura Edwards	eng ENG	MF	Bristol City	19	2001	1.2	0.00	0.00	0.00	2.50	3.33	0.00	1.67	0.00	1.67			0.00	Matches
+210	Carel Eiting	nl NED	MF	Huddersfield	22	1998	17.3	0.00	0.00	0.00	1.04	0.46	0.06	1.68	0.81	0.81			0.00	Matches
+211	Ovie Ejaria	eng ENG	MF	Reading	22	1997	34.9	0.06	0.00	0.00	0.97	2.69	0.23	1.52	1.23	0.74			0.00	Matches
+212	Harvey Elliott	eng ENG	FW,MF	Blackburn	17	2003	30.6	0.10	0.00	0.00	0.33	0.92	0.13	3.66	0.59	0.49			0.00	Matches
+213	Tomás Esteves	pt POR	DF,MF	Reading	18	2002	13.8	0.00	0.00	0.00	0.58	0.72	0.07	2.10	1.30	1.96			0.00	Matches
+214	Neil Etheridge	ph PHI	GK	Birmingham City	30	1990	43.0	0.05	0.00	0.00	0.02	0.05	0.00	0.02	0.00	0.05			0.02	Matches
+215	Ched Evans	wls WAL	FW	Preston	31	1988	18.3	0.11	0.00	0.00	2.73	2.35	0.82	0.66	0.49	0.33			0.00	Matches
+216	Corry Evans	nir NIR	MF	Blackburn	30	1990	9.0	0.22	0.00	0.00	1.89	1.00	0.00	0.78	2.33	1.33			0.00	Matches
+217	George Evans	eng ENG	DF,MF	Millwall	25	1994	18.8	0.27	0.00	0.00	1.70	0.48	0.11	0.48	2.07	1.28			0.00	Matches
+218	George Evans	eng ENG	DF,MF	Derby County	25	1994	5.0	0.20	0.00	0.00	1.00	0.00	0.00	0.80	1.00	0.80			0.00	Matches
+219	Kiko Femenía	es ESP	DF,MF	Watford	29	1991	33.6	0.15	0.03	0.03	0.80	0.63	0.12	3.51	1.40	1.01			0.00	Matches
+220	Shane Ferguson	nir NIR	MF,FW	Millwall	29	1991	2.7	0.00	0.00	0.00	1.11	0.74	0.00	6.30	1.85	1.11			0.00	Matches
+221	Sam Field	eng ENG	MF,DF	QPR	22	1998	10.8	0.19	0.00	0.00	1.85	0.83	0.00	0.19	1.85	1.30			0.00	Matches
+222	Tobias Figueiredo	pt POR	DF	Nottingham	26	1994	31.5	0.29	0.00	0.00	1.27	0.54	0.00	0.06	1.75	0.44			0.00	Matches
+223	Darnell Fisher	eng ENG	DF,MF	Middlesbrough	26	1994	10.0	0.10	0.00	0.00	2.00	2.90	0.10	2.90	1.30	1.90			0.00	Matches
+224	Darnell Fisher	eng ENG	DF	Preston	26	1994	12.8	0.39	0.00	0.00	2.19	2.73	0.00	2.42	2.42	2.03			0.00	Matches
+225	Ashley Fletcher	eng ENG	FW	Middlesbrough	24	1995	5.6	0.18	0.00	0.00	2.32	0.71	0.54	0.89	0.36	0.18			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+226	Steven Fletcher	sct SCO	FW	Stoke City	33	1987	26.1	0.11	0.00	0.00	1.69	1.19	1.00	0.38	0.46	0.54			0.00	Matches
+227	Aden Flint	eng ENG	DF	Cardiff City	31	1989	22.0	0.14	0.00	0.00	1.00	0.91	0.32	0.09	1.18	0.50			0.05	Matches
+228	Aden Flint	eng ENG	DF	Sheffield Weds	31	1989	3.2	0.00	0.00	0.00	0.94	0.63	0.00	0.31	1.56	0.63			0.00	Matches
+229	Samuel Folarin	ng NGA	FW,MF	Middlesbrough	19	2000	0.3	0.00	0.00	0.00	0.00	3.33	0.00	6.67	0.00	0.00			0.00	Matches
+230	William Forrester	eng ENG	DF	Stoke City	19	2001	1.0	0.00	0.00	0.00	1.00	0.00	0.00	0.00	1.00	0.00			0.00	Matches
+231	Marcus Forss	fi FIN	FW	Brentford	21	1999	12.3	0.24	0.00	0.00	1.95	0.89	0.16	0.65	0.41	0.49			0.00	Matches
+232	Craig Forsyth	sct SCO	DF,MF	Derby County	31	1989	18.1	0.06	0.00	0.00	0.50	0.66	0.17	3.26	1.16	0.55			0.00	Matches
+233	Ben Foster	eng ENG	GK	Watford	37	1983	23.0	0.00	0.00	0.00	0.00	0.04	0.00	0.00	0.04	0.09			0.00	Matches
+234	Tariqe Fosu	gh GHA	FW,MF	Brentford	24	1995	20.0	0.20	0.00	0.00	1.90	2.15	0.25	2.30	0.95	1.05			0.00	Matches
+235	Morgan Fox	wls WAL	DF,MF	Stoke City	26	1993	19.3	0.10	0.00	0.00	0.93	0.36	0.00	2.75	1.50	0.93			0.00	Matches
+236	Luke Freeman	eng ENG	MF	Nottingham	28	1992	14.1	0.07	0.00	0.00	1.35	1.28	0.43	6.52	0.85	0.50			0.00	Matches
+237	Nick Freeman	eng ENG	MF	Wycombe	24	1995	3.9	0.00	0.00	0.00	0.51	0.00	0.00	1.79	1.28	1.28			0.00	Matches
+238	George Friend	eng ENG	DF	Birmingham City	32	1987	21.4	0.19	0.00	0.00	1.17	0.89	0.09	0.98	1.59	1.21			0.00	Matches
+239	Dominik Frieser	at AUT	FW,MF	Barnsley	26	1993	23.6	0.00	0.00	0.00	1.14	0.97	0.64	1.23	0.72	0.34			0.00	Matches
+240	Dael Fry	eng ENG	DF	Middlesbrough	22	1997	29.6	0.07	0.00	0.00	0.74	0.88	0.07	0.14	2.09	0.68			0.00	Matches
+241	Jay Fulton	sct SCO	MF	Swansea City	26	1994	30.2	0.26	0.00	0.00	1.82	1.32	0.17	1.09	1.62	2.45			0.00	Matches
+242	Jordan Gabriel	eng ENG	DF	Nottingham	21	1998	1.0	1.00	0.00	0.00	1.00	1.00	0.00	1.00	1.00	2.00			0.00	Matches
+243	Paul Gallagher	sct SCO	MF	Preston	35	1984	6.3	0.00	0.00	0.00	1.59	0.63	0.16	9.84	1.11	0.79			0.00	Matches
+244	Sam Gallagher	eng ENG	FW,MF	Blackburn	24	1995	24.6	0.16	0.00	0.00	1.50	1.54	0.69	0.77	0.89	0.77			0.00	Matches
+245	Dominic Gape	eng ENG	MF	Wycombe	25	1994	9.6	0.10	0.00	0.00	1.46	1.25	0.00	0.42	2.50	1.77			0.00	Matches
+246	Gary Gardner	eng ENG	MF	Birmingham City	28	1992	24.9	0.20	0.00	0.00	1.45	1.24	0.08	2.41	1.08	1.04			0.00	Matches
+247	James Garner	eng ENG	MF	Nottingham	19	2001	18.9	0.05	0.00	0.00	1.22	1.75	0.00	2.06	1.85	1.16			0.00	Matches
+248	James Garner	eng ENG	MF	Watford	19	2001	12.6	0.24	0.00	0.00	2.14	1.43	0.00	5.56	1.11	0.95			0.00	Matches
+249	Jordan Garrick	eng ENG	FW,MF	Swansea City	22	1998	0.6	0.00	0.00	0.00	0.00	1.67	1.67	5.00	0.00	0.00			0.00	Matches
+250	Saman Ghoddos	ir IRN	MF,FW	Brentford	26	1993	16.4	0.06	0.00	0.00	2.26	1.40	0.06	1.89	0.55	1.04			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+251	Dimitris Giannoulis	gr GRE	DF	Norwich City	24	1995	14.5	0.00	0.07	0.00	0.97	1.31	0.00	1.52	1.10	1.24			0.00	Matches
+252	Morgan Gibbs-White	eng ENG	MF	Swansea City	20	2000	3.5	0.00	0.00	0.00	1.14	0.86	0.29	4.86	0.57	0.57			0.00	Matches
+253	Ben Gibson	eng ENG	DF	Norwich City	27	1993	26.2	0.19	0.00	0.00	0.73	0.50	0.00	0.11	1.72	0.38			0.00	Matches
+254	Lewis Gibson	eng ENG	DF	Reading	20	2000	8.3	0.00	0.00	0.00	0.60	1.69	0.00	1.20	2.29	1.33			0.00	Matches
+255	Ryan Giles	eng ENG	MF	Rotherham	20	2000	13.0	0.00	0.00	0.00	0.23	0.23	0.08	8.69	1.15	0.38			0.00	Matches
+256	Ryan Giles	eng ENG	MF,DF	Coventry City	20	2000	15.1	0.00	0.00	0.00	0.13	0.60	0.07	6.36	0.66	0.99			0.00	Matches
+257	Robert Glatzel	de GER	FW	Cardiff City	26	1994	10.2	0.00	0.00	0.00	1.76	2.35	0.39	0.20	0.29	0.69			0.00	Matches
+258	Matthew Godden	eng ENG	FW	Coventry City	29	1991	16.1	0.00	0.00	0.00	1.24	1.12	0.93	0.31	0.25	0.00			0.00	Matches
+259	Ben Godfrey	eng ENG	DF	Norwich City	22	1998	3.0	0.00	0.00	0.00	1.33	0.00	0.00	1.00	0.67	1.00			0.00	Matches
+260	Charlie Goode	eng ENG	DF	Brentford	24	1995	4.9	0.00	0.00	0.00	0.61	2.45	0.00	0.00	1.02	0.20			0.00	Matches
+261	Anthony Gordon	eng ENG	MF	Preston	19	2001	5.7	0.18	0.00	0.00	1.40	2.81	0.35	5.44	0.35	0.00			0.00	Matches
+262	Kaide Gordon	eng ENG	FW	Derby County	15	2004	0.0	0	0	0	0	0	0	0	0	1			0	Matches
+263	Nico Gordon	ms MSR	DF	Birmingham City	18	2002	1.3	0.00	0.00	0.00	0.77	0.00	0.00	0.00	2.31	3.85			0.00	Matches
+264	Dan Gosling	eng ENG	MF	Watford	30	1990	6.5	0.00	0.00	0.00	1.69	0.77	0.00	0.15	1.08	0.62			0.00	Matches
+265	Dan Gosling	eng ENG	MF	Bournemouth	30	1990	8.6	0.23	0.00	0.00	1.40	1.63	0.12	0.35	1.28	1.40			0.00	Matches
+266	Lewis Grabban	eng ENG	FW	Nottingham	32	1988	22.1	0.09	0.00	0.00	1.58	0.41	0.54	1.18	0.27	0.23			0.00	Matches
+267	Andre Gray	jm JAM	FW	Watford	29	1991	14.2	0.07	0.00	0.00	1.62	0.42	1.13	0.49	0.14	0.14			0.00	Matches
+268	André Green	eng ENG	FW,MF	Sheffield Weds	22	1998	3.4	0.00	0.00	0.00	0.59	2.06	0.59	1.47	0.00	0.59			0.00	Matches
+269	Lee Gregory	eng ENG	FW	Stoke City	31	1988	2.8	0.00	0.00	0.00	1.43	2.14	0.71	1.07	0.00	0.00			0.00	Matches
+270	Lee Gregory	eng ENG	FW,MF	Derby County	31	1988	6.3	0.00	0.00	0.00	1.11	1.27	0.63	0.48	0.32	0.00			0.00	Matches
+271	Matt Grimes	eng ENG	MF	Swansea City	25	1995	43.1	0.12	0.00	0.00	1.14	0.88	0.00	2.62	1.60	1.11			0.02	Matches
+272	Jack Grimmer	sct SCO	DF	Wycombe	26	1994	38.3	0.13	0.00	0.00	0.73	0.50	0.00	2.64	1.51	1.02			0.00	Matches
+273	Marc Guéhi	eng ENG	DF	Swansea City	20	2000	39.4	0.20	0.00	0.00	0.79	1.62	0.08	0.20	1.55	1.19			0.00	Matches
+274	Angus Gunn	sct SCO	GK	Stoke City	24	1996	14.5	0.14	0.00	0.00	0.14	0.07	0.00	0.00	0.14	0.00			0.00	Matches
+275	Viktor Gyökeres	se SWE	FW	Swansea City	22	1998	3.1	0.00	0.00	0.00	0.97	1.29	0.32	0.97	0.00	0.65			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+276	Viktor Gyökeres	se SWE	FW	Coventry City	22	1998	8.5	0.00	0.00	0.00	0.82	1.53	0.59	0.59	0.59	0.59			0.00	Matches
+277	Hayden Hackney	eng ENG	MF	Middlesbrough	18	2002	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+278	Alen Halilović	hr CRO	MF	Birmingham City	24	1996	8.7	0.11	0.00	0.00	0.80	1.49	0.11	3.45	0.11	0.46			0.00	Matches
+279	Grant Hall	eng ENG	DF	Middlesbrough	28	1991	17.2	0.00	0.00	0.00	0.47	0.58	0.29	0.12	1.40	0.41			0.06	Matches
+280	Aapo Halme	fi FIN	DF,MF	Barnsley	22	1998	7.4	0.54	0.00	0.00	2.43	1.08	0.14	0.14	1.35	1.22			0.00	Matches
+281	Niko Hämäläinen	fi FIN	DF,MF	QPR	23	1997	19.3	0.21	0.00	0.00	1.04	0.16	0.00	2.07	1.24	0.73			0.00	Matches
+282	Ben Hamer	eng ENG	GK	Huddersfield	32	1987	14.5	0.14	0.00	0.00	0.07	0.34	0.00	0.00	0.14	0.00			0.00	Matches
+283	Gustavo Hamer	nl NED	MF	Coventry City	23	1997	33.2	0.24	0.03	0.00	2.56	0.96	0.03	4.40	1.69	1.30			0.00	Matches
+284	Grant Hanley	sct SCO	DF	Norwich City	28	1991	42.0	0.07	0.00	0.00	0.95	1.45	0.05	0.02	1.98	0.52			0.00	Matches
+285	Wes Harding	jm JAM	DF,MF	Rotherham	23	1996	41.5	0.07	0.00	0.00	0.89	0.48	0.05	2.58	2.07	0.94			0.00	Matches
+286	Rekeem Harper	eng ENG	MF	Birmingham City	20	2000	11.3	0.27	0.00	0.00	1.33	1.33	0.09	0.18	0.53	0.44			0.00	Matches
+287	Kadeem Harris	eng ENG	MF	Sheffield Weds	27	1993	29.6	0.20	0.03	0.00	1.55	1.79	0.10	3.95	0.57	1.01			0.00	Matches
+288	Mark Harris	wls WAL	FW,MF	Cardiff City	21	1998	7.2	0.00	0.00	0.00	1.39	0.83	0.97	0.83	0.14	0.56			0.00	Matches
+289	Josh Harrop	eng ENG	MF	Preston	24	1995	2.2	0.45	0.00	0.00	2.73	1.82	0.00	6.36	0.45	1.82			0.00	Matches
+290	Taylor Harwood-Bellis	eng ENG	DF	Blackburn	18	2002	17.1	0.12	0.00	0.00	0.58	0.12	0.00	0.12	1.75	0.64			0.00	Matches
+291	Maxwell Haygarth	eng ENG	MF	Brentford	18	2002	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+292	Jahmal Hector-Ingram	eng ENG	FW	Derby County	21	1998	0.7	0.00	0.00	0.00	5.71	0.00	2.86	0.00	0.00	0.00			0.00	Matches
+293	Michał Helik	pl POL	DF	Barnsley	24	1995	41.7	0.12	0.02	0.00	1.27	0.77	0.02	0.05	2.49	1.22			0.00	Matches
+294	Rico Henry	jm JAM	DF	Brentford	23	1997	28.0	0.00	0.00	0.00	0.50	1.32	0.00	2.75	1.18	0.79			0.00	Matches
+295	Onel Hernández	cu CUB	MF	Norwich City	27	1993	6.5	0.15	0.00	0.00	1.54	1.85	0.62	0.92	0.46	0.46			0.00	Matches
+296	Scott High	sct SCO	MF	Huddersfield	19	2001	3.5	0.00	0.00	0.00	1.71	1.14	0.00	0.86	1.71	0.57			0.00	Matches
+297	George Hirst	sct SCO	FW	Rotherham	21	1999	7.6	0.26	0.00	0.00	1.58	2.76	0.79	0.26	0.00	0.00			0.00	Matches
+298	Scott Hogan	ie IRL	FW	Birmingham City	28	1992	23.4	0.09	0.00	0.00	1.32	0.81	1.03	0.47	0.21	0.13			0.00	Matches
+299	Jonathan Hogg	eng ENG	MF	Huddersfield	31	1988	34.4	0.26	0.00	0.00	1.54	1.13	0.00	0.12	1.37	1.25			0.00	Matches
+300	Junior Hoilett	ca CAN	MF	Cardiff City	30	1990	13.0	0.15	0.00	0.00	1.77	1.00	0.69	2.69	1.38	1.38			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+301	Duane Holmes	us USA	MF	Derby County	25	1994	6.7	0.15	0.00	0.00	1.94	0.60	0.00	1.79	0.60	0.45			0.00	Matches
+302	Duane Holmes	us USA	FW,MF	Huddersfield	25	1994	13.7	0.29	0.00	0.00	1.31	1.02	0.07	3.80	0.66	0.80			0.00	Matches
+303	Tom Holmes	eng ENG	DF	Reading	20	2000	30.4	0.16	0.00	0.00	0.86	0.92	0.03	0.76	1.45	1.02			0.03	Matches
+304	Lewis Holtby	de GER	MF	Blackburn	29	1990	20.1	0.25	0.00	0.00	1.44	1.69	0.20	2.59	1.00	0.95			0.00	Matches
+305	Daryl Horgan	ie IRL	MF,FW	Wycombe	27	1992	28.0	0.07	0.00	0.00	0.82	0.36	0.32	4.43	0.64	0.61			0.00	Matches
+306	Conor Hourihane	ie IRL	MF	Swansea City	29	1991	15.5	0.06	0.00	0.00	0.84	0.65	0.26	4.65	0.52	0.71			0.00	Matches
+307	Jonny Howson	eng ENG	MF	Middlesbrough	32	1988	40.2	0.17	0.00	0.00	0.75	0.75	0.05	0.95	1.24	1.29			0.00	Matches
+308	Andrew Hughes	wls WAL	DF	Preston	28	1992	32.2	0.03	0.00	0.00	0.99	0.43	0.03	1.09	1.40	0.84			0.00	Matches
+309	Will Hughes	eng ENG	MF	Watford	25	1995	21.6	0.32	0.00	0.00	1.90	1.48	0.00	1.94	1.57	1.30			0.00	Matches
+310	Jordan Hugill	eng ENG	FW,MF	Norwich City	28	1992	7.7	0.26	0.00	0.00	2.34	1.56	1.17	0.52	0.13	0.13			0.00	Matches
+311	Joseph Hungbo	eng ENG	FW	Watford	20	2000	1.0	0.00	0.00	0.00	0.00	6.00	1.00	2.00	0.00	0.00			0.00	Matches
+312	Alex Hunt	eng ENG	MF	Sheffield Weds	20	2000	0.8	0.00	0.00	0.00	1.25	0.00	0.00	0.00	0.00	1.25			0.00	Matches
+313	Jack Hunt	eng ENG	MF,DF	Bristol City	29	1990	36.1	0.14	0.00	0.00	0.91	0.78	0.06	3.57	1.47	0.72			0.00	Matches
+314	Paul Huntington	eng ENG	DF	Preston	32	1987	17.9	0.06	0.00	0.00	0.45	0.28	0.11	0.00	1.68	0.34			0.00	Matches
+315	Sam Hutchinson	eng ENG	MF,DF	Sheffield Weds	30	1989	21.0	0.19	0.00	0.00	1.52	0.62	0.10	0.43	2.10	1.10			0.00	Matches
+316	Shaun Hutchinson	eng ENG	DF	Millwall	29	1990	38.3	0.18	0.00	0.00	1.20	0.86	0.03	0.47	2.79	1.15			0.00	Matches
+317	Dominic Hyam	sct SCO	DF	Coventry City	24	1995	43.0	0.07	0.00	0.00	0.49	0.77	0.12	0.05	1.58	0.79			0.00	Matches
+318	Danny Hylton	eng ENG	FW,MF	Luton Town	31	1989	6.6	0.45	0.00	0.00	2.73	1.82	0.91	0.45	0.15	0.30			0.00	Matches
+319	Jordon Ibe	eng ENG	FW,MF	Derby County	24	1995	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+320	Adam Idah	ie IRL	MF	Norwich City	19	2001	3.8	0.79	0.26	0.00	2.37	0.53	1.32	1.58	0.26	1.05			0.00	Matches
+321	Michael Ihiekwe	eng ENG	DF	Rotherham	27	1992	42.0	0.29	0.00	0.00	1.21	1.10	0.07	0.60	1.88	1.02			0.02	Matches
+322	Uche Ikpeazu	ug UGA	FW	Wycombe	25	1995	22.9	0.13	0.00	0.00	3.84	3.19	0.66	0.48	0.13	0.17			0.04	Matches
+323	Tom Ince	eng ENG	MF	Stoke City	28	1992	2.8	0.00	0.00	0.00	1.07	1.07	0.36	5.36	0.00	0.71			0.00	Matches
+324	Tom Ince	eng ENG	FW,MF	Luton Town	28	1992	3.0	0.00	0.00	0.00	1.33	2.00	0.00	1.00	0.33	1.00			0.00	Matches
+325	Nicholas Ioannou	cy CYP	DF	Nottingham	24	1995	4.5	0.00	0.22	0.00	1.11	0.67	0.00	5.33	2.00	1.78			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+326	Dominic Iorfa	eng ENG	DF,MF	Sheffield Weds	25	1995	9.0	0.00	0.00	0.00	1.22	0.44	0.11	0.11	2.00	1.00			0.00	Matches
+327	Daniel Iversen	dk DEN	GK	Preston	23	1997	23.0	0.00	0.00	0.00	0.00	0.13	0.00	0.00	0.04	0.00			0.04	Matches
+328	Ben Jackson	eng ENG	MF	Huddersfield	19	2001	0.6	0.00	0.00	0.00	1.67	3.33	0.00	0.00	3.33	0.00			0.00	Matches
+329	Joe Jacobson	wls WAL	DF	Wycombe	33	1986	35.5	0.20	0.00	0.00	1.04	1.21	0.03	6.90	2.14	1.18			0.00	Matches
+330	Matty James	eng ENG	MF	Coventry City	29	1991	20.0	0.05	0.00	0.00	1.20	1.15	0.00	3.05	1.50	1.10			0.00	Matches
+331	Matty James	eng ENG	MF	Barnsley	29	1991	10.5	0.19	0.00	0.00	1.14	0.48	0.00	3.24	0.95	1.62			0.00	Matches
+332	Vitaly Janelt	de GER	MF	Brentford	22	1998	34.2	0.23	0.00	0.00	1.46	1.43	0.00	0.85	1.75	1.29			0.00	Matches
+333	Saikou Janneh	eng ENG	FW	Bristol City	19	2001	0.9	0.00	0.00	0.00	0.00	2.22	0.00	1.11	0.00	0.00			0.00	Matches
+334	Pontus Jansson	se SWE	DF	Brentford	29	1991	22.7	0.09	0.04	0.04	0.66	0.66	0.04	0.09	1.19	0.31			0.00	Matches
+335	Zach Jeacock	eng ENG	GK	Birmingham City	19	2001	2.0	0.00	0.00	0.00	0.00	0.50	0.00	0.00	0.00	0.00			0.00	Matches
+336	Carl Jenkinson	eng ENG	DF	Nottingham	28	1992	1.4	0.00	0.00	0.00	2.14	0.71	0.00	3.57	2.14	1.43			0.00	Matches
+337	Mathias Jensen	dk DEN	MF	Brentford	24	1996	35.3	0.06	0.00	0.00	0.79	0.34	0.00	4.65	1.50	0.76			0.00	Matches
+338	Lucas João	ao ANG	FW	Reading	26	1993	34.1	0.09	0.00	0.00	1.06	1.94	0.62	0.03	0.26	0.12			0.00	Matches
+339	João Pedro	br BRA	FW	Watford	18	2001	30.5	0.20	0.03	0.03	1.57	1.11	0.46	0.59	0.69	0.69			0.00	Matches
+340	Wesley Jobello	fr FRA	FW,MF	Coventry City	26	1994	0.3	0.00	0.00	0.00	3.33	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+341	Stefan Johansen	no NOR	MF	QPR	29	1991	19.6	0.20	0.00	0.00	1.53	0.51	0.05	2.50	0.92	0.82			0.00	Matches
+342	Viktor Johansson	se SWE	GK	Rotherham	21	1998	20.1	0.00	0.00	0.00	0.00	0.40	0.00	0.00	0.10	0.05			0.00	Matches
+343	Bradley Johnson	eng ENG	MF	Blackburn	33	1987	23.5	0.30	0.00	0.00	1.96	1.70	0.09	0.47	1.57	0.89			0.00	Matches
+344	Daniel Johnson	jm JAM	MF	Preston	27	1992	23.1	0.22	0.00	0.00	1.99	0.56	0.09	1.30	0.65	0.87			0.00	Matches
+345	Marvin Johnson	eng ENG	MF	Middlesbrough	29	1990	23.9	0.04	0.00	0.00	1.00	1.80	0.50	7.82	0.63	0.88			0.00	Matches
+346	Billy Jones	eng ENG	DF	Rotherham	33	1987	2.6	0.77	0.00	0.00	2.31	0.77	0.00	0.38	0.77	0.77			0.00	Matches
+347	Patrick Jones	wls WAL	FW	Huddersfield	17	2003	0.6	0.00	0.00	0.00	1.67	1.67	0.00	3.33	0.00	3.33			0.00	Matches
+348	Florian Jozefzoon	sr SUR	MF,FW	Rotherham	29	1991	10.4	0.00	0.00	0.00	0.96	0.67	0.38	5.00	0.67	0.19			0.00	Matches
+349	Kamil Jóźwiak	pl POL	MF,FW	Derby County	22	1998	29.8	0.20	0.00	0.00	1.17	1.85	0.17	1.98	0.27	1.17			0.00	Matches
+350	Mads Juel Andersen	dk DEN	DF	Barnsley	22	1997	45.7	0.22	0.02	0.02	1.66	0.63	0.09	0.22	2.43	1.12			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+351	Lukas Jutkiewicz	eng ENG	FW	Birmingham City	31	1989	27.7	0.07	0.00	0.00	2.92	2.06	0.76	0.58	0.25	0.32			0.00	Matches
+352	Christian Kabasele	be BEL	DF	Watford	29	1991	18.9	0.11	0.00	0.00	0.69	1.01	0.00	0.00	0.90	0.58			0.00	Matches
+353	Elias Kachunga	cd COD	FW,MF	Sheffield Weds	28	1992	10.6	0.19	0.00	0.00	2.45	2.83	0.57	0.94	0.57	0.85			0.00	Matches
+354	Adan Kai George	eng ENG	FW	Birmingham City	18	2002	0.2	0.00	0.00	0.00	0.00	0.00	0.00	0.00	5.00	0.00			0.00	Matches
+355	Osman Kakay	sl SLE	DF,MF	QPR	22	1997	23.4	0.17	0.00	0.00	1.07	0.68	0.00	3.12	1.03	0.98			0.00	Matches
+356	Tomáš Kalas	cz CZE	DF	Bristol City	27	1993	37.6	0.00	0.00	0.00	0.24	1.04	0.03	0.19	1.89	0.53			0.00	Matches
+357	Thomas Kaminski	be BEL	GK	Blackburn	27	1992	43.0	0.09	0.00	0.00	0.09	0.12	0.00	0.00	0.00	0.05			0.00	Matches
+358	Herbie Kane	eng ENG	MF	Barnsley	21	1998	10.2	0.10	0.00	0.00	1.18	1.47	0.00	4.02	1.37	1.47			0.00	Matches
+359	Todd Kane	eng ENG	MF,DF	QPR	26	1993	24.3	0.33	0.04	0.04	0.62	0.49	0.04	4.98	0.86	0.66			0.00	Matches
+360	Scott Kashket	eng ENG	FW,MF	Wycombe	24	1996	17.3	0.23	0.00	0.00	1.21	1.85	0.75	0.81	0.12	0.58			0.00	Matches
+361	Gervane Kastaneer	cw CUW	FW,MF	Coventry City	24	1996	0.2	0.00	0.00	0.00	5.00	0.00	0.00	0.00	0.00	5.00			0.00	Matches
+362	Colin Kazim-Richards	tr TUR	FW	Derby County	33	1986	30.4	0.23	0.00	0.00	2.11	1.18	0.89	0.39	0.16	0.53			0.00	Matches
+363	Neeskens Kebano	cd COD	MF,FW	Middlesbrough	28	1992	13.5	0.07	0.00	0.00	0.81	2.07	0.52	5.41	0.96	0.81			0.00	Matches
+364	Liam Kelly	sct SCO	MF	Coventry City	30	1990	18.1	0.11	0.00	0.00	1.49	1.44	0.00	0.72	1.60	1.38			0.00	Matches
+365	Lloyd Kelly	eng ENG	DF	Bournemouth	21	1998	33.8	0.15	0.00	0.00	1.04	1.04	0.03	1.80	0.86	0.80			0.00	Matches
+366	Charlie Kelman	us USA	FW	QPR	18	2001	1.7	0.00	0.00	0.00	0.59	0.59	0.00	0.00	0.00	0.00			0.00	Matches
+367	Richard Keogh	ie IRL	DF	Huddersfield	33	1986	20.2	0.05	0.00	0.00	0.40	0.35	0.00	0.05	1.14	0.45			0.00	Matches
+368	Maikel Kieftenbeld	nl NED	MF	Millwall	30	1990	8.2	0.24	0.00	0.00	1.95	0.85	0.12	0.49	1.71	1.83			0.00	Matches
+369	Maikel Kieftenbeld	nl NED	MF	Birmingham City	30	1990	8.5	0.12	0.00	0.00	1.88	1.18	0.00	0.24	2.71	1.29			0.00	Matches
+370	Gavin Kilkenny	ie IRL	MF	Bournemouth	20	2000	0.0	0	0	0	0	0	0	0	0	1			0	Matches
+371	Joshua King	no NOR	FW	Bournemouth	28	1992	6.5	0.00	0.00	0.00	1.23	0.62	0.62	1.08	0.00	0.31			0.00	Matches
+372	Liam Kitching	eng ENG	DF	Barnsley	20	1999	0.1	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+373	Jason Knight	ie IRL	MF	Derby County	19	2001	39.8	0.13	0.00	0.00	1.31	2.36	0.08	1.31	1.03	1.03			0.00	Matches
+374	Josh Knight	eng ENG	DF,MF	Wycombe	22	1997	35.9	0.17	0.03	0.00	0.84	1.23	0.00	0.19	2.06	0.86			0.00	Matches
+375	Anthony Knockaert	fr FRA	MF	Nottingham	28	1991	27.1	0.26	0.04	0.04	1.81	1.40	0.11	7.82	1.18	0.66			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+376	Josh Koroma	sl SLE	FW,MF	Huddersfield	21	1998	18.0	0.11	0.00	0.00	1.11	1.11	0.72	1.83	0.17	0.67			0.00	Matches
+377	Filip Krovinović	hr CRO	MF	Nottingham	24	1995	17.5	0.11	0.00	0.00	0.69	1.94	0.11	1.83	0.97	0.74			0.00	Matches
+378	Tim Krul	nl NED	GK	Norwich City	32	1988	35.4	0.06	0.00	0.00	0.00	0.25	0.00	0.00	0.03	0.06			0.00	Matches
+379	Freddie Ladapo	eng ENG	FW	Rotherham	27	1993	23.3	0.00	0.00	0.00	2.15	1.07	0.56	0.60	0.34	0.21			0.00	Matches
+380	Henri Lansbury	eng ENG	MF	Bristol City	29	1990	10.5	0.48	0.10	0.00	2.86	1.33	0.00	1.52	2.00	1.43			0.00	Matches
+381	Joël Latibeaudière	jm JAM	DF	Swansea City	20	2000	4.7	0.00	0.00	0.00	1.06	0.64	0.00	0.00	3.40	1.06			0.21	Matches
+382	Josh Laurent	eng ENG	MF	Reading	25	1995	44.4	0.09	0.00	0.00	1.28	0.70	0.07	0.41	1.51	1.35			0.00	Matches
+383	Tom Lawrence	wls WAL	MF,FW	Derby County	26	1994	18.5	0.05	0.00	0.00	1.35	1.08	0.05	3.08	0.54	1.03			0.00	Matches
+384	Achraf Lazaar	ma MAR	DF	Watford	28	1992	2.5	0.00	0.00	0.00	2.00	0.40	0.00	3.60	1.20	3.20			0.00	Matches
+385	Ryan Ledson	eng ENG	MF	Preston	22	1997	29.9	0.33	0.00	0.00	1.67	1.44	0.03	4.52	1.57	1.91			0.00	Matches
+386	Elliot Lee	eng ENG	FW,MF	Luton Town	25	1994	6.9	0.00	0.00	0.00	0.87	1.30	0.14	0.72	0.87	0.72			0.00	Matches
+387	Tom Lees	eng ENG	DF	Sheffield Weds	29	1990	36.8	0.05	0.03	0.00	1.06	0.63	0.14	0.03	1.85	0.87			0.03	Matches
+388	Jonathan Leko	eng ENG	FW,MF	Birmingham City	21	1999	17.8	0.22	0.00	0.00	2.42	1.07	1.01	1.52	0.34	0.39			0.00	Matches
+389	Darragh Lenihan	ie IRL	DF	Blackburn	26	1994	40.4	0.20	0.02	0.00	1.39	0.92	0.07	0.30	1.68	0.67			0.02	Matches
+390	Ryan Leonard	eng ENG	MF,DF	Millwall	28	1992	24.0	0.25	0.00	0.00	1.21	1.58	0.04	1.00	1.83	1.29			0.00	Matches
+391	Jefferson Lerma	co COL	MF	Bournemouth	25	1994	37.1	0.30	0.03	0.00	1.48	1.83	0.05	0.30	1.08	0.59			0.00	Matches
+392	Jamie Lindsay	sct SCO	MF	Rotherham	24	1995	25.8	0.23	0.00	0.00	1.67	1.55	0.04	1.90	1.40	1.36			0.00	Matches
+393	Liam Lindsay	sct SCO	DF	Preston	24	1995	12.4	0.08	0.00	0.00	1.13	0.81	0.00	0.08	2.26	0.81			0.00	Matches
+394	Tom Lockyer	wls WAL	DF	Luton Town	25	1994	16.8	0.00	0.06	0.00	0.54	1.07	0.00	0.77	1.61	0.65			0.00	Matches
+395	Joe Lolley	eng ENG	MF,FW	Nottingham	27	1992	16.5	0.06	0.00	0.00	1.21	1.58	0.12	3.58	0.67	1.09			0.00	Matches
+396	Shane Long	ie IRL	FW	Bournemouth	33	1987	5.1	0.00	0.00	0.00	1.96	1.57	1.18	0.39	0.39	0.39			0.00	Matches
+397	Jamal Lowe	jm JAM	FW	Swansea City	26	1994	38.2	0.08	0.00	0.00	2.41	1.70	0.99	1.13	0.26	0.68			0.00	Matches
+398	Kazenga LuaLua	cd COD	MF,FW	Luton Town	29	1990	8.6	0.23	0.00	0.00	1.28	2.79	0.47	4.07	0.70	0.70			0.00	Matches
+399	Kilian Ludewig	de GER	MF	Barnsley	20	2000	3.4	0.00	0.00	0.00	0.59	1.18	0.00	2.94	1.18	1.76			0.00	Matches
+400	Joe Lumley	eng ENG	GK	QPR	25	1995	4.3	0.23	0.00	0.00	0.00	0.47	0.00	0.00	0.00	0.00			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+401	Massimo Luongo	au AUS	MF	Sheffield Weds	27	1992	9.2	0.54	0.00	0.00	2.17	1.09	0.00	0.33	1.63	2.07			0.00	Matches
+402	Angus MacDonald	eng ENG	DF	Rotherham	27	1992	34.7	0.26	0.03	0.00	1.10	0.84	0.03	0.55	1.50	0.58			0.06	Matches
+403	Cornell MacDonald	eng ENG	DF	Derby County	18	2001	2.3	0.00	0.00	0.00	0.43	1.74	0.00	1.30	1.30	2.17			0.00	Matches
+404	Shaun MacDonald	wls WAL	MF	Rotherham	32	1988	12.3	0.16	0.00	0.00	1.14	0.89	0.00	0.81	1.30	1.38			0.00	Matches
+405	Seán Maguire	ie IRL	FW	Preston	26	1994	15.1	0.26	0.00	0.00	1.85	1.99	1.06	0.86	0.26	0.60			0.00	Matches
+406	Connor Mahoney	eng ENG	MF	Millwall	23	1997	6.3	0.00	0.00	0.00	0.48	1.75	0.32	7.14	1.27	0.16			0.00	Matches
+407	Connor Malley	eng ENG	MF	Middlesbrough	20	2000	1.3	0.00	0.00	0.00	0.00	0.00	0.00	1.54	0.77	2.31			0.00	Matches
+408	Scott Malone	eng ENG	MF	Millwall	29	1991	37.4	0.08	0.00	0.00	0.70	0.19	0.00	4.97	1.55	1.28			0.00	Matches
+409	Ryan Manning	ie IRL	MF,DF	Swansea City	24	1996	12.0	0.17	0.00	0.00	1.33	1.75	0.08	3.17	1.58	1.67			0.00	Matches
+410	Emiliano Marcondes	dk DEN	MF	Brentford	25	1995	15.0	0.13	0.00	0.00	1.27	1.47	0.07	2.47	0.53	1.13			0.00	Matches
+411	Adrian Mariappa	jm JAM	DF	Bristol City	33	1986	19.5	0.00	0.00	0.00	0.77	0.51	0.05	0.36	1.44	1.08			0.00	Matches
+412	Marko Maroši	sk SVK	GK	Coventry City	26	1993	20.0	0.10	0.00	0.00	0.00	0.15	0.00	0.00	0.05	0.00			0.00	Matches
+413	Jack Marriott	eng ENG	FW	Sheffield Weds	25	1994	4.3	0.00	0.00	0.00	3.95	0.70	0.00	0.93	0.00	0.00			0.00	Matches
+414	Jack Marriott	eng ENG	FW	Derby County	25	1994	2.2	0.00	0.00	0.00	1.82	0.00	0.00	0.45	0.00	0.00			0.00	Matches
+415	David Marshall	sct SCO	GK	Derby County	35	1985	32.5	0.00	0.00	0.00	0.00	0.12	0.00	0.00	0.00	0.03			0.00	Matches
+416	Chris Martin	sct SCO	FW	Bristol City	31	1988	20.4	0.10	0.00	0.00	1.32	1.47	0.34	0.34	0.44	0.54			0.00	Matches
+417	Josh Martin	eng ENG	MF	Norwich City	18	2001	5.0	0.00	0.00	0.00	1.80	1.00	0.00	1.20	0.60	1.40			0.00	Matches
+418	Bruno Martins Indi	nl NED	DF	Stoke City	28	1992	1.9	0.00	0.00	0.00	1.05	1.05	0.00	0.00	1.05	0.53			0.00	Matches
+419	Adam Masina	ma MAR	DF	Watford	26	1994	21.4	0.19	0.00	0.00	0.93	0.65	0.00	2.10	1.68	1.12			0.00	Matches
+420	Han-Noah Massengo	fr FRA	MF	Bristol City	19	2001	16.8	0.06	0.00	0.00	0.83	3.04	0.06	0.42	1.19	1.25			0.00	Matches
+421	Conor Masterson	ie IRL	DF	QPR	21	1998	3.7	0.00	0.00	0.00	0.27	0.27	0.00	0.00	1.08	0.00			0.00	Matches
+422	Rabbi Matondo	wls WAL	MF,FW	Stoke City	19	2000	5.9	0.00	0.00	0.00	1.02	1.53	0.00	2.88	0.34	0.68			0.00	Matches
+423	Joe Mattock	eng ENG	DF,MF	Rotherham	30	1990	10.1	0.20	0.00	0.00	1.49	1.39	0.00	6.93	1.98	1.49			0.00	Matches
+424	Alfie Mawson	eng ENG	DF	Bristol City	26	1994	10.6	0.19	0.00	0.00	1.13	0.47	0.00	0.09	1.60	0.94			0.00	Matches
+425	Loïc Mbe Soh	fr FRA	DF	Nottingham	19	2001	5.1	0.00	0.00	0.00	1.37	0.20	0.00	0.00	0.59	0.20			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+426	Isaac Mbenza	be BEL	FW,MF	Huddersfield	24	1996	25.8	0.19	0.00	0.00	0.50	0.66	0.70	4.92	0.43	0.62			0.00	Matches
+427	Bryan Mbeumo	cm CMR	FW,MF	Brentford	20	1999	34.1	0.09	0.00	0.00	1.06	1.64	0.35	3.52	0.79	0.62			0.00	Matches
+428	Reece McAlear	sct SCO	MF	Norwich City	18	2002	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+429	Sam McCallum	eng ENG	MF,DF	Coventry City	19	2000	37.0	0.05	0.00	0.00	0.95	2.46	0.03	3.65	2.24	1.32			0.00	Matches
+430	Jason McCarthy	eng ENG	DF,MF	Wycombe	24	1995	21.7	0.14	0.00	0.00	1.06	0.83	0.00	3.32	1.11	0.78			0.09	Matches
+431	James McClean	ie IRL	MF,FW	Stoke City	31	1989	17.8	0.39	0.00	0.00	1.46	0.67	0.22	5.67	0.84	1.12			0.00	Matches
+432	Garath McCleary	jm JAM	MF,FW	Wycombe	33	1987	20.5	0.20	0.00	0.00	1.07	0.24	0.10	4.24	0.63	0.88			0.00	Matches
+433	Kyle McFadzean	sct SCO	DF	Coventry City	33	1987	36.6	0.19	0.05	0.03	1.12	0.87	0.00	0.11	1.31	0.55			0.03	Matches
+434	Michael McGovern	nir NIR	GK	Norwich City	36	1984	9.1	0.00	0.00	0.00	0.00	0.33	0.00	0.00	0.00	0.00			0.00	Matches
+435	Riley McGree	au AUS	MF	Birmingham City	21	1998	8.2	0.12	0.00	0.00	1.59	0.73	0.00	2.80	0.85	1.34			0.00	Matches
+436	Tom McIntyre	sct SCO	DF	Reading	21	1998	17.4	0.11	0.00	0.00	1.15	0.80	0.00	0.40	1.95	1.38			0.00	Matches
+437	Scott McKenna	sct SCO	DF	Nottingham	23	1996	23.5	0.13	0.00	0.00	0.51	0.72	0.04	0.13	1.02	0.38			0.00	Matches
+438	Kenny McLean	sct SCO	MF	Norwich City	28	1992	30.2	0.20	0.00	0.00	0.70	1.66	0.03	1.09	1.13	1.09			0.00	Matches
+439	Paddy McNair	nir NIR	DF	Middlesbrough	25	1995	45.4	0.18	0.02	0.00	0.79	2.14	0.00	4.74	1.37	1.37			0.00	Matches
+440	Dan McNamara	ie IRL	MF	Millwall	21	1998	13.8	0.36	0.00	0.00	1.09	1.30	0.07	2.32	0.94	0.94			0.00	Matches
+441	Anis Mehmeti	al ALB	MF	Wycombe	19	2001	16.6	0.18	0.00	0.00	0.96	0.42	0.18	1.14	0.36	0.48			0.00	Matches
+442	Yakou Méïte	ci CIV	MF,FW	Reading	24	1996	18.7	0.05	0.00	0.00	1.71	1.07	0.32	0.80	0.32	0.32			0.00	Matches
+443	Nathaniel Mendez-Laing	gt GUA	MF,FW	Middlesbrough	28	1992	3.3	0.00	0.00	0.00	1.52	0.61	0.00	3.33	0.61	0.91			0.00	Matches
+444	Teden Mengi	eng ENG	DF	Derby County	18	2002	7.4	0.14	0.00	0.00	0.95	0.27	0.00	0.14	1.08	0.68			0.00	Matches
+445	Chris Mepham	wls WAL	DF	Bournemouth	22	1997	21.1	0.14	0.00	0.00	1.42	0.71	0.05	0.14	1.90	1.42			0.00	Matches
+446	Alex Mighten	eng ENG	MF	Nottingham	18	2002	13.3	0.08	0.00	0.00	1.35	3.16	0.08	1.43	0.45	0.68			0.00	Matches
+447	Amari Miller	eng ENG	MF	Birmingham City	17	2002	2.1	0.00	0.00	0.00	2.86	1.43	0.00	0.00	0.95	0.95			0.00	Matches
+448	George Miller	eng ENG	FW	Barnsley	21	1998	0.9	0.00	0.00	0.00	1.11	3.33	1.11	0.00	0.00	0.00			0.00	Matches
+449	Mickel Miller	eng ENG	MF,FW	Rotherham	24	1995	5.9	0.68	0.17	0.17	3.39	2.03	0.17	4.07	1.53	1.36			0.00	Matches
+450	Billy Mitchell	eng ENG	MF	Millwall	20	2000	9.3	0.11	0.00	0.00	1.40	0.75	0.00	0.54	1.40	1.83			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+451	Jayden Mitchell-Lawson	eng ENG	FW,MF	Derby County	20	1999	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+452	Jayson Molumby	ie IRL	MF	Preston	20	1999	7.5	0.27	0.00	0.00	1.20	1.60	0.00	1.20	0.80	1.60			0.00	Matches
+453	George Moncur	eng ENG	MF,FW	Luton Town	26	1993	9.1	0.00	0.00	0.00	0.99	0.44	0.22	3.96	0.44	0.88			0.00	Matches
+454	Jasper Moon	eng ENG	MF	Barnsley	19	2000	1.3	0.00	0.00	0.00	2.31	1.54	0.00	0.00	0.77	3.85			0.00	Matches
+455	Kieffer Moore	wls WAL	FW	Cardiff City	27	1992	37.9	0.11	0.00	0.00	2.11	2.16	0.50	0.79	0.18	0.29			0.00	Matches
+456	Liam Moore	jm JAM	DF	Reading	27	1993	30.9	0.10	0.00	0.00	0.81	0.52	0.13	0.10	0.91	0.29			0.00	Matches
+457	Taylor Moore	eng ENG	DF	Bristol City	23	1997	15.2	0.20	0.00	0.00	0.79	0.33	0.00	0.26	2.11	0.86			0.07	Matches
+458	Joe Morrell	wls WAL	MF	Luton Town	23	1997	5.0	0.00	0.00	0.00	1.20	0.60	0.00	0.80	1.60	1.40			0.00	Matches
+459	Carlton Morris	eng ENG	MF,FW	Barnsley	24	1995	12.0	0.25	0.00	0.00	1.33	1.75	0.00	2.25	0.50	0.50			0.00	Matches
+460	Jordan Morris	us USA	FW,MF	Swansea City	25	1994	1.0	0.00	0.00	0.00	0.00	0.00	2.00	1.00	0.00	0.00			0.00	Matches
+461	Michael Morrison	eng ENG	DF	Reading	32	1988	33.8	0.06	0.00	0.00	0.38	0.92	0.09	0.12	1.01	0.59			0.00	Matches
+462	Sean Morrison	eng ENG	DF	Cardiff City	29	1991	36.6	0.22	0.00	0.00	1.31	0.87	0.14	0.14	1.64	0.82			0.03	Matches
+463	Sam Morsy	eg EGY	MF	Middlesbrough	28	1991	26.0	0.31	0.04	0.00	2.35	0.92	0.04	1.04	1.46	1.35			0.00	Matches
+464	Alex Mowatt	eng ENG	MF	Barnsley	25	1995	42.6	0.14	0.02	0.00	0.96	1.15	0.05	4.39	0.99	0.89			0.00	Matches
+465	Hayden Muller	eng ENG	DF,MF	Millwall	18	2002	0.2	5.00	0.00	0.00	5.00	0.00	0.00	0.00	5.00	10.0			0.00	Matches
+466	Bali Mumba	eng ENG	DF	Norwich City	18	2001	1.3	0.00	0.00	0.00	1.54	1.54	0.00	1.54	1.54	0.00			0.00	Matches
+467	Josh Murphy	eng ENG	FW,MF	Cardiff City	25	1995	12.6	0.16	0.00	0.00	1.11	1.83	0.40	3.97	0.48	0.56			0.00	Matches
+468	Glenn Murray	eng ENG	FW	Watford	36	1983	1.3	0.00	0.00	0.00	5.38	2.31	0.77	0.00	0.77	0.00			0.00	Matches
+469	Glenn Murray	eng ENG	FW	Nottingham	36	1983	8.0	0.13	0.00	0.00	3.13	1.50	1.00	0.50	0.00	0.25			0.00	Matches
+470	Admiral Muskwe	zw ZIM	FW,MF	Wycombe	21	1998	11.9	0.08	0.00	0.00	1.18	1.43	0.34	0.17	0.08	0.34			0.00	Matches
+471	Ádám Nagy	hu HUN	MF	Bristol City	25	1995	23.7	0.04	0.00	0.00	0.59	0.42	0.04	0.55	2.32	0.97			0.00	Matches
+472	Kal Naismith	sct SCO	DF,MF	Luton Town	28	1992	17.8	0.06	0.00	0.00	0.56	1.52	0.00	1.69	0.96	1.57			0.00	Matches
+473	Kyle Naughton	eng ENG	DF	Swansea City	31	1988	26.4	0.15	0.04	0.04	0.68	0.64	0.00	0.34	1.36	1.10			0.00	Matches
+474	Marc Navarro	es ESP	DF	Watford	25	1995	2.5	0.40	0.00	0.00	0.40	0.80	0.00	3.20	0.40	2.00			0.00	Matches
+475	Curtis Nelson	eng ENG	DF	Cardiff City	27	1993	43.8	0.14	0.00	0.00	1.05	0.57	0.07	0.14	1.60	0.78			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+476	Perry Ng	eng ENG	MF,DF	Cardiff City	24	1996	18.2	0.16	0.00	0.00	1.37	1.87	0.11	0.99	1.04	1.54			0.00	Matches
+477	Jeremy Ngakia		DF,MF	Watford	19	2000	17.8	0.06	0.00	0.00	0.79	0.96	0.00	3.37	1.97	2.13			0.00	Matches
+478	Sam Nombe	eng ENG	FW	Luton Town	21	1998	2.0	0.50	0.00	0.00	3.50	0.50	3.00	2.00	0.50	1.50			0.00	Matches
+479	Rhys Norrington-Davies	wls WAL	DF,MF	Luton Town	21	1999	15.9	0.13	0.00	0.00	1.57	0.63	0.00	4.21	0.82	0.82			0.00	Matches
+480	Rhys Norrington-Davies	wls WAL	DF,MF	Stoke City	21	1999	18.6	0.11	0.05	0.00	1.40	1.34	0.00	3.39	0.97	1.02			0.00	Matches
+481	Christian Norton	wls WAL	FW	Stoke City	19	2001	1.7	0.00	0.00	0.00	2.94	2.94	0.59	1.76	0.00	0.00			0.00	Matches
+482	Ryan Nyambe	na NAM	DF	Blackburn	22	1997	33.2	0.03	0.00	0.00	0.78	1.45	0.03	1.81	1.51	1.45			0.03	Matches
+483	Christian Nørgaard	dk DEN	MF,DF	Brentford	26	1994	14.5	0.14	0.00	0.00	1.03	0.83	0.00	0.41	1.31	1.45			0.00	Matches
+484	Lewis O'Brien	eng ENG	MF	Huddersfield	21	1998	39.0	0.13	0.00	0.00	1.36	1.67	0.10	1.38	1.21	1.08			0.00	Matches
+485	Callum O'Dowda	ie IRL	MF	Bristol City	25	1995	14.7	0.00	0.00	0.00	1.50	2.72	0.20	4.49	0.61	0.95			0.00	Matches
+486	Callum O'Hare	eng ENG	MF,FW	Coventry City	22	1998	39.9	0.13	0.00	0.00	1.60	2.93	0.23	0.80	0.60	1.25			0.00	Matches
+487	Max O'Leary	ie IRL	GK	Bristol City	23	1996	3.0	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+488	Tashan Oakley-Boothe	eng ENG	MF	Stoke City	20	2000	4.9	0.20	0.00	0.00	2.04	3.06	0.20	2.04	0.20	1.43			0.00	Matches
+489	John Obi Mikel	ng NGA	MF	Stoke City	33	1987	35.6	0.17	0.00	0.00	1.63	1.10	0.00	0.22	0.87	1.21			0.00	Matches
+490	Jordan Obita	ug UGA	DF	Wycombe	26	1993	7.1	0.14	0.00	0.00	1.13	0.42	0.00	4.51	0.99	0.99			0.00	Matches
+491	Moses Odubajo	eng ENG	DF,MF	Sheffield Weds	27	1993	15.9	0.31	0.00	0.00	1.26	2.01	0.13	1.64	1.38	1.13			0.00	Matches
+492	Clarke Oduor	ke KEN	MF	Barnsley	21	1999	6.2	0.00	0.00	0.00	0.32	0.81	0.00	1.94	1.61	1.13			0.00	Matches
+493	Nnamdi Ofoborh	ng NGA	MF	Wycombe	20	1999	3.5	0.00	0.00	0.00	1.43	1.43	0.00	1.43	2.00	0.86			0.00	Matches
+494	Nnamdi Ofoborh	ng NGA	MF	Bournemouth	20	1999	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+495	Chiedozie Ogbene	ie IRL	MF,FW	Rotherham	23	1997	6.8	0.00	0.00	0.00	0.88	3.53	0.15	3.68	0.74	1.18			0.00	Matches
+496	Sheyi Ojo	eng ENG	MF,FW	Cardiff City	23	1997	26.2	0.19	0.00	0.00	0.99	1.83	0.27	2.40	0.34	1.11			0.00	Matches
+497	Michael Olise	fr FRA	MF	Reading	18	2001	36.0	0.08	0.00	0.00	0.83	2.69	0.17	7.11	0.72	0.69			0.00	Matches
+498	Matthew Olosunde	us USA	MF,DF	Rotherham	22	1998	21.6	0.19	0.00	0.00	1.53	1.71	0.05	1.39	1.99	1.90			0.05	Matches
+499	Andrew Omobamidele	ie IRL	DF	Norwich City	18	2002	7.9	0.00	0.00	0.00	0.38	0.76	0.00	0.00	1.01	0.63			0.00	Matches
+500	Tyrese Omotoye	be BEL	FW	Norwich City	17	2002	0.1	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+501	Jayden Onen	eng ENG	FW,MF	Reading	19	2001	0.1	10.0	0.00	0.00	10.0	10.0	0.00	0.00	0.00	0.00			0.00	Matches
+502	Fred Onyedinma	eng ENG	MF,FW	Wycombe	23	1996	27.5	0.07	0.00	0.00	1.64	2.07	0.22	1.49	0.98	1.09			0.00	Matches
+503	Bright Osayi-Samuel	ng NGA	MF,FW	QPR	22	1997	19.1	0.16	0.00	0.00	1.52	1.47	0.31	1.73	0.63	0.52			0.00	Matches
+504	Jordi Osei-Tutu	eng ENG	DF	Cardiff City	21	1998	6.2	0.00	0.00	0.00	0.32	1.61	0.00	0.97	1.61	1.45			0.00	Matches
+505	Marlon Pack	eng ENG	MF	Cardiff City	29	1991	29.9	0.23	0.03	0.03	1.57	0.97	0.00	1.97	1.04	0.94			0.00	Matches
+506	Kasey Palmer	jm JAM	MF	Bristol City	23	1996	15.7	0.45	0.00	0.00	2.29	1.59	0.00	2.17	0.89	1.78			0.00	Matches
+507	Kasey Palmer	jm JAM	MF	Swansea City	23	1996	4.1	0.24	0.00	0.00	4.15	2.68	0.49	0.24	0.73	0.98			0.00	Matches
+508	Liam Palmer	sct SCO	DF,MF	Sheffield Weds	28	1991	33.0	0.15	0.00	0.00	1.00	0.91	0.06	1.76	1.36	1.09			0.00	Matches
+509	Romal Palmer	eng ENG	MF	Barnsley	20	1999	17.4	0.11	0.00	0.00	1.95	1.55	0.00	0.92	1.55	1.72			0.00	Matches
+510	Josh Parker	ag ATG	FW,MF	Wycombe	29	1990	0.5	2.00	0.00	0.00	8.00	0.00	0.00	8.00	0.00	0.00			0.00	Matches
+511	Troy Parrott	ie IRL	FW	Millwall	18	2002	6.7	0.00	0.00	0.00	1.49	1.34	0.45	0.15	0.15	0.30			0.00	Matches
+512	Josh Pask	eng ENG	DF,MF	Coventry City	22	1997	7.8	0.00	0.00	0.00	0.64	0.64	0.13	0.51	1.41	1.54			0.00	Matches
+513	Callum Paterson	sct SCO	FW,MF	Sheffield Weds	25	1994	32.4	0.15	0.00	0.00	1.79	1.60	0.43	1.08	0.37	0.68			0.03	Matches
+514	Jamie Paterson	eng ENG	MF	Bristol City	28	1991	15.1	0.20	0.00	0.00	1.13	1.46	0.00	3.31	1.26	0.46			0.00	Matches
+515	Alex Pattison	eng ENG	MF	Wycombe	22	1997	4.4	0.23	0.23	0.00	1.36	1.14	0.00	0.00	2.50	0.23			0.00	Matches
+516	Alex Pearce	ie IRL	DF	Millwall	31	1988	19.0	0.00	0.00	0.00	0.95	0.68	0.00	0.00	2.05	0.63			0.00	Matches
+517	Aynsley Pears	eng ENG	GK	Blackburn	22	1998	3.0	0.00	0.00	0.00	0.00	0.33	0.00	0.00	0.00	0.00			0.00	Matches
+518	Ben Pearson	eng ENG	MF	Bournemouth	25	1995	10.7	0.09	0.00	0.00	1.78	1.68	0.00	0.19	1.68	1.03			0.00	Matches
+519	Ben Pearson	eng ENG	MF	Preston	25	1995	7.3	0.14	0.00	0.00	1.10	0.68	0.00	0.55	2.05	1.23			0.00	Matches
+520	Matty Pearson	eng ENG	DF	Luton Town	26	1993	36.2	0.17	0.03	0.03	1.02	0.97	0.03	0.52	1.93	1.13			0.00	Matches
+521	Sam Pearson	wls WAL	MF	Bristol City	18	2001	2.5	0.00	0.00	0.00	0.80	2.40	0.00	1.20	0.40	0.40			0.00	Matches
+522	Kristian Pedersen	dk DEN	DF,MF	Birmingham City	25	1994	34.3	0.20	0.03	0.03	1.55	0.61	0.09	1.81	2.30	1.22			0.03	Matches
+523	Joey Pelupessy	id IDN	MF	Sheffield Weds	27	1993	26.4	0.11	0.00	0.00	1.48	0.91	0.00	0.11	1.82	1.52			0.00	Matches
+524	Matt Penney	eng ENG	MF,DF	Sheffield Weds	22	1998	9.4	0.21	0.00	0.00	1.38	0.74	0.00	2.77	1.49	1.06			0.00	Matches
+525	Dion Pereira	ag ATG	MF	Luton Town	21	1999	0.1	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+526	Stipe Perica	hr CRO	FW	Watford	25	1995	4.1	0.49	0.00	0.00	1.22	1.22	0.73	0.24	0.24	0.24			0.00	Matches
+527	Daniel Phillips	tt TRI	MF	Watford	19	2001	0.1	0.00	0.00	0.00	0.00	0.00	0.00	10.0	0.00	0.00			0.00	Matches
+528	Dillon Phillips	eng ENG	GK	Cardiff City	25	1995	15.9	0.06	0.00	0.00	0.00	0.13	0.00	0.00	0.00	0.00			0.00	Matches
+529	Kieran Phillips	eng ENG	FW	Huddersfield	20	2000	2.3	0.00	0.00	0.00	0.00	1.74	0.00	0.43	0.00	0.43			0.00	Matches
+530	Ethan Pinnock	jm JAM	DF	Brentford	27	1993	38.1	0.00	0.03	0.00	0.47	0.31	0.03	0.31	1.08	0.60			0.00	Matches
+531	Pipa	es ESP	DF,MF	Huddersfield	22	1998	33.7	0.24	0.00	0.00	1.25	0.95	0.15	1.72	1.10	1.22			0.00	Matches
+532	Maurizio Pochettino	es ESP	FW	Watford	19	2001	0.1	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+533	Brad Potts	eng ENG	MF	Preston	26	1994	23.7	0.08	0.00	0.00	1.14	0.97	0.30	1.18	0.97	0.89			0.00	Matches
+534	Dan Potts	eng ENG	DF	Luton Town	26	1994	18.9	0.11	0.00	0.00	1.01	0.79	0.32	1.27	1.38	0.42			0.00	Matches
+535	Nick Powell	eng ENG	MF,FW	Stoke City	26	1994	34.5	0.14	0.00	0.00	2.61	3.22	0.29	2.14	1.10	1.16			0.00	Matches
+536	Aaron Pressley	sct SCO	FW	Brentford	19	2001	0.1	0.00	0.00	0.00	20.0	0.00	10.0	0.00	0.00	0.00			0.00	Matches
+537	Alex Pritchard	eng ENG	MF	Huddersfield	27	1993	7.4	0.00	0.00	0.00	1.35	2.97	0.00	3.11	0.81	1.08			0.00	Matches
+538	Teemu Pukki	fi FIN	FW	Norwich City	30	1990	38.1	0.03	0.00	0.00	1.00	0.79	0.50	0.39	0.24	0.31			0.00	Matches
+539	George Pușcaș	ro ROU	FW	Reading	24	1996	9.4	0.11	0.00	0.00	1.60	1.17	0.32	0.43	0.11	0.21			0.00	Matches
+540	Ignacio Pussetto	ar ARG	FW,MF	Watford	24	1995	0.1	0.00	0.00	0.00	0.00	0.00	10.0	0.00	0.00	0.00			0.00	Matches
+541	Przemysław Płacheta	pl POL	MF,FW	Norwich City	22	1998	12.5	0.08	0.00	0.00	0.88	0.56	0.24	5.76	0.24	1.04			0.00	Matches
+542	Domingos Quina	pt POR	MF	Watford	20	1999	8.2	0.12	0.00	0.00	2.56	2.56	0.24	3.29	0.73	1.71			0.00	Matches
+543	Xavi Quintillà	es ESP	DF	Norwich City	23	1996	10.8	0.09	0.00	0.00	0.74	0.37	0.09	11.7	0.65	0.37			0.00	Matches
+544	Joe Rafferty	ie IRL	DF	Preston	26	1993	14.8	0.07	0.07	0.00	0.88	1.35	0.00	4.26	2.03	0.68			0.07	Matches
+545	Joe Ralls	eng ENG	MF	Cardiff City	26	1993	33.2	0.21	0.03	0.03	2.05	0.93	0.12	3.43	1.17	1.51			0.00	Matches
+546	Joe Rankin-Costello	eng ENG	DF	Blackburn	21	1999	12.0	0.17	0.00	0.00	1.33	1.00	0.00	3.75	2.08	1.08			0.00	Matches
+547	David Raya	es ESP	GK	Brentford	24	1995	42.0	0.02	0.00	0.00	0.02	0.17	0.00	0.00	0.00	0.00			0.02	Matches
+548	Glen Rea	ie IRL	MF,DF	Luton Town	25	1994	32.2	0.31	0.00	0.00	1.96	1.15	0.03	0.16	2.39	1.06			0.03	Matches
+549	Adam Reach	eng ENG	MF,DF	Sheffield Weds	27	1993	38.4	0.05	0.00	0.00	0.52	0.57	0.10	4.30	1.07	0.78			0.00	Matches
+550	Winston Reid	nz NZL	DF	Brentford	32	1988	7.3	0.14	0.00	0.00	1.51	2.05	0.00	0.00	2.19	0.55			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+551	Jordan Rhodes	sct SCO	FW	Sheffield Weds	30	1990	16.6	0.00	0.00	0.00	1.08	1.99	0.48	0.24	0.12	0.42			0.00	Matches
+552	Yuri Ribeiro	pt POR	DF	Nottingham	23	1997	24.3	0.12	0.04	0.00	1.11	1.19	0.00	2.80	1.07	0.66			0.00	Matches
+553	Omar Richards	eng ENG	DF	Reading	22	1998	36.8	0.22	0.00	0.00	1.14	1.71	0.03	3.23	1.66	2.09			0.00	Matches
+554	Diego Rico	es ESP	DF,MF	Bournemouth	27	1993	22.5	0.31	0.00	0.00	1.56	1.29	0.09	6.44	2.36	1.42			0.00	Matches
+555	Emil Riis Jakobsen	dk DEN	FW	Preston	22	1998	18.1	0.00	0.00	0.00	1.33	1.16	1.10	0.83	0.17	0.33			0.00	Matches
+556	Andy Rinomhota	zw ZIM	MF	Reading	23	1997	40.4	0.10	0.00	0.00	1.29	2.10	0.05	0.40	1.14	1.11			0.00	Matches
+557	Connor Ripley	eng ENG	GK	Preston	27	1993	1.0	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+558	Rodrigo Riquelme	es ESP	MF,FW	Bournemouth	20	2000	3.8	0.26	0.00	0.00	1.05	2.37	0.00	3.16	0.26	0.53			0.00	Matches
+559	Marcel Ritzmaier	at AUT	MF	Barnsley	27	1993	2.2	0.45	0.00	0.00	1.36	1.36	0.00	5.45	0.45	0.91			0.00	Matches
+560	Connor Roberts	wls WAL	MF	Swansea City	24	1995	43.7	0.16	0.00	0.00	0.80	1.74	0.14	5.13	1.14	0.41			0.00	Matches
+561	Marc Roberts	eng ENG	DF	Birmingham City	30	1990	30.5	0.07	0.03	0.00	1.05	0.46	0.07	0.85	1.44	0.95			0.00	Matches
+562	Patrick Roberts	eng ENG	FW,MF	Middlesbrough	23	1997	3.7	0.00	0.00	0.00	1.35	1.62	0.54	1.35	0.00	0.54			0.00	Matches
+563	Patrick Roberts	eng ENG	MF	Derby County	23	1997	7.5	0.13	0.00	0.00	0.93	2.13	0.13	2.67	0.40	0.40			0.00	Matches
+564	Clark Robertson	sct SCO	DF	Rotherham	26	1993	10.8	0.00	0.00	0.00	1.11	0.83	0.09	0.83	1.57	0.37			0.00	Matches
+565	Jack Robinson	eng ENG	DF	Middlesbrough	19	2001	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+566	Joe Rodon	wls WAL	DF	Swansea City	22	1997	4.0	0.00	0.00	0.00	0.25	0.25	0.00	0.00	2.00	0.00			0.00	Matches
+567	Mads Roerslev	dk DEN	MF,DF	Brentford	21	1999	9.6	0.00	0.00	0.00	1.35	0.42	0.10	3.02	0.73	0.94			0.00	Matches
+568	Mahlon Romeo	ag ATG	MF,DF	Millwall	24	1995	29.9	0.13	0.00	0.00	0.90	1.87	0.10	3.28	1.51	1.17			0.00	Matches
+569	Wayne Rooney	eng ENG	MF,FW	Derby County	34	1985	8.8	0.11	0.00	0.00	0.57	0.34	0.00	3.98	0.11	0.11			0.00	Matches
+570	Kelle Roos	nl NED	GK	Derby County	28	1992	13.5	0.00	0.00	0.00	0.00	0.07	0.00	0.00	0.00	0.00			0.00	Matches
+571	Michael Rose	sct SCO	DF	Coventry City	24	1995	13.6	0.07	0.07	0.00	0.74	0.29	0.00	0.15	1.69	0.66			0.15	Matches
+572	Joe Rothwell	eng ENG	MF	Blackburn	25	1995	25.9	0.23	0.00	0.00	1.00	0.58	0.00	1.62	0.93	0.66			0.00	Matches
+573	Wayne Routledge	eng ENG	FW	Swansea City	35	1985	5.9	0.00	0.00	0.00	1.86	0.68	2.03	3.39	0.17	0.85			0.00	Matches
+574	Aaron Rowe	eng ENG	MF,DF	Huddersfield	19	2000	11.0	0.09	0.00	0.00	2.00	1.18	0.18	2.09	1.00	0.91			0.00	Matches
+575	Tommy Rowe	eng ENG	DF,MF	Bristol City	31	1988	24.9	0.08	0.00	0.00	0.92	0.84	0.04	2.77	2.45	0.68			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+576	Declan Rudd	eng ENG	GK	Preston	29	1991	22.0	0.00	0.00	0.00	0.00	0.23	0.00	0.00	0.14	0.05			0.00	Matches
+577	Pelly Ruddock Mpanzu	cd COD	MF	Luton Town	27	1993	38.3	0.10	0.00	0.00	1.12	1.67	0.13	1.28	0.81	0.63			0.00	Matches
+578	Lukas Rupp	de GER	MF	Norwich City	29	1991	14.1	0.14	0.00	0.00	1.91	0.99	0.07	1.42	1.56	1.84			0.00	Matches
+579	Kieran Sadlier	ie IRL	MF,FW	Rotherham	25	1994	4.9	0.00	0.00	0.00	1.22	1.02	0.00	5.92	0.61	1.63			0.00	Matches
+580	Brice Samba	fr FRA	GK	Nottingham	26	1994	45.0	0.09	0.00	0.00	0.02	0.20	0.00	0.00	0.02	0.00			0.00	Matches
+581	Alex Samuel	wls WAL	FW,MF	Wycombe	24	1995	6.8	0.29	0.00	0.00	2.06	1.91	0.29	1.47	0.74	0.59			0.00	Matches
+582	Mikel San José	es ESP	MF,DF	Birmingham City	31	1989	20.1	0.20	0.00	0.00	1.59	0.35	0.00	0.80	1.34	1.04			0.00	Matches
+583	Carlos Sánchez	co COL	MF	Watford	34	1986	3.0	0.00	0.00	0.00	1.00	1.00	0.00	0.00	1.33	1.67			0.00	Matches
+584	Iván Sánchez	es ESP	MF	Birmingham City	27	1992	30.7	0.07	0.00	0.00	0.88	2.48	0.10	4.85	0.88	1.11			0.00	Matches
+585	Thomas Sang	eng ENG	MF	Cardiff City	21	1999	8.2	0.00	0.00	0.00	0.49	0.85	0.00	2.68	1.34	1.34			0.00	Matches
+586	Yaya Sanogo	fr FRA	FW	Huddersfield	27	1993	5.5	0.00	0.00	0.00	1.82	2.00	0.91	0.18	0.36	0.18			0.00	Matches
+587	Ismaila Sarr	sn SEN	FW,MF	Watford	22	1998	38.4	0.13	0.00	0.00	1.59	3.02	0.65	3.88	0.68	0.70			0.00	Matches
+588	Mouhamadou-Naby Sarr	fr FRA	DF	Huddersfield	26	1993	40.4	0.10	0.02	0.00	0.89	0.64	0.10	0.17	1.26	0.45			0.00	Matches
+589	George Saville	nir NIR	MF	Middlesbrough	27	1993	36.1	0.22	0.00	0.00	1.72	1.22	0.11	0.61	1.11	1.16			0.00	Matches
+590	Christopher Schindler	de GER	DF	Huddersfield	30	1990	8.9	0.11	0.00	0.00	1.35	1.46	0.00	0.00	2.70	1.57			0.00	Matches
+591	Patrick Schmidt	at AUT	FW	Barnsley	22	1998	2.4	0.00	0.00	0.00	1.67	0.42	1.25	0.00	0.42	0.00			0.00	Matches
+592	Ryan Schofield	eng ENG	GK	Huddersfield	20	1999	29.5	0.07	0.00	0.00	0.03	0.20	0.00	0.00	0.03	0.03			0.00	Matches
+593	Alex Scott	eng ENG	MF	Bristol City	16	2003	1.7	0.00	0.00	0.00	1.18	3.53	0.00	1.76	0.59	1.18			0.00	Matches
+594	Steve Seddon	eng ENG	MF,DF	Birmingham City	22	1997	5.0	0.20	0.00	0.00	0.80	0.80	0.60	3.20	0.80	0.80			0.00	Matches
+595	Ken Sema	se SWE	MF,FW	Watford	26	1993	36.3	0.03	0.00	0.00	1.27	0.91	0.30	4.93	0.66	0.85			0.00	Matches
+596	Alfa Semedo	gw GNB	MF	Reading	22	1997	23.8	0.17	0.00	0.00	1.64	1.18	0.21	0.76	1.22	2.10			0.00	Matches
+597	Antoine Semenyo	gh GHA	FW,MF	Bristol City	20	2000	27.2	0.07	0.00	0.00	2.06	1.80	0.51	1.29	0.85	1.18			0.00	Matches
+598	Steven Sessegnon	eng ENG	DF,MF	Bristol City	20	2000	10.9	0.00	0.00	0.00	0.64	0.83	0.00	1.65	1.83	0.92			0.00	Matches
+599	Liam Shaw	eng ENG	MF,DF	Sheffield Weds	19	2001	10.9	0.28	0.18	0.09	2.39	1.01	0.00	0.46	0.92	0.92			0.00	Matches
+600	Ryan Shawcross	eng ENG	DF	Stoke City	32	1987	0.5	0.00	0.00	0.00	2.00	0.00	0.00	0.00	0.00	4.00			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+601	James Shea	eng ENG	GK	Luton Town	29	1991	7.0	0.14	0.00	0.00	0.14	0.29	0.00	0.00	0.00	0.00			0.00	Matches
+602	Ben Sheaf	eng ENG	MF	Coventry City	22	1998	20.1	0.20	0.00	0.00	1.24	1.49	0.00	0.70	1.39	1.59			0.00	Matches
+603	Graeme Shinnie	sct SCO	MF	Derby County	28	1991	37.1	0.24	0.00	0.00	1.29	1.54	0.00	2.64	1.40	1.51			0.00	Matches
+604	Jordan Shipley	ie IRL	MF	Coventry City	22	1997	15.2	0.07	0.00	0.00	1.25	0.33	0.33	0.99	0.79	0.79			0.00	Matches
+605	Toby Sibbick	ug UGA	DF	Barnsley	21	1999	13.4	0.22	0.00	0.00	0.82	0.52	0.00	0.00	1.57	1.72			0.00	Matches
+606	Louie Sibley	eng ENG	MF,FW	Derby County	18	2001	11.6	0.43	0.00	0.00	2.33	2.16	0.26	1.90	0.34	1.29			0.00	Matches
+607	Francisco Sierralta	cl CHI	DF	Watford	23	1997	24.5	0.33	0.00	0.00	1.43	0.82	0.04	0.04	1.27	0.53			0.04	Matches
+608	Keke Simmonds	eng ENG	FW	Birmingham City	19	2001	0.1	0.00	0.00	0.00	10.0	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+609	Elliot Simoes	ao ANG	MF	Barnsley	20	1999	3.6	0.28	0.00	0.00	1.39	1.67	0.56	0.56	0.00	1.11			0.00	Matches
+610	Danny Simpson	eng ENG	DF	Bristol City	33	1987	3.0	0.33	0.00	0.00	1.67	0.67	0.00	2.00	1.33	0.67			0.00	Matches
+611	Jack Simpson	eng ENG	DF	Bournemouth	23	1996	6.2	0.00	0.00	0.00	0.97	0.16	0.00	0.32	1.77	0.97			0.00	Matches
+612	Scott Sinclair	eng ENG	MF	Preston	31	1989	29.5	0.03	0.00	0.00	0.31	0.85	0.81	1.05	0.47	0.27			0.00	Matches
+613	Jiří Skalák	cz CZE	MF	Millwall	28	1992	1.1	0.00	0.00	0.00	0.00	2.73	0.00	4.55	0.91	1.82			0.00	Matches
+614	Oliver Skipp	eng ENG	MF	Norwich City	19	2000	42.8	0.16	0.00	0.00	1.21	1.61	0.02	0.40	1.26	1.38			0.00	Matches
+615	Simon Sluga	hr CRO	GK	Luton Town	27	1993	39.0	0.03	0.00	0.00	0.00	0.13	0.00	0.00	0.05	0.03			0.00	Matches
+616	Adam Smith	eng ENG	DF,MF	Bournemouth	29	1991	37.0	0.11	0.00	0.00	1.54	2.00	0.08	1.84	0.70	1.00			0.00	Matches
+617	Jordan Smith	eng ENG	GK	Nottingham	25	1994	1.0	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+618	Korey Smith	eng ENG	MF	Swansea City	29	1991	28.4	0.07	0.00	0.00	1.02	1.58	0.04	0.63	0.53	0.74			0.00	Matches
+619	Matt Smith	eng ENG	FW	Millwall	31	1989	10.2	0.00	0.00	0.00	1.96	0.88	1.57	0.20	0.20	0.20			0.00	Matches
+620	Michael Smith	eng ENG	FW	Rotherham	28	1991	34.8	0.26	0.03	0.00	2.21	1.21	0.69	1.24	0.20	0.43			0.00	Matches
+621	Tommy Smith	eng ENG	MF,DF	Stoke City	28	1992	32.5	0.18	0.00	0.00	0.71	1.17	0.09	5.23	1.02	0.74			0.00	Matches
+622	Alex Smithies	eng ENG	GK	Cardiff City	30	1990	30.1	0.00	0.00	0.00	0.00	0.20	0.00	0.00	0.03	0.00			0.00	Matches
+623	Paul Smyth	nir NIR	FW,MF	QPR	22	1997	0.4	0.00	0.00	0.00	0.00	5.00	2.50	7.50	0.00	7.50			0.00	Matches
+624	Dominic Solanke	eng ENG	FW	Bournemouth	22	1997	37.1	0.05	0.00	0.00	1.32	1.91	0.54	0.27	0.08	0.22			0.00	Matches
+625	Michael Sollbauer	at AUT	DF	Barnsley	30	1990	31.5	0.16	0.00	0.00	1.05	0.44	0.00	0.10	2.57	1.43			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+626	Luke Southwood	nir NIR	GK	Reading	22	1997	1.0	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+627	Harry Souttar	au AUS	DF	Stoke City	21	1998	38.0	0.05	0.03	0.00	0.61	0.39	0.05	0.03	1.42	0.79			0.00	Matches
+628	Samba Sow	ml MLI	MF	Nottingham	31	1989	10.0	0.60	0.00	0.00	3.70	1.20	0.00	0.10	2.40	2.50			0.00	Matches
+629	Djed Spence	eng ENG	MF,DF	Middlesbrough	19	2000	23.2	0.04	0.00	0.00	0.86	0.99	0.17	2.41	1.16	0.86			0.00	Matches
+630	Jack Stacey	eng ENG	MF,DF	Bournemouth	24	1996	19.0	0.05	0.00	0.00	1.58	0.84	0.05	3.16	1.32	1.00			0.00	Matches
+631	Junior Stanislas	eng ENG	MF,FW	Bournemouth	30	1989	26.9	0.04	0.00	0.00	0.45	0.48	0.11	4.05	0.00	0.30			0.00	Matches
+632	Richard Stearman	eng ENG	DF	Huddersfield	32	1987	14.0	0.36	0.00	0.00	1.21	1.71	0.07	0.14	1.79	0.93			0.07	Matches
+633	Finley Stevens	wls WAL	DF	Brentford	17	2003	0.1	0.00	0.00	0.00	0.00	0.00	0.00	20.0	0.00	0.00			0.00	Matches
+634	Anthony Stewart	eng ENG	DF	Wycombe	27	1992	31.3	0.16	0.00	0.00	0.83	0.83	0.03	0.19	1.41	0.54			0.00	Matches
+635	Marco Stiepermann	de GER	MF	Norwich City	29	1991	11.3	0.09	0.00	0.00	0.88	0.71	0.09	0.35	0.44	0.35			0.00	Matches
+636	Ryan Stirk	wls WAL	MF	Birmingham City	19	2000	1.9	0.53	0.00	0.00	1.05	1.05	0.00	1.58	1.58	1.05			0.00	Matches
+637	David Stockdale	eng ENG	GK	Wycombe	34	1985	17.0	0.06	0.00	0.00	0.00	0.24	0.00	0.00	0.12	0.00			0.00	Matches
+638	Jayden Stockley	eng ENG	FW	Preston	26	1993	5.9	0.00	0.00	0.00	3.39	2.20	0.68	0.85	0.00	0.00			0.00	Matches
+639	Jordan Storey	eng ENG	DF	Preston	22	1997	27.4	0.00	0.00	0.00	0.47	0.62	0.00	0.04	2.37	0.51			0.04	Matches
+640	Jack Stretton	eng ENG	FW	Derby County	18	2001	0.4	0.00	0.00	0.00	0.00	0.00	0.00	2.50	0.00	0.00			0.00	Matches
+641	Callum Styles	hu HUN	MF	Barnsley	20	2000	37.8	0.19	0.00	0.00	1.16	1.19	0.05	2.41	1.30	2.01			0.00	Matches
+642	Isaac Success	ng NGA	FW	Watford	24	1996	4.0	0.50	0.00	0.00	2.00	4.00	0.25	0.75	0.25	0.25			0.00	Matches
+643	Ivan Šunjić	ba BIH	MF	Birmingham City	23	1996	37.1	0.24	0.00	0.00	2.02	0.49	0.03	0.70	1.19	1.21			0.00	Matches
+644	Sam Surridge	eng ENG	FW	Bournemouth	22	1998	11.4	0.18	0.00	0.00	2.28	1.67	0.61	0.35	0.18	0.53			0.00	Matches
+645	Will Swan	eng ENG	FW	Nottingham	19	2000	0.4	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+646	John Swift	eng ENG	MF	Reading	25	1995	8.7	0.11	0.00	0.00	1.15	1.15	0.34	3.56	0.23	0.34			0.00	Matches
+647	Jakob Sørensen	dk DEN	DF	Norwich City	22	1998	21.8	0.14	0.00	0.00	1.38	1.06	0.05	0.64	1.51	1.56			0.00	Matches
+648	Ryan Tafazolli	eng ENG	DF	Wycombe	28	1991	17.4	0.11	0.06	0.00	1.32	0.40	0.23	0.06	1.15	0.34			0.00	Matches
+649	Marcus Tavernier	eng ENG	MF,FW	Middlesbrough	21	1999	24.5	0.12	0.00	0.00	1.02	2.33	0.24	3.84	0.73	1.10			0.00	Matches
+650	Connor Taylor	eng ENG	DF	Stoke City	18	2001	0.8	0.00	0.00	0.00	0.00	2.50	0.00	0.00	6.25	1.25			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+651	Lyle Taylor	ms MSR	FW	Nottingham	30	1990	19.3	0.16	0.00	0.00	1.92	1.14	0.67	1.71	0.21	0.31			0.00	Matches
+652	Mike te Wierik	nl NED	DF	Derby County	28	1992	3.0	0.33	0.00	0.00	2.00	0.33	0.00	0.00	2.00	0.67			0.00	Matches
+653	Dejan Tetek	rs SRB	MF	Reading	17	2002	1.4	0.71	0.00	0.00	5.00	1.43	0.00	0.00	0.71	1.43			0.00	Matches
+654	Alexander Tettey	no NOR	MF	Norwich City	34	1986	5.2	0.00	0.00	0.00	0.77	0.58	0.00	0.19	1.54	0.58			0.00	Matches
+655	George Thomas	wls WAL	MF	QPR	23	1997	5.4	0.00	0.00	0.00	0.56	1.67	0.19	1.48	0.93	0.37			0.00	Matches
+656	Luke Thomas	eng ENG	MF,FW	Barnsley	21	1999	8.1	0.12	0.00	0.00	2.47	1.85	0.25	0.62	0.25	1.36			0.00	Matches
+657	Sorba Thomas	wls WAL	FW,MF	Huddersfield	20	1999	2.0	0.00	0.00	0.00	1.00	0.00	0.50	5.00	0.50	0.00			0.00	Matches
+658	Ben Thompson	eng ENG	MF	Millwall	24	1995	15.0	0.07	0.00	0.00	1.47	2.73	0.27	0.67	1.07	0.40			0.00	Matches
+659	Curtis Thompson	eng ENG	MF	Wycombe	26	1993	27.8	0.18	0.00	0.00	1.98	2.37	0.00	0.61	1.58	1.08			0.00	Matches
+660	Dominic Thompson	eng ENG	DF	Brentford	20	2000	2.6	0.38	0.00	0.00	0.77	0.77	0.00	2.31	2.31	0.38			0.00	Matches
+661	Jordan Thompson	nir NIR	MF	Stoke City	23	1997	22.3	0.22	0.00	0.00	1.43	1.88	0.00	5.16	0.72	0.58			0.00	Matches
+662	Jordon Thompson	eng ENG	DF	Coventry City	21	1999	0.4	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	2.50			0.00	Matches
+663	Harry Toffolo	eng ENG	DF,MF	Huddersfield	24	1995	29.7	0.10	0.03	0.00	1.14	1.41	0.17	3.57	1.99	0.47			0.00	Matches
+664	Lee Tomlin	eng ENG	MF	Cardiff City	31	1989	1.8	1.67	0.56	0.56	2.78	3.33	0.00	1.67	1.11	0.00			0.00	Matches
+665	Ivan Toney	eng ENG	FW	Brentford	24	1996	42.8	0.21	0.02	0.02	2.31	2.45	0.61	0.54	0.26	0.42			0.00	Matches
+666	Jon Toral	es ESP	MF	Birmingham City	25	1995	8.2	0.37	0.00	0.00	2.80	2.07	0.00	1.59	0.12	1.22			0.00	Matches
+667	Ryley Towler	eng ENG	MF	Bristol City	19	2001	1.9	0.53	0.00	0.00	1.58	1.05	0.00	1.05	2.11	1.58			0.00	Matches
+668	Mark Travers	ie IRL	GK	Bournemouth	21	1999	1.0	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+669	Lewis Travis	eng ENG	MF	Blackburn	22	1997	14.5	0.28	0.00	0.00	1.86	1.86	0.00	0.41	1.31	1.72			0.00	Matches
+670	William Troost-Ekong	ng NGA	DF	Watford	26	1993	29.7	0.07	0.00	0.00	0.54	0.34	0.03	0.00	0.91	0.64			0.03	Matches
+671	Connal Trueman	eng ENG	GK	Birmingham City	24	1996	1.0	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00	0.00			0.00	Matches
+672	Tom Trybull	de GER	MF	Blackburn	27	1993	14.8	0.27	0.00	0.00	1.76	1.08	0.00	0.14	2.91	1.89			0.00	Matches
+673	Ryan Tunnicliffe	eng ENG	MF	Luton Town	27	1992	15.7	0.13	0.00	0.00	0.89	0.57	0.00	1.02	1.02	1.15			0.00	Matches
+674	Josh Tymon	eng ENG	MF	Stoke City	21	1999	17.8	0.00	0.00	0.00	0.45	0.39	0.17	3.54	0.67	0.90			0.00	Matches
+675	Osaze Urhoghide	nl NED	DF	Sheffield Weds	20	2000	12.7	0.31	0.00	0.00	1.57	1.02	0.00	0.39	2.05	1.34			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+676	Yan Valery	tn TUN	DF	Birmingham City	21	1999	2.6	0.00	0.00	0.00	1.54	0.77	0.38	1.92	0.77	1.15			0.00	Matches
+677	Álex Vallejo	es ESP	MF,DF	Huddersfield	28	1992	11.4	0.09	0.00	0.00	1.23	0.79	0.18	0.18	2.02	1.05			0.00	Matches
+678	Kyle Vassell	nir NIR	MF,FW	Rotherham	27	1993	5.7	0.00	0.00	0.00	2.98	1.40	0.88	1.93	0.18	0.70			0.00	Matches
+679	Will Vaulks	wls WAL	MF	Cardiff City	26	1993	34.8	0.17	0.03	0.00	1.75	0.72	0.09	2.27	1.52	0.92			0.00	Matches
+680	Thibaud Verlinden	be BEL	FW,MF	Stoke City	21	1999	0.1	0.00	0.00	0.00	0.00	0.00	0.00	30.0	0.00	0.00			0.00	Matches
+681	Sam Vokes	wls WAL	FW	Stoke City	30	1989	9.2	0.00	0.00	0.00	1.20	1.52	0.87	0.11	0.11	0.11			0.00	Matches
+682	Mario Vrančić	ba BIH	MF	Norwich City	31	1989	19.1	0.16	0.00	0.00	1.73	1.15	0.10	1.20	0.84	1.20			0.00	Matches
+683	Zak Vyner	ke KEN	DF,MF	Bristol City	23	1997	37.4	0.08	0.00	0.00	0.78	0.29	0.03	0.35	1.68	1.07			0.00	Matches
+684	Martyn Waghorn	eng ENG	FW,MF	Derby County	30	1990	21.0	0.14	0.05	0.00	1.67	1.33	0.86	2.14	0.43	0.67			0.00	Matches
+685	Tyler Walker	eng ENG	FW	Coventry City	23	1996	20.0	0.05	0.00	0.00	1.05	1.25	1.15	0.95	0.20	0.30			0.00	Matches
+686	Jed Wallace	eng ENG	FW,MF	Millwall	26	1994	42.5	0.07	0.00	0.00	0.99	1.04	0.33	6.59	0.45	0.73			0.00	Matches
+687	Lee Wallace	sct SCO	MF,DF	QPR	32	1987	25.1	0.08	0.00	0.00	1.08	0.72	0.12	2.91	0.84	1.31			0.00	Matches
+688	Murray Wallace	sct SCO	DF,MF	Millwall	27	1993	20.0	0.25	0.05	0.05	1.35	0.90	0.05	1.30	1.35	1.05			0.00	Matches
+689	Liam Walsh	eng ENG	MF	Bristol City	22	1997	1.4	0.71	0.00	0.00	1.43	0.00	0.00	2.14	2.14	0.00			0.00	Matches
+690	Jack Walton	eng ENG	GK	Barnsley	22	1998	24.0	0.04	0.00	0.00	0.04	0.33	0.00	0.00	0.00	0.04			0.00	Matches
+691	Danny Ward	eng ENG	FW	Huddersfield	28	1991	8.1	0.00	0.00	0.00	0.74	0.49	0.00	0.25	0.12	0.62			0.00	Matches
+692	Marley Watkins	wls WAL	FW,MF	Bristol City	29	1990	0.3	0.00	0.00	0.00	6.67	3.33	0.00	0.00	0.00	0.00			0.00	Matches
+693	Duncan Watmore	eng ENG	FW,MF	Middlesbrough	26	1994	20.6	0.00	0.00	0.00	0.73	0.87	0.44	0.97	0.39	0.19			0.00	Matches
+694	Louie Watson	ie IRL	MF	Derby County	19	2001	1.8	0.00	0.00	0.00	0.00	1.11	0.56	0.56	0.00	0.56			0.00	Matches
+695	Tennai Watson	eng ENG	DF,MF	Reading	23	1997	0.0	0	0	0	0	0	0	0	0	0			0	Matches
+696	Max Watters	eng ENG	FW	Cardiff City	21	1999	1.0	0.00	0.00	0.00	2.00	0.00	2.00	0.00	2.00	1.00			0.00	Matches
+697	Andreas Weimann	at AUT	MF	Bristol City	28	1991	6.7	0.00	0.00	0.00	0.90	2.54	0.30	0.75	0.30	1.04			0.00	Matches
+698	Nahki Wells	bm BER	FW,MF	Bristol City	30	1990	33.7	0.12	0.00	0.00	1.84	1.54	0.45	0.98	0.47	0.71			0.00	Matches
+699	Keiren Westwood	ie IRL	GK	Sheffield Weds	35	1984	19.1	0.00	0.00	0.00	0.05	0.37	0.00	0.00	0.00	0.05			0.00	Matches
+700	Scott Wharton	eng ENG	DF	Blackburn	22	1997	4.4	0.23	0.00	0.00	0.91	0.23	0.00	0.00	1.59	1.14			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+701	David Wheeler	eng ENG	MF,FW	Wycombe	29	1990	27.2	0.11	0.00	0.00	1.43	0.96	0.15	0.55	1.62	0.70			0.00	Matches
+702	Ben Whiteman	eng ENG	MF	Preston	24	1996	19.1	0.16	0.00	0.00	1.10	0.37	0.00	2.09	1.31	0.89			0.00	Matches
+703	Morgan Whittaker	eng ENG	MF	Derby County	19	2001	2.4	0.00	0.00	0.00	2.08	2.08	0.42	7.08	0.42	0.83			0.00	Matches
+704	Morgan Whittaker	eng ENG	FW	Swansea City	19	2001	4.5	0.22	0.00	0.00	1.11	2.67	0.44	2.44	0.44	1.11			0.00	Matches
+705	Gavin Whyte	nir NIR	MF	Cardiff City	24	1996	1.2	0.00	0.00	0.00	0.83	1.67	0.00	1.67	0.83	0.00			0.00	Matches
+706	Jordy de Wijs	nl NED	DF	QPR	25	1995	7.1	0.14	0.00	0.00	0.99	0.28	0.00	0.00	1.69	0.70			0.00	Matches
+707	Joe Wildsmith	eng ENG	GK	Sheffield Weds	24	1995	18.9	0.11	0.00	0.00	0.00	0.05	0.00	0.00	0.00	0.00			0.00	Matches
+708	Ben Wiles	eng ENG	MF	Rotherham	21	1999	37.3	0.19	0.00	0.00	0.80	1.61	0.11	1.96	1.29	0.83			0.00	Matches
+709	Derrick Williams	ie IRL	DF	Blackburn	27	1993	9.8	0.00	0.00	0.00	0.51	0.51	0.00	0.00	1.12	0.51			0.00	Matches
+710	Joe Williams	eng ENG	MF	Bristol City	23	1996	0.7	0.00	0.00	0.00	1.43	1.43	0.00	0.00	0.00	0.00			0.00	Matches
+711	Jonny Williams	wls WAL	MF	Cardiff City	26	1993	2.0	0.50	0.00	0.00	1.00	4.00	0.00	1.00	0.50	0.00			0.00	Matches
+712	Jordan Williams	eng ENG	MF,DF	Barnsley	20	1999	9.8	0.00	0.00	0.00	0.61	0.61	0.00	1.73	1.12	1.43			0.00	Matches
+713	Shaun Williams	ie IRL	MF	Millwall	33	1986	13.5	0.22	0.00	0.00	1.11	1.41	0.00	1.63	1.78	0.81			0.00	Matches
+714	Chris Willock	eng ENG	MF,FW	QPR	22	1998	21.6	0.05	0.00	0.00	0.93	1.81	0.42	3.43	0.32	0.88			0.00	Matches
+715	Ben Wilmot	eng ENG	DF	Watford	20	1999	14.8	0.27	0.00	0.00	0.81	0.27	0.00	0.34	1.42	0.47			0.00	Matches
+716	Jack Wilshere	eng ENG	MF	Bournemouth	28	1992	7.8	0.38	0.13	0.13	1.41	2.05	0.00	0.38	0.77	1.03			0.00	Matches
+717	Ben Wilson	eng ENG	GK	Coventry City	27	1992	26.0	0.04	0.00	0.00	0.12	0.12	0.00	0.00	0.00	0.00			0.00	Matches
+718	Harry Wilson	wls WAL	MF,FW	Cardiff City	23	1997	31.2	0.10	0.00	0.00	1.44	2.05	0.26	5.10	1.03	0.58			0.00	Matches
+719	Josh Windass	eng ENG	FW,MF	Sheffield Weds	26	1994	32.2	0.00	0.03	0.00	1.12	1.30	0.68	2.70	0.31	0.47			0.00	Matches
+720	Lewis Wing	eng ENG	MF	Middlesbrough	25	1995	4.2	0.00	0.00	0.00	1.67	1.67	0.00	2.86	1.43	0.48			0.00	Matches
+721	Lewis Wing	eng ENG	MF	Rotherham	25	1995	18.2	0.05	0.00	0.00	1.10	1.21	0.00	5.44	0.99	1.43			0.00	Matches
+722	Andre Wisdom	eng ENG	DF	Derby County	27	1993	34.6	0.12	0.00	0.00	0.78	0.29	0.00	0.23	1.27	0.58			0.00	Matches
+723	Richard Wood	eng ENG	DF	Rotherham	35	1985	25.9	0.31	0.04	0.00	1.35	1.12	0.31	0.04	1.00	0.50			0.00	Matches
+724	Nathan Wood-Gordon	eng ENG	DF	Middlesbrough	18	2002	2.8	0.00	0.00	0.00	1.07	1.07	0.00	0.00	3.21	1.79			0.00	Matches
+725	Freddie Woodman	eng ENG	GK	Swansea City	23	1997	45.0	0.07	0.00	0.00	0.00	0.13	0.00	0.00	0.00	0.02			0.00	Matches
+Rk	Player	Nation	Pos	Squad	Age	Born	90s	CrdY	CrdR	2CrdY	Fls	Fld	Off	Crs	Int	TklW	PKwon	PKcon	OG	Matches
+726	Cauley Woodrow	eng ENG	FW,MF	Barnsley	25	1994	36.3	0.22	0.00	0.00	2.18	1.27	0.80	0.85	0.33	0.22			0.00	Matches
+727	Ryan Woods	eng ENG	MF	Millwall	26	1993	38.0	0.24	0.00	0.00	1.26	0.79	0.00	0.21	0.92	0.66			0.00	Matches
+728	Joe Worrall	eng ENG	DF	Nottingham	23	1997	31.0	0.00	0.00	0.00	0.45	0.39	0.10	0.16	1.26	0.58			0.00	Matches
+729	Ryan Yates	eng ENG	MF	Nottingham	22	1997	30.2	0.10	0.03	0.00	1.42	2.62	0.26	0.36	1.23	1.26			0.00	Matches
+730	Andy Yiadom	gh GHA	DF	Reading	28	1991	18.0	0.06	0.00	0.00	1.61	1.89	0.11	3.11	0.94	1.33			0.00	Matches
+731	Jan Žambůrek	cz CZE	MF	Brentford	19	2001	0.6	0.00	0.00	0.00	0.00	1.67	0.00	1.67	1.67	3.33			0.00	Matches
+732	Jordan Zemura	zw ZIM	DF,MF	Bournemouth	20	1999	0.1	0.00	0.00	0.00	20.0	10.0	0.00	0.00	0.00	0.00			0.00	Matches
+733	Christoph Zimmermann	de GER	DF	Norwich City	27	1993	13.5	0.30	0.00	0.00	0.96	1.04	0.00	0.00	0.74	0.67			0.00	Matches
+734	Philip Zinckernagel	dk DEN	MF	Watford	25	1994	10.2	0.20	0.00	0.00	2.84	0.78	0.00	2.75	0.29	1.08			0.00	Matches
+735	Kenneth Zohore	dk DEN	FW	Millwall	26	1994	9.6	0.00	0.00	0.00	1.25	1.56	0.42	0.21	0.10	0.21			0.00	Matches
+736	Leo Østigård	no NOR	DF	Coventry City	20	1999	34.7	0.35	0.03	0.03	1.53	1.18	0.06	0.26	1.15	0.52			0.00	Matches
