@@ -11,8 +11,9 @@ services:
     image: neo4j:5.26-community
     restart: unless-stopped
     environment:
+      # Don't add other NEO4J_* variables here: the image turns every NEO4J_* env var
+      # into a config setting and refuses to start on unknown ones.
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in deploy/.env}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD}  # only used by the healthcheck below
       # Defaults fit a 4 GB VM (the graph itself is ~200 MB on disk; the backend
       # needs ~1 GB). Raise them in deploy/.env on bigger machines.
       NEO4J_server_memory_heap_initial__size: ${NEO4J_HEAP:-1G}
@@ -27,7 +28,8 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$$NEO4J_PASSWORD\" 'RETURN 1' >/dev/null 2>&1"]
+      # Password is the part of NEO4J_AUTH after "neo4j/"
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p \"$${NEO4J_AUTH#*/}\" 'RETURN 1' >/dev/null 2>&1"]
       interval: 10s
       timeout: 10s
       retries: 12
