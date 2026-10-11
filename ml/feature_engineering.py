@@ -54,11 +54,13 @@ class FeatureEngineer:
         
         # Define numeric features (excluding target and leakage-prone features)
         self.numeric_features = [
+            # Basic stats (MUST be lagged/historical versions only)
             'minutes', 'goals_scored', 'assists', 'bps', 
-            'ict_index', 'influence', 'creativity', 'threat',
             'clean_sheets', 'bonus', 'goals_conceded', 'saves',
             'yellow_cards', 'red_cards', 'penalties_missed', 'penalties_saved',
             'own_goals', 'value', 'was_home', 'GW',
+            # NOTE: ICT stats (influence, creativity, threat, ict_index) are EXCLUDED
+            # as they are current-GW statistics - use form-based features instead
             'form', 'team_goals',  # Engineered features
             # IMPROVEMENT 8: High-signal features
             'minutes_rolling5', 'points_per_90', 'home_form', 'away_form',
@@ -68,7 +70,11 @@ class FeatureEngineer:
             # IMPROVEMENT 11: Defensive features (for GK/DEF clean sheets)
             'opp_off_strength', 'team_def_strength',
             # IMPROVEMENT 12: Double gameweek feature
-            'fixtures_this_gw'
+            'fixtures_this_gw',
+            # Minutes model features (Model C & D)
+            'started_last_match', 'started_2_of_last_3', 'avg_minutes_last_3'
+            # NOTE: Defensive stats (recoveries, tackles, clearances, defensive_contribution)
+            # are EXCLUDED as they are current-GW outcomes
         ]
         
         self.is_fitted = True
@@ -169,12 +175,14 @@ class FeatureEngineer:
         
         # Map actual columns to stored mappings
         column_mapping = {}
-        if 'position' in df.columns:
-            column_mapping['position'] = 'position'
+        # Don't encode position - keep it for filtering
+        # if 'position' in df.columns:
+        #     column_mapping['position'] = 'position'
         
         team_col = 'team' if 'team' in df.columns else 'team_x' if 'team_x' in df.columns else None
-        if team_col and 'team' in self.categorical_mappings:
-            column_mapping[team_col] = 'team'
+        if team_col:
+            if is_training or 'team' in self.categorical_mappings:
+                column_mapping[team_col] = 'team'
         
         # IMPROVEMENT 11: Skip opponent one-hot encoding when using continuous opponent strength features
         # This removes collinearity between opp_team_name_Manchester_City and opp_off_strength
@@ -186,12 +194,22 @@ class FeatureEngineer:
                 if 'opp_off_strength' in df.columns or 'opp_def_strength' in df.columns:
                     skip_opponent_encoding = True
                     logger.info(f"Skipping opponent one-hot encoding (using continuous strength features instead)")
-                elif 'opponent' in self.categorical_mappings:
+                elif is_training or 'opponent' in self.categorical_mappings:
                     column_mapping[opp_col] = 'opponent'
                 break
         
         for actual_col, mapping_key in column_mapping.items():
-            categories = self.categorical_mappings[mapping_key]
+            # Build or retrieve categories
+            if is_training:
+                # Build categories during training
+                categories = sorted(df[actual_col].unique().tolist())
+                self.categorical_mappings[mapping_key] = categories
+            else:
+                # Use stored categories from training
+                if mapping_key not in self.categorical_mappings:
+                    logger.warning(f"No stored mapping for {mapping_key}, skipping")
+                    continue
+                categories = self.categorical_mappings[mapping_key]
             
             # Create one-hot encoding
             if is_training:
@@ -241,7 +259,7 @@ class FeatureEngineer:
             'name', 'season_x', 'season', 'element', 'fixture', 'kickoff_time',
             'selected', 'transfers_in', 'transfers_out', 'transfers_balance',
             'round', 'total_points', 'bps',  # IMPROVEMENT: Removed from features
-            'team_a_score', 'team_h_score', 'opponent_team', 'xP',  # IMPROVEMENT 7: xP is lookahead
+            'team_a_score', 'team_h_score', 'opponent_team', 'opp_team_name', 'xP',  # IMPROVEMENT 7: xP is lookahead
             'home_team', 'away_team', 'Unnamed: 0', 'index',
             'expected_assists', 'expected_goal_involvements', 'expected_goals',
             'expected_goals_conceded',  # These are also predictive of target
@@ -258,6 +276,8 @@ class FeatureEngineer:
             'yellow_cards',  # Current GW yellows = leakage
             'red_cards',  # Current GW reds = leakage
             'own_goals',  # Current GW own goals = leakage
+            'team_x',  # String column - already one-hot encoded
+            'position',  # String column - keep for filtering but exclude from features
         ]
         
         # Get target if available
@@ -317,7 +337,7 @@ class FeatureEngineer:
             self.numeric_features = data['numeric_features']
             self.feature_names = data['feature_names']
             self.is_fitted = True
-        print(f"✅ Loaded feature mappings from {filepath}")
+        logger.info(f"Loaded feature mappings from {filepath}")
     
     def _add_high_signal_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -387,7 +407,10 @@ class FeatureEngineer:
         # 8. Double Gameweek (DGW) feature (IMPROVEMENT 12) - captures biggest FPL edge
         df = self._add_dgw_feature(df)
         
-        logger.info("Added 9 high-signal features: minutes_rolling5, points_per_90, home_form, away_form, gw_in_season, opp_def_strength, opp_off_strength, team_def_strength, fixtures_this_gw")
+        # 9. Fixture congestion features (LIST 1 #6) - rotation risk
+        df = self._add_fixture_congestion_features(df)
+        
+        logger.info("Added 12 high-signal features: minutes_rolling5, points_per_90, home_form, away_form, gw_in_season, opp_def_strength, opp_off_strength, team_def_strength, fixtures_this_gw, days_since_last_match, matches_in_next_14_days, fixture_congestion_risk")
         
         return df
     
@@ -600,5 +623,70 @@ class FeatureEngineer:
         max_fixtures = df['fixtures_this_gw'].max()
         
         logger.info(f"Added DGW feature: {single_gw_count:,} single GWs ({100-dgw_pct-tgw_pct:.1f}%), {dgw_count:,} DGWs ({dgw_pct:.1f}%), {tgw_count:,} TGWs ({tgw_pct:.1f}%) - max {max_fixtures} fixtures/GW")
+        
+        return df
+    
+    def _add_fixture_congestion_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        LIST 1 #6: Add fixture congestion and rotation risk features.
+        
+        Features:
+        - days_since_last_match: Days since player's last game
+        - matches_in_next_14_days: Upcoming fixture density  
+        - fixture_congestion_risk: Combined congestion risk score
+        
+        Args:
+            df: Input dataframe
+            
+        Returns:
+            Dataframe with congestion features
+        """
+        if 'kickoff_time' not in df.columns or 'name' not in df.columns:
+            logger.warning("Cannot compute fixture congestion - missing required columns")
+            df['days_since_last_match'] = 7
+            df['matches_in_next_14_days'] = 1
+            df['fixture_congestion_risk'] = 0.0
+            return df
+        
+        # Sort by player and time
+        df = df.sort_values(['name', 'kickoff_time']).copy()
+        df['kickoff_time'] = pd.to_datetime(df['kickoff_time'])
+        
+        # Calculate days since last match per player
+        df['days_since_last_match'] = df.groupby('name')['kickoff_time'].diff().dt.days
+        df['days_since_last_match'] = df['days_since_last_match'].fillna(7)  # Default 7 days
+        
+        # Count upcoming matches in 14-day window per team (approximation)
+        # In production, this would use actual fixture schedule
+        team_col = 'team' if 'team' in df.columns else 'team_x'
+        if team_col in df.columns:
+            # Estimate based on GW progression (rough approximation)
+            df['matches_in_next_14_days'] = 2  # Typical: 1-2 matches per 14 days
+            
+            # Adjust for DGW periods (when fixtures_this_gw > 1)
+            if 'fixtures_this_gw' in df.columns:
+                df.loc[df['fixtures_this_gw'] >= 2, 'matches_in_next_14_days'] = 4
+        else:
+            df['matches_in_next_14_days'] = 2
+        
+        # Calculate fixture congestion risk score
+        # Factors: short rest + high upcoming density + heavy recent minutes
+        short_rest_risk = (df['days_since_last_match'] <= 3).astype(float) * 0.4
+        
+        density_risk = (df['matches_in_next_14_days'] / 6).clip(0, 1) * 0.35
+        
+        heavy_minutes_risk = 0.0
+        if 'minutes_rolling5' in df.columns:
+            heavy_minutes_risk = (df['minutes_rolling5'] > 400).astype(float) * 0.25
+        
+        df['fixture_congestion_risk'] = (
+            short_rest_risk + density_risk + heavy_minutes_risk
+        ).clip(0, 1)
+        
+        # Log statistics
+        high_risk = (df['fixture_congestion_risk'] > 0.5).sum()
+        total = len(df)
+        
+        logger.info(f"Added fixture congestion features: {high_risk:,}/{total:,} ({high_risk/total*100:.1f}%) with high rotation risk (>50%)")
         
         return df

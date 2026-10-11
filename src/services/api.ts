@@ -1,8 +1,7 @@
 import axios, { AxiosError } from 'axios';
 
-// IMPORTANT: Always use relative URLs in production to leverage Vercel's proxy rewrites
-// This avoids CORS issues by making requests same-origin
-// Vercel rewrites /api/* and /health to Railway backend
+// Production builds use relative URLs: the site and the API share an origin
+// (Caddy serves dist/ and proxies /api, /health and /ws — see deploy/Caddyfile).
 const API_BASE_URL = import.meta.env.MODE === 'production' ? '' : (import.meta.env.VITE_API_URL || '');
 
 const api = axios.create({
@@ -85,6 +84,14 @@ export interface MLPrediction {
   confidence_interval?: [number, number];
   features_used?: Record<string, any>;
   model_version: string;
+  team_name?: string | null;
+  fixture_context?: {
+    opponent_team: string;
+    home_away: "home" | "away";
+    match_date: string;  // ISO datetime
+    matchday: number;
+    fixture_id: string;
+  } | null;
 }
 
 export interface TopPerformersResponse {
@@ -143,19 +150,41 @@ export const apiService = {
   },
 
   async predictTopPerformers(position?: string, topK: number = 10): Promise<TopPerformersResponse> {
-    const { data } = await api.post<TopPerformersResponse>('/api/ml/predict/top-performers', {
-      position,
-      top_k: topK,
-    });
-    return data;
+    // Try GET endpoint first (faster, uses CSV), fallback to POST (uses Neo4j + ML)
+    try {
+      const { data } = await api.get<TopPerformersResponse>('/api/ml/top-performers', {
+        params: { position, limit: topK },
+        timeout: 5000,
+      });
+      return data;
+    } catch (error) {
+      // Fallback to POST endpoint if GET fails
+      console.warn('CSV endpoint failed, trying Neo4j-based endpoint:', error);
+      const { data } = await api.post<TopPerformersResponse>('/api/ml/predict/top-performers', {
+        position,
+        top_k: topK,
+      });
+      return data;
+    }
   },
 
   async predictBestValue(position?: string, topK: number = 10): Promise<BestValueResponse> {
-    const { data } = await api.post<BestValueResponse>('/api/ml/predict/best-value', {
-      position,
-      top_k: topK,
-    });
-    return data;
+    // Try GET endpoint first (faster, uses CSV), fallback to POST (uses Neo4j + ML)
+    try {
+      const { data } = await api.get<BestValueResponse>('/api/ml/best-value', {
+        params: { position, limit: topK },
+        timeout: 5000,
+      });
+      return data;
+    } catch (error) {
+      // Fallback to POST endpoint if GET fails
+      console.warn('CSV endpoint failed, trying Neo4j-based endpoint:', error);
+      const { data } = await api.post<BestValueResponse>('/api/ml/predict/best-value', {
+        position,
+        top_k: topK,
+      });
+      return data;
+    }
   },
 
   async getMLStatus(): Promise<any> {
@@ -166,7 +195,7 @@ export const apiService = {
   // Query
   async queryFPL(
     question: string,
-    model: string = 'qwen-2.5-coder',
+    model: string = 'gpt-oss-120b',
     retrievalMethod: string = 'Hybrid',
     embeddingModel: string = 'minilm',
     isFirstMessage: boolean = false,
@@ -211,18 +240,26 @@ export const apiService = {
   // Players
   async searchPlayers(
     query: string,
-    options?: { limit?: number; includeAvatars?: boolean }
+    options?: { limit?: number; includeAvatars?: boolean; signal?: AbortSignal }
   ): Promise<{ players: Array<Record<string, any>> }> {
-    const { data } = await api.post('/api/players/search', {
-      query,
-      limit: options?.limit ?? 20,
-      include_avatars: options?.includeAvatars ?? true,
-    });
+    const { data } = await api.post(
+      '/api/players/search',
+      {
+        query,
+        limit: options?.limit ?? 20,
+        include_avatars: options?.includeAvatars ?? false, // Default to false for fast search
+      },
+      { signal: options?.signal }
+    );
     return data;
   },
 
-  async getPlayerStats(playerName: string, season?: string): Promise<{ stats: Record<string, any> }> {
-    const { data } = await api.post('/api/players/stats', { player_name: playerName, season });
+  async getPlayerStats(
+    playerName: string,
+    season?: string,
+    signal?: AbortSignal
+  ): Promise<{ stats: Record<string, any> }> {
+    const { data } = await api.post('/api/players/stats', { player_name: playerName, season }, { signal });
     return data;
   },
 
@@ -239,9 +276,10 @@ export const apiService = {
     return data;
   },
 
-  async searchImage(query: string): Promise<ImageSearchResponse> {
+  async searchImage(query: string, signal?: AbortSignal): Promise<ImageSearchResponse> {
     const { data } = await api.get<ImageSearchResponse>('/api/images/search', {
       params: { query },
+      signal,
     });
     return data;
   },

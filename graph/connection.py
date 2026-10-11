@@ -129,7 +129,8 @@ class Neo4jConnection:
     
     def clear_database(self):
         """Clear all nodes and relationships from the database."""
-        query = "MATCH (n) DETACH DELETE n"
+        # Batched so large graphs don't exceed the transaction memory limit (Aura Free)
+        query = "MATCH (n) CALL { WITH n DETACH DELETE n } IN TRANSACTIONS OF 5000 ROWS"
         self.execute_write(query)
         logger.info("Database cleared")
     
@@ -176,28 +177,21 @@ class Neo4jConnection:
         Returns:
             Dictionary with database statistics
         """
-        stats = {
+        # Two grouped queries instead of one count query per label/type
+        node_rows = self.execute_query(
+            "MATCH (n) UNWIND labels(n) AS label RETURN label, count(*) AS count ORDER BY label"
+        )
+        rel_rows = self.execute_query(
+            "MATCH ()-[r]->() RETURN type(r) AS type, count(*) AS count ORDER BY type"
+        )
+        node_labels = {r["label"]: r["count"] for r in node_rows}
+        relationship_types = {r["type"]: r["count"] for r in rel_rows}
+        return {
             "total_nodes": self.get_node_count(),
-            "total_relationships": self.get_relationship_count(),
-            "node_labels": {},
-            "relationship_types": {}
+            "total_relationships": sum(relationship_types.values()),
+            "node_labels": node_labels,
+            "relationship_types": relationship_types,
         }
-        
-        # Get counts by label
-        labels_query = "CALL db.labels() YIELD label RETURN label"
-        labels = self.execute_query(labels_query)
-        for label_record in labels:
-            label = label_record["label"]
-            stats["node_labels"][label] = self.get_node_count(label)
-        
-        # Get counts by relationship type
-        rels_query = "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType"
-        rel_types = self.execute_query(rels_query)
-        for rel_record in rel_types:
-            rel_type = rel_record["relationshipType"]
-            stats["relationship_types"][rel_type] = self.get_relationship_count(rel_type)
-        
-        return stats
     
     def test_connection(self) -> bool:
         """

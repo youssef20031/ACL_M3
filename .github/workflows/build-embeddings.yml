@@ -51,9 +51,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          # Install requirements (will pull default torch with CPU support)
+          # CPU-only torch first (avoids the multi-GB CUDA wheels from PyPI)
+          pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.1.0"
+          # Runtime requirements (build_embeddings_from_csv.py only needs
+          # pandas/numpy/sentence-transformers; spaCy model not needed here)
           pip install -r requirements.txt
-          python -m spacy download en_core_web_sm
 
       # ── 4. Build embeddings from CSV (no Neo4j needed) ───────────────────
       - name: Build embeddings

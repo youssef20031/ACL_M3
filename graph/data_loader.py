@@ -2,166 +2,173 @@
 FPL Data Loader - Loads CSV data into Neo4j Knowledge Graph
 """
 import pandas as pd
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from tqdm import tqdm
 import logging
 from .connection import Neo4jConnection
 from .schema import GraphSchema
+from utils.text import normalize_name
 
 logger = logging.getLogger(__name__)
+
+# Rows per UNWIND batch. Large batches keep round trips to a remote (Aura) instance low.
+BATCH_SIZE = 5000
+
+# Per-match columns summed into SEASON_STATS. Averages are derived as sum / games
+# at query time so they stay correct when several seasons are added together.
+SEASON_SUM_COLUMNS = {
+    "total_points": "total_points",
+    "goals_scored": "goals",
+    "assists": "assists",
+    "clean_sheets": "clean_sheets",
+    "bonus": "bonus",
+    "bps": "bps",
+    "minutes": "minutes",
+    "saves": "saves",
+    "goals_conceded": "goals_conceded",
+    "yellow_cards": "yellow_cards",
+    "red_cards": "red_cards",
+    "ict_index": "ict_sum",
+    "influence": "influence_sum",
+    "creativity": "creativity_sum",
+    "threat": "threat_sum",
+    "value": "value_sum",
+    "form": "form_sum",
+}
 
 
 class FPLDataLoader:
     """Loads FPL CSV data into Neo4j graph database."""
-    
+
     def __init__(self, connection: Neo4jConnection):
         """
         Initialize data loader.
-        
+
         Args:
             connection: Neo4j connection instance
         """
         self.conn = connection
         self.schema = GraphSchema(connection)
-    
+
     def load_csv(self, filepath: str) -> pd.DataFrame:
         """
         Load FPL data from CSV file.
-        
+
         Args:
             filepath: Path to CSV file
-            
+
         Returns:
             Pandas DataFrame with FPL data
         """
         logger.info(f"Loading data from {filepath}")
-        df = pd.read_csv(filepath)
+        df = pd.read_csv(filepath, low_memory=False)
         logger.info(f"Loaded {len(df)} records with {len(df.columns)} columns")
-        
+
         # Transform columns to match expected schema
         df = self.transform_columns(df)
-        
+
         return df
-    
+
     def transform_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Transform CSV columns to match expected schema.
         Handles column renaming and creates home_team/away_team columns.
-        
+
         Args:
             df: Raw DataFrame from CSV
-            
+
         Returns:
             Transformed DataFrame with standardized column names
         """
         logger.info("Transforming columns to match expected schema...")
-        
-        # Rename season_x to season if present
+
         if 'season_x' in df.columns and 'season' not in df.columns:
             df = df.rename(columns={'season_x': 'season'})
-            logger.info("Renamed 'season_x' to 'season'")
-        
-        # Create home_team and away_team columns based on team_x, opp_team_name, and was_home
-        # This provides explicit match structure representation
-        if 'team_x' in df.columns and 'opp_team_name' in df.columns and 'was_home' in df.columns:
-            if 'home_team' not in df.columns:
-                # When was_home is True: team_x is home_team, opp_team_name is away_team
-                # When was_home is False: opp_team_name is home_team, team_x is away_team
-                df['home_team'] = df.apply(
-                    lambda row: row['team_x'] if row['was_home'] else row['opp_team_name'], 
-                    axis=1
-                )
-                logger.info("Created 'home_team' column from match structure")
-            
-            if 'away_team' not in df.columns:
-                df['away_team'] = df.apply(
-                    lambda row: row['opp_team_name'] if row['was_home'] else row['team_x'], 
-                    axis=1
-                )
-                logger.info("Created 'away_team' column from match structure")
-        
-        # Add form column if missing (calculate as rolling average of recent points)
-        if 'form' not in df.columns:
-            logger.info("'form' column not found, calculating from recent performance...")
-            # Sort by player and gameweek to calculate rolling form
-            df = df.sort_values(['name', 'season', 'GW'])
-            # Calculate form as rolling mean of last 5 gameweeks' total_points
-            df['form'] = df.groupby(['name', 'season'])['total_points'].transform(
-                lambda x: x.rolling(window=5, min_periods=1).mean()
-            )
-            df['form'] = df['form'].round(1)
-            logger.info("Created 'form' column from rolling average of total_points")
-        
-        # Normalize position codes (e.g., GKP -> GK)
+
+        # Normalize position codes (e.g., GKP -> GK). "AM" rows are the 2024-25
+        # assistant-manager chip — managers, not players — so they are not loaded.
         if 'position' in df.columns:
-            position_mapping = {'GKP': 'GK'}  # Map alternative codes to standard codes
-            df['position'] = df['position'].replace(position_mapping)
-            logger.info("Normalized position codes")
-        
+            df['position'] = df['position'].replace({'GKP': 'GK'})
+            dropped = int((df['position'] == 'AM').sum())
+            if dropped:
+                df = df[df['position'] != 'AM'].copy()
+                logger.info(f"Dropped {dropped} assistant-manager (AM) rows")
+
+        # When was_home is True team_x is the home side, otherwise opp_team_name is
+        if 'team_x' in df.columns and 'opp_team_name' in df.columns and 'was_home' in df.columns:
+            home = df['was_home'].astype(bool)
+            if 'home_team' not in df.columns:
+                df['home_team'] = df['team_x'].where(home, df['opp_team_name'])
+            if 'away_team' not in df.columns:
+                df['away_team'] = df['opp_team_name'].where(home, df['team_x'])
+
+        # Add form column if missing: rolling mean of the last 5 gameweeks' points
+        if 'form' not in df.columns:
+            df = df.sort_values(['name', 'season', 'GW', 'kickoff_time'])
+            df['form'] = (
+                df.groupby(['name', 'season'])['total_points']
+                .transform(lambda x: x.rolling(window=5, min_periods=1).mean())
+                .round(1)
+            )
+
         return df
-    
+
     def prepare_data(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
         Prepare data for graph loading by extracting unique entities.
-        
+
         Args:
             df: Raw FPL DataFrame
-            
+
         Returns:
             Dictionary with prepared data for each entity type
         """
         logger.info("Preparing data for graph loading...")
-        
-        # Extract unique players with their positions
-        players = df.groupby(['name', 'position', 'element']).size().reset_index()[['name', 'position', 'element']]
-        players.columns = ['name', 'position', 'element_id']
-        players = players.to_dict('records')
+
+        # A player's identity is their name; position/team/element come from their
+        # most recent appearance so each player gets exactly one PLAYS_POSITION.
+        latest = (
+            df.sort_values(['season', 'GW', 'kickoff_time'])
+            .groupby('name', sort=False)
+            .tail(1)
+        )
+        latest_season = df['season'].max()
+        players = [
+            {
+                'name': row.name_,
+                'name_normalized': normalize_name(row.name_),
+                'position': row.position,
+                'element_id': int(row.element),
+                'team': row.team_x,
+                'last_season': row.season,
+                'is_current': row.season == latest_season,
+            }
+            for row in latest.rename(columns={'name': 'name_'}).itertuples(index=False)
+        ]
         logger.info(f"Found {len(players)} unique players")
-        
-        # Extract unique teams from home_team and away_team columns (or team_x if available)
-        if 'home_team' in df.columns and 'away_team' in df.columns:
-            home_teams = df['home_team'].unique().tolist()
-            away_teams = df['away_team'].unique().tolist()
-            teams = list(set(home_teams + away_teams))
-        elif 'team_x' in df.columns:
-            # Fallback: use team_x and opp_team_name
-            player_teams = df['team_x'].unique().tolist()
-            opp_teams = df['opp_team_name'].unique().tolist() if 'opp_team_name' in df.columns else []
-            teams = list(set(player_teams + opp_teams))
-        else:
-            teams = []
-            logger.warning("Could not find team columns in data")
+
+        teams = sorted(set(df['home_team']) | set(df['away_team']))
         logger.info(f"Found {len(teams)} unique teams")
-        
-        # Extract unique seasons
-        seasons = df['season'].unique().tolist()
+
+        seasons = sorted(df['season'].unique().tolist())
         logger.info(f"Found {len(seasons)} seasons: {seasons}")
-        
-        # Extract unique gameweeks per season
-        gameweeks = df.groupby(['season', 'GW']).size().reset_index()[['season', 'GW']]
-        gameweeks = gameweeks.to_dict('records')
+
+        gameweeks = df[['season', 'GW']].drop_duplicates().to_dict('records')
         logger.info(f"Found {len(gameweeks)} unique gameweeks")
-        
-        # Extract unique fixtures
-        fixtures = df.groupby([
-            'fixture', 'season', 'GW', 'home_team', 'away_team', 
-            'team_h_score', 'team_a_score', 'kickoff_time'
-        ]).size().reset_index()
-        fixtures = fixtures[[
+
+        fixtures = df[[
             'fixture', 'season', 'GW', 'home_team', 'away_team',
             'team_h_score', 'team_a_score', 'kickoff_time'
-        ]].to_dict('records')
+        ]].drop_duplicates(subset=['fixture', 'season']).to_dict('records')
         logger.info(f"Found {len(fixtures)} unique fixtures")
-        
-        # Prepare player-fixture performance records
-        # Base columns always expected
+
         perf_columns = [
             'name', 'season', 'fixture', 'GW', 'minutes', 'goals_scored', 'assists',
             'clean_sheets', 'bonus', 'bps', 'total_points', 'ict_index',
             'influence', 'creativity', 'threat', 'value', 'form',
             'selected', 'transfers_in', 'transfers_out', 'transfers_balance',
             'goals_conceded', 'own_goals', 'penalties_missed', 'penalties_saved',
-            'saves', 'yellow_cards', 'red_cards', 'home_team', 'away_team'
+            'saves', 'yellow_cards', 'red_cards', 'team_x', 'was_home',
         ]
         # Optional enrichment columns from newer seasons — include only if present
         optional_perf_columns = [
@@ -171,9 +178,10 @@ class FPLDataLoader:
             'clearances_blocks_interceptions', 'defensive_contribution',
         ]
         perf_columns += [c for c in optional_perf_columns if c in df.columns]
-        performances = df[perf_columns].to_dict('records')
+        perf_df = df[perf_columns].astype(object).where(df[perf_columns].notna(), None)
+        performances = perf_df.to_dict('records')
         logger.info(f"Prepared {len(performances)} performance records")
-        
+
         return {
             'players': players,
             'teams': teams,
@@ -181,24 +189,55 @@ class FPLDataLoader:
             'gameweeks': gameweeks,
             'fixtures': fixtures,
             'performances': performances,
-            'raw_df': df
+            'season_stats': self.build_season_stats(df),
         }
-    
+
+    def build_season_stats(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Aggregate per-match rows into one record per (player, season)."""
+        grouped = df.groupby(['name', 'season'], sort=False)
+        stats = grouped[list(SEASON_SUM_COLUMNS)].sum().rename(columns=SEASON_SUM_COLUMNS)
+        stats['games'] = grouped.size()
+        stats['max_value'] = grouped['value'].max()
+        stats['max_selected'] = grouped['selected'].max()
+
+        played = df[df['minutes'] > 0].groupby(['name', 'season'], sort=False)
+        stats['appearances'] = played.size()
+        stats['ict_played_sum'] = played['ict_index'].sum()
+        stats['influence_played_sum'] = played['influence'].sum()
+        stats['creativity_played_sum'] = played['creativity'].sum()
+        stats['threat_played_sum'] = played['threat'].sum()
+
+        # Team and position the player had most often that season
+        stats['team'] = grouped['team_x'].agg(lambda s: s.mode().iat[0])
+        stats['position'] = grouped['position'].agg(lambda s: s.mode().iat[0])
+
+        stats = stats.fillna(0).reset_index()
+        stats['appearances'] = stats['appearances'].astype(int)
+        records = stats.to_dict('records')
+        for rec in records:
+            for key, val in rec.items():
+                if hasattr(val, 'item'):  # numpy scalar -> python
+                    rec[key] = val.item()
+        logger.info(f"Built {len(records)} player-season aggregates")
+        return records
+
+    def _run_batches(self, query: str, rows: List[Dict[str, Any]], desc: str, batch_size: int = BATCH_SIZE):
+        for i in tqdm(range(0, len(rows), batch_size), desc=desc):
+            self.conn.execute_write(query, {"batch": rows[i:i + batch_size]})
+
     def create_team_nodes(self, teams: List[str]):
         """Create Team nodes."""
-        logger.info("Creating Team nodes...")
         query = """
         UNWIND $teams AS team_name
         MERGE (t:Team {name: team_name})
         """
-        self.conn.execute_query(query, {"teams": teams})
+        self.conn.execute_write(query, {"teams": teams})
         logger.info(f"Created {len(teams)} Team nodes")
-    
+
     def create_gameweek_nodes(self, gameweeks: List[Dict]):
         """Create Gameweek nodes with relationships to seasons."""
-        logger.info("Creating Gameweek nodes...")
         query = """
-        UNWIND $gameweeks AS gw
+        UNWIND $batch AS gw
         MERGE (gameweek:Gameweek {id: gw.season + '-GW' + toString(gw.GW)})
         SET gameweek.number = gw.GW,
             gameweek.season_id = gw.season
@@ -206,28 +245,33 @@ class FPLDataLoader:
         MATCH (s:Season {id: gw.season})
         MERGE (gameweek)-[:IN_SEASON]->(s)
         """
-        self.conn.execute_query(query, {"gameweeks": gameweeks})
-        logger.info(f"Created {len(gameweeks)} Gameweek nodes")
-    
+        self._run_batches(query, gameweeks, "Gameweeks")
+
     def create_player_nodes(self, players: List[Dict]):
-        """Create Player nodes with position relationships."""
-        logger.info("Creating Player nodes...")
+        """Create Player nodes with position and current-team relationships."""
         query = """
-        UNWIND $players AS player
+        UNWIND $batch AS player
         MERGE (p:Player {name: player.name})
-        SET p.element_id = player.element_id
+        SET p.element_id = player.element_id,
+            p.name_normalized = player.name_normalized,
+            p.last_team = player.team,
+            p.last_season = player.last_season
         WITH p, player
         MATCH (pos:Position {code: player.position})
         MERGE (p)-[:PLAYS_POSITION]->(pos)
+        WITH p, player
+        // PLAYS_FOR means "current team", so only players from the latest season get one
+        WHERE player.is_current
+        MATCH (t:Team {name: player.team})
+        MERGE (p)-[r:PLAYS_FOR]->(t)
+        SET r.season = player.last_season
         """
-        self.conn.execute_query(query, {"players": players})
-        logger.info(f"Created {len(players)} Player nodes")
-    
+        self._run_batches(query, players, "Players")
+
     def create_fixture_nodes(self, fixtures: List[Dict]):
         """Create Fixture nodes with team and gameweek relationships."""
-        logger.info("Creating Fixture nodes...")
         query = """
-        UNWIND $fixtures AS fix
+        UNWIND $batch AS fix
         MERGE (f:Fixture {id: toString(fix.fixture) + '-' + fix.season})
         SET f.fixture_id = fix.fixture,
             f.kickoff_time = fix.kickoff_time,
@@ -243,81 +287,10 @@ class FPLDataLoader:
         MERGE (f)-[:AWAY_TEAM]->(away)
         MERGE (f)-[:PART_OF]->(gw)
         """
-        self.conn.execute_query(query, {"fixtures": fixtures})
-        logger.info(f"Created {len(fixtures)} Fixture nodes")
-    
-    def create_player_team_relationships(self, df: pd.DataFrame):
-        """Create PLAYS_FOR relationships between players and teams."""
-        logger.info("Creating Player-Team relationships...")
-        
-        # Determine player's team from fixtures they played in
-        # A player plays for the home team if they appear in a fixture where home_team matches
-        # We need to look at which team the player actually played for
-        
-        # Group by player, season and determine their team
-        player_teams = []
-        
-        for (name, season), group in df.groupby(['name', 'season']):
-            # Get fixtures where player played minutes
-            played = group[group['minutes'] > 0]
-            if len(played) == 0:
-                # Use all records if player never played
-                played = group
-            
-            # Determine team - check first fixture
-            first_fixture = played.iloc[0]
-            home_team = first_fixture['home_team']
-            away_team = first_fixture['away_team']
-            
-            # Need to infer which team the player belongs to
-            # We'll use a heuristic: count appearances as home vs away
-            home_count = len(played[played['home_team'] == home_team])
-            away_count = len(played[played['away_team'] == away_team])
-            
-            # Actually, we need a smarter approach. Let's check if player name
-            # appears more often with certain teams at home
-            team_appearances = {}
-            for _, row in played.iterrows():
-                # If they're in a Brighton home game, they could be Brighton player
-                # We'll just pick the most common home_team in their fixtures
-                if row['home_team'] not in team_appearances:
-                    team_appearances[row['home_team']] = 0
-                if row['away_team'] not in team_appearances:
-                    team_appearances[row['away_team']] = 0
-            
-            # For simplicity, we'll use the home_team from a fixture where player scored/assisted
-            # or just the first team that appears most
-            scoring = played[(played['goals_scored'] > 0) | (played['assists'] > 0)]
-            
-            if len(scoring) > 0:
-                # Use the team from their scoring record
-                # Assume player plays for home team in home fixtures
-                first_score = scoring.iloc[0]
-                # We actually can't determine this without more info
-                # So we'll use a different approach
-                pass
-            
-            # Final approach: Use element_id patterns or just assign based on fixture pattern
-            # For now, we'll skip team relationships and add them via a simpler method
-            
-        # Alternative: Create relationships based on fixture appearances
-        # Players appear in fixtures for their team
-        query = """
-        UNWIND $records AS rec
-        MATCH (p:Player {name: rec.name})
-        MATCH (t:Team {name: rec.team})
-        MERGE (p)-[r:PLAYS_FOR]->(t)
-        SET r.season = rec.season
-        """
-        
-        # We need to infer teams from the data differently
-        # For now, skip this - we'll add team info during performance creation
-        logger.info("Player-Team relationships will be inferred from performances")
-    
-    def create_performance_relationships(self, performances: List[Dict], batch_size: int = 500):
+        self._run_batches(query, fixtures, "Fixtures")
+
+    def create_performance_relationships(self, performances: List[Dict]):
         """Create PLAYED_IN relationships with performance stats."""
-        logger.info("Creating performance relationships...")
-        
         query = """
         UNWIND $batch AS perf
         MATCH (p:Player {name: perf.name})
@@ -344,7 +317,10 @@ class FPLDataLoader:
             r.yellow_cards = perf.yellow_cards,
             r.red_cards = perf.red_cards,
             r.gameweek = perf.GW,
-            // Optional enrichment columns (null-safe — only set if key present in record)
+            r.season = perf.season,
+            r.team = perf.team_x,
+            r.was_home = perf.was_home,
+            // Optional enrichment columns (null when absent for older seasons)
             r.xP = perf.xP,
             r.expected_goals = perf.expected_goals,
             r.expected_assists = perf.expected_assists,
@@ -356,118 +332,52 @@ class FPLDataLoader:
             r.clearances_blocks_interceptions = perf.clearances_blocks_interceptions,
             r.defensive_contribution = perf.defensive_contribution
         """
-        
-        total = len(performances)
-        for i in tqdm(range(0, total, batch_size), desc="Loading performances"):
-            batch = performances[i:i + batch_size]
-            self.conn.execute_query(query, {"batch": batch})
-        
-        logger.info(f"Created {total} performance relationships")
-    
-    def infer_player_teams(self, df: pd.DataFrame):
-        """Infer and create player-team relationships from performance data."""
-        logger.info("Inferring player-team relationships...")
-        
-        # For each player in each season, find their most common team
-        player_teams = []
-        
-        for (name, season), group in df.groupby(['name', 'season']):
-            # Count home appearances for each team
-            team_counts = {}
-            
-            for _, row in group.iterrows():
-                # Player is part of home team in home fixtures and away team in away fixtures
-                # We can't directly tell, but we can use the pattern of fixtures
-                pass
-            
-            # Alternative: Look at which team they appear with most often
-            # when that team is playing at home AND the player has good stats
-            
-        # Simpler approach: Create a computed relationship in Cypher
+        self._run_batches(query, performances, "Performances")
+        logger.info(f"Created {len(performances)} performance relationships")
+
+    def create_season_stats(self, season_stats: List[Dict]):
+        """Create precomputed (Player)-[:SEASON_STATS]->(Season) aggregates."""
         query = """
-        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:HOME_TEAM]->(ht:Team)
-        MATCH (f)-[:AWAY_TEAM]->(at:Team)
-        WITH p, f, r, ht, at,
-             CASE WHEN r.minutes > 0 THEN 1 ELSE 0 END AS played
-        WHERE played = 1
-        WITH p, ht, at, f, count(*) AS appearances
-        RETURN p.name, ht.name, at.name, appearances
-        LIMIT 10
+        UNWIND $batch AS row
+        MATCH (p:Player {name: row.name})
+        MATCH (s:Season {id: row.season})
+        MERGE (p)-[st:SEASON_STATS]->(s)
+        SET st += row
+        REMOVE st.name
         """
-        # This is complex - for now we'll skip direct team relationships
-        # The team can be inferred from fixtures in queries
-        logger.info("Team relationships will be inferred from fixture context in queries")
-    
+        self._run_batches(query, season_stats, "Season stats")
+
     def load_all(self, filepath: str, clear_existing: bool = True):
         """
         Load all FPL data into Neo4j.
-        
+
         Args:
             filepath: Path to CSV file
             clear_existing: Whether to clear existing data first
         """
         logger.info("Starting full data load...")
-        
+
         if clear_existing:
             logger.info("Clearing existing data...")
             self.conn.clear_database()
-        
-        # Initialize schema
+
         self.schema.initialize_schema()
         self.schema.create_static_nodes()
-        
-        # Load and prepare data
+
         df = self.load_csv(filepath)
         data = self.prepare_data(df)
-        
-        # Create nodes and relationships
+
         self.create_team_nodes(data['teams'])
         self.create_gameweek_nodes(data['gameweeks'])
         self.create_player_nodes(data['players'])
         self.create_fixture_nodes(data['fixtures'])
         self.create_performance_relationships(data['performances'])
-        
-        # Get stats
+        self.create_season_stats(data['season_stats'])
+
         stats = self.conn.get_database_stats()
-        logger.info(f"Data load complete!")
+        logger.info("Data load complete!")
         logger.info(f"Total nodes: {stats['total_nodes']}")
         logger.info(f"Total relationships: {stats['total_relationships']}")
         logger.info(f"Node labels: {stats['node_labels']}")
-        
+
         return stats
-    
-    def get_aggregate_player_stats(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calculate aggregate player statistics per season.
-        
-        Args:
-            df: Raw FPL DataFrame
-            
-        Returns:
-            DataFrame with aggregated player stats
-        """
-        agg_stats = df.groupby(['name', 'position', 'season']).agg({
-            'goals_scored': 'sum',
-            'assists': 'sum',
-            'total_points': 'sum',
-            'clean_sheets': 'sum',
-            'bonus': 'sum',
-            'bps': 'sum',
-            'minutes': 'sum',
-            'ict_index': 'mean',
-            'influence': 'mean',
-            'creativity': 'mean',
-            'threat': 'mean',
-            'value': 'last',  # End of season value
-            'form': 'mean',
-            'selected': 'max',
-            'saves': 'sum',
-            'goals_conceded': 'sum',
-            'yellow_cards': 'sum',
-            'red_cards': 'sum',
-            'GW': 'count'  # Number of gameweeks
-        }).reset_index()
-        
-        agg_stats.rename(columns={'GW': 'games_played'}, inplace=True)
-        
-        return agg_stats

@@ -1,0 +1,711 @@
+name,position,team,predicted_points,value,opponent,is_home,gameweek,kickoff_time,prediction_method,is_promoted_team
+Erling Haaland,FWD,Man City,8.47,147,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Viktor Gyökeres,FWD,Arsenal,7.63,91,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Ollie Watkins,FWD,Aston Villa,7.01,87,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Elliot Anderson,MID,Nott'm Forest,6.08,57,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Junior Kroupi,FWD,Bournemouth,5.74,47,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Dominic Calvert-Lewin,FWD,Leeds,5.46,58,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Morgan Gibbs-White,MID,Nott'm Forest,5.36,76,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+William Osula,FWD,Newcastle,5.07,55,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Jérémy Doku,MID,Man City,5.01,65,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Dango Ouattara,MID,Brentford,4.97,56,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Richarlison de Andrade,FWD,Spurs,4.66,65,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Igor Thiago Nascimento Rodrigues,FWD,Brentford,4.55,72,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Antoine Semenyo,MID,Man City,4.35,80,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Bruno Borges Fernandes,MID,Man Utd,4.25,104,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Rayan Vitor Simplício Rocha,MID,Bournemouth,4.23,54,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Igor Jesus Maciel da Cruz,FWD,Nott'm Forest,4.22,59,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Kai Havertz,FWD,Arsenal,4.19,73,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Alexander Isak,FWD,Liverpool,4.09,103,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Taiwo Awoniyi,FWD,Nott'm Forest,4.08,52,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jack Hinshelwood,MID,Brighton,4.03,52,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Francisco Evanilson de Lima Barbosa,FWD,Bournemouth,3.91,66,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jean-Philippe Mateta,FWD,Crystal Palace,3.88,76,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Brian Brobbey,FWD,Sunderland,3.85,53,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Mikkel Damsgaard,MID,Brentford,3.84,56,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+João Maria Lobo Alves Palhares Costa Palhinha Gonçalves,MID,Spurs,3.77,55,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Kevin Schade,MID,Brentford,3.54,68,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Emiliano Martínez Romero,GK,Aston Villa,3.53,50,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Bukayo Saka,MID,Arsenal,3.47,100,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Thierno Barry,FWD,Everton,3.45,57,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Robert Lynch Sánchez,GK,Chelsea,3.41,48,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Bryan Mbeumo,MID,Man Utd,3.39,83,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Caoimhín Kelleher,GK,Brentford,3.36,48,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Matz Sels,GK,Nott'm Forest,3.32,46,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Gabriel dos Santos Magalhães,DEF,Arsenal,3.27,73,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Cole Palmer,MID,Chelsea,3.25,103,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Nick Pope,GK,Newcastle,3.24,50,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Bruno Guimarães Rodriguez Moura,MID,Newcastle,3.22,69,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Dominik Szoboszlai,MID,Liverpool,3.21,71,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Matheus Santos Carneiro da Cunha,MID,Man Utd,3.17,81,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+James Tarkowski,DEF,Everton,3.14,58,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Karl Darlow,GK,Leeds,3.11,40,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Mohamed Salah,MID,Liverpool,3.1,140,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Senne Lammens,GK,Man Utd,3.09,51,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Benjamin Sesko,FWD,Man Utd,3.08,72,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Harvey Barnes,MID,Newcastle,3.08,61,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Virgil van Dijk,DEF,Liverpool,3.07,61,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Ismaïla Sarr,MID,Crystal Palace,3.05,64,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Curtis Jones,MID,Liverpool,3.02,54,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Marcus Tavernier,MID,Bournemouth,3.0,53,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jordan Pickford,GK,Everton,2.97,56,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Nick Woltemade,FWD,Newcastle,2.96,67,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Felipe Rodrigues da Silva,DEF,Nott'm Forest,2.93,43,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Marc Guéhi,DEF,Man City,2.89,51,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Morgan Rogers,MID,Aston Villa,2.88,73,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Mathias Jensen,MID,Brentford,2.88,49,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Dan Burn,DEF,Newcastle,2.88,50,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Daniel Muñoz Mejía,DEF,Crystal Palace,2.87,59,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Robin Roefs,GK,Sunderland,2.86,48,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Antonee Robinson,DEF,Fulham,2.83,49,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Jaka Bijol,DEF,Leeds,2.81,39,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Matheus Nunes,DEF,Man City,2.79,53,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+William Saliba,DEF,Arsenal,2.78,63,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Yankuba Minteh,MID,Brighton,2.76,55,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Dean Henderson,GK,Crystal Palace,2.74,51,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Iliman Ndiaye,MID,Everton,2.71,63,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Bernd Leno,GK,Fulham,2.69,50,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Cody Gakpo,MID,Liverpool,2.65,73,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Chris Wood,FWD,Nott'm Forest,2.64,71,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Bart Verbruggen,GK,Brighton,2.64,46,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Maxence Lacroix,DEF,Crystal Palace,2.64,52,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Bernardo Mota Veiga de Carvalho e Silva,MID,Man City,2.61,62,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Amad Diallo,MID,Man Utd,2.6,62,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Joe Rodon,DEF,Leeds,2.59,39,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tyrick Mitchell,DEF,Crystal Palace,2.58,50,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+João Pedro Junqueira de Jesus,FWD,Chelsea,2.58,74,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Nikola Milenković,DEF,Nott'm Forest,2.58,51,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jorrel Hato,DEF,Chelsea,2.57,46,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Enzo Fernández,MID,Chelsea,2.57,65,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Carlos Henrique Casimiro,MID,Man Utd,2.57,58,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Malo Gusto,DEF,Chelsea,2.56,48,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Ryan Gravenberch,MID,Liverpool,2.56,54,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Alexis Mac Allister,MID,Liverpool,2.52,61,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Lukas Nmecha,FWD,Leeds,2.52,50,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jaydee Canvot,DEF,Crystal Palace,2.52,45,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Conor Gallagher,MID,Spurs,2.51,50,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Mathys Tel,MID,Spurs,2.5,62,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Pascal Struijk,DEF,Leeds,2.49,42,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Destiny Udogie,DEF,Spurs,2.49,43,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Randal Kolo Muani,FWD,Spurs,2.49,69,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Jacob Ramsey,MID,Newcastle,2.48,53,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Luca Netz,DEF,Nott'm Forest,2.48,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jake O'Brien,DEF,Everton,2.44,49,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Kiernan Dewsbury-Hall,MID,Everton,2.44,53,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Rodrigo Muniz Carvalho,FWD,Fulham,2.43,53,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Matty Cash,DEF,Aston Villa,2.42,46,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Norberto Bercique Gomes Betuncal,FWD,Everton,2.41,51,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Gabriel Fernando de Jesus,FWD,Arsenal,2.39,64,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Raúl Jiménez Rodríguez,FWD,Fulham,2.38,59,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Declan Rice,MID,Arsenal,2.37,72,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Reinildo Mandava,DEF,Sunderland,2.37,38,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Trai Hume,DEF,Sunderland,2.36,45,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Emiliano Buendía Stati,MID,Aston Villa,2.34,53,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Neco Williams,DEF,Nott'm Forest,2.33,48,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Pascal Groß,MID,Brighton,2.3,56,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Antonín Kinský,GK,Spurs,2.28,39,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Emile Smith Rowe,MID,Fulham,2.26,56,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Joshua Zirkzee,FWD,Man Utd,2.26,58,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Wilson Isidor,FWD,Sunderland,2.26,50,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Gianluigi Donnarumma,GK,Man City,2.25,56,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Ibrahima Konaté,DEF,Liverpool,2.23,54,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Adam Wharton,MID,Crystal Palace,2.2,50,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Brenden Aaronson,MID,Leeds,2.18,54,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Enzo Le Fée,MID,Sunderland,2.17,48,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Granit Xhaka,MID,Sunderland,2.17,51,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Đorđe Petrović,GK,Bournemouth,2.14,46,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Kobbie Mainoo,MID,Man Utd,2.14,47,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Adrien Truffert,DEF,Bournemouth,2.14,48,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jørgen Strand Larsen,FWD,Crystal Palace,2.13,58,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Pedro Porro Sauceda,DEF,Spurs,2.13,52,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Luke Shaw,DEF,Man Utd,2.12,45,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Marc Cucurella Saseta,DEF,Chelsea,2.1,61,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Youri Tielemans,MID,Aston Villa,2.1,59,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Moisés Caicedo Corozo,MID,Chelsea,2.09,57,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Yehor Yarmoliuk,MID,Brentford,2.09,50,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Saša Lukić,MID,Fulham,2.07,49,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Ross Barkley,MID,Aston Villa,2.06,48,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+James Garner,MID,Everton,2.03,52,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Danny Welbeck,FWD,Brighton,2.03,63,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Harry Maguire,DEF,Man Utd,2.01,44,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Noah Sadiki,MID,Sunderland,1.99,49,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+John McGinn,MID,Aston Villa,1.99,53,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Sandro Tonali,MID,Newcastle,1.98,53,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Timothy Castagne,DEF,Fulham,1.98,43,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Ferdi Kadıoğlu,DEF,Brighton,1.98,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Keane Lewis-Potter,DEF,Brentford,1.96,48,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Vitalii Mykolenko,DEF,Everton,1.94,49,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Nordi Mukiele,DEF,Sunderland,1.94,46,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Rodrigo Bentancur,MID,Spurs,1.94,52,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Tyler Adams,MID,Bournemouth,1.94,49,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Marcos Senesi Barón,DEF,Bournemouth,1.93,52,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Charalampos Kostoulas,FWD,Brighton,1.92,48,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Alex Scott,MID,Bournemouth,1.92,49,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Enes Ünal,FWD,Bournemouth,1.92,54,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Sven Botman,DEF,Newcastle,1.92,49,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Kevin Danso,DEF,Spurs,1.92,42,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Michael Keane,DEF,Everton,1.9,45,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jan Paul van Hecke,DEF,Brighton,1.9,47,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Malick Thiaw,DEF,Newcastle,1.89,49,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Tanaka Ao,MID,Leeds,1.88,48,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Carlos Baleba,MID,Brighton,1.88,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Nathan Collins,DEF,Brentford,1.88,49,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+James Justin,DEF,Leeds,1.87,40,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Merlin Röhl,MID,Everton,1.87,50,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Dominic Solanke-Mitchell,FWD,Spurs,1.87,71,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Michael Kayode,DEF,Brentford,1.87,46,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Tim Iroegbunam,MID,Everton,1.86,48,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ethan Ampadu,MID,Leeds,1.86,49,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Leandro Trossard,MID,Arsenal,1.86,66,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+James Hill,DEF,Bournemouth,1.85,42,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Micky van de Ven,DEF,Spurs,1.85,44,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Calvin Bassey,DEF,Fulham,1.84,44,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Florian Wirtz,MID,Liverpool,1.69,83,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Noni Madueke,MID,Arsenal,1.67,68,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Phil Foden,MID,Man City,1.59,80,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Omar Marmoush,MID,Man City,1.57,83,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Joe Willock,MID,Newcastle,1.56,50,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Liam Delap,FWD,Chelsea,1.56,62,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Yoane Wissa,FWD,Newcastle,1.56,73,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Sávio Moreira de Oliveira,MID,Man City,1.55,69,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jonah Kusi-Asare,FWD,Fulham,1.54,45,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Alex Iwobi,MID,Fulham,1.53,61,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Eberechi Eze,MID,Arsenal,1.52,73,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Gabriel Martinelli Silva,MID,Arsenal,1.51,68,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Rayan Cherki,MID,Man City,1.45,65,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Joël Piroe,FWD,Leeds,1.45,49,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Maxim De Cuyper,DEF,Brighton,1.44,43,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Pedro Lomba Neto,MID,Chelsea,1.37,70,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Tammy Abraham,FWD,Aston Villa,1.36,57,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Sean Neave,FWD,Newcastle,1.36,43,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Marc Guiu Paz,FWD,Chelsea,1.36,40,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Lorenzo Lucca,FWD,Nott'm Forest,1.36,53,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Omari Hutchinson,MID,Nott'm Forest,1.33,54,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Anthony Elanga,MID,Newcastle,1.32,65,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Justin Kluivert,MID,Bournemouth,1.31,69,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Georginio Rutter,MID,Brighton,1.31,56,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Freddie Woodman,GK,Liverpool,1.29,39,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Alejandro Garnacho Ferreyra,MID,Chelsea,1.27,64,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Rodrigo 'Rodri' Hernandez Cascante,MID,Man City,1.25,63,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Federico Chiesa,MID,Liverpool,1.25,63,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Patrick Dorgu,DEF,Man Utd,1.24,41,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Rayan Aït-Nouri,DEF,Man City,1.24,57,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Lisandro Martínez,DEF,Man Utd,1.23,48,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Evann Guessand,MID,Crystal Palace,1.23,62,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Nico González Iglesias,MID,Man City,1.23,59,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Martin Ødegaard,MID,Arsenal,1.23,78,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+James Maddison,MID,Spurs,1.23,68,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Oscar Bobb,MID,Fulham,1.23,51,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Mitoma Kaoru,MID,Brighton,1.2,61,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Joško Gvardiol,DEF,Man City,1.19,58,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Dilane Bakwa,MID,Nott'm Forest,1.17,59,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Reece James,DEF,Chelsea,1.17,56,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Jadon Sancho,MID,Aston Villa,1.17,58,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Solly March,MID,Brighton,1.17,58,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Yéremy Pino Santos,MID,Crystal Palace,1.16,58,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Mateo Kovačić,MID,Man City,1.16,58,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Abdukodir Khusanov,DEF,Man City,1.16,54,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Rúben dos Santos Gato Alves Dias,DEF,Man City,1.15,55,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+John Stones,DEF,Man City,1.14,54,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Idrissa Gana Gueye,MID,Everton,1.14,54,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Xavi Simons,MID,Spurs,1.14,63,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Rio Ngumoha,MID,Liverpool,1.13,43,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Ryan Sessegnon,MID,Fulham,1.13,54,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Yves Bissouma,MID,Spurs,1.13,52,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Brennan Johnson,MID,Crystal Palace,1.13,65,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Lucas Bergvall,MID,Spurs,1.13,52,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Yasin Ayari,MID,Brighton,1.12,48,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Lewis Hall,DEF,Newcastle,1.12,53,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Mason Mount,MID,Man Utd,1.11,59,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Jacob Murphy,MID,Newcastle,1.11,59,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Douglas Luiz Soares de Paulo,MID,Aston Villa,1.08,49,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Filip Jörgensen,GK,Chelsea,1.08,43,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Noah Okafor,MID,Leeds,1.08,55,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Carlos Alcaraz Durán,MID,Everton,1.07,52,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+David Brooks,MID,Bournemouth,1.07,50,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Chris Rigg,MID,Sunderland,1.07,47,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Hugo Ekitiké,FWD,Liverpool,1.06,90,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Giorgi Mamardashvili,GK,Liverpool,1.06,41,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Christian Nørgaard,MID,Arsenal,1.06,51,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+James McAtee,MID,Nott'm Forest,1.06,50,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Harrison Armstrong,MID,Everton,1.05,45,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Amadou Onana,MID,Aston Villa,1.05,48,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Mikel Merino Zazón,MID,Arsenal,1.04,53,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Amine Adli,MID,Bournemouth,1.04,54,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+David Raya Martín,GK,Arsenal,1.04,62,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Reiss Nelson,MID,Brentford,1.04,48,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Justin Devenny,MID,Crystal Palace,1.04,43,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ryan Christie,MID,Bournemouth,1.04,49,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Leon Bailey,MID,Aston Villa,1.04,55,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Will Hughes,MID,Crystal Palace,1.04,47,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Dário Luís Essugo,MID,Chelsea,1.04,43,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Kevin Santos Lopes de Macedo,MID,Fulham,1.03,57,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Trey Nyoni,MID,Liverpool,1.03,43,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Ben Gannon-Doak,MID,Bournemouth,1.03,48,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jordan Henderson,MID,Brentford,1.03,50,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Anton Stach,MID,Leeds,1.03,48,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Trevoh Chalobah,DEF,Chelsea,1.03,54,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Daniel James,MID,Leeds,1.02,52,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ibrahim Sangaré,MID,Nott'm Forest,1.01,49,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Daichi Kamada,MID,Crystal Palace,1.01,50,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jeremie Frimpong,DEF,Liverpool,1.01,57,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Mats Wieffer,MID,Brighton,1.01,48,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Tom Cairney,MID,Fulham,1.0,48,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Kieran Trippier,DEF,Newcastle,1.0,49,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Archie Gray,MID,Spurs,0.99,48,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Wilfried Gnonto,MID,Leeds,0.99,51,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Dwight McNeil,MID,Everton,0.99,55,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Habib Diarra,MID,Sunderland,0.99,53,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Séamus Coleman,DEF,Everton,0.99,42,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Max Dowman,MID,Arsenal,0.99,42,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Harry Wilson,MID,Fulham,0.99,58,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Lewis Miley,MID,Newcastle,0.99,44,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Sean Longstaff,MID,Leeds,0.98,48,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Roméo Lavia,MID,Chelsea,0.98,49,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Facundo Buonanotte,MID,Leeds,0.98,46,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tijjani Reijnders,MID,Man City,0.98,50,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Vitaly Janelt,MID,Brentford,0.98,49,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Harrison Reed,MID,Fulham,0.98,43,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Samuel Chukwueze,MID,Fulham,0.97,53,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+James Milner,MID,Brighton,0.96,49,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Joe Gomez,DEF,Liverpool,0.96,49,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Joelinton Cássio Apolinário de Lira,MID,Newcastle,0.96,59,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Andrew Robertson,DEF,Liverpool,0.96,57,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Diego Gómez Amarilla,MID,Brighton,0.95,49,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Rico Lewis,DEF,Man City,0.95,46,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jesse Derry,MID,Chelsea,0.94,45,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Tyrell Malacia,DEF,Man Utd,0.94,37,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Cristhian Mosquera,DEF,Arsenal,0.94,53,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Alex Murphy,DEF,Newcastle,0.94,38,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Dennis Cirkin,DEF,Sunderland,0.94,40,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Nico O'Reilly,DEF,Man City,0.94,53,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Shea Lacey,MID,Man Utd,0.92,45,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Gabriel Gudmundsson,DEF,Leeds,0.92,38,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Milos Kerkez,DEF,Liverpool,0.92,56,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Nicolás Domínguez,MID,Nott'm Forest,0.91,50,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Aaron Hickey,DEF,Brentford,0.91,40,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Nathaniel Clyne,DEF,Crystal Palace,0.91,38,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Andrey Nascimento dos Santos,MID,Chelsea,0.91,44,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Jefferson Lerma Solís,MID,Crystal Palace,0.91,49,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Daniel Ballard,DEF,Sunderland,0.9,46,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Martín Zubimendi Ibáñez,MID,Arsenal,0.9,49,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Pape Matar Sarr,MID,Spurs,0.9,45,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Tyrique George,MID,Everton,0.9,48,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Alex Tóth,MID,Bournemouth,0.9,49,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Rio Cardines,MID,Crystal Palace,0.9,44,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Issa Diop,DEF,Fulham,0.9,43,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Josh King,MID,Fulham,0.9,44,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Nilson Angulo,MID,Sunderland,0.89,50,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Omar Alderete,DEF,Sunderland,0.89,41,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Andrés García,DEF,Aston Villa,0.89,39,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Tosin Adarabioyo,DEF,Chelsea,0.89,40,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Luke O'Nien,DEF,Sunderland,0.89,40,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Myles Lewis-Skelly,DEF,Arsenal,0.88,50,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Ryan Yates,MID,Nott'm Forest,0.88,47,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Piero Hincapié,DEF,Arsenal,0.88,51,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Diogo Dalot Teixeira,DEF,Man Utd,0.88,45,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Leny Yoro,DEF,Man Utd,0.87,41,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Marco Bizot,GK,Aston Villa,0.87,42,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Ola Aina,DEF,Nott'm Forest,0.87,47,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+James Trafford,GK,Man City,0.87,45,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Josh Acheampong,DEF,Chelsea,0.87,37,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Riccardo Calafiori,DEF,Arsenal,0.86,56,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Tyrone Mings,DEF,Aston Villa,0.86,43,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Adam Smith,DEF,Bournemouth,0.85,44,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Sepp van den Berg,DEF,Brentford,0.84,44,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Ezri Konsa Ngoyo,DEF,Aston Villa,0.84,44,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Chemsdine Talbi,MID,Sunderland,0.84,49,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tyler Fletcher,MID,Man Utd,0.84,44,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Sander Berge,MID,Fulham,0.84,49,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Kepa Arrizabalaga Revuelta,GK,Arsenal,0.84,40,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Noussair Mazraoui,DEF,Man Utd,0.83,49,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Sebastiaan Bornauw,DEF,Leeds,0.82,38,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Nathan Aké,DEF,Man City,0.82,52,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Levi Samuels Colwill,DEF,Chelsea,0.81,47,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Lutsharel Geertruida,DEF,Sunderland,0.81,45,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Chris Richards,DEF,Crystal Palace,0.8,44,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Benjamin White,DEF,Arsenal,0.79,51,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Lewis Dunk,DEF,Brighton,0.78,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jayden Bogle,DEF,Leeds,0.77,44,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Olivier Boscagli,DEF,Brighton,0.76,42,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Pau Torres,DEF,Aston Villa,0.75,43,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Mamadou Sarr,DEF,Chelsea,0.75,45,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Wesley Fofana,DEF,Chelsea,0.74,44,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Victor Lindelöf,DEF,Aston Villa,0.73,45,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Álex Jiménez Sánchez,DEF,Bournemouth,0.72,45,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Djed Spence,DEF,Spurs,0.72,41,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Kristoffer Ajer,DEF,Brentford,0.71,44,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Chadi Riad Dnanou,DEF,Crystal Palace,0.7,40,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Zach Abbott,DEF,Nott'm Forest,0.7,38,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Lucas Digne,DEF,Aston Villa,0.7,45,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Joachim Andersen,DEF,Fulham,0.69,44,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Jurriën Timber,DEF,Arsenal,0.69,60,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Ian Maatsen,DEF,Aston Villa,0.68,42,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Antoni Milambo,MID,Brentford,0.67,52,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Joël Veltman,DEF,Brighton,0.66,43,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jair Paula da Cunha Filho,DEF,Nott'm Forest,0.64,42,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ayden Heaven,DEF,Man Utd,0.62,37,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Manuel Akanji,DEF,Man City,0.55,54,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Lamare Bogarde,DEF,Aston Villa,0.55,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jakub Kiwior,DEF,Arsenal,0.55,54,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Jarrad Branthwaite,DEF,Everton,0.5,53,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Josh Dasilva,MID,Brentford,0.4,49,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Vitor de Oliveira Nunes dos Reis,DEF,Man City,0.36,50,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Murillo Costa dos Santos,DEF,Nott'm Forest,0.36,52,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Cristian Romero,DEF,Spurs,0.36,50,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Fabian Schär,DEF,Newcastle,0.36,52,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Illia Zabarnyi,DEF,Bournemouth,0.36,50,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Matthijs de Ligt,DEF,Man Utd,0.35,49,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Giovanni Leoni,DEF,Liverpool,0.35,49,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Oleksandr Zinchenko,DEF,Nott'm Forest,0.35,49,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tino Livramento,DEF,Newcastle,0.35,49,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Conor Bradley,DEF,Liverpool,0.35,49,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+İlkay Gündoğan,MID,Man City,0.34,63,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Son Heung-min,MID,Spurs,0.33,85,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Luis Díaz Marulanda,MID,Liverpool,0.33,80,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Alisson Becker,GK,Liverpool,0.32,54,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Anthony Gordon,MID,Newcastle,0.29,72,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Mohammed Kudus,MID,Spurs,0.29,64,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Dejan Kulusevski,MID,Spurs,0.29,64,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Jack Grealish,MID,Everton,0.29,63,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Estêvão Almeida de Oliveira Gonçalves,MID,Chelsea,0.28,64,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Marcus Rashford,MID,Man Utd,0.27,70,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Sam Byram,DEF,Leeds,0.26,37,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Nathan Patterson,DEF,Everton,0.26,44,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jorge Cuenca Barreno,DEF,Fulham,0.26,43,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Radu Drăgușin,DEF,Spurs,0.26,45,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Shumaira Mheuka,FWD,Chelsea,0.19,45,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Lewis Cook,MID,Bournemouth,0.18,49,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Nicolas Jackson,FWD,Chelsea,0.17,65,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Jamie Bynoe-Gittens,MID,Chelsea,0.17,60,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Rasmus Højlund,FWD,Man Utd,0.17,63,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Daniel Adu-Adjei,FWD,Bournemouth,0.17,44,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Darwin Núñez Ribeiro,FWD,Liverpool,0.17,65,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Christantus Uche,FWD,Crystal Palace,0.15,55,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Eliezer Mayenda Dossou,FWD,Sunderland,0.15,51,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Stefanos Tzimas,FWD,Brighton,0.15,52,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Claudio Echeverri,MID,Man City,0.15,54,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Arnaud Kalimuendo,FWD,Nott'm Forest,0.15,60,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Evan Ferguson,FWD,Brighton,0.15,55,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Youssef Ramalho Chermiti,FWD,Everton,0.15,49,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Eddie Nketiah,FWD,Crystal Palace,0.15,54,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Odsonne Édouard,FWD,Crystal Palace,0.15,50,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Luís Hemir Silva Semedo,FWD,Sunderland,0.14,44,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Patrick Bamford,FWD,Leeds,0.14,49,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Nazarii Rusyn,FWD,Sunderland,0.14,44,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Kaye Furo,FWD,Brentford,0.14,45,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+James Wilson,FWD,Spurs,0.14,45,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Braiden Graham,FWD,Everton,0.14,45,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Will Wright,FWD,Liverpool,0.14,45,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Bertrand Traoré,MID,Sunderland,0.14,55,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Zach Marsh,FWD,Crystal Palace,0.14,44,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Lamin Sillah,FWD,Nott'm Forest,0.14,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Mateo Joseph Fernández-Regatillo,FWD,Leeds,0.14,50,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Iwan Morgan,FWD,Brentford,0.14,44,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Will Lankshear,FWD,Spurs,0.14,45,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Dane Scarlett,FWD,Spurs,0.14,43,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Zépiqueno Redmond,FWD,Aston Villa,0.14,45,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jayden Danns,FWD,Liverpool,0.14,43,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Chido Obi,FWD,Man Utd,0.14,42,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Ben Casey,FWD,Crystal Palace,0.14,45,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Martin Sherif,FWD,Everton,0.14,44,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ahmed Abdullahi,FWD,Sunderland,0.14,42,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ethan Wheatley,FWD,Man Utd,0.14,45,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Samuel Iling-Junior,MID,Aston Villa,0.13,55,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Ryan McAidoo,MID,Man City,0.13,45,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Matt O'Riley,MID,Brighton,0.13,55,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Sverre Nypan,MID,Man City,0.13,50,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Reigan Heskey,MID,Man City,0.13,45,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Divine Mukasa,MID,Man City,0.13,44,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Charlie Gray,MID,Man City,0.13,45,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Dan Ndoye,MID,Nott'm Forest,0.13,55,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Kalvin Phillips,MID,Man City,0.13,47,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Christopher Nkunku,MID,Chelsea,0.13,59,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Callum Hudson-Odoi,MID,Nott'm Forest,0.13,57,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Harry Gray,FWD,Leeds,0.13,45,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Norberto Murara Neto,GK,Bournemouth,0.12,45,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Antony dos Santos,MID,Man Utd,0.12,59,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Lucas Estella Perri,GK,Leeds,0.12,44,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ederson Santana de Moraes,GK,Man City,0.11,53,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Harvey Elliott,MID,Aston Villa,0.1,51,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Fábio Ferreira Vieira,MID,Arsenal,0.1,54,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Patrick Roberts,MID,Sunderland,0.1,54,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Donyell Malen,MID,Aston Villa,0.1,51,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Andreas Hoelgebaum Pereira,MID,Fulham,0.1,53,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Jack Harrison,MID,Leeds,0.1,51,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Wilson Odobert,MID,Spurs,0.1,53,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+João Pedro Ferreira da Silva,MID,Nott'm Forest,0.1,54,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tyler Dibling,MID,Everton,0.1,53,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Manor Solomon,MID,Spurs,0.1,54,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Abdallah Sima,MID,Brighton,0.1,54,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Brajan Gruda,MID,Brighton,0.1,54,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Julio Enciso Espínola,MID,Brighton,0.1,54,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Borna Sosa,DEF,Crystal Palace,0.09,48,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ármin Pécsi,GK,Liverpool,0.09,38,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Konstantinos Tsimikas,DEF,Liverpool,0.09,48,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Samuel Amissah,DEF,Fulham,0.08,38,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Harrison Ashby,DEF,Newcastle,0.08,39,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Simon Adingra,MID,Sunderland,0.08,49,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jaydon Jones,MID,Sunderland,0.08,45,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Leo Shahar,DEF,Newcastle,0.08,40,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Jack Whittaker,MID,Sunderland,0.08,45,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Aaron Ramsdale,GK,Newcastle,0.08,48,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Ian Poveda-Ocampo,MID,Sunderland,0.08,47,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tariq Lamptey,DEF,Brighton,0.08,44,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Dean Benamar,DEF,Crystal Palace,0.08,40,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Yasin Özcan,DEF,Aston Villa,0.08,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Aji Alese,DEF,Sunderland,0.08,40,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Illan Meslier,GK,Leeds,0.08,41,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Isaac Schmidt,DEF,Leeds,0.08,40,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+James Rowswell,DEF,Spurs,0.08,40,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Jacob Slater,DEF,Brighton,0.08,40,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Luka Vušković,DEF,Spurs,0.08,39,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Kenny Tete,DEF,Fulham,0.08,45,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Joe Anderson,DEF,Sunderland,0.08,38,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Mads Roerslev Rasmussen,DEF,Brentford,0.08,45,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Ashley Phillips,DEF,Spurs,0.08,40,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Romaine Mundle,MID,Sunderland,0.08,49,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jenson Seelt,DEF,Sunderland,0.08,40,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Takai Kōta,DEF,Spurs,0.08,40,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Luis Eduardo Soares da Silva,DEF,Nott'm Forest,0.08,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Diego León Blanco,DEF,Man Utd,0.08,41,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Joshua Stephenson,DEF,Brentford,0.08,40,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Abdoullah Ba,MID,Sunderland,0.08,43,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Harrison Jones,MID,Sunderland,0.08,43,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Rob Holding,DEF,Crystal Palace,0.08,40,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jun'ai Byfield,DEF,Spurs,0.08,40,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Leo Fuhr Hjelde,DEF,Sunderland,0.08,40,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Guglielmo Vicario,GK,Spurs,0.08,47,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Rhys Williams,DEF,Liverpool,0.08,37,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Caleb Kporha,DEF,Crystal Palace,0.08,40,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Leon Routh,DEF,Aston Villa,0.08,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jamaal Lascelles,DEF,Newcastle,0.08,43,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Zak Johnson,DEF,Sunderland,0.08,38,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Pervis Estupiñán Tenorio,DEF,Brighton,0.08,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Danny Imray,DEF,Crystal Palace,0.08,40,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tyler Fredricson,DEF,Man Utd,0.08,37,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Eiran Cashin,DEF,Brighton,0.08,40,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Benjamin Arthur,DEF,Brentford,0.08,38,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Owen Bevan,DEF,Bournemouth,0.08,38,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Diego Coppola,DEF,Brighton,0.08,42,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Veljko Milosavljevic,DEF,Bournemouth,0.08,44,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+George King,DEF,Crystal Palace,0.08,40,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Calvin Ramsay,DEF,Liverpool,0.08,37,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Niall Huggins,DEF,Sunderland,0.08,40,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Travis Patterson,DEF,Aston Villa,0.08,39,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Arthur Masuaku,DEF,Sunderland,0.08,39,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Stephen Mfuni,DEF,Man City,0.08,39,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jayden Meghoma,DEF,Brentford,0.08,40,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Harry Amass,DEF,Man Utd,0.08,40,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Kim Ji-soo,DEF,Brentford,0.08,39,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Benoît Badiashile Mukinayi,DEF,Chelsea,0.08,44,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Aarón Anselmino,DEF,Chelsea,0.08,40,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Freddie Simmonds,DEF,Brighton,0.08,40,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Nicolò Savona,DEF,Nott'm Forest,0.08,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Matt Targett,DEF,Newcastle,0.08,40,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Igor Julio dos Santos de Paulo,DEF,Brighton,0.08,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Reece Welch,DEF,Everton,0.08,38,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ollie Shield,DEF,Brentford,0.08,40,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Jayden Lienou,DEF,Leeds,0.08,40,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Adam Webster,DEF,Brighton,0.08,44,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Omar Richards,DEF,Nott'm Forest,0.08,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Max Alleyne,DEF,Man City,0.08,39,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Conor McManus,DEF,Brentford,0.08,40,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Djiamgone Jocelin Ta Bi,MID,Sunderland,0.08,49,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Roman Dixon,DEF,Everton,0.08,38,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Charlie Tasker,DEF,Brighton,0.08,38,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Josh Nichols,DEF,Arsenal,0.08,37,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Godwill Kukonki,DEF,Man Utd,0.08,40,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Benjamin Fredrick,DEF,Brentford,0.08,40,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+David Mota Veiga Teixeira do Carmo,DEF,Nott'm Forest,0.08,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Stefan Ortega Moreno,GK,Nott'm Forest,0.08,47,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jason Steele,GK,Brighton,0.08,42,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Willy Boly,DEF,Nott'm Forest,0.08,38,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Miodrag Pivaš,DEF,Newcastle,0.08,38,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Elijah Campbell,DEF,Everton,0.08,39,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Julio Soler Barreto,DEF,Bournemouth,0.08,39,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Chris Mepham,DEF,Bournemouth,0.08,40,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jenson Jones,DEF,Sunderland,0.08,40,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Lino da Cruz Sousa,DEF,Aston Villa,0.08,38,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Alan Browne,MID,Sunderland,0.08,45,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Timothée Pembélé,DEF,Sunderland,0.08,39,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Álex Moreno Lopera,DEF,Aston Villa,0.08,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Marli Salmon,DEF,Arsenal,0.08,40,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Anthony Patterson,GK,Sunderland,0.08,42,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Maldini Kacurri,DEF,Arsenal,0.08,39,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Brayden Clarke,DEF,Arsenal,0.08,37,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Emil Krafth,DEF,Newcastle,0.08,43,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Tymur Tutierov,MID,Sunderland,0.08,45,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Altay Bayındır,GK,Man Utd,0.08,47,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Mark Travers,GK,Everton,0.08,42,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Amara Nallo,DEF,Liverpool,0.08,37,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Triston Rowe,DEF,Aston Villa,0.08,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Nectarios Triantis,MID,Sunderland,0.08,44,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ben Davies,DEF,Spurs,0.08,43,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Matai Akinmboni,DEF,Bournemouth,0.08,38,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+João Victor de Souza Menezes,DEF,Spurs,0.08,40,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Adam Aznou,DEF,Everton,0.08,42,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Wellity Lucky,DEF,Liverpool,0.08,40,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Ethan Pinnock,DEF,Brentford,0.08,42,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Pierre Ekwah Elimby,MID,Sunderland,0.08,45,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Bafodé Diakité,DEF,Bournemouth,0.08,41,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+TJ Carroll,DEF,Aston Villa,0.08,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Rico Henry,DEF,Brentford,0.08,43,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Julián Araujo Zúñiga,DEF,Bournemouth,0.08,38,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Dan Neil,MID,Sunderland,0.08,48,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+André Onana,GK,Man Utd,0.08,49,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Talla Ndiaye,DEF,Liverpool,0.08,40,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Milan Aleksić,MID,Sunderland,0.08,49,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jay Matete,MID,Sunderland,0.08,43,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ben Winterburn,MID,Bournemouth,0.07,45,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Mikey Moore,MID,Spurs,0.07,50,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Seth Ridgeon,MID,Fulham,0.07,45,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Malick Yalcouyé,MID,Brighton,0.07,50,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Hamed Traorè,MID,Bournemouth,0.07,45,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Leander Dendoncker,MID,Aston Villa,0.07,45,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Sam Greenwood,MID,Leeds,0.07,49,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Rhys Chadwick,MID,Leeds,0.07,45,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Bradley Burrowes,MID,Aston Villa,0.07,43,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Romain Esse,MID,Crystal Palace,0.07,47,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Lucá Williams-Barnett,MID,Spurs,0.07,45,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Eric da Silva Moreira,MID,Nott'm Forest,0.07,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Kieran Morrison,MID,Liverpool,0.07,45,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Tom Watson,MID,Brighton,0.07,48,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+David Ozoh,MID,Crystal Palace,0.07,45,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Zain Silcott-Duberry,MID,Bournemouth,0.07,44,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Luis Sinisterra Lucumí,MID,Bournemouth,0.07,50,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Jesurun Rak-Sakyi,MID,Crystal Palace,0.07,44,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Marko Stamenić,MID,Nott'm Forest,0.07,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Asher Agbinone,MID,Crystal Palace,0.07,43,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Sam Chambers,MID,Leeds,0.07,44,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Kendry Páez Andrade,MID,Chelsea,0.07,45,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Boubacar Kamara,MID,Aston Villa,0.07,49,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+James McConnell,MID,Liverpool,0.07,44,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Tyler Onyango,MID,Everton,0.07,45,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jimmy Sinclair,MID,Nott'm Forest,0.07,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Romain Faivre,MID,Bournemouth,0.07,45,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Callum Bates,MID,Everton,0.07,43,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tyler Morton,MID,Liverpool,0.07,45,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Ethan Nwaneri,MID,Arsenal,0.07,50,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Bryan Gil Salvatierra,MID,Spurs,0.07,49,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Joél Drakes-Thomas,MID,Crystal Palace,0.07,45,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Stefan Bajčetić Maquieira,MID,Liverpool,0.07,42,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+George Hemmings,MID,Aston Villa,0.07,45,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Franco Umeh-Chibueze,MID,Crystal Palace,0.07,45,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Joe Gelhardt,MID,Leeds,0.07,45,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Andre Harriman-Annous,MID,Arsenal,0.07,44,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Jenson Metcalfe,MID,Everton,0.07,45,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Rio Kyerematen,MID,Spurs,0.07,45,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Lewis O'Brien,MID,Nott'm Forest,0.07,50,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Mykhailo Mudryk,MID,Chelsea,0.07,49,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Charlie Stevens,MID,Bournemouth,0.07,45,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Malcom DaCosta,MID,Bournemouth,0.07,45,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Alfie Cresswell,MID,Leeds,0.07,45,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Largie Ramazani,MID,Leeds,0.07,49,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Charlie Crew,MID,Leeds,0.07,45,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ben Broggio,MID,Aston Villa,0.07,44,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Albert Sambi Lokonga,MID,Arsenal,0.07,45,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Cheick Doucouré,MID,Crystal Palace,0.07,49,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Jeremy Sarmiento Morante,MID,Brighton,0.07,49,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Ilia Gruev,MID,Leeds,0.07,47,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Archie Whitehall,MID,Nott'm Forest,0.07,45,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Seung-Soo Park,MID,Newcastle,0.07,43,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Adrian Mazilu,MID,Brighton,0.07,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Isaac Hayden,MID,Newcastle,0.07,45,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Ismeal Kabia,MID,Arsenal,0.07,45,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Malcolm Ebiowei,MID,Crystal Palace,0.07,45,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Luke Harris,MID,Fulham,0.07,45,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Jamaldeen Jimoh-Aloba,MID,Aston Villa,0.07,45,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Antoñito Cordero Campillo,MID,Newcastle,0.07,49,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Joe Knight,MID,Brighton,0.07,44,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Yusuf Akhamrich,MID,Spurs,0.07,45,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Matheus França de Oliveira,MID,Crystal Palace,0.07,45,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Kaden Rodney,MID,Crystal Palace,0.07,44,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Philip Billing,MID,Bournemouth,0.07,49,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Joe White,MID,Newcastle,0.07,45,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Enzo Barrenechea,MID,Aston Villa,0.07,50,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Lewis Dobbin,MID,Aston Villa,0.07,50,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Landon Emenalo,MID,Chelsea,0.07,45,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Callum Olusesi,MID,Spurs,0.07,43,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Isaac Heath,MID,Everton,0.07,45,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Andrew Moran,MID,Brighton,0.07,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Harry Howell,MID,Brighton,0.07,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Mathis Eboué,MID,Chelsea,0.07,45,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Darko Gyabi,MID,Leeds,0.07,45,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Sam Alabi,MID,Newcastle,0.07,45,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Coby Ebere,MID,Everton,0.07,44,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Dominic Sadi,MID,Bournemouth,0.07,45,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Naouirou Ahamada,MID,Crystal Palace,0.07,43,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Nehemiah Oriola,MID,Brighton,0.07,45,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Yang Min-hyeok,MID,Spurs,0.07,45,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Remy Rees-Dottin,MID,Bournemouth,0.07,43,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Ryan Kavuma-McQueen,MID,Chelsea,0.07,45,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Alysson Edward Franco da Rocha dos Santos,MID,Aston Villa,0.07,50,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Martial Godo,MID,Fulham,0.07,45,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Kadan Young,MID,Aston Villa,0.07,43,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Endo Wataru,MID,Liverpool,0.07,49,Newcastle,False,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Garang Kuol,MID,Newcastle,0.07,44,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Riley Owen,MID,Brentford,0.06,45,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Romelle Donovan,MID,Brentford,0.06,44,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Ryan Trevitt,MID,Brentford,0.06,45,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Jayce Fitzgerald,MID,Man Utd,0.06,43,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Jim Thwaites,MID,Man Utd,0.06,45,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Paris Maghoma,MID,Brentford,0.06,45,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Luka Bentt,MID,Brentford,0.06,45,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Jack Fletcher,MID,Man Utd,0.06,43,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Manuel Ugarte Ribeiro,MID,Man Utd,0.06,47,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Frank Onyeka,MID,Brentford,0.06,48,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Fábio Freitas Gouveia Carvalho,MID,Brentford,0.06,46,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Toby Collyer,MID,Man Utd,0.06,45,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Jack Moorhouse,MID,Man Utd,0.06,45,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Bendito Mantato,MID,Man Utd,0.06,45,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Gustavo Nunes Fernandes Gomes,MID,Brentford,0.06,49,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Sékou Koné,MID,Man Utd,0.06,43,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Myles Peart-Harris,MID,Brentford,0.06,44,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Yunus Emre Konak,MID,Brentford,0.06,43,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Dermot Mee,GK,Man Utd,0.05,39,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Alex Cairns,GK,Leeds,0.05,39,Nott'm Forest,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Carlos Miguel dos Santos Pereira,GK,Nott'm Forest,0.05,40,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Callan McKenna,GK,Bournemouth,0.05,39,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Walter Benítez,GK,Crystal Palace,0.05,39,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Steven Benda,GK,Fulham,0.05,40,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Hákon Rafn Valdimarsson,GK,Brentford,0.05,38,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Simon Moore,GK,Sunderland,0.05,39,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Alfie McNally,GK,Fulham,0.05,40,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Blondy Nna Noukeu,GK,Sunderland,0.05,39,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tom McGill,GK,Brighton,0.05,39,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Mark Gillespie,GK,Newcastle,0.05,39,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Mike Penders,GK,Chelsea,0.05,40,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Fraser Forster,GK,Bournemouth,0.05,40,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Filip Marschall,GK,Aston Villa,0.05,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Christos Mandas,GK,Bournemouth,0.05,40,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Max Merrick,GK,Chelsea,0.05,40,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Alex Paulsen,GK,Bournemouth,0.05,40,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Joe Gauci,GK,Aston Villa,0.05,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Matt Turner,GK,Nott'm Forest,0.05,40,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Marcus Bettinelli,GK,Man City,0.05,38,Bournemouth,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Tom King,GK,Everton,0.05,39,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Benjamin Lecomte,GK,Fulham,0.05,39,Chelsea,True,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Teddy Sharman-Lowe,GK,Chelsea,0.05,40,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+Tom Heaton,GK,Man Utd,0.05,38,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Brandon Austin,GK,Spurs,0.05,39,Brentford,False,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Julian Eyestone,GK,Brentford,0.05,39,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Karl Hein,GK,Arsenal,0.05,40,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Sam Proctor,GK,Aston Villa,0.05,39,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Gabriel Słonina,GK,Chelsea,0.05,38,Fulham,False,1,2026-08-24T20:00:00Z,xgboost_v2,False
+James Wright,GK,Aston Villa,0.05,39,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+John Ruddy,GK,Newcastle,0.05,40,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Angus Gunn,GK,Nott'm Forest,0.05,40,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Melker Ellborg,GK,Sunderland,0.05,40,Ipswich,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Ronnie Hollingshead,GK,Aston Villa,0.05,40,Brighton,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Will Dennis,GK,Bournemouth,0.05,40,Man City,False,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Matthew Cox,GK,Brentford,0.05,39,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+John Victor Maciel Furtado,GK,Nott'm Forest,0.05,40,Leeds,True,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Tommy Setford,GK,Arsenal,0.05,39,Coventry City,True,1,2026-08-21T20:00:00Z,xgboost_v2,False
+Remi Matthews,GK,Crystal Palace,0.05,39,Everton,False,1,2026-08-22T15:00:00Z,xgboost_v2,False
+Kjell Scherpen,GK,Brighton,0.05,40,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Odysseas Vlachodimos,GK,Newcastle,0.05,40,Liverpool,True,1,2026-08-23T16:30:00Z,xgboost_v2,False
+Carl Rushworth,GK,Brighton,0.05,40,Aston Villa,True,1,2026-08-23T14:00:00Z,xgboost_v2,False
+Ellery Balcombe,GK,Brentford,0.05,39,Spurs,True,1,2026-08-22T17:30:00Z,xgboost_v2,False
+Elyh Harrison,GK,Man Utd,0.05,40,Hull City,False,1,2026-08-22T12:30:00Z,xgboost_v2,False
+Harry Tyrer,GK,Everton,0.05,39,Crystal Palace,True,1,2026-08-22T15:00:00Z,xgboost_v2,False

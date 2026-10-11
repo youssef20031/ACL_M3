@@ -1,0 +1,6 @@
+# Files executed or parsed on the Linux VM must keep LF line endings
+*.sh text eol=lf
+deploy/Caddyfile text eol=lf
+deploy/*.Dockerfile text eol=lf
+deploy/*.dockerignore text eol=lf
+Dockerfile text eol=lf

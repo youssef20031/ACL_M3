@@ -1,0 +1,22 @@
+{
+  "season": "2026-2027",
+  "promoted_teams": [
+    "Bristol City",
+    "Ipswich Town",
+    "Hull City"
+  ],
+  "team_info": {
+    "Bristol City": {
+      "championship_finish": 1,
+      "key_players": []
+    },
+    "Ipswich Town": {
+      "championship_finish": 2,
+      "key_players": []
+    },
+    "Hull City": {
+      "championship_finish": 3,
+      "key_players": []
+    }
+  }
+}

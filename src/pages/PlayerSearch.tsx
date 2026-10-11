@@ -1,11 +1,13 @@
-﻿import { useEffect, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+﻿import { useEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, Loader2, AlertCircle, User, TrendingUp, Target, ArrowLeftRight, Gauge, Shield, Flame, Aperture, Sparkles } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { cn } from '../utils/cn';
+import { PlayerWithClub } from '../components/PlayerWithClub';
+import { AvatarImage } from '../components/AvatarImage';
 
 const POSITION_COLORS: Record<string, string> = {
   GK: 'bg-yellow-100 text-yellow-800',
@@ -48,9 +50,23 @@ export function PlayerSearch() {
     ? 'border-slate-700 bg-slate-950/70 text-slate-100 placeholder:text-slate-500 focus:ring-violet-500 disabled:bg-slate-900'
     : 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-purple-500 disabled:bg-gray-100';
 
+  const queryClient = useQueryClient();
+  // Only the most recently submitted search may write results (guards against out-of-order responses).
+  const latestSearchRef = useRef('');
+
   const searchMutation = useMutation({
-    mutationFn: (q: string) => apiService.searchPlayers(q),
-    onSuccess: (data) => {
+    // Go through the query cache so repeating a recent search is served without a new request.
+    mutationFn: (q: string) =>
+      queryClient.fetchQuery({
+        queryKey: ['players', 'search', q.toLowerCase(), 20],
+        queryFn: ({ signal }) => apiService.searchPlayers(q, { signal }),
+        staleTime: 5 * 60 * 1000,
+      }),
+    onMutate: (q) => {
+      latestSearchRef.current = q;
+    },
+    onSuccess: (data, q) => {
+      if (q !== latestSearchRef.current) return;
       setResults(data.players);
       setSelectedPlayer(null);
       setHasSearched(true);
@@ -154,20 +170,30 @@ export function PlayerSearch() {
             <p className={cn('text-sm', headerTextClass)}>{results.length} player{results.length !== 1 ? 's' : ''} found</p>
             {results.map((player, i) => (
               <button
-                key={i}
+                key={`${player.element_id ?? player.player_name ?? player.name ?? ''}-${i}`}
                 onClick={() => setSelectedPlayer(player)}
                 className={cn('w-full text-left rounded-xl border p-4 transition-all flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between', isDark ? 'border-slate-800 bg-slate-900/80 text-slate-100 hover:border-violet-400/60 hover:shadow-[0_18px_50px_rgba(2,6,23,0.35)]' : 'border-gray-200 bg-white text-gray-900 hover:border-purple-400 hover:shadow-sm')}
               >
                 <div className="flex items-center gap-3">
-                  {player.avatar ? (
-                    <img src={player.avatar} alt={player.player_name ?? player.name} className="w-10 h-10 rounded-full object-cover" />
-                  ) : (
-                    <div className={cn('flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold', isDark ? 'bg-violet-500/15 text-violet-200' : 'bg-purple-100 text-purple-600')}>
-                      {(player.player_name ?? player.name ?? '?')[0].toUpperCase()}
-                    </div>
-                  )}
+                  <AvatarImage
+                    src={player.avatar}
+                    alt={player.player_name ?? player.name}
+                    className="w-10 h-10 rounded-full object-cover"
+                    size={40}
+                    fallback={
+                      <div className={cn('flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold', isDark ? 'bg-violet-500/15 text-violet-200' : 'bg-purple-100 text-purple-600')}>
+                        {(player.player_name ?? player.name ?? '?')[0].toUpperCase()}
+                      </div>
+                    }
+                  />
                   <div>
-                    <p className={cn('font-medium', headerTitleClass)}>{player.player_name ?? player.name}</p>
+                    <PlayerWithClub
+                      playerName={player.player_name ?? player.name}
+                      teamName={player.team_name}
+                      showAbbreviation={true}
+                      logoSize="sm"
+                      nameClassName={cn('font-medium', headerTitleClass)}
+                    />
                     <div className="flex items-center gap-2 mt-0.5">
                       {player.position && (
                         <span className={cn('rounded px-1.5 py-0.5 text-xs font-medium', isDark ? 'bg-white/8 text-slate-200' : POSITION_COLORS[player.position] ?? 'bg-gray-100 text-gray-600')}>
@@ -246,7 +272,6 @@ function PlayerDetail({
 }) {
   const resolvedInitialSeason = initialSeason === 'All seasons' ? '2025-26' : initialSeason;
   const [selectedSeason, setSelectedSeason] = useState<string>(resolvedInitialSeason);
-  const [stats, setStats] = useState<PlayerResult>(player);
   const { theme } = useAppStore();
   const isDark = theme === 'dark';
   const pageText = isDark ? 'text-slate-100' : 'text-gray-900';
@@ -254,35 +279,28 @@ function PlayerDetail({
   const panelClass = isDark ? 'border-slate-800 bg-slate-900/80 text-slate-100' : 'border-gray-200 bg-white text-gray-900';
   const controlClass = isDark ? 'border-slate-700 bg-slate-950/70 text-slate-100 focus:ring-violet-500 focus:border-violet-500' : 'border-gray-400 bg-gray-100 text-gray-900 focus:ring-purple-500 focus:border-purple-500 focus:bg-white';
 
-  const statsMutation = useMutation({
-    mutationFn: ({ name, season }: { name: string; season?: string }) =>
-      apiService.getPlayerStats(name, season === 'All seasons' ? undefined : season),
-    onSuccess: (data) => {
-      if (data.stats) {
-        setStats(data.stats);
-      }
-    },
-  });
+  const playerName: string | undefined = player.player_name ?? player.name;
 
+  // Reset the season picker when the detail view is re-targeted (e.g. via route state).
   useEffect(() => {
-    const playerName = player.player_name ?? player.name;
-    if (!playerName) {
-      return;
-    }
+    setSelectedSeason(resolvedInitialSeason);
+  }, [playerName, resolvedInitialSeason]);
 
-    setStats(player);
-    statsMutation.mutate({
-      name: playerName,
-      season: resolvedInitialSeason,
-    });
-  }, [player.player_name, player.name, resolvedInitialSeason]);
+  // Cached per (player, season): switching back to a season or reopening a player is instant.
+  const statsQuery = useQuery({
+    queryKey: ['players', 'stats', playerName, selectedSeason],
+    queryFn: ({ signal }) =>
+      apiService.getPlayerStats(playerName as string, selectedSeason === 'All seasons' ? undefined : selectedSeason, signal),
+    enabled: !!playerName,
+    staleTime: 10 * 60 * 1000,
+    // Keep showing the previous season's numbers (under the loading overlay) for the same player only.
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[2] === playerName ? prev : undefined),
+  });
+  const stats: PlayerResult = statsQuery.data?.stats ? statsQuery.data.stats : player;
+  const statsLoading = statsQuery.isFetching;
 
   const handleSeasonChange = (season: string) => {
     setSelectedSeason(season);
-    statsMutation.mutate({
-      name: player.player_name ?? player.name,
-      season,
-    });
   };
 
   const name = stats.player_name ?? stats.name ?? 'Unknown';
@@ -361,7 +379,7 @@ function PlayerDetail({
           <select
             value={selectedSeason}
             onChange={(e) => handleSeasonChange(e.target.value)}
-            disabled={statsMutation.isPending}
+            disabled={statsLoading}
             className={cn('w-40 cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium transition-all focus:ring-2 disabled:opacity-50', controlClass)}
           >
             {seasons.map((s) => (
@@ -376,20 +394,25 @@ function PlayerDetail({
           <div className="absolute -right-16 -top-12 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
           <div className="absolute left-1/3 top-8 h-28 w-28 rounded-full bg-fuchsia-400/20 blur-3xl" />
         </div>
-        {statsMutation.isPending && (
+        {statsLoading && (
           <div className="absolute inset-0 bg-black/10 backdrop-blur-[1px] flex items-center justify-center z-10">
             <Loader2 className="w-8 h-8 animate-spin text-white" />
           </div>
         )}
         <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            {stats.avatar ? (
-              <img src={stats.avatar} alt={name} className="h-20 w-20 rounded-full border-2 border-white/30 object-cover shadow-lg" />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/20 text-3xl font-bold shadow-lg">
-                {name[0].toUpperCase()}
-              </div>
-            )}
+            <AvatarImage
+              src={stats.avatar}
+              alt={name}
+              className="h-20 w-20 rounded-full border-2 border-white/30 object-cover shadow-lg"
+              size={80}
+              loading="eager"
+              fallback={
+                <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/20 text-3xl font-bold shadow-lg">
+                  {name[0].toUpperCase()}
+                </div>
+              }
+            />
             <div>
               <p className={cn('text-xs font-semibold uppercase tracking-[0.24em]', isDark ? 'text-slate-300' : 'text-purple-100')}>
                 Player Dashboard

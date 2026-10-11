@@ -32,52 +32,40 @@ class LLMManager:
     # Available models configuration
     # Using models that support chat/conversational task on HuggingFace Inference API and Groq
     MODELS = {
-     "llama-3.3-70b": {
-        "name": "llama-3.3-70b-versatile",
-        "display_name": "Llama 3.3 70B Versatile",
-        "description": "High-performance Meta model via Groq",
-        "max_tokens": 2048,
+    "gpt-oss-120b": {
+        "name": "openai/gpt-oss-120b",
+        "display_name": "GPT-OSS 120B",
+        "description": "Highest quality open-weight model via Groq",
+        # Reasoning tokens count toward the completion budget, so leave headroom
+        "max_tokens": 4096,
         "temperature": 0.7,
         "use_chat": True,
         "provider": "groq",
-    },   
-    "llama-3.2-3b": {
-        "name": "meta-llama/Llama-3.2-3B-Instruct",
-        "display_name": "Llama 3.2 3B",
-        "description": "Meta's efficient instruction model",
-        "max_tokens": 1024,
-        "temperature": 0.7,
-        "use_chat": True,
-        "provider": "huggingface",
+        "extra": {"reasoning_effort": "low"},
     },
-    "qwen-2.5-coder": {
-        "name": "Qwen/Qwen2.5-Coder-32B-Instruct",
-        "display_name": "Qwen 2.5 Coder 32B",
-        "description": "Powerful coding and reasoning model",
-        "max_tokens": 1024,
+    "gpt-oss-20b": {
+        "name": "openai/gpt-oss-20b",
+        "display_name": "GPT-OSS 20B",
+        "description": "Fast open-weight model via Groq",
+        "max_tokens": 4096,
         "temperature": 0.7,
         "use_chat": True,
-        "provider": "huggingface",
+        "provider": "groq",
+        "extra": {"reasoning_effort": "low"},
     },
-    "qwen-2.5-7b": {
-        "name": "Qwen/Qwen2.5-7B-Instruct",
-        "display_name": "Qwen 2.5 7B",
-        "description": "Balanced instruction model",
-        "max_tokens": 1024,
-        "temperature": 0.7,
+    "qwen3-27b": {
+        "name": "qwen/qwen3.8-27b",
+        "display_name": "Qwen 3.8 27B",
+        "description": "Strong mid-size model via Groq",
+        "max_tokens": 2048,
+        "temperature": 0.6,
         "use_chat": True,
-        "provider": "huggingface",
-    }
+        "provider": "groq",
+        "extra": {"reasoning_format": "hidden"},
+    },
 }
 
-    # Fallback priority when a model hits a quota/billing error (first = highest priority)
-    FALLBACK_ORDER = ["llama-3.3-70b", "llama-3.2-3b"]
 
-    # Error strings that indicate quota/billing exhaustion — worth retrying on another model
-    _QUOTA_ERROR_MARKERS = [
-        "402", "payment required", "credits", "quota",
-        "rate limit", "429", "too many requests", "billing",
-    ]
 
     @classmethod
     def _is_quota_error(cls, error_str: str) -> bool:
@@ -86,15 +74,30 @@ class LLMManager:
         return any(marker in lowered for marker in cls._QUOTA_ERROR_MARKERS)
     
     # Models tried as fallback when primary fails (in priority order)
-    FALLBACK_ORDER = ["llama-3.3-70b", "llama-3.2-3b"]
+    FALLBACK_ORDER = ["gpt-oss-120b", "gpt-oss-20b", "qwen3-27b"]
 
-    # Errors that indicate quota/billing exhaustion — worth retrying on another model
+    # Keys clients may still send (persisted in browsers) for models that were retired
+    # upstream: Groq retired llama-3.3-70b-versatile, and the HuggingFace Inference
+    # models are no longer served for this account. HuggingFace support remains for
+    # any model entry with provider "huggingface".
+    RETIRED_MODELS = {
+        "llama-3.3-70b": "gpt-oss-120b",
+        "llama-3.2-3b": "gpt-oss-20b",
+        "qwen-2.5-coder": "qwen3-27b",
+        "qwen-2.5-7b": "qwen3-27b",
+        "phi-3-mini": "gpt-oss-120b",
+        "gemma-2-2b": "gpt-oss-120b",
+    }
+
+    # Errors worth retrying on another model: quota/billing exhaustion, or the
+    # provider no longer serving the model
     _QUOTA_ERROR_MARKERS = [
         "402", "payment required", "credits", "quota", "rate limit",
         "429", "too many requests", "billing", "subscription",
+        "model_not_found", "model_not_supported", "decommissioned", "does not exist",
     ]
 
-    def __init__(self, api_token: Optional[str] = None, default_model: str = "llama-3.3-70b"):
+    def __init__(self, api_token: Optional[str] = None, default_model: str = "gpt-oss-120b"):
         """
         Initialize LLM manager.
         
@@ -181,9 +184,10 @@ class LLMManager:
         model_key = model_key or self.default_model
 
         # Backward compatibility for persisted legacy model keys.
-        if model_key in {"phi-3-mini", "gemma-2-2b"}:
-            logger.warning("Model '%s' is deprecated. Falling back to 'llama-3.3-70b'.", model_key)
-            model_key = "llama-3.3-70b"
+        if model_key in self.RETIRED_MODELS:
+            replacement = self.RETIRED_MODELS[model_key]
+            logger.info("Model '%s' is retired; using '%s'.", model_key, replacement)
+            model_key = replacement
 
         if model_key not in self.MODELS:
             return LLMResponse(
@@ -257,9 +261,10 @@ class LLMManager:
                 model=model_name,
                 messages=messages,
                 max_tokens=max_tokens,
-                temperature=temperature
+                temperature=temperature,
+                **model_config.get("extra", {}),
             )
-            generated_text = response.choices[0].message.content.strip()
+            generated_text = (response.choices[0].message.content or "").strip()
             response_time = time.time() - start_time
             
             # Get token usage from response

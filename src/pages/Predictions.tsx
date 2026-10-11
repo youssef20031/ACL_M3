@@ -11,11 +11,16 @@ import {
   User,
   Info,
   Target,
-  RefreshCw
+  RefreshCw,
+  Calendar,
+  MapPin,
+  Home,
+  Plane
 } from 'lucide-react';
 import { apiService, MLPrediction } from '../services/api';
 import { useAppStore } from '../store/appStore';
 import { cn } from '../utils/cn';
+import { PlayerWithClub } from '../components/PlayerWithClub';
 
 export function Predictions() {
   const { theme, mlAvailable, mlModelType } = useAppStore();
@@ -31,6 +36,7 @@ export function Predictions() {
     queryFn: () => apiService.predictTopPerformers(selectedPosition, 12),
     enabled: mlAvailable,
     retry: 1,
+    staleTime: 15 * 60 * 1000, // precomputed predictions; manual Refresh still refetches
   });
 
   const { 
@@ -43,6 +49,7 @@ export function Predictions() {
     queryFn: () => apiService.predictBestValue(selectedPosition, 6),
     enabled: mlAvailable,
     retry: 1,
+    staleTime: 15 * 60 * 1000,
   });
 
   const positions = [
@@ -214,8 +221,14 @@ export function Predictions() {
                       <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 text-xs font-bold">
                         V
                       </div>
-                      <div>
-                        <div className="font-bold text-sm">{player.player_name}</div>
+                      <div className="min-w-0">
+                        <PlayerWithClub
+                          playerName={player.player_name}
+                          teamName={player.team_name}
+                          showAbbreviation={false}
+                          logoSize="sm"
+                          nameClassName="font-bold text-sm truncate block"
+                        />
                         <div className="text-xs opacity-50">£{player.cost?.toFixed(1)}m</div>
                       </div>
                     </div>
@@ -245,6 +258,27 @@ export function Predictions() {
 }
 
 function PredictionCard({ player, rank, theme }: { player: MLPrediction; rank: number; theme: string }) {
+  // Format match date to readable local timezone format
+  const formatMatchDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const fixtureContext = player.fixture_context;
+  
+  // Debug: Log to see what team_name we're getting
+  // console.log('Player:', player.player_name, 'Team:', player.team_name);
+
   return (
     <div className={cn(
       "group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300",
@@ -269,7 +303,13 @@ function PredictionCard({ player, rank, theme }: { player: MLPrediction; rank: n
         </div>
         
         <div className="min-w-0 flex-1">
-          <h3 className="font-bold truncate group-hover:text-violet-400 transition-colors">{player.player_name}</h3>
+          <PlayerWithClub
+            playerName={player.player_name}
+            teamName={player.team_name}
+            showAbbreviation={false}
+            logoSize="sm"
+            nameClassName="font-bold truncate group-hover:text-violet-400 transition-colors"
+          />
           <p className="text-xs opacity-50 flex items-center gap-1 uppercase tracking-widest font-semibold">
             Next Gameweek Forecast
           </p>
@@ -282,6 +322,61 @@ function PredictionCard({ player, rank, theme }: { player: MLPrediction; rank: n
           <div className="text-[10px] uppercase font-bold opacity-40">Predicted Pts</div>
         </div>
       </div>
+      
+      {/* Fixture Context Display */}
+      {fixtureContext ? (
+        <div className={cn(
+          "mt-3 pt-3 border-t space-y-2",
+          theme === 'dark' ? "border-slate-800" : "border-gray-200"
+        )}>
+          {/* Opponent and Home/Away */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <MapPin className={cn("w-3.5 h-3.5 shrink-0", theme === 'dark' ? "text-slate-400" : "text-gray-400")} />
+              <span className="text-sm font-semibold truncate">{fixtureContext.opponent_team}</span>
+            </div>
+            <div className={cn(
+              "px-2 py-0.5 rounded text-xs font-bold uppercase shrink-0",
+              fixtureContext.home_away === 'home'
+                ? "bg-emerald-500/20 text-emerald-400"
+                : "bg-amber-500/20 text-amber-400"
+            )}>
+              {fixtureContext.home_away === 'home' ? (
+                <span className="flex items-center gap-1">
+                  <Home className="w-3 h-3" />
+                  H
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <Plane className="w-3 h-3" />
+                  A
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Match Date and Matchday */}
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <div className={cn("flex items-center gap-1.5", theme === 'dark' ? "text-slate-400" : "text-gray-500")}>
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{formatMatchDate(fixtureContext.match_date)}</span>
+            </div>
+            <div className={cn(
+              "px-2 py-0.5 rounded font-semibold",
+              theme === 'dark' ? "bg-slate-800 text-slate-300" : "bg-gray-100 text-gray-700"
+            )}>
+              GW {fixtureContext.matchday}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className={cn(
+          "mt-3 pt-3 border-t text-xs text-center italic",
+          theme === 'dark' ? "border-slate-800 text-slate-500" : "border-gray-200 text-gray-400"
+        )}>
+          No upcoming fixture
+        </div>
+      )}
       
       {/* Progress Bar (Visual indicator of score relative to 10 max) */}
       <div className="mt-4 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">

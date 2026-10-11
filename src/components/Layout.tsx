@@ -35,7 +35,8 @@ export function Layout() {
   } = useAppStore();
 
   const { data: health } = useQuery({
-    queryKey: ['health', 'layout'],
+    // Shared key with Settings so both views read one cached/polled health query.
+    queryKey: ['health'],
     queryFn: () => apiService.getHealth(),
     refetchInterval: 30000,
   });

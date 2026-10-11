@@ -1,0 +1,33 @@
+{
+  "categorical_mappings": {
+    "team": [
+      "Arsenal",
+      "Aston Villa",
+      "Bournemouth",
+      "Brentford",
+      "Brighton",
+      "Burnley",
+      "Chelsea",
+      "Crystal Palace",
+      "Everton",
+      "Fulham",
+      "Ipswich",
+      "Leeds",
+      "Leicester",
+      "Liverpool",
+      "Luton",
+      "Man City",
+      "Man Utd",
+      "Newcastle",
+      "Nott'm Forest",
+      "Sheffield Utd",
+      "Southampton",
+      "Spurs",
+      "Sunderland",
+      "West Ham",
+      "Wolves"
+    ]
+  },
+  "numeric_features": [],
+  "feature_names": []
+}

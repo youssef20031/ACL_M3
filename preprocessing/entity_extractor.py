@@ -1,6 +1,7 @@
 """
 Entity Extraction for FPL Query Processing using spaCy
 """
+from config.settings import SEASONS
 import spacy
 from spacy.matcher import Matcher
 from spacy.tokens import Doc
@@ -191,6 +192,9 @@ class EntityExtractor:
             known_players: Optional set of known player names for better extraction
         """
         self.known_players = known_players or set()
+        # Optional services.player_index.PlayerIndex: accent/typo-tolerant matching that
+        # prefers popular players for ambiguous surnames. Set by the API after startup.
+        self.player_index = None
         # Load spaCy model
         try:
             self.nlp = spacy.load("en_core_web_sm")
@@ -245,12 +249,13 @@ class EntityExtractor:
         """
         self.known_players = players
     
-    def extract(self, query: str) -> ExtractedEntities:
+    def extract(self, query: str, chat_history: Optional[List[Dict[str, str]]] = None) -> ExtractedEntities:
         """
         Extract all entities from a query using spaCy.
         
         Args:
             query: User's input query
+            chat_history: Optional conversation history for pronoun resolution
             
         Returns:
             ExtractedEntities with all found entities
@@ -281,7 +286,60 @@ class EntityExtractor:
         # Extract players (do this last, using other entities for context)
         entities.players = self._extract_players(doc, entities)
         
+        # If no players found but query has pronouns, check chat history
+        if not entities.players and chat_history:
+            query_lower = query.lower()
+            has_pronoun = bool(re.search(r'\b(he|she|they|him|her|his|hers|their)\b', query_lower))
+            if has_pronoun:
+                # Extract players from recent conversation
+                history_players = self._extract_players_from_history(chat_history)
+                if history_players:
+                    entities.players = history_players
+        
         return entities
+    
+    def _extract_players_from_history(self, chat_history: List[Dict[str, str]]) -> List[str]:
+        """
+        Extract player names from recent chat history for pronoun resolution.
+        
+        Args:
+            chat_history: Conversation history
+            
+        Returns:
+            List of player names found in recent messages
+        """
+        players = []
+        # Check last 3 messages for player names
+        recent_messages = chat_history[-3:] if len(chat_history) >= 3 else chat_history
+
+        if self.player_index is not None:
+            for msg in reversed(recent_messages):  # most recent mention wins
+                found = self.player_index.mentions(msg.get('content', ''), limit=1)
+                if found:
+                    return found
+            return []
+        
+        # Common words to exclude
+        common_words = {
+            'premier', 'league', 'season', 'gameweek', 'week', 'top', 'best', 'most',
+            'points', 'goals', 'assists', 'player', 'team', 'stats', 'performance',
+            'who', 'what', 'when', 'where', 'how', 'which', 'the', 'and', 'for',
+            'with', 'from', 'this', 'that', 'would', 'should', 'could', 'like',
+            'next', 'upcoming', 'forecast', 'predict', 'earn', 'score', 'get'
+        }
+        
+        for msg in recent_messages:
+            content = msg.get('content', '')
+            # Look for capitalized words (likely proper names)
+            words = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', content)
+            for word in words:
+                if word.lower() not in common_words and len(word) > 3:
+                    # Check if it looks like a player name (at least one capital letter after first word)
+                    parts = word.split()
+                    if len(parts) >= 1:  # Single name like "Haaland" or full name
+                        players.append(word)
+        
+        return players[:1]  # Return most recent player mentioned
     
     def _extract_teams(self, doc: Doc) -> List[str]:
         """Extract team names from query using spaCy."""
@@ -322,62 +380,49 @@ class EntityExtractor:
         return positions
     
     def _extract_seasons(self, doc: Doc) -> List[str]:
-        """Extract seasons from query using spaCy matcher."""
-        seasons = []
+        """Extract seasons ("2024-25", "2024/25", "2024-2025", "2023", "last season").
+
+        Only seasons present in config.settings.SEASONS are returned.
+        """
+        seasons: List[str] = []
         text_lower = doc.text.lower()
 
-        # Handle phrases like "season that ended in 2022" before generic year parsing.
-        # This should map to the previous FPL season (2021-22), not 2022-23.
-        ended_year_matches = re.findall(r"ended\s+in\s+(20\d{2})", text_lower)
-        for year_text in ended_year_matches:
-            year = int(year_text)
-            if year > 2020:
-                prev_year = year - 1
-                season = f"{prev_year}-{str(year)[2:]}"
-                if season in ["2020-21", "2021-22", "2022-23"] and season not in seasons:
-                    seasons.append(season)
+        def add(start_year: int) -> bool:
+            season = f"{start_year}-{str(start_year + 1)[2:]}"
+            if season in SEASONS and season not in seasons:
+                seasons.append(season)
+                return True
+            return False
 
-        matches = self.matcher(doc)
-        
-        for match_id, start, end in matches:
-            if self.nlp.vocab.strings[match_id] == "SEASON":
-                span = doc[start:end]
-                season_text = span.text
-                
-                # Parse season format
-                # Full year format: 2021-2022 or 2021/2022
-                if re.match(r"(20\d{2})[-/](20\d{2})", season_text):
-                    years = re.findall(r"20\d{2}", season_text)
-                    if len(years) == 2:
-                        year1, year2 = int(years[0]), int(years[1])
-                        if year2 == year1 + 1:
-                            season = f"{year1}-{str(year2)[2:]}"
-                            if season in ["2020-21", "2021-22", "2022-23"]:
-                                seasons.append(season)
-                # Short format: 2021-22 or 2021/22
-                elif re.match(r"20(\d{2})[-/](\d{2})", season_text):
-                    match = re.match(r"20(\d{2})[-/](\d{2})", season_text)
-                    season = f"20{match.group(1)}-{match.group(2)}"
-                    if season in ["2020-21", "2021-22", "2022-23"]:
-                        seasons.append(season)
-        
-        # Check for single year mentions using DATE entities
-        for ent in doc.ents:
-            if ent.label_ == "DATE" and ent.text.isdigit():
-                year = int(ent.text)
-                # Skip if this year already belongs to an "ended in YEAR" phrase.
-                if re.search(rf"ended\s+in\s+{year}", text_lower):
-                    continue
-                if year == 2020:
-                    seasons.append("2020-21")
-                elif year == 2021:
-                    seasons.append("2021-22")
-                elif year == 2022:
-                    seasons.append("2022-23")
-                elif year == 2023:
-                    seasons.append("2022-23")
-        
-        return list(set(seasons))
+        # "season that ended in 2022" -> the season that finished that year (2021-22)
+        ended_years = set()
+        for year_text in re.findall(r"ended\s+in\s+(20\d{2})", text_lower):
+            ended_years.add(year_text)
+            add(int(year_text) - 1)
+
+        # Explicit ranges: 2021-22, 2021/22, 2021-2022, 2021 - 22
+        spans = []
+        for m in re.finditer(r"\b(20\d{2})\s*[-/–]\s*(20\d{2}|\d{2})\b", text_lower):
+            start_year, end_text = int(m.group(1)), m.group(2)
+            end_year = int(end_text) if len(end_text) == 4 else 2000 + int(end_text)
+            if end_year == start_year + 1:
+                add(start_year)
+                spans.append(m.span())
+
+        # Relative phrases refer to the most recent season with data
+        if re.search(r"\b(this|last|previous|current)\s+season\b", text_lower):
+            if SEASONS[-1] not in seasons:
+                seasons.append(SEASONS[-1])
+
+        # A lone year: the season starting that year, else the one ending in it
+        for m in re.finditer(r"\b(20\d{2})\b", text_lower):
+            if m.group(1) in ended_years or any(a <= m.start() < b for a, b in spans):
+                continue
+            year = int(m.group(1))
+            if not add(year):
+                add(year - 1)
+
+        return seasons
     
     def _extract_gameweeks(self, doc: Doc) -> List[int]:
         """Extract gameweek numbers from query using spaCy matcher."""
@@ -439,15 +484,18 @@ class EntityExtractor:
         """
         players = []
         text_lower = doc.text.lower()
+
+        if self.player_index is not None:
+            players = self.player_index.mentions(doc.text, limit=2)
         
         # First, check against known players (exact full name match)
-        if self.known_players:
+        elif self.known_players:
             for player in self.known_players:
                 if player.lower() in text_lower:
                     players.append(player)
         
         # If no exact match, try partial matching (last name or common nicknames)
-        if not players and self.known_players:
+        if not players and self.known_players and self.player_index is None:
             query_words = set(text_lower.split())
             # Common words to exclude from matching
             common_words = {

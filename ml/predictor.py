@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass
 
 from ml.feature_engineering import FeatureEngineer
+from ml.promoted_teams_handler import PromotedTeamsHandler
 
 logger = logging.getLogger(__name__)
 
@@ -31,19 +32,56 @@ class FPLPredictor:
     Uses trained ML models to predict next gameweek points.
     """
     
-    def __init__(self, model_path: Optional[str] = None, model_type: str = "linear"):
+    def __init__(self, model_path: Optional[str] = None, model_type: str = "linear",
+                 enable_promoted_teams_handler: bool = True,
+                 enable_minutes_models: bool = True):
         """
         Initialize predictor.
         
         Args:
             model_path: Path to trained model file (.pkl)
             model_type: Type of model ('linear' or 'neural')
+            enable_promoted_teams_handler: Enable cold start handling for promoted teams
+            enable_minutes_models: Enable minutes prediction models (Model C & D)
         """
         self.model = None
         self.scaler = None
         self.feature_engineer = FeatureEngineer()
         self.model_type = model_type
         self.model_loaded = False
+        
+        # Initialize promoted teams handler
+        self.promoted_teams_handler = None
+        if enable_promoted_teams_handler:
+            # Try v2 archetype database first (with EFL data), then fallback to v1
+            archetype_db_path = 'ml/models/promoted_archetypes_v2.pkl'
+            if not os.path.exists(archetype_db_path):
+                archetype_db_path = 'ml/models/promoted_archetypes.pkl'
+            
+            if os.path.exists(archetype_db_path):
+                self.promoted_teams_handler = PromotedTeamsHandler(
+                    archetype_db_path=archetype_db_path
+                )
+                logger.info(f"Promoted teams handler enabled with {archetype_db_path}")
+            else:
+                self.promoted_teams_handler = PromotedTeamsHandler()
+                logger.info("Promoted teams handler enabled without archetype database")
+        
+        # Initialize minutes models (Model C & D)
+        self.minutes_predictor = None
+        if enable_minutes_models:
+            try:
+                from ml.minutes_model import MinutesPredictor
+                self.minutes_predictor = MinutesPredictor(models_dir='ml/models')
+                # Try to load existing models
+                if os.path.exists('ml/models/minutes_pstart_fwd_v1.pkl'):
+                    self.minutes_predictor.load()
+                    logger.info("✅ Minutes models (Model C & D) loaded")
+                else:
+                    logger.info("⚠️ Minutes models not found - predictions will use fallback")
+            except Exception as e:
+                logger.warning(f"Failed to initialize minutes models: {e}")
+                self.minutes_predictor = None
         
         if model_path and os.path.exists(model_path):
             self.load_model(model_path)
@@ -113,6 +151,9 @@ class FPLPredictor:
         """
         Predict points for a single player's next gameweek.
         
+        Automatically handles promoted teams with cold start handling.
+        Uses minutes models (Model C & D) if available.
+        
         Args:
             player_data: Dictionary with player's recent stats and fixture info
             
@@ -122,6 +163,37 @@ class FPLPredictor:
         if not self.model_loaded:
             raise ValueError("Model not loaded. Call load_model() first.")
         
+        # Check if player is from promoted team
+        is_promoted = player_data.get('is_promoted', False)
+        current_gw = player_data.get('GW', 1)
+        
+        # Use promoted teams handler for cold start (GW 1-12)
+        if is_promoted and current_gw <= 12 and self.promoted_teams_handler:
+            logger.info(f"Using promoted teams handler for {player_data.get('name')} (GW{current_gw})")
+            
+            try:
+                prediction, metadata = self.promoted_teams_handler.predict_promoted_player(
+                    player_data,
+                    current_gw=current_gw,
+                    use_archetypes=True
+                )
+                
+                return PlayerPrediction(
+                    player_name=player_data.get('name', 'Unknown'),
+                    predicted_points=float(prediction),
+                    features_used={
+                        'method': metadata.get('method'),
+                        'cold_start_phase': metadata.get('cold_start_phase'),
+                        'confidence': metadata.get('confidence'),
+                        'form': player_data.get('form', 0),
+                        'position': player_data.get('position', '')
+                    },
+                    model_version=f"v1_promoted_{metadata.get('method')}"
+                )
+            except Exception as e:
+                logger.warning(f"Promoted teams handler failed: {e}. Falling back to standard prediction.")
+        
+        # Standard prediction for non-promoted or post-cold-start
         # Convert to dataframe for feature engineering
         df = pd.DataFrame([player_data])
         
@@ -141,11 +213,33 @@ class FPLPredictor:
         else:
             X_scaled = X.values
         
-        # Predict
-        prediction = self.model.predict(X_scaled)[0]
+        # Predict points using existing model
+        # NOTE: Existing models predict total_points directly, NOT points-per-minute
+        # We keep this as-is until models are retrained with points-per-90 targets
+        raw_prediction = self.model.predict(X_scaled)[0]
         
-        # Ensure non-negative prediction
-        prediction = max(0, prediction)
+        # Optionally adjust prediction based on minutes models
+        # This provides better context but doesn't use the flawed division approach
+        minutes_info = {}
+        if self.minutes_predictor and self.minutes_predictor.is_fitted:
+            try:
+                minutes_pred = self.minutes_predictor.predict(player_data)
+                minutes_info = minutes_pred
+                
+                # Store minutes prediction for context
+                # Do NOT apply points_per_minute = raw_points / 66.5 (mathematically invalid)
+                # The existing model already accounts for typical playing time
+                # in its training data distribution
+                
+                logger.debug(f"Minutes prediction: {minutes_pred['expected_minutes']:.1f} min "
+                           f"(P(start)={minutes_pred['p_start']:.2f})")
+                
+            except Exception as e:
+                logger.warning(f"Minutes prediction failed: {e}")
+        
+        # Use raw prediction as-is
+        # TODO: Retrain points models with points-per-90 targets for proper integration
+        prediction = max(0, raw_prediction)
         
         return PlayerPrediction(
             player_name=player_data.get('name', 'Unknown'),
@@ -154,7 +248,8 @@ class FPLPredictor:
                 'form': player_data.get('form', 0),
                 'minutes_avg': player_data.get('minutes', 0),
                 'goals_scored': player_data.get('goals_scored', 0),
-                'assists': player_data.get('assists', 0)
+                'assists': player_data.get('assists', 0),
+                **minutes_info  # Include minutes prediction context
             },
             model_version="v1"
         )
@@ -207,11 +302,22 @@ class FPLPredictor:
         
         # Predict
         predictions = self.model.predict(X_scaled)
-        
+
+        # engineer_features re-sorts rows (by kickoff_time/name), so the
+        # predictions follow df_engineered's row order, not players_data's.
+        # Map each prediction back to its player by name; indexing
+        # players_data[i] attributed predictions to the wrong players.
+        ordered_players = players_data
+        if 'name' in df_engineered.columns and len(df_engineered) == len(players_data):
+            by_name = {}
+            for p in players_data:
+                by_name.setdefault(p.get('name'), p)
+            ordered_players = [by_name.get(n, {'name': n}) for n in df_engineered['name'].tolist()]
+
         # Create results
         results = []
         for i, pred in enumerate(predictions):
-            player_data = players_data[i]
+            player_data = ordered_players[i]
             results.append(PlayerPrediction(
                 player_name=player_data.get('name', 'Unknown'),
                 predicted_points=max(0, float(pred)),
@@ -251,9 +357,12 @@ class FPLPredictor:
         
         # Calculate value score
         value_results = []
+        players_by_name = {}
+        for p in players_data:
+            players_by_name.setdefault(p.get('name'), p)  # first match wins, as before
         for pred in predictions:
             # Find matching player data
-            player = next((p for p in players_data if p.get('name') == pred.player_name), None)
+            player = players_by_name.get(pred.player_name)
             if player and player.get('value', 0) > 0:
                 value = player['value'] / 10.0  # Convert to millions
                 points_per_million = pred.predicted_points / value if value > 0 else 0

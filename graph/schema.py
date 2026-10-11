@@ -23,6 +23,7 @@ class GraphSchema:
     PLAYS_POSITION = "PLAYS_POSITION"
     PLAYS_FOR = "PLAYS_FOR"
     PLAYED_IN = "PLAYED_IN"
+    SEASON_STATS = "SEASON_STATS"
     HOME_TEAM = "HOME_TEAM"
     AWAY_TEAM = "AWAY_TEAM"
     PART_OF = "PART_OF"
@@ -67,7 +68,12 @@ class GraphSchema:
         indexes = [
             # Player indexes
             f"CREATE INDEX player_element IF NOT EXISTS FOR (p:{self.PLAYER}) ON (p.element_id)",
-            
+            f"CREATE INDEX player_name_normalized IF NOT EXISTS FOR (p:{self.PLAYER}) ON (p.name_normalized)",
+
+            # Season/gameweek match-row queries start from Fixture nodes, then expand PLAYED_IN
+            f"CREATE INDEX fixture_season IF NOT EXISTS FOR (f:{self.FIXTURE}) ON (f.season_id)",
+            f"CREATE INDEX fixture_season_gw IF NOT EXISTS FOR (f:{self.FIXTURE}) ON (f.season_id, f.gameweek)",
+
             # Gameweek indexes
             f"CREATE INDEX gameweek_number IF NOT EXISTS FOR (gw:{self.GAMEWEEK}) ON (gw.number)",
             f"CREATE INDEX gameweek_season IF NOT EXISTS FOR (gw:{self.GAMEWEEK}) ON (gw.season_id)",
@@ -180,7 +186,7 @@ class GraphSchema:
                 self.SEASON, self.GAMEWEEK, self.FIXTURE
             ],
             "relationship_types": [
-                self.PLAYS_POSITION, self.PLAYS_FOR, self.PLAYED_IN,
+                self.PLAYS_POSITION, self.PLAYS_FOR, self.PLAYED_IN, self.SEASON_STATS,
                 self.HOME_TEAM, self.AWAY_TEAM, self.PART_OF, self.IN_SEASON
             ],
             "constraints": [],

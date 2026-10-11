@@ -1,0 +1,15 @@
+# Used instead of the root .dockerignore when building deploy/web.Dockerfile
+# (BuildKit picks up <Dockerfile>.dockerignore). Only the frontend sources
+# and the Caddyfile are needed.
+*
+!package.json
+!package-lock.json
+!index.html
+!tsconfig.json
+!tsconfig.node.json
+!vite.config.ts
+!tailwind.config.js
+!postcss.config.js
+!src
+!public
+!deploy/Caddyfile

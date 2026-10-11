@@ -6,3 +6,38 @@ __pycache__
 .gitignore
 neo4j_data
 neo4j_logs
+
+# --- Not needed by the API server image ---
+# Frontend (built/hosted separately)
+node_modules
+dist
+src
+public
+index.html
+package.json
+package-lock.json
+tsconfig*.json
+vite.config.ts
+tailwind.config.js
+postcss.config.js
+vercel.json
+/*.tsx
+/*.ts
+# Docs, reports, specs, CI, tests
+*.md
+*.pdf
+*.tex
+docs
+.kiro
+.claude
+.github
+tests
+.pytest_cache
+.hypothesis
+.cache
+.env.*
+
+# Deployment files and secrets (deploy/.env) never go into the backend image
+deploy
+**/.env
+**/.env.*
