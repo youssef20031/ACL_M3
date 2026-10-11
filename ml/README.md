@@ -10,7 +10,7 @@ This module integrates machine learning predictions into the FPL RAG system. It 
 **Status**: Validated, leakage-free, production-ready (pending calibration analysis)
 **Models**: XGBoost position-specific (GK, DEF, MID, FWD)
 
-**See**: `ML_V6_LEAKAGE_CORRECTED.md` for complete documentation
+**See**: `docs/archive/ML_V6_LEAKAGE_CORRECTED.md` for complete documentation
 
 ## Improvements Implemented
 
@@ -440,7 +440,7 @@ curl -X POST http://localhost:8000/api/ml/status
 - ⚠️ Start probability model (separate binary classifier)
 - ⚠️ Double gameweek feature (fixtures_this_gw counter)
 
-**See**: `ML_V6_LEAKAGE_CORRECTED.md` for detailed production readiness checklist
+**See**: `docs/archive/ML_V6_LEAKAGE_CORRECTED.md` for detailed production readiness checklist
 
 ## Future Improvements (Prioritized)
 
@@ -483,9 +483,9 @@ curl -X POST http://localhost:8000/api/ml/status
 ## References & Documentation
 
 **Main Documentation**:
-- `ML_V6_LEAKAGE_CORRECTED.md` - Complete V6 documentation with real performance
+- `docs/archive/ML_V6_LEAKAGE_CORRECTED.md` - Complete V6 documentation with real performance
 - `ml/LEAKAGE_SUMMARY.md` - Detailed explanation of leakage discovery and fix
-- `ML_FINAL_V5_BREAKTHROUGH.md` - V5 results (⚠️ had leakage, DO NOT USE)
+- `docs/archive/ML_FINAL_V5_BREAKTHROUGH.md` - V5 results (⚠️ had leakage, DO NOT USE)
 
 **Training Scripts**:
 - `ml/train.py` - Main training pipeline
