@@ -12,10 +12,9 @@ import { apiService } from '../services/api';
 import { cn } from '../utils/cn';
 
 const MODELS = [
-  { key: 'llama-3.3-70b', label: 'Llama 3.3 70B Versatile', description: 'Highest performance model via Groq (recommended)' },
-  { key: 'qwen-2.5-coder', label: 'Qwen 2.5 Coder', description: 'Light model, Good for structured data queries' },
-  { key: 'llama-3.2-3b', label: 'Llama 3.2 3B', description: 'Fast, lightweight responses' },
-  { key: 'qwen-2.5-7b', label: 'Qwen 2.5 7B', description: 'medium quality model' },
+  { key: 'gpt-oss-120b', label: 'GPT-OSS 120B', description: 'Highest quality model via Groq (recommended)' },
+  { key: 'gpt-oss-20b', label: 'GPT-OSS 20B', description: 'Fast, lightweight responses' },
+  { key: 'qwen3-27b', label: 'Qwen 3.8 27B', description: 'Balanced quality and speed' },
 ];
 
 const RETRIEVAL_METHODS = [
@@ -49,7 +48,8 @@ export function Settings() {
   const { data: health, refetch: refetchHealth } = useQuery({
     queryKey: ['health'],
     queryFn: () => apiService.getHealth(),
-    refetchInterval: 30000,
+    // Polling is owned by Layout (always mounted) on the same ['health'] key; a second
+    // interval here would double the /health traffic while this page is open.
   });
 
   return (

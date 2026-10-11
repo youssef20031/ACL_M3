@@ -68,7 +68,7 @@ You present data clearly and draw meaningful conclusions."""
             model_key: The model being used (to customize prompt)
         """
         # Use enhanced persona for Llama 3.3 70B
-        if model_key == "llama-3.3-70b":
+        if model_key in ("gpt-oss-120b", "gpt-oss-20b", "llama-3.3-70b"):
             persona_text = PromptTemplates.PERSONAS.get("conversational_fpl_llama", PromptTemplates.PERSONAS["conversational_fpl"])
         else:
             persona_text = PromptTemplates.PERSONAS.get(persona, PromptTemplates.PERSONAS["conversational_fpl"])
@@ -143,10 +143,14 @@ FirstMessage: {str(is_first_message)}
 - Format: "[Player] scored [X] goals in [specific season]" OR "[Player] scored [X] goals across all seasons (2020-21 through 2025-26)"
 
 **ML FORECAST RULES:**
-- If "ML Predictions" are provided, prioritize them for questions about FUTURE performance.
-- Always distinguish between "Historical Stats" (from Knowledge Graph) and "Forecasts" (from ML).
-- Example: "Based on historical data, Salah has 5 goals, but our ML model predicts he will score 7.2 points next gameweek."
-- Only reference ML predictions when they are present in the context above.
+- If "ML Predictions" are provided above, those are the CURRENT/FUTURE predictions for the UPCOMING 2026-27 season.
+- ML predictions are forecasts based on recent form and upcoming fixtures - they are NOT historical stats.
+- When asked about "next gameweek" or "upcoming matches" or "who to pick", ALWAYS use ML Predictions if available.
+- Always distinguish between "Historical Stats" (from Knowledge Graph) and "ML Forecasts" (for next gameweek).
+- When discussing recent form for context, use stats from the 2025-26 season (the most recent complete season before the upcoming 2026-27).
+- Example: "Haaland averaged 8 goals in 2025-26, and our ML model predicts he will score 8.0 points in his next match vs Bournemouth."
+- If ML Predictions show Haaland with 8.03 predicted points, that is THE answer when asked "who should I pick" or "how many points will he get".
+- NEVER ignore ML Predictions when they are present - they are the most important data for future performance questions.
 
 **UNDERSTANDING USER INTENT:**
 - Vague responses like "hmm", "i dont know", "not sure", "maybe" mean the user is UNCERTAIN - offer helpful choices
@@ -179,8 +183,20 @@ Good: "He scored 36 goals across 35 games in the 2022-23 season..." (clearly sta
 User: "who scored the most?"
 Good: "Erling Haaland with 36 goals in the 2022-23 season." (direct answer with season specified)
 
-User: "who will score next gameweek?"
-Good: "Based on our ML model, Haaland is forecast for 7.2 points next gameweek." (uses ML predictions)
+User: "who will score next gameweek?" or "who should I pick?"
+IF ML PREDICTIONS ARE AVAILABLE:
+Good: "Based on our ML model, Haaland is forecast for 8.0 points in his next match vs Bournemouth (Home). He's the top predicted performer."
+Bad: "Haaland scored 36 goals in the 2022-23 season." (WRONG - giving historical stats instead of predictions)
+
+User: "how many points do you think he's gonna earn?" (after discussing a player)
+IF ML PREDICTIONS ARE AVAILABLE:
+Good: "Our ML model forecasts Haaland will score 8.0 points in his next match vs Bournemouth at home."
+Bad: "Based on historical stats, Haaland scored 36 goals in 2022-23..." (WRONG - giving old season stats instead of prediction)
+
+User: "forecasted points" or "predicted points"
+IF ML PREDICTIONS ARE AVAILABLE:
+Good: "Haaland: 8.0 predicted points vs Bournemouth (H), Palmer: 7.5 predicted points vs Fulham (A)"
+Bad: "Haaland's forecasted points are not explicitly listed..." (WRONG if they ARE in ML Predictions section above)
 
 User: "compare him to other top scorers"
 IF DATA SCOPE IS "2025-26 season":

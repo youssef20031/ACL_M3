@@ -87,7 +87,7 @@ export const useAppStore = create<AppState>()(
       clearChat: () => set({ chatHistory: [] }),
 
       // Settings
-      selectedModel: 'llama-3.3-70b',
+      selectedModel: 'gpt-oss-120b',
       retrievalMethod: 'Hybrid',
       embeddingModel: 'minilm',
       setSelectedModel: (model) => set({ selectedModel: model }),
@@ -109,7 +109,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'fpl-app-storage',
-      version: 2, // bump version to force migration
+      version: 3, // bump version to force migration
       partialize: (state) => ({
         selectedModel: state.selectedModel,
         retrievalMethod: state.retrievalMethod,
@@ -124,6 +124,19 @@ export const useAppStore = create<AppState>()(
           const legacyModels = ['qwen-2.5-coder', 'qwen-2.5-7b', 'llama-3.2-3b', 'phi-3-mini', 'gemma-2-2b'];
           if (legacyModels.includes(persistedState?.selectedModel)) {
             persistedState.selectedModel = 'llama-3.3-70b';
+          }
+        }
+        // v2 → v3: Groq retired Llama 3.3 and the HuggingFace models are no longer served
+        if (version < 3) {
+          const retired: Record<string, string> = {
+            'llama-3.3-70b': 'gpt-oss-120b',
+            'llama-3.2-3b': 'gpt-oss-20b',
+            'qwen-2.5-coder': 'qwen3-27b',
+            'qwen-2.5-7b': 'qwen3-27b',
+          };
+          const current = persistedState?.selectedModel;
+          if (current && retired[current]) {
+            persistedState.selectedModel = retired[current];
           }
         }
         return persistedState;
