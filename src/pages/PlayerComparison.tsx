@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeftRight,
@@ -31,6 +31,11 @@ import {
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
 import { cn } from '../utils/cn';
+import { getClubLogoPath } from '../utils/clubLogos';
+import { AvatarImage } from '../components/AvatarImage';
+
+const SEARCH_DEBOUNCE_MS = 200;
+const AVATAR_STALE_MS = 24 * 60 * 60 * 1000;
 
 const SEASONS = ['', '2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26'];
 
@@ -72,8 +77,11 @@ export function PlayerComparison() {
   const p2SuppressSearch = useRef(false);
   const p1AutocompleteActive = useRef(false);
   const p2AutocompleteActive = useRef(false);
-  const [avatarByName, setAvatarByName] = useState<Record<string, string | null>>({});
-  const avatarHydrationVersion = useRef(0);
+  // Bumped on every input change / commit so out-of-order search responses are dropped.
+  const p1SearchSeq = useRef(0);
+  const p2SearchSeq = useRef(0);
+  const compareSeq = useRef(0);
+  const queryClient = useQueryClient();
   const p1InputRef = useRef<HTMLInputElement | null>(null);
   const p2InputRef = useRef<HTMLInputElement | null>(null);
   const p1ListId = 'p1-suggestions-list';
@@ -83,9 +91,17 @@ export function PlayerComparison() {
   const restoreComparisonRef = useRef(false);
 
   const compareMutation = useMutation({
+    // Served from the query cache when the same matchup was compared recently (e.g. returning from "View Details").
     mutationFn: ({ p1, p2, s }: { p1: string; p2: string; s?: string }) =>
-      apiService.comparePlayers(p1, p2, s || undefined),
-    onSuccess: (data) => {
+      queryClient.fetchQuery({
+        queryKey: ['players', 'compare', p1, p2, s || ''],
+        queryFn: () => apiService.comparePlayers(p1, p2, s || undefined),
+        staleTime: 5 * 60 * 1000,
+      }),
+    // Only the latest compare request may write results (season can change while one is in flight).
+    onMutate: () => ({ seq: ++compareSeq.current }),
+    onSuccess: (data, _vars, context) => {
+      if (context?.seq !== compareSeq.current) return;
       setComparisonData(data.comparison);
     },
   });
@@ -93,6 +109,19 @@ export function PlayerComparison() {
   const handleCompare = (e: React.FormEvent) => {
     e.preventDefault();
     if (!player1.trim() || !player2.trim() || !neo4jConnected) return;
+    
+    // Deactivate autocomplete and clear suggestions to prevent them from reappearing
+    p1AutocompleteActive.current = false;
+    p2AutocompleteActive.current = false;
+    p1SearchSeq.current++;
+    p2SearchSeq.current++;
+    setP1Suggestions([]);
+    setP2Suggestions([]);
+    
+    // Blur the input fields to remove focus
+    p1InputRef.current?.blur();
+    p2InputRef.current?.blur();
+    
     compareMutation.mutate({ p1: player1.trim(), p2: player2.trim(), s: season });
   };
 
@@ -106,14 +135,21 @@ export function PlayerComparison() {
     compareMutation.mutate({ p1, p2, s: season });
   };
 
-  const runSearch = async (q: string, setSuggestions: (s: Suggestion[]) => void) => {
+  const runSearch = async (q: string, setSuggestions: (s: Suggestion[]) => void, isCurrent: () => boolean) => {
     if (!q || q.trim().length < 2) {
       setSuggestions([]);
       return;
     }
 
+    const term = q.trim();
     try {
-      const res = await apiService.searchPlayers(q.trim(), { limit: 10, includeAvatars: false });
+      // fetchQuery dedupes identical in-flight requests and caches recent terms (e.g. after backspacing).
+      const res = await queryClient.fetchQuery({
+        queryKey: ['players', 'search', term.toLowerCase(), 10],
+        queryFn: ({ signal }) => apiService.searchPlayers(term, { limit: 10, includeAvatars: false, signal }),
+        staleTime: 5 * 60 * 1000,
+      });
+      if (!isCurrent()) return;
       const players = (res.players || [])
         .map((p: any) => ({
           name: p.player_name || p.name || '',
@@ -124,50 +160,40 @@ export function PlayerComparison() {
         .filter((x: Suggestion) => x.name);
       setSuggestions(players.slice(0, 10));
     } catch {
-      setSuggestions([]);
+      if (isCurrent()) setSuggestions([]);
     }
   };
 
-  useEffect(() => {
-    const visibleNames = Array.from(new Set([...p1Suggestions, ...p2Suggestions].map((s) => s.name).filter(Boolean)));
-    const namesToHydrate = visibleNames.filter((name) => avatarByName[name] === undefined).slice(0, 4);
-
-    if (namesToHydrate.length === 0) {
-      return;
-    }
-
-    const version = ++avatarHydrationVersion.current;
-
-    // Fetch images with staggered delays to avoid rate limits (250ms between each)
-    void Promise.allSettled(
-      namesToHydrate.map(async (name, index) => {
-        // Stagger requests by 250ms each to be gentler on image sources
-        await new Promise(resolve => setTimeout(resolve, index * 250));
+  // Avatars for suggestions that don't already carry one. One cached query per player name (24h),
+  // so each name is looked up at most once per session; lookups for names that drop out of the
+  // list while typing are aborted.
+  const namesNeedingAvatar = Array.from(
+    new Set([...p1Suggestions, ...p2Suggestions].filter((s) => s.name && !s.avatar).map((s) => s.name))
+  );
+  const avatarQueries = useQueries({
+    queries: namesNeedingAvatar.map((name) => ({
+      queryKey: ['player-avatar', name],
+      queryFn: async ({ signal }: { signal: AbortSignal }) => {
         try {
-          const result = await apiService.searchImage(name);
-          return { name, avatar: result.image_url ?? null };
+          const result = await apiService.searchImage(name, signal);
+          return result.image_url ?? null;
         } catch (err) {
-          // If rate-limited or errored, just return null (no avatar)
-          console.warn(`Failed to fetch avatar for ${name}:`, err);
-          return { name, avatar: null };
+          if (signal.aborted) throw err;
+          return null; // no avatar on lookup failure; don't retry
         }
-      })
-    ).then((settled) => {
-      if (version !== avatarHydrationVersion.current) return;
-
-      setAvatarByName((current) => {
-        const next = { ...current };
-        for (const item of settled) {
-          if (item.status === 'fulfilled') {
-            next[item.value.name] = item.value.avatar;
-          }
-        }
-        return next;
-      });
-    });
-  }, [avatarByName, p1Suggestions, p2Suggestions]);
+      },
+      staleTime: AVATAR_STALE_MS,
+      gcTime: AVATAR_STALE_MS,
+      retry: false,
+    })),
+  });
+  const avatarByName: Record<string, string | null | undefined> = {};
+  namesNeedingAvatar.forEach((name, i) => {
+    avatarByName[name] = avatarQueries[i]?.data;
+  });
 
   useEffect(() => {
+    const seq = ++p1SearchSeq.current;
     if (p1Timer.current) window.clearTimeout(p1Timer.current);
     p1Timer.current = window.setTimeout(() => {
       if (!p1AutocompleteActive.current) {
@@ -180,9 +206,9 @@ export function PlayerComparison() {
         setP1Index(-1);
         return;
       }
-      runSearch(player1, setP1Suggestions);
+      runSearch(player1, setP1Suggestions, () => seq === p1SearchSeq.current && p1AutocompleteActive.current);
       setP1Index(-1);
-    }, 150) as unknown as number;
+    }, SEARCH_DEBOUNCE_MS) as unknown as number;
 
     return () => {
       if (p1Timer.current) window.clearTimeout(p1Timer.current);
@@ -190,6 +216,7 @@ export function PlayerComparison() {
   }, [player1]);
 
   useEffect(() => {
+    const seq = ++p2SearchSeq.current;
     if (p2Timer.current) window.clearTimeout(p2Timer.current);
     p2Timer.current = window.setTimeout(() => {
       if (!p2AutocompleteActive.current) {
@@ -202,9 +229,9 @@ export function PlayerComparison() {
         setP2Index(-1);
         return;
       }
-      runSearch(player2, setP2Suggestions);
+      runSearch(player2, setP2Suggestions, () => seq === p2SearchSeq.current && p2AutocompleteActive.current);
       setP2Index(-1);
-    }, 150) as unknown as number;
+    }, SEARCH_DEBOUNCE_MS) as unknown as number;
 
     return () => {
       if (p2Timer.current) window.clearTimeout(p2Timer.current);
@@ -410,10 +437,7 @@ export function PlayerComparison() {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        {(() => {
-                          const avatarUrl = s.avatar ?? avatarByName[s.name];
-                          return avatarUrl ? <img src={avatarUrl} alt={`${s.name} avatar`} className="h-6 w-6 rounded-full" /> : null;
-                        })()}
+                        <AvatarImage src={s.avatar ?? avatarByName[s.name]} alt={`${s.name} avatar`} className="h-6 w-6 rounded-full" size={24} />
                         <div>
                           <div className="font-medium">{s.name}</div>
                           {(s.position || s.season) && <div className={cn('text-xs', mutedText)}>{[s.position, s.season].filter(Boolean).join(' · ')}</div>}
@@ -470,10 +494,7 @@ export function PlayerComparison() {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        {(() => {
-                          const avatarUrl = s.avatar ?? avatarByName[s.name];
-                          return avatarUrl ? <img src={avatarUrl} alt={`${s.name} avatar`} className="h-6 w-6 rounded-full" /> : null;
-                        })()}
+                        <AvatarImage src={s.avatar ?? avatarByName[s.name]} alt={`${s.name} avatar`} className="h-6 w-6 rounded-full" size={24} />
                         <div>
                           <div className="font-medium">{s.name}</div>
                           {(s.position || s.season) && <div className={cn('text-xs', mutedText)}>{[s.position, s.season].filter(Boolean).join(' · ')}</div>}
@@ -653,22 +674,43 @@ function ComparisonResults({
           return (
             <div key={i} className={cn('relative overflow-hidden rounded-[2rem] border', panelClass)}>
               <div className={cn('absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r', accent)} />
-              <div className="relative min-h-[420px]">
-                {p.avatar ? (
-                  <img src={p.avatar} alt={`${name} avatar`} className="absolute inset-0 h-full w-full object-cover" />
-                ) : (
-                  <div className={cn('absolute inset-0 bg-gradient-to-br', i === 0 ? 'from-violet-900 via-slate-900 to-slate-950' : 'from-sky-900 via-slate-900 to-slate-950')} />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-slate-950/10" />
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent_35%)]" />
-                <div className="relative flex h-full flex-col justify-end p-6 text-white">
-                  <div className="mb-4 flex items-center gap-2">
-                    <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] backdrop-blur">{p.position ?? 'Player'}</span>
-                    {p.season && <span className="rounded-full bg-white/10 px-3 py-1 text-xs backdrop-blur">{p.season}</span>}
+              <AvatarImage
+                src={p.avatar}
+                alt={`${name} avatar`}
+                className="absolute inset-0 h-full w-full object-cover brightness-110"
+                loading="eager"
+                fallback={<div className={cn('absolute inset-0 bg-gradient-to-br', i === 0 ? 'from-violet-900 via-slate-900 to-slate-950' : 'from-sky-900 via-slate-900 to-slate-950')} />}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.05),_transparent_40%)]" />
+              <div className="relative flex flex-col justify-between p-6 text-white min-h-[420px]">
+                <div className="flex items-center gap-3">
+                  {(() => {
+                    const logoPath = p.team_name ? getClubLogoPath(p.team_name) : null;
+                    return logoPath ? (
+                      <img
+                        src={logoPath}
+                        alt={`${p.team_name} logo`}
+                        className="h-12 w-12 object-contain shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : null;
+                  })()}
+                  <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] backdrop-blur">{p.position ?? 'Player'}</span>
+                  {p.season && <span className="rounded-full bg-white/10 px-3 py-1 text-xs backdrop-blur">{p.season}</span>}
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg font-black uppercase leading-tight tracking-tight sm:text-xl">
+                      {name}
+                    </h3>
+                    <p className="mt-2 text-sm text-white/75">{p.team_name ?? p.team ?? 'Premier League'}</p>
                   </div>
-                  <h3 className="max-w-[12ch] text-4xl font-black uppercase leading-[0.9] tracking-tight sm:text-5xl">{name}</h3>
-                  <p className="mt-2 text-sm text-white/75">{p.team_name ?? p.team ?? 'Premier League'}</p>
-                  <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                  
+                  <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur">
                       <div className="text-xs uppercase tracking-wide text-white/60">Points</div>
                       <div className="mt-1 text-2xl font-bold">{p.total_points ?? 0}</div>
@@ -678,18 +720,21 @@ function ComparisonResults({
                       <div className="mt-1 text-2xl font-bold">{p.games ?? 0}</div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onOpenDetails(p)}
-                    className={cn(
-                      'relative z-20 mt-5 inline-flex self-start items-center rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] shadow-lg transition',
-                      isDark
-                        ? 'border-white/15 bg-white/10 text-white hover:bg-white/20'
-                        : 'border-white/20 bg-white/15 text-white hover:bg-white/25'
-                    )}
-                  >
-                    View details
-                  </button>
+                  
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onOpenDetails(p)}
+                      className={cn(
+                        'relative z-20 text-sm font-semibold underline decoration-2 underline-offset-4 transition-colors',
+                        i === 0
+                          ? 'text-violet-300 hover:text-violet-100'
+                          : 'text-sky-300 hover:text-sky-100'
+                      )}
+                    >
+                      View Details →
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
