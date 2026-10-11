@@ -158,6 +158,11 @@ class LLMManager:
             logger.error(f"Failed to initialize Groq client: {e}")
             self.groq_client = None
     
+    @property
+    def available(self) -> bool:
+        """True when at least one provider (Groq or HuggingFace) is configured."""
+        return self.groq_client is not None or self.client is not None
+
     def set_api_token(self, token: str):
         """
         Set or update the API token.
