@@ -126,17 +126,13 @@ The app will be available at **http://localhost:3000**
 
 ---
 
-### Step 4 — First-Time Setup (in the browser)
+### Step 4 — Load the data (first time only)
 
-1. Open **http://localhost:3000**
-2. Go to **Settings**
-3. Under **Neo4j Connection**, enter:
-   - URI: `bolt://localhost:7687`
-   - Username: `neo4j`
-   - Password: `password`
-   - Click **Connect**
-4. Under **Data Management**, click **📥 Load FPL Data** — this imports the CSV into Neo4j (takes 1–3 minutes)
-5. Optionally click **🔮 Build Embeddings** to enable Hybrid/Embeddings retrieval mode
+```powershell
+.venv\Scripts\python.exe load_data.py
+```
+
+This wipes Neo4j and loads all six seasons plus the 2026-27 fixtures (about 30 seconds locally, about 3 minutes against a remote database). Then open **http://localhost:3000**.
 
 ---
 
@@ -209,106 +205,23 @@ ACL_M3/
 
 ## ☁️ Deployment
 
-The app deploys as three separate services:
-
-| Component | Platform | Cost |
-|-----------|----------|------|
-| React frontend | Vercel | Free |
-| FastAPI backend | Render | Free (sleeps after 15min inactivity) |
-| Neo4j database | AuraDB | Free tier |
-
----
-
-### 1 — Neo4j AuraDB (database)
-
-1. Go to [console.neo4j.io](https://console.neo4j.io) and create a free account
-2. Create a new **AuraDB Free** instance
-3. Download the credentials file when prompted — you need:
-   - **Connection URI** (looks like `neo4j+s://xxxxxxxx.databases.neo4j.io`)
-   - **Username** (usually `neo4j`)
-   - **Password** (auto-generated)
-4. Keep these — you'll add them as environment variables in Railway
-
----
-
-### 2 — Render (FastAPI backend)
-
-1. Go to [render.com](https://render.com) and sign in with GitHub
-2. Click **New → Web Service**
-3. Connect your GitHub repo
-4. Render will auto-detect Python using `render.yaml`. Confirm these settings:
-   - **Runtime**: Python
-   - **Build Command**: *(auto-filled from render.yaml)*
-   - **Start Command**: `uvicorn api_main:app --host 0.0.0.0 --port $PORT`
-   - **Plan**: Free
-5. Scroll to **Environment Variables** and add:
-
-```
-NEO4J_URI=neo4j+s://xxxxxxxx.databases.neo4j.io
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your_aura_password
-HUGGINGFACE_API_TOKEN=hf_your_token_here
-```
-
-6. Click **Create Web Service**. Render will build and deploy (takes ~5 minutes first time)
-7. Copy the public URL it gives you (e.g. `https://fpl-fantasytrivia-api.onrender.com`)
-
-> **Note**: On the free tier, the service spins down after 15 minutes of inactivity. The first request after that takes ~30 seconds to wake up. This is normal.
-
----
-
-### 3 — Vercel (React frontend)
-
-1. Go to [vercel.com](https://vercel.com) and sign in with GitHub
-2. Click **Add New Project** and import this repository
-3. Vercel will detect Vite automatically. Leave all build settings as-is
-4. Before deploying, add this **Environment Variable**:
-   ```
-   VITE_API_URL=https://fpl-fantasytrivia-api.onrender.com
-   ```
-   (replace with your actual Render URL)
-5. Also open `vercel.json` and replace both `REPLACE_WITH_YOUR_RAILWAY_URL` with your Render URL:
-   ```json
-   "destination": "https://fpl-fantasytrivia-api.onrender.com/api/:path*"
-   ```
-6. Click **Deploy**
-
-Your app will be live at `https://your-project.vercel.app`
-
----
-
-### 4 — Load data after deployment
-
-Once both services are running:
-1. Open your Vercel URL
-2. Go to **Settings**
-3. The Neo4j connection will auto-connect using the Railway env vars
-4. Click **📥 Load FPL Data** to populate AuraDB
-5. Click **🔮 Build Embeddings** if you want semantic search
-
----
-
-### Environment variables reference
-
-| Variable | Where | Description |
-|----------|-------|-------------|
-| `NEO4J_URI` | Render | AuraDB connection URI |
-| `NEO4J_USER` | Render | AuraDB username |
-| `NEO4J_PASSWORD` | Render | AuraDB password |
-| `HUGGINGFACE_API_TOKEN` | Render | HuggingFace API token |
-| `VITE_API_URL` | Vercel | Render backend public URL |
+Production runs on a single VM with Docker Compose: Caddy (HTTPS and the built frontend), the FastAPI backend, and Neo4j. Setup steps for Oracle Cloud's free tier, plus day-to-day commands, are in **[deploy/README.md](deploy/README.md)**.
 
 ---
 
 ## 🔧 Environment Variables
 
-Create or edit `.env` in the project root:
+Create or edit `.env` in the project root (for the VM, see `deploy/.env.example`):
 
 ```env
-HUGGINGFACE_API_TOKEN=hf_your_token_here
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=password
+GROQ_API_KEY=gsk_your_key_here
+# Optional
+HUGGINGFACE_API_TOKEN=
+GOOGLE_CUSTOM_SEARCH_API_KEY=
+GOOGLE_CUSTOM_SEARCH_CX=
 ```
 
 ---
@@ -334,11 +247,13 @@ NEO4J_PASSWORD=password
 
 ## 🤖 LLM Models
 
+All served by Groq:
+
 | Key | Model |
 |-----|-------|
-| `qwen-2.5-coder` | Qwen 2.5 Coder (default) |
-| `llama-3.2-3b` | Llama 3.2 3B Instruct |
-| `qwen-2.5-7b` | Qwen 2.5 7B |
+| `gpt-oss-120b` | OpenAI GPT-OSS 120B (default) |
+| `gpt-oss-20b` | OpenAI GPT-OSS 20B (fast) |
+| `qwen3-27b` | Qwen 3.8 27B |
 
 ---
 

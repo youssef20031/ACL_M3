@@ -2,7 +2,8 @@
 .env
 .env.example
 .env.local
-# .env.production is committed (contains public Railway URL)
+# Template for the VM deployment (no secrets)
+!deploy/.env.example
 
 # Python
 .venv/
@@ -29,3 +30,6 @@ Thumbs.db
 
 # Data (large files — load via the app instead)
 # cleaned_merged_seasons_cleaned.csv  # keep this committed so Railway can access it
+
+# Runtime caches (avatar lookups)
+.cache/

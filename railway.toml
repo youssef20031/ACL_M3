@@ -1,8 +1,0 @@
-[build]
-builder = "nixpacks"
-buildCommand = "pip install -r requirements.txt && python -m spacy download en_core_web_sm && python -m nltk.downloader punkt punkt_tab stopwords wordnet"
-
-[deploy]
-startCommand = "python start.py"
-restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3

@@ -1,0 +1,44 @@
+name: Deploy to VM
+
+# Pulls the latest main on the VM and rebuilds the stack (deploy/deploy.sh).
+# Inactive until these repository secrets are set (Settings → Secrets → Actions):
+#   VM_HOST     public IP or hostname of the VM
+#   VM_USER     SSH user (ubuntu on Oracle's Ubuntu images)
+#   VM_SSH_KEY  private key whose public half is in the VM's ~/.ssh/authorized_keys
+#   VM_APP_DIR  optional, path of the repo on the VM (default: ~/ACL_M3)
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'embeddings/prebuilt/**'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VM_HOST: ${{ secrets.VM_HOST }}
+    steps:
+      - name: Skip when the VM isn't configured
+        if: env.VM_HOST == ''
+        run: echo "VM_HOST secret not set; skipping deploy."
+
+      - name: Deploy over SSH
+        if: env.VM_HOST != ''
+        env:
+          VM_USER: ${{ secrets.VM_USER }}
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_APP_DIR: ${{ secrets.VM_APP_DIR }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_deploy "$VM_USER@$VM_HOST" \
+            "cd ${VM_APP_DIR:-~/ACL_M3} && bash deploy/deploy.sh"
