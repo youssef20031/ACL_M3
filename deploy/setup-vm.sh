@@ -1,14 +1,30 @@
 #!/usr/bin/env bash
-# One-time setup for a fresh Ubuntu 22.04/24.04 VM (tested target: Oracle Cloud
-# Ampere A1 / arm64). Run from the repo root on the VM:
+# One-time setup for a fresh Ubuntu 22.04/24.04 VM (x86_64 or arm64; e.g. an
+# Azure B-series VM or Oracle Cloud Ampere). Run from the repo root on the VM:
 #
 #   bash deploy/setup-vm.sh
 #
-# Installs Docker, opens ports 80/443 in the host firewall, and creates
-# deploy/.env with a generated Neo4j password and an sslip.io hostname.
+# Installs Docker, adds swap on small VMs, opens ports 80/443 in the host
+# firewall, and creates deploy/.env with a generated Neo4j password and an
+# sslip.io hostname.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+echo "==> Checking swap"
+# A 4 GB VM runs the stack fine, but the image build and model loading can spike;
+# swap turns a would-be out-of-memory kill into a brief slowdown.
+mem_kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+if [ "$(swapon --noheadings | wc -l)" -eq 0 ] && [ "$mem_kb" -lt 16000000 ]; then
+  sudo fallocate -l 4G /swapfile
+  sudo chmod 600 /swapfile
+  sudo mkswap /swapfile >/dev/null
+  sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+  echo "    Added a 4 GB swap file"
+else
+  echo "    Swap already present or plenty of RAM; skipping"
+fi
 
 echo "==> Installing Docker Engine + compose plugin (official apt repository)"
 if ! command -v docker >/dev/null 2>&1; then
@@ -28,8 +44,9 @@ else
 fi
 
 echo "==> Opening ports 80 and 443 in the host firewall"
-# Oracle's Ubuntu images ship iptables rules that REJECT everything except SSH,
-# in addition to the cloud-level Security List (which you open in the console).
+# Needed on Oracle's Ubuntu images, whose iptables rules REJECT everything except
+# SSH; harmless elsewhere. The cloud-level firewall (Azure Network Security Group,
+# Oracle Security List) is opened separately in the provider's console.
 for port in 80 443; do
   if ! sudo iptables -C INPUT -p tcp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT 2>/dev/null; then
     sudo iptables -I INPUT -p tcp --dport "$port" -m conntrack --ctstate NEW -j ACCEPT

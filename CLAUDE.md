@@ -76,7 +76,7 @@ Routes in `src/App.tsx` (`/qa`, `/predictions`, `/trivia`, `/search`, `/compare`
 
 ## Deployment
 
-Production is one VM (Oracle Cloud Ampere, **arm64**) running `deploy/docker-compose.yml`: `web` (Caddy: HTTPS, serves the built `dist/`, proxies `/api`, `/health`, `/ws`, `/docs`), `backend` (root `Dockerfile`), and `neo4j` (not public). See `deploy/README.md`.
+Production is one Ubuntu VM with 4 GB+ RAM (Azure for Students x86_64 now; Oracle Ampere arm64 also supported, so keep both architectures building) running `deploy/docker-compose.yml`. Neo4j memory defaults (`NEO4J_HEAP=1G`, `NEO4J_PAGECACHE=512M`) are sized for 4 GB; the backend peaks around 0.9 GB. Services: `web` (Caddy: HTTPS, serves the built `dist/`, proxies `/api`, `/health`, `/ws`, `/docs`), `backend` (root `Dockerfile`), and `neo4j` (not public). See `deploy/README.md`.
 - `deploy/setup-vm.sh` does one-time VM setup.
 - `deploy/deploy.sh [--load-data]` pulls, rebuilds and restarts.
 - `.github/workflows/deploy.yml` runs it over SSH once the `VM_*` secrets exist.
