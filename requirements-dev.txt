@@ -1,0 +1,31 @@
+# Development, testing, training and analysis dependencies.
+# Install with: pip install -r requirements-dev.txt
+-r requirements.txt
+
+# --- Tests (tests/) ---------------------------------------------------------
+pytest>=8.0
+hypothesis>=6.100
+
+# --- Training / analysis scripts --------------------------------------------
+# ml/train.py, ml/calibrate_start_probability.py, ml/investigate_leakage.py,
+# ml/production_readiness.py, ml/verify_production_readiness.py,
+# ml/features/adaptation_curve.py, evaluate_llm_models.py, ...
+matplotlib>=3.8.0
+seaborn>=0.12.0
+scipy>=1.11
+joblib>=1.3.0
+psutil>=5.9                 # build_embeddings_offline.py
+
+# --- Legacy Streamlit UI (app.py) and utils/visualization.py -----------------
+streamlit>=1.29.0
+plotly>=5.18.0
+networkx>=3.2.1
+
+# --- Data scraping (ml/data/fbref_scraper.py) --------------------------------
+beautifulsoup4>=4.12
+curl_cffi>=0.6
+
+# --- Optional: neural-net experiments in ml/train.py ------------------------
+# ml/train.py imports TensorFlow inside a try/except and falls back without it.
+# Very large and has no wheels for Python 3.14; install manually if needed:
+#   pip install "tensorflow>=2.15.0"

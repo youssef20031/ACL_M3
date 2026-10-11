@@ -1,6 +1,6 @@
 services:
   neo4j:
-    image: neo4j:5.15
+    image: neo4j:5.26  # 5.26 LTS
     container_name: neo4j_fpl
     ports:
       - "7474:7474" # HTTP Browser
@@ -50,18 +50,11 @@ services:
           memory: 8G
     restart: always
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: react_fpl
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
-    restart: always
+  # No frontend service: the React/Vite app lives at the repo root (src/),
+  # not in ./frontend. Run it on the host with `npm run dev` (port 3000,
+  # proxies /api, /health and /ws to the backend on :8000), or build static
+  # files with `npm run build` (output in dist/) and serve them from any
+  # static host that forwards /api to the backend.
 
 volumes:
   neo4j_data:
