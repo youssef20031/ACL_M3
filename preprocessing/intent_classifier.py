@@ -193,11 +193,19 @@ class IntentClassifier:
 
             Intent.PREDICTION: [
                 r"predict(?:ions?)?",
-                r"forecast",
+                r"forecast(?:ed)?",
                 r"who will score",
-                r"next (?:gw|gameweek)",
-                r"expected (?:points|performance)",
-                r"who (?:should|is likely to) perform",
+                r"who (?:should|could|might) (?:i|we) pick",
+                r"next (?:gw|gameweek|week)",
+                r"upcoming (?:gw|gameweek|week|match|fixture)",
+                r"expected (?:points|performance|score)",
+                r"who (?:should|is likely to|will|might) perform",
+                r"who to (?:pick|choose|select|captain)",
+                r"(?:good|best) (?:picks?|choice|option|captain) for (?:next|upcoming)",
+                r"captain(?:cy)? (?:pick|choice|option)",
+                r"points? (?:for|in) (?:next|upcoming) (?:gw|gameweek)",
+                r"(?:how many|what) points? (?:will|do you think|is|are|can|might) (?:he|she|they|him|her|\w+)?\s*(?:gonna|going to)? (?:earn|get|score|make)",
+                r"(?:will|do you think|can|might) (?:he|she|they|\w+)\s*(?:get|score|earn|make) (?:any\s+)?points?",
             ],
             
             Intent.TRIVIA: [
@@ -230,17 +238,38 @@ class IntentClassifier:
             ],
         }
     
-    def classify(self, query: str) -> IntentResult:
+    def classify(self, query: str, chat_history: Optional[List[Dict[str, str]]] = None) -> IntentResult:
         """
         Classify the intent of a user query.
         
         Args:
             query: User's input query
+            chat_history: Optional conversation history for pronoun resolution
             
         Returns:
             IntentResult with classified intent and metadata
         """
         query_lower = query.lower().strip()
+        
+        # Enhanced prediction detection for pronoun-based queries
+        # Check if query has prediction-related keywords + pronouns
+        has_pronoun = bool(re.search(r'\b(he|she|they|him|her|his|hers|their)\b', query_lower))
+        has_points_question = bool(re.search(r'\b(points?|earn|score|get|make)\b', query_lower))
+        has_future_tense = bool(re.search(r'\b(will|gonna|going to|do you think|can|might)\b', query_lower))
+        
+        # If this looks like a prediction query with pronouns, check chat history for player context
+        if has_pronoun and has_points_question and has_future_tense and chat_history:
+            # Look for player names in recent conversation
+            recent_players = self._extract_players_from_history(chat_history)
+            if recent_players:
+                # This is likely a prediction query about a previously mentioned player
+                # Upgrade to PREDICTION intent
+                return IntentResult(
+                    intent=Intent.PREDICTION,
+                    confidence=0.8,
+                    matched_patterns=["pronoun_reference_with_prediction_context"],
+                    extracted_keywords=recent_players
+                )
         
         best_intent = Intent.UNKNOWN
         best_confidence = 0.0
@@ -281,6 +310,38 @@ class IntentClassifier:
             extracted_keywords=list(set(extracted_keywords))
         )
     
+    def _extract_players_from_history(self, chat_history: List[Dict[str, str]]) -> List[str]:
+        """
+        Extract player names from recent chat history.
+        
+        Args:
+            chat_history: Conversation history
+            
+        Returns:
+            List of player names found in recent messages
+        """
+        players = []
+        # Check last 3 messages for player names
+        recent_messages = chat_history[-3:] if len(chat_history) >= 3 else chat_history
+        
+        # Common player name patterns (capitalized words that aren't common words)
+        common_words = {
+            'premier', 'league', 'season', 'gameweek', 'week', 'top', 'best', 'most',
+            'points', 'goals', 'assists', 'player', 'team', 'stats', 'performance',
+            'who', 'what', 'when', 'where', 'how', 'which', 'the', 'and', 'for',
+            'with', 'from', 'this', 'that', 'erling', 'mohamed', 'harry', 'son'
+        }
+        
+        for msg in recent_messages:
+            content = msg.get('content', '')
+            # Look for capitalized words (likely names)
+            words = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', content)
+            for word in words:
+                if word.lower() not in common_words and len(word) > 3:
+                    players.append(word)
+        
+        return players[:1]  # Return most recent player mentioned
+    
     def get_query_type_for_intent(self, intent: Intent) -> str:
         """
         Map intent to corresponding Cypher query method.
@@ -310,7 +371,7 @@ class IntentClassifier:
             Intent.SEASON_SUMMARY: "get_season_summary",
             Intent.RECOMMENDATION: "get_best_value_players",  # Default recommendation strategy
             Intent.TRIVIA: "get_highest_single_gameweek_score", # Default trivia
-            Intent.PREDICTION: "get_ml_predictions",
+            Intent.PREDICTION: None,  # ML predictions handled separately in api_main.py, not via Cypher
         }
         
         return intent_to_query.get(intent, "")
