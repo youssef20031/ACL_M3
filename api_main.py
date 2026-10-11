@@ -9,10 +9,12 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from pydantic import BaseModel
 from dataclasses import asdict
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone
+import asyncio
 import json
 import inspect
 import time
@@ -23,12 +25,12 @@ import logging
 import io
 from threading import Lock, Thread
 from contextlib import asynccontextmanager
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 # Import project modules
 from config.settings import (
     NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD,
-    HUGGINGFACE_API_TOKEN, DATA_PATH,
+    HUGGINGFACE_API_TOKEN, DATA_PATH, SEASONS,
     GOOGLE_CUSTOM_SEARCH_API_KEY, GOOGLE_CUSTOM_SEARCH_CX
 )
 from graph.connection import Neo4jConnection
@@ -46,12 +48,15 @@ try:
 except Exception:
     redis = None
 
+from services.player_index import PlayerIndex
+from services.avatars import AvatarService, ImageProxy, is_proxy_allowed
+from services.predictions import get_predictions_df
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
 from ml.api_integration import MLAPIIntegration, register_ml_routes, PlayerPredictionRequest, TopPerformersRequest
 
-import requests
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -66,83 +71,14 @@ app_state = {
     "embedding_building": False,
     "embedding_build_error": None,
     "trivia_cache": None,
-    "player_search_cache": None,
+    "player_index": None,
+    "latest_season": None,
+    "avatar_service": None,
+    "image_proxy": None,
     "ml_integration": None,
 }
 
 embedding_build_lock = Lock()
-
-
-def get_wikipedia_player_image_url(player_name: str) -> Optional[str]:
-    """Fallback to the Wikimedia thumbnail for the player's Wikipedia page."""
-    normalized_name = " ".join(player_name.split()).strip().lower()
-    if not normalized_name:
-        return None
-
-    if normalized_name in PLAYER_AVATAR_CACHE:
-        return PLAYER_AVATAR_CACHE[normalized_name]
-
-    try:
-        response = requests.get(
-            "https://en.wikipedia.org/w/api.php",
-            params={
-                "action": "query",
-                "format": "json",
-                "prop": "pageimages",
-                "pithumbsize": 250,
-                "redirects": 1,
-                "titles": player_name,
-            },
-            headers={"User-Agent": "FPL FantasyTrivia/1.0 (local testing)"},
-            timeout=15,
-        )
-        response.raise_for_status()
-        pages = response.json().get("query", {}).get("pages", {})
-        for page in pages.values():
-            thumbnail = page.get("thumbnail", {})
-            image_url = thumbnail.get("source")
-            if image_url:
-                PLAYER_AVATAR_CACHE[normalized_name] = image_url
-                return image_url
-    except Exception as exc:
-        logger.warning("Wikipedia avatar lookup failed for %s: %s", player_name, exc)
-
-    return None
-
-
-def build_image_search_variants(query: str) -> List[str]:
-    """Return a small set of progressively simpler search strings for image lookup."""
-    normalized = " ".join(query.split()).strip()
-    if not normalized:
-        return []
-
-    variants: List[str] = []
-    seen = set()
-
-    def add_variant(value: str) -> None:
-        value = " ".join(value.split()).strip()
-        if value and value not in seen:
-            seen.add(value)
-            variants.append(value)
-
-    add_variant(normalized)
-
-    accent_free = unicodedata.normalize("NFKD", normalized)
-    accent_free = "".join(char for char in accent_free if not unicodedata.combining(char))
-    add_variant(accent_free)
-
-    parts = normalized.split()
-    if len(parts) > 2:
-        add_variant(" ".join(parts[:2]))
-        add_variant(" ".join(accent_free.split()[:2]))
-    if len(parts) > 1:
-        add_variant(parts[-1])
-        add_variant(accent_free.split()[-1])
-    if len(parts) > 3:
-        add_variant(" ".join(parts[-2:]))
-        add_variant(" ".join(accent_free.split()[-2:]))
-
-    return variants
 
 
 def repair_mojibake(text: str) -> str:
@@ -156,9 +92,6 @@ def repair_mojibake(text: str) -> str:
         return text.encode("latin1").decode("utf-8")
     except Exception:
         return text
-PLAYER_AVATAR_CACHE: Dict[str, Optional[str]] = {}
-FPL_PLAYER_PHOTO_CACHE: Dict[str, Optional[str]] = {}
-FPL_PLAYER_PHOTO_CACHE_READY = False
 
 
 class TriviaQuestionCache:
@@ -276,6 +209,14 @@ async def lifespan(app: FastAPI):
         app_state["llm_manager"] = LLMManager(api_token=HUGGINGFACE_API_TOKEN)
 
     app_state["trivia_cache"] = TriviaQuestionCache()
+
+    # Avatar lookups (FPL photo codes load in the background)
+    avatar_service = AvatarService(
+        google_api_key=GOOGLE_CUSTOM_SEARCH_API_KEY, google_cx=GOOGLE_CUSTOM_SEARCH_CX
+    )
+    await avatar_service.start()
+    app_state["avatar_service"] = avatar_service
+    app_state["image_proxy"] = ImageProxy(avatar_service.client)
     
     # Connect to Neo4j (fast)
     try:
@@ -284,14 +225,14 @@ async def lifespan(app: FastAPI):
             app_state["neo4j_conn"] = conn
             print("✅ Neo4j connected")
             try:
-                get_player_search_cache(conn)
-                print("✅ Player search cache warmed")
+                index = await asyncio.to_thread(get_player_index, conn)
+                print(f"✅ Player index built ({len(index)} players)")
             except Exception as cache_error:
-                print(f"⚠️ Player search cache warm-up failed: {cache_error}")
+                print(f"⚠️ Player index build failed: {cache_error}")
     except Exception as e:
         print(f"⚠️  Neo4j connection failed: {e}")
     
-    # Try to load prebuilt embeddings on startup (Railway optimization)
+    # Load prebuilt embeddings on startup (avoids building them in-process)
     print("🔮 Checking for prebuilt embeddings...")
     try:
         # Lazy import to avoid transformer/Keras dependency at startup
@@ -330,19 +271,19 @@ async def lifespan(app: FastAPI):
             neo4j_conn=app_state["neo4j_conn"],
             query_executor=None  # Not needed; queries run directly via neo4j_conn
         )
-        # Try XGBoost models first (best performance)
+        # Try XGBoost v2 models (retrained with robustness features)
         xgb_models = {
-            "GK": "ml/models/xgboost_gk_v3.pkl",
-            "DEF": "ml/models/xgboost_def_v3.pkl",
-            "MID": "ml/models/xgboost_mid_v3.pkl",
-            "FWD": "ml/models/xgboost_fwd_v3.pkl"
+            "GK": "ml/models/xgboost_gk_v2.pkl",
+            "DEF": "ml/models/xgboost_def_v2.pkl",
+            "MID": "ml/models/xgboost_mid_v2.pkl",
+            "FWD": "ml/models/xgboost_fwd_v2.pkl"
         }
         
         model_loaded = False
         if all(os.path.exists(p) for p in xgb_models.values()):
             ml_integration.load_predictors_by_position(xgb_models)
             model_loaded = True
-            print("✅ XGBoost position-specific ML models loaded")
+            print("✅ XGBoost v2 position-specific ML models loaded (retrained with robustness features)")
         else:
             # Fall back to linear regression
             for model_path in [
@@ -364,6 +305,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    if app_state["avatar_service"]:
+        await app_state["avatar_service"].close()
     if app_state["neo4j_conn"]:
         app_state["neo4j_conn"].close()
     print("👋 API Shutdown")
@@ -376,23 +319,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS: in production the frontend is served from the same origin (deploy/Caddyfile),
+# so only local dev servers and any CORS_ORIGINS (comma-separated) need allowing.
 allowed_origins = [
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:3001",
-    "https://aclm3-production.up.railway.app",
-    "https://acl-m3.vercel.app",
-]
-
-# Add Vercel domains if deployed
-if os.getenv("VERCEL_URL"):
-    allowed_origins.append(f"https://{os.getenv('VERCEL_URL')}")
+] + [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -449,6 +386,131 @@ register_ml_routes(app, _lazy_ml)
 
 
 # ============================================================================
+# SIMPLE CSV-BASED ML ENDPOINTS (uses precomputed predictions)
+# ============================================================================
+
+@app.get("/api/ml/top-performers")
+async def get_top_performers_csv(position: Optional[str] = None, limit: int = 10):
+    """
+    Get top performers from precomputed predictions CSV.
+    This endpoint provides faster responses by using pre-generated predictions.
+    """
+    df = get_predictions_df()
+    if df is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Predictions not available. Please generate predictions first."
+        )
+    
+    try:
+        # Filter by position if specified
+        if position:
+            df = df[df['position'] == position.upper()]
+        
+        # Sort by predicted points and get top N
+        df = df.nlargest(limit, 'predicted_points')
+        
+        # Format response
+        predictions = []
+        for _, row in df.iterrows():
+            # Build fixture context
+            fixture_context = {
+                "opponent_team": row['opponent'],
+                "home_away": "home" if bool(row['is_home']) else "away",
+                "match_date": row['kickoff_time'],
+                "matchday": int(row['gameweek']),
+                "fixture_id": f"{row['team']}_vs_{row['opponent']}_GW{int(row['gameweek'])}"
+            }
+            
+            predictions.append({
+                "player_name": row['name'],
+                "predicted_points": round(float(row['predicted_points']), 2),
+                "team_name": row['team'],
+                "position": row['position'],
+                "model_version": row.get('prediction_method', 'xgboost_v2'),
+                "fixture_context": fixture_context
+            })
+        
+        return {
+            "predictions": predictions,
+            "model_version": "xgboost_v2",
+            "total_predictions": len(predictions),
+            "metadata": {
+                "position_filter": position,
+                "source": "precomputed_csv",
+                "gameweek": int(df.iloc[0]['gameweek']) if len(df) > 0 else None
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error reading predictions CSV: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ml/best-value")
+async def get_best_value_csv(position: Optional[str] = None, limit: int = 10):
+    """
+    Get best value players from precomputed predictions CSV.
+    Value is calculated as predicted_points / (value / 10).
+    """
+    df = get_predictions_df()
+    if df is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Predictions not available. Please generate predictions first."
+        )
+    
+    try:
+        # Calculate value score (points per million)
+        df = df.assign(value_score=df['predicted_points'] / (df['value'] / 10.0))
+        
+        # Filter by position if specified
+        if position:
+            df = df[df['position'] == position.upper()]
+        
+        # Sort by value score and get top N
+        df = df.nlargest(limit, 'value_score')
+        
+        # Format response
+        predictions = []
+        for _, row in df.iterrows():
+            # Build fixture context
+            fixture_context = {
+                "opponent_team": row['opponent'],
+                "home_away": "home" if bool(row['is_home']) else "away",
+                "match_date": row['kickoff_time'],
+                "matchday": int(row['gameweek']),
+                "fixture_id": f"{row['team']}_vs_{row['opponent']}_GW{int(row['gameweek'])}"
+            }
+            
+            predictions.append({
+                "player_name": row['name'],
+                "predicted_points": round(float(row['predicted_points']), 2),
+                "team_name": row['team'],
+                "position": row['position'],
+                "value": round(float(row['value']) / 10.0, 1),
+                "value_score": round(float(row['value_score']), 2),
+                "model_version": row.get('prediction_method', 'xgboost_v2'),
+                "fixture_context": fixture_context
+            })
+        
+        return {
+            "predictions": predictions,
+            "model_version": "xgboost_v2",
+            "total_predictions": len(predictions),
+            "metadata": {
+                "position_filter": position,
+                "source": "precomputed_csv",
+                "gameweek": int(df.iloc[0]['gameweek']) if len(df) > 0 else None
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error reading predictions CSV: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # Pydantic Models
 # ============================================================================
 
@@ -466,7 +528,7 @@ class ConnectionResponse(BaseModel):
 
 class QueryRequest(BaseModel):
     question: str
-    model: str = "qwen-2.5-coder"
+    model: str = "gpt-oss-120b"
     retrieval_method: str = "Hybrid"  # "Baseline", "Embeddings", "Hybrid"
     embedding_model: str = "minilm"  # "minilm" or "mpnet"
     is_first_message: bool = False
@@ -509,255 +571,66 @@ def looks_like_small_talk(question: str) -> bool:
     return any(re.match(pattern, text) for pattern in small_talk_patterns)
 
 
-def build_proxy_image_url(source_url: str) -> str:
-    return f"/api/images/proxy?url={quote_plus(source_url)}"
+async def run_db(conn, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Run a Neo4j query in a worker thread so it doesn't block the event loop."""
+    return await asyncio.to_thread(conn.execute_query, query, params or {})
 
 
-def _looks_like_generic_wikimedia_image(url: str) -> bool:
-    """Return True for known generic/placeholder Wikimedia images we should ignore."""
-    if not url:
-        return False
-    lowered = url.lower()
-    generic_indicators = [
-        'image_created_with_a_mobile_phone',
-        'no_image_available',
-        'no_photo',
-        'default',
-        'placeholder',
-    ]
-    return any(ind in lowered for ind in generic_indicators)
+def get_player_index(conn=None) -> PlayerIndex:
+    """Shared in-memory player index; built at startup and rebuilt after data loads."""
+    index = app_state["player_index"]
+    if index is None:
+        conn = conn or app_state["neo4j_conn"]
+        if conn is None:
+            raise HTTPException(status_code=503, detail="Neo4j not connected")
+        index = PlayerIndex.load(conn)
+        app_state["player_index"] = index
+        if app_state["entity_extractor"] is not None:
+            app_state["entity_extractor"].player_index = index
+    return index
 
 
-def normalize_text(text: str) -> str:
-    return ''.join(
-        c for c in unicodedata.normalize('NFD', text)
-        if unicodedata.category(c) != 'Mn'
-    ).lower()
+async def get_player_index_async(conn=None) -> PlayerIndex:
+    if app_state["player_index"] is not None:
+        return app_state["player_index"]
+    return await asyncio.to_thread(get_player_index, conn)
 
 
-def _tokenize_normalized_text(text: str) -> List[str]:
-    return [token for token in normalize_text(text).split() if token]
+def get_latest_season(conn=None) -> str:
+    """Most recent season that has match data, used when a question names no season."""
+    season = app_state["latest_season"]
+    if season is None:
+        conn = conn or app_state["neo4j_conn"]
+        rows = conn.execute_query(
+            "MATCH (s:Season) WHERE EXISTS { ()-[:SEASON_STATS]->(s) } RETURN max(s.id) AS season"
+        ) if conn else []
+        season = (rows[0]["season"] if rows else None) or SEASONS[-1]
+        app_state["latest_season"] = season
+    return season
 
 
-def _tokens_appear_in_order(query_tokens: List[str], candidate_tokens: List[str]) -> bool:
-    if not query_tokens:
-        return False
-
-    candidate_index = 0
-    for query_token in query_tokens:
-        found = False
-        while candidate_index < len(candidate_tokens):
-            candidate_token = candidate_tokens[candidate_index]
-            candidate_index += 1
-            if candidate_token == query_token or candidate_token.startswith(query_token) or query_token in candidate_token:
-                found = True
-                break
-        if not found:
-            return False
-    return True
+def reset_graph_caches() -> None:
+    """Drop everything derived from graph contents (after connect or data load)."""
+    app_state["player_index"] = None
+    app_state["latest_season"] = None
 
 
-def score_player_search_match(query: str, candidate_name: str) -> Optional[tuple]:
-    normalized_query = normalize_text(query)
-    normalized_candidate = normalize_text(candidate_name)
-
-    if not normalized_query or not normalized_candidate:
+async def avatar_for(player_name: str, team_name: Optional[str] = None) -> Optional[str]:
+    service: Optional[AvatarService] = app_state["avatar_service"]
+    if service is None or not player_name:
         return None
-
-    if normalized_query == normalized_candidate:
-        return (4, 1, 1, 1, 0, 0)
-
-    query_tokens = _tokenize_normalized_text(normalized_query)
-    candidate_tokens = _tokenize_normalized_text(normalized_candidate)
-    if not query_tokens or not candidate_tokens:
-        return None
-
-    matched_tokens = 0
-    for query_token in query_tokens:
-        if any(candidate_token == query_token or candidate_token.startswith(query_token) or query_token in candidate_token for candidate_token in candidate_tokens):
-            matched_tokens += 1
-
-    if matched_tokens == 0:
-        return None
-
-    return (
-        matched_tokens,
-        1 if _tokens_appear_in_order(query_tokens, candidate_tokens) else 0,
-        1 if normalized_candidate.startswith(normalized_query) else 0,
-        1 if normalized_query in normalized_candidate else 0,
-        -len(candidate_tokens),
-        -len(normalized_candidate),
-    )
+    if team_name is None and app_state["player_index"] is not None:
+        team_name = app_state["player_index"].team_of(player_name)
+    return await service.get(player_name, team_name)
 
 
-def rank_player_search_results(rows: List[Dict[str, Any]], query: str, limit: int) -> List[Dict[str, Any]]:
-    ranked_rows = [
-        (score_player_search_match(query, str(row.get("player_name", ""))), row)
-        for row in rows
-    ]
-    ranked_rows = [item for item in ranked_rows if item[0] is not None]
-    ranked_rows.sort(key=lambda item: item[0], reverse=True)
-    return [row for _, row in ranked_rows[:limit]]
-
-
-def get_player_search_cache(conn) -> List[Dict[str, Any]]:
-    """Load and cache searchable player suggestions in memory."""
-    if app_state["player_search_cache"] is not None:
-        return app_state["player_search_cache"]
-
-    query = """
-    MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
-    RETURN p.name AS player_name, pos.code AS position, p.element_id AS element_id
-    ORDER BY p.name
-    """
-    results = conn.execute_query(query, {})
-    app_state["player_search_cache"] = results
-    return results
-
-
-def get_player_avatar_url(player_name: str, team_name: Optional[str] = None) -> Optional[str]:
-    """Return the best available avatar URL for a player."""
-    player_name = repair_mojibake(player_name)
-    normalized_name = " ".join(player_name.split()).strip().lower()
-    if not normalized_name:
-        return None
-
-    if normalized_name in PLAYER_AVATAR_CACHE:
-        cached_url = PLAYER_AVATAR_CACHE[normalized_name]
-        return build_proxy_image_url(cached_url) if cached_url else None
-
-    # Try to find team name if not provided
-    if not team_name and app_state["neo4j_conn"]:
-        try:
-            team_query = "MATCH (p:Player {name: $name})-[:PLAYS_FOR]->(t:Team) RETURN t.name AS team_name LIMIT 1"
-            team_res = app_state["neo4j_conn"].execute_query(team_query, {"name": player_name})
-            if team_res:
-                team_name = team_res[0]["team_name"]
-        except Exception:
-            pass
-
-    image_url = None
-    search_queries: List[str] = []
-    if team_name:
-        search_queries.extend(build_image_search_variants(f"{player_name} {team_name}"))
-        search_queries.extend(build_image_search_variants(f"{player_name} {team_name} official picture"))
-    search_queries.extend(build_image_search_variants(player_name))
-    search_queries.extend(build_image_search_variants(f"{player_name} official picture"))
-
-    deduped_queries: List[str] = []
-    seen_queries = set()
-    for search_query in search_queries:
-        if search_query not in seen_queries:
-            seen_queries.add(search_query)
-            deduped_queries.append(search_query)
-
-    # First prefer official FPL player photos when available (more reliable).
-    # If the FPL photo URL is blocked (returns non-200), ignore it and fall back.
-    fpl_photo = get_fpl_player_photo_url(player_name)
-    if fpl_photo:
-        try:
-            # quick HEAD check to avoid choosing inaccessible URLs
-            head_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "Accept": "image/*,*/*;q=0.8", "Referer": "https://fantasy.premierleague.com/"}
-            head_resp = requests.head(fpl_photo, headers=head_headers, timeout=6, allow_redirects=True)
-            if head_resp.status_code == 200:
-                image_url = fpl_photo
-            else:
-                logger.debug("FPL photo unreachable (%s): %s", head_resp.status_code, fpl_photo)
-        except Exception as exc:
-            logger.debug("FPL photo HEAD check failed for %s: %s", fpl_photo, exc)
-
-    if not image_url and GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_CX:
-        for search_query in deduped_queries:
-            try:
-                response = requests.get(
-                    "https://www.googleapis.com/customsearch/v1",
-                    params={
-                        "key": GOOGLE_CUSTOM_SEARCH_API_KEY,
-                        "cx": GOOGLE_CUSTOM_SEARCH_CX,
-                        "q": search_query,
-                        "searchType": "image",
-                        "num": 1,
-                        "safe": "active",
-                    },
-                    timeout=10,
-                )
-                response.raise_for_status()
-                items = response.json().get("items", [])
-                if items:
-                    image_info = items[0].get("image", {})
-                    image_url = image_info.get("thumbnailLink") or items[0].get("link")
-                    if image_url:
-                        # ignore clearly generic Wikimedia images
-                        if _looks_like_generic_wikimedia_image(image_url):
-                            image_url = None
-                            continue
-                        break
-            except Exception as exc:
-                logger.warning("Google avatar lookup failed for %s with query %s: %s", player_name, search_query, exc)
-
-    if not image_url:
-        for search_query in deduped_queries:
-            image_url = get_wikipedia_player_image_url(search_query)
-            if image_url:
-                # discard generic Wikimedia placeholders
-                if _looks_like_generic_wikimedia_image(image_url):
-                    image_url = None
-                    continue
-                break
-
-    PLAYER_AVATAR_CACHE[normalized_name] = image_url
-    return build_proxy_image_url(image_url) if image_url else None
-
-
-def get_fpl_player_photo_url(player_name: str) -> Optional[str]:
-    """Fallback to the official FPL player photo when no Google image is available."""
-    global FPL_PLAYER_PHOTO_CACHE_READY
-
-    normalized_name = " ".join(player_name.split()).strip().lower()
-    if not normalized_name:
-        return None
-
-    if normalized_name in FPL_PLAYER_PHOTO_CACHE:
-        return FPL_PLAYER_PHOTO_CACHE[normalized_name]
-
-    if not FPL_PLAYER_PHOTO_CACHE_READY:
-        try:
-            response = requests.get("https://fantasy.premierleague.com/api/bootstrap-static/", timeout=15)
-            response.raise_for_status()
-            for element in response.json().get("elements", []):
-                photo = element.get("photo")
-                if not photo:
-                    continue
-
-                photo_url = f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{photo}"
-                aliases = {
-                    f"{element.get('first_name', '')} {element.get('second_name', '')}".strip(),
-                    f"{element.get('second_name', '')} {element.get('first_name', '')}".strip(),
-                    element.get("web_name", ""),
-                }
-                for alias in aliases:
-                    alias_key = " ".join(alias.split()).strip().lower()
-                    if alias_key:
-                        FPL_PLAYER_PHOTO_CACHE.setdefault(alias_key, photo_url)
-            FPL_PLAYER_PHOTO_CACHE_READY = True
-        except Exception as exc:
-            logger.warning("FPL photo cache could not be loaded: %s", exc)
-            FPL_PLAYER_PHOTO_CACHE_READY = True
-
-    return FPL_PLAYER_PHOTO_CACHE.get(normalized_name)
-
-
-def enrich_rows_with_avatars(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Attach avatar URLs to player rows when possible."""
-    enriched_rows: List[Dict[str, Any]] = []
-    for row in rows:
-        enriched_row = dict(row)
-        player_name = enriched_row.get("player_name")
-        team_name = enriched_row.get("team_name")
-        if player_name and not enriched_row.get("avatar"):
-            enriched_row["avatar"] = get_player_avatar_url(str(player_name), team_name=team_name)
-        enriched_rows.append(enriched_row)
-    return enriched_rows
+async def enrich_rows_with_avatars(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Copies of rows with an `avatar` URL, looked up concurrently."""
+    service: Optional[AvatarService] = app_state["avatar_service"]
+    if service is None:
+        return [dict(r) for r in rows]
+    index = app_state["player_index"]
+    return await service.enrich(rows, team_of=index.team_of if index else None)
 
 
 class TriviaQuestion(BaseModel):
@@ -795,7 +668,7 @@ class EmbeddingBuildResponse(BaseModel):
 class PlayerSearchRequest(BaseModel):
     query: str
     limit: int = 20
-    include_avatars: bool = True
+    include_avatars: bool = False  # Default to False for fast search
 
 
 class PlayerComparisonRequest(BaseModel):
@@ -806,6 +679,22 @@ class PlayerComparisonRequest(BaseModel):
 
 class DataLoadRequest(BaseModel):
     clear_existing: bool = True
+
+
+class FixtureLoadRequest(BaseModel):
+    csv_path: str
+    season_id: str = "2026-27"
+    clear_existing: bool = False
+
+
+class FixtureLoadResponse(BaseModel):
+    success: bool
+    fixtures_loaded: int
+    message: str
+
+
+class NextFixtureResponse(BaseModel):
+    fixtures: List[Dict[str, Any]]
 
 
 # ============================================================================
@@ -824,18 +713,17 @@ def get_entity_extractor():
     """Lazy load entity extractor."""
     if not app_state["entity_extractor"]:
         print("🔄 Loading entity extractor...")
-        app_state["entity_extractor"] = EntityExtractor()
+        extractor = EntityExtractor()
         
-        # Load known players if Neo4j is connected
+        # Player mentions are matched against the shared player index
         if app_state["neo4j_conn"]:
             try:
-                query, _ = CypherQueries.get_all_player_names()
-                results = app_state["neo4j_conn"].execute_query(query)
-                if results:
-                    players = {r['player_name'] for r in results}
-                    app_state["entity_extractor"].set_known_players(players)
+                index = get_player_index()
+                extractor.player_index = index
+                extractor.set_known_players({e.player_name for e in index.entries})
             except Exception as e:
                 print(f"Warning: Failed to load player names: {e}")
+        app_state["entity_extractor"] = extractor
     return app_state["entity_extractor"]
 
 
@@ -858,7 +746,7 @@ def run_embedding_build(model_key: str, conn: Neo4jConnection) -> None:
             from embeddings.embedding_manager import EmbeddingManager
             app_state["embedding_manager"] = EmbeddingManager(model_key=model_key)
             
-            # Try to load prebuilt embeddings first (for Railway)
+            # Try to load prebuilt embeddings first
             prebuilt_path = f"embeddings/prebuilt/{model_key}_embeddings.pkl"
             if app_state["embedding_manager"].load_embeddings(prebuilt_path):
                 logger.info("Successfully loaded prebuilt embeddings from %s", prebuilt_path)
@@ -899,7 +787,7 @@ def run_embedding_build(model_key: str, conn: Neo4jConnection) -> None:
         )
     except MemoryError as exc:
         app_state["embeddings_built"] = False
-        app_state["embedding_build_error"] = "Out of memory. Try restarting the server or upgrading Railway plan."
+        app_state["embedding_build_error"] = "Out of memory. Try restarting the server or giving it more memory."
         logger.exception("Embedding build failed due to memory error for model %s", model_key)
     except Exception as exc:
         app_state["embeddings_built"] = False
@@ -1074,7 +962,7 @@ def enforce_tied_top_scorers_in_answer(
 
 @app.get("/")
 async def root():
-    """Health check endpoint - lightweight for Railway."""
+    """Lightweight liveness check (used by the container healthcheck)."""
     return {
         "message": "FPL FantasyTrivia API",
         "status": "running",
@@ -1083,21 +971,9 @@ async def root():
     }
 
 
-@app.get("/debug/env")
-async def debug_env():
-    """Temporary: show what Neo4j config Railway is using (no password)."""
-    return {
-        "NEO4J_URI": NEO4J_URI,
-        "NEO4J_USER": NEO4J_USER,
-        "NEO4J_PASSWORD_LENGTH": len(NEO4J_PASSWORD),
-        "NEO4J_PASSWORD_FIRST4": NEO4J_PASSWORD[:4] if NEO4J_PASSWORD else "EMPTY",
-        "neo4j_connected": app_state["neo4j_conn"] is not None,
-    }
-
-
 @app.get("/debug/embeddings")
 async def debug_embeddings():
-    """Debug: show embedding state on Railway."""
+    """Debug: show embedding state."""
     import os
     manager = app_state["embedding_manager"]
     files = {}
@@ -1114,17 +990,25 @@ async def debug_embeddings():
     }
 
 
+HEALTH_STATS_TTL_SECONDS = 60
+_health_stats_cache: Dict[str, Any] = {"at": 0.0, "stats": None}
+
+
 @app.get("/health")
 async def health_check():
-    """Detailed health check."""
+    """Detailed health check. The frontend polls this, so DB stats are cached briefly."""
     neo4j_status = "connected" if app_state["neo4j_conn"] else "disconnected"
     
     stats = None
     if app_state["neo4j_conn"]:
-        try:
-            stats = app_state["neo4j_conn"].get_database_stats()
-        except:
-            neo4j_status = "error"
+        if time.time() - _health_stats_cache["at"] < HEALTH_STATS_TTL_SECONDS:
+            stats = _health_stats_cache["stats"]
+        else:
+            try:
+                stats = await asyncio.to_thread(app_state["neo4j_conn"].get_database_stats)
+                _health_stats_cache.update(at=time.time(), stats=stats)
+            except Exception:
+                neo4j_status = "error"
     
     # Get embedding count safely
     embedding_count = 0
@@ -1175,17 +1059,15 @@ async def connect_neo4j(request: ConnectionRequest):
                 app_state["neo4j_conn"].close()
             
             app_state["neo4j_conn"] = conn
-            stats = conn.get_database_stats()
+            reset_graph_caches()
+            _health_stats_cache["at"] = 0.0
+            stats = await asyncio.to_thread(conn.get_database_stats)
             
-            # Load player names
+            # Rebuild the player index (also feeds the entity extractor)
             try:
-                query, _ = CypherQueries.get_all_player_names()
-                results = conn.execute_query(query)
-                if results:
-                    players = {r['player_name'] for r in results}
-                    app_state["entity_extractor"].set_known_players(players)
-            except:
-                pass
+                await asyncio.to_thread(get_player_index, conn)
+            except Exception as index_error:
+                logger.warning("Player index rebuild failed: %s", index_error)
             
             # Only return top-level int fields for Pydantic validation
             simple_stats = {
@@ -1210,6 +1092,8 @@ async def disconnect_neo4j():
     if app_state["neo4j_conn"]:
         app_state["neo4j_conn"].close()
         app_state["neo4j_conn"] = None
+    reset_graph_caches()
+    _health_stats_cache["at"] = 0.0
     return {"success": True, "message": "Disconnected"}
 
 
@@ -1232,8 +1116,8 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             )
 
         # Step 1: Intent Classification (lazy load)
-        intent_classifier = get_intent_classifier()
-        intent_result = intent_classifier.classify(request.question)
+        intent_classifier = await asyncio.to_thread(get_intent_classifier)
+        intent_result = intent_classifier.classify(request.question, chat_history=request.chat_history)
 
         # If the user's text explicitly mentions clean sheets, prefer the CLEAN_SHEETS intent
         q_lower = request.question.lower()
@@ -1241,8 +1125,8 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             intent_result.intent = Intent.CLEAN_SHEETS
         
         # Step 2: Entity Extraction (lazy load)
-        entity_extractor = get_entity_extractor()
-        entities = entity_extractor.extract(request.question)
+        entity_extractor = await asyncio.to_thread(get_entity_extractor)
+        entities = entity_extractor.extract(request.question, chat_history=request.chat_history)
         
         # Step 3: Get query parameters
         params = entity_extractor.get_query_parameters(entities)
@@ -1263,16 +1147,17 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 params["limit_per_position"] = 5
             
             # Special handling for different query types
+            latest_season = await asyncio.to_thread(get_latest_season, conn)
             if query_method == "get_player_season_stats" and "gameweek" in params:
                 query_method = "get_player_gameweek_performance"
                 if "season" not in params:
-                    params["season"] = "2022-23"
+                    params["season"] = latest_season
             elif query_method == "get_player_season_stats" and "season" not in params:
                 query_method = "get_player_all_seasons_stats"
             
             if query_method == "get_most_transferred_players":
                 if "season" not in params:
-                    params["season"] = "2022-23"
+                    params["season"] = latest_season
                 if "gameweek" not in params:
                     params["gameweek"] = 1
                 if "out" in request.question.lower():
@@ -1282,7 +1167,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             
             if query_method == "get_most_selected_players":
                 if "season" not in params:
-                    params["season"] = "2022-23"
+                    params["season"] = latest_season
                 if "gameweek" not in params:
                     params["gameweek"] = 1
             
@@ -1306,7 +1191,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 valid_params = {k: v for k, v in params.items() if k in sig.parameters}
                 query, query_params = method(**valid_params)
             
-            results = conn.execute_query(query, query_params)
+            results = await run_db(conn, query, query_params)
             cypher_context = PromptBuilder.format_kg_context(results)
             cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
             executed_query = query
@@ -1319,18 +1204,70 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 try:
                     # If a player was extracted, get single player prediction
                     if entities.players:
-                        pred_req = PlayerPredictionRequest(player_name=entities.players[0])
-                        pred = await ml_integration.predict_player_next_gameweek(pred_req)
-                        ml_context = f"- {pred.player_name}: {pred.predicted_points:.1f} predicted points for the next gameweek"
+                        player_name = entities.players[0]
+                        
+                        # Try to get from CSV first (faster)
+                        try:
+                            df = get_predictions_df()
+                            if df is not None:
+                                player_pred = df[df['name_lower'] == player_name.lower()]
+                                
+                                if len(player_pred) > 0:
+                                    row = player_pred.iloc[0]
+                                    opponent = row['opponent']
+                                    home_away = "Home" if row['is_home'] else "Away"
+                                    ml_context = f"ML Prediction for {row['name']}:\n- Predicted points: {row['predicted_points']:.1f} pts\n- Next match: vs {opponent} ({home_away})\n- Gameweek: {int(row['gameweek'])}"
+                                else:
+                                    # Fallback to Neo4j-based prediction
+                                    pred_req = PlayerPredictionRequest(player_name=player_name)
+                                    pred = await ml_integration.predict_player_next_gameweek(pred_req)
+                                    ml_context = f"- {pred.player_name}: {pred.predicted_points:.1f} predicted points for the next gameweek"
+                            else:
+                                # No CSV, use Neo4j
+                                pred_req = PlayerPredictionRequest(player_name=player_name)
+                                pred = await ml_integration.predict_player_next_gameweek(pred_req)
+                                ml_context = f"- {pred.player_name}: {pred.predicted_points:.1f} predicted points for the next gameweek"
+                        except Exception as csv_err:
+                            logger.warning(f"CSV prediction lookup failed, using Neo4j: {csv_err}")
+                            pred_req = PlayerPredictionRequest(player_name=player_name)
+                            pred = await ml_integration.predict_player_next_gameweek(pred_req)
+                            ml_context = f"- {pred.player_name}: {pred.predicted_points:.1f} predicted points for the next gameweek"
                     else:
-                        # Otherwise get top performers for the detected position or overall
-                        pos = entities.positions[0] if entities.positions else None
-                        top_req = TopPerformersRequest(position=pos, top_k=5)
-                        top_preds = await ml_integration.predict_top_performers(top_req)
-                        ml_context = "Top predicted performers for the next gameweek:\n" + \
-                                     "\n".join([f"- {p.player_name}: {p.predicted_points:.1f} pts" for p in top_preds.predictions])
+                        # Get top performers from CSV
+                        try:
+                            df = get_predictions_df()
+                            if df is not None:
+                                # Filter by position if specified
+                                pos = entities.positions[0] if entities.positions else None
+                                if pos:
+                                    df = df[df['position'] == pos.upper()]
+                                
+                                # Get top 5
+                                top_5 = df.nlargest(5, 'predicted_points')
+                                
+                                ml_context = "ML Predictions - Top 5 performers for next gameweek:\n"
+                                for idx, row in top_5.iterrows():
+                                    opponent = row['opponent']
+                                    home_away = "H" if row['is_home'] else "A"
+                                    ml_context += f"- {row['name']} ({row['position']}): {row['predicted_points']:.1f} pts vs {opponent} ({home_away})\n"
+                            else:
+                                # Fallback to Neo4j
+                                pos = entities.positions[0] if entities.positions else None
+                                top_req = TopPerformersRequest(position=pos, top_k=5)
+                                top_preds = await ml_integration.predict_top_performers(top_req)
+                                ml_context = "Top predicted performers for the next gameweek:\n" + \
+                                             "\n".join([f"- {p.player_name}: {p.predicted_points:.1f} pts" for p in top_preds.predictions])
+                        except Exception as csv_err:
+                            logger.warning(f"CSV top performers lookup failed, using Neo4j: {csv_err}")
+                            pos = entities.positions[0] if entities.positions else None
+                            top_req = TopPerformersRequest(position=pos, top_k=5)
+                            top_preds = await ml_integration.predict_top_performers(top_req)
+                            ml_context = "Top predicted performers for the next gameweek:\n" + \
+                                         "\n".join([f"- {p.player_name}: {p.predicted_points:.1f} pts" for p in top_preds.predictions])
                 except Exception as ml_err:
                     logger.error(f"ML prediction failed during query: {ml_err}")
+                    import traceback
+                    logger.error(traceback.format_exc())
 
         # Step 6: Embedding search
         embedding_context = ""
@@ -1377,12 +1314,14 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                         key_player = results[0]['player_name']
                     
                     if key_player:
-                        season = entities.seasons[0] if entities.seasons else "2022-23"
-                        similar_players = app_state["embedding_manager"].find_similar_to_player(
+                        season = entities.seasons[0] if entities.seasons else await asyncio.to_thread(get_latest_season, conn)
+                        similar_players = await asyncio.to_thread(
+                            app_state["embedding_manager"].find_similar_to_player,
                             key_player, season=season, top_k=10, exclude_self=False
                         )
                     else:
-                        similar_players = app_state["embedding_manager"].find_similar_players(
+                        similar_players = await asyncio.to_thread(
+                            app_state["embedding_manager"].find_similar_players,
                             request.question, top_k=5
                         )
                     embedding_context = PromptBuilder.format_embedding_context(similar_players)
@@ -1393,7 +1332,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         # Step 7: Generate LLM response
         answer = ""
         if app_state["llm_manager"] and app_state["llm_manager"].client:
-            data_scope = f"the {params['season']} season" if "season" in params else "all seasons (2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26)"
+            data_scope = f"the {params['season']} season" if "season" in params else f"all seasons ({', '.join(SEASONS)})"
             full_prompt = PromptTemplates.qa_template(
                 question=request.question,
                 kg_context=cypher_context,
@@ -1405,7 +1344,8 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 model_key=request.model  # Pass model key for model-specific prompting
             )
             
-            response = app_state["llm_manager"].generate(
+            response = await asyncio.to_thread(
+                app_state["llm_manager"].generate,
                 full_prompt,
                 model_key=request.model,
                 timeout=60
@@ -1496,7 +1436,7 @@ async def build_embeddings(request: EmbeddingBuildRequest, conn=Depends(get_neo4
 
 
 @app.get("/api/trivia/new", response_model=TriviaQuestion)
-async def get_trivia_question(difficulty: Optional[str] = None, conn=Depends(get_neo4j_conn)):
+def get_trivia_question(difficulty: Optional[str] = None, conn=Depends(get_neo4j_conn)):
     """Generate a new trivia question, optionally filtered by difficulty."""
     try:
         trivia_gen = TriviaGenerator(conn)
@@ -1544,7 +1484,7 @@ async def get_trivia_question(difficulty: Optional[str] = None, conn=Depends(get
 
 
 @app.post("/api/trivia/answer", response_model=TriviaAnswerResponse)
-async def check_trivia_answer(request: TriviaAnswerRequest, conn=Depends(get_neo4j_conn)):
+def check_trivia_answer(request: TriviaAnswerRequest, conn=Depends(get_neo4j_conn)):
     """Check trivia answer (simplified - store questions in session/cache in production)."""
     try:
         trivia_cache: TriviaQuestionCache = app_state["trivia_cache"]
@@ -1577,266 +1517,166 @@ class PlayerStatsRequest(BaseModel):
 async def get_player_stats(request: PlayerStatsRequest, conn=Depends(get_neo4j_conn)):
     """Fetch stats for a specific player, either for a single season or combined career."""
     try:
-        player_name = request.player_name
-        season = request.season
+        index = await get_player_index_async(conn)
+        player_name = index.resolve(request.player_name) or request.player_name
 
-        if season:
-            query, params = CypherQueries.get_player_season_stats(player_name, season)
-            results = conn.execute_query(query, params)
+        if request.season:
+            query, params = CypherQueries.get_player_season_stats(player_name, request.season)
         else:
-            # Combined career stats
-            query = """
-            MATCH (p:Player {name: $player_name})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season)
-            MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
-            WITH p, pos, 
-                 SUM(r.total_points) AS total_points,
-                 SUM(r.goals_scored) AS goals,
-                 SUM(r.assists) AS assists,
-                 SUM(r.clean_sheets) AS clean_sheets,
-                 SUM(r.bonus) AS bonus,
-                 SUM(r.minutes) AS minutes,
-                 AVG(r.ict_index) AS avg_ict,
-                 MAX(r.value) AS max_value,
-                 MAX(r.selected) AS max_selected,
-                 COUNT(f) AS games
-            RETURN p.name AS player_name, pos.code AS position, 'All seasons' AS season,
-                   total_points, goals, assists, clean_sheets, bonus,
-                   minutes, round(avg_ict, 2) AS avg_ict_index, 
-                   round(max_value / 10.0, 2) AS avg_value_millions, 
-                   max_selected, games
-            """
-            results = conn.execute_query(query, {"player_name": player_name})
+            query, params = CypherQueries.get_player_career_stats(player_name)
+        results, avatar = await asyncio.gather(run_db(conn, query, params), avatar_for(player_name))
 
         if not results:
             return {"stats": None}
 
-        # Format ICT index to 2 decimal places if it's not already
         stats = dict(results[0])
-        if "avg_ict" in stats and stats["avg_ict"] is not None:
+        if stats.get("avg_ict") is not None:
             stats["avg_ict_index"] = round(float(stats["avg_ict"]), 2)
-        
-        # Add avatar
-        stats["avatar"] = get_player_avatar_url(player_name)
-        
+        stats["avatar"] = avatar
         return {"stats": stats}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+async def _attach_predicted_points(rows: List[Dict[str, Any]]) -> None:
+    """Add next-gameweek predicted points: precomputed CSV first, live model for the rest."""
+    df = get_predictions_df()
+    missing = []
+    for row in rows:
+        name = row.get("player_name")
+        hit = df[df["name_lower"] == name.lower()] if (df is not None and name) else None
+        if hit is not None and len(hit):
+            row["predicted_points"] = round(float(hit.iloc[0]["predicted_points"]), 2)
+        elif name:
+            missing.append(row)
+
+    ml_integration = app_state.get("ml_integration")
+    if not missing or not (ml_integration and ml_integration.predictor_loaded):
+        return
+
+    async def predict(row: Dict[str, Any]) -> None:
+        try:
+            pred = await ml_integration.predict_player_next_gameweek(
+                PlayerPredictionRequest(player_name=row["player_name"])
+            )
+            row["predicted_points"] = pred.predicted_points
+        except Exception:
+            pass
+
+    await asyncio.gather(*(predict(r) for r in missing))
+
+
 @app.post("/api/players/search")
 async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_conn)):
-    """Search for players by name, with accent-insensitive matching."""
+    """Search players by name: accent-insensitive, typo tolerant, popular players first."""
     try:
-        raw_query = request.query
-
+        index = await get_player_index_async(conn)
+        results = index.search(request.query, request.limit)
         if not request.include_avatars:
-            all_players = get_player_search_cache(conn)
-            results = rank_player_search_results(all_players, raw_query, request.limit)
             return {"players": results}
 
-        # First try the standard query (exact accent match)
-        query, params = CypherQueries.search_players_by_name(raw_query, limit=request.limit)
-        results = conn.execute_query(query, params)
-
-        # If no results, fall back to accent-stripped search across all players
-        if not results:
-            all_query = """
-            MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
-            OPTIONAL MATCH (p)-[:PLAYS_FOR]->(t:Team)
-            RETURN p.name AS player_name, pos.code AS position, t.name AS team_name
-            """
-            all_players = conn.execute_query(all_query, {})
-            results = rank_player_search_results(all_players, raw_query, request.limit)
-        else:
-            # Enrich results with team names if missing
-            enriched_results = []
-            for r in results:
-                row = dict(r)
-                if not row.get("team_name"):
-                    team_q = "MATCH (p:Player {name: $name})-[:PLAYS_FOR]->(t:Team) RETURN t.name AS team_name LIMIT 1"
-                    team_res = conn.execute_query(team_q, {"name": row["player_name"]})
-                    if team_res:
-                        row["team_name"] = team_res[0]["team_name"]
-                enriched_results.append(row)
-            results = rank_player_search_results(enriched_results, raw_query, request.limit)
-
-        if request.include_avatars:
-            results = enrich_rows_with_avatars(results[: request.limit])
-        else:
-            results = results[: request.limit]
-
-        # Enrich with ML predictions if available
-        ml_integration = app_state.get("ml_integration")
-        if ml_integration and ml_integration.predictor_loaded:
-            for row in results:
-                try:
-                    p_name = row.get("player_name")
-                    if p_name:
-                        pred = await ml_integration.predict_player_next_gameweek(
-                            PlayerPredictionRequest(player_name=p_name)
-                        )
-                        row["predicted_points"] = pred.predicted_points
-                except Exception:
-                    pass
-
-        return {"players": results[: request.limit]}
+        results = await enrich_rows_with_avatars(results)
+        await _attach_predicted_points(results)
+        return {"players": results}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/players/compare")
 async def compare_players(request: PlayerComparisonRequest, conn=Depends(get_neo4j_conn)):
-    """Compare two players, resolving accented names automatically."""
-    import unicodedata
-
-    def normalize(text: str) -> str:
-        return ''.join(
-            c for c in unicodedata.normalize('NFD', text)
-            if unicodedata.category(c) != 'Mn'
-        ).lower()
-
-    def resolve_name(raw: str, conn) -> str:
-        """Return the exact DB name that matches the input after accent stripping."""
-        norm = normalize(raw)
-        # Try exact match first
-        exact_query = "MATCH (p:Player) WHERE toLower(p.name) = toLower($name) RETURN p.name AS player_name LIMIT 1"
-        result = conn.execute_query(exact_query, {"name": raw})
-        if result:
-            return result[0]["player_name"]
-        # Fall back to accent-stripped scan
-        all_query = "MATCH (p:Player) RETURN p.name AS player_name"
-        all_players = conn.execute_query(all_query, {})
-        for r in all_players:
-            if normalize(r["player_name"]) == norm:
-                return r["player_name"]
-        return raw  # return original if nothing found
-
+    """Compare two players, resolving accented / partial names automatically."""
     try:
-        p1 = resolve_name(request.player1, conn)
-        p2 = resolve_name(request.player2, conn)
+        index = await get_player_index_async(conn)
+        p1 = index.resolve(request.player1) or request.player1
+        p2 = index.resolve(request.player2) or request.player2
         query, params = CypherQueries.compare_players(p1, p2, request.season)
-        results = conn.execute_query(query, params)
-        return {"comparison": enrich_rows_with_avatars(results)}
+        results = await run_db(conn, query, params)
+        return {"comparison": await enrich_rows_with_avatars(results)}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/images/search", response_model=ImageSearchResponse)
 async def search_image(query: str, conn=Depends(get_neo4j_conn)):
-    """Return the first Google image result for a search term, if configured."""
-
-    def normalize(text: str) -> str:
-        return ''.join(
-            c for c in unicodedata.normalize('NFD', text)
-            if unicodedata.category(c) != 'Mn'
-        ).lower()
-
-    resolved_query = repair_mojibake(query)
+    """Return an avatar URL for a player name (or free text mentioning a player)."""
+    text = repair_mojibake(query)
+    resolved = text
     try:
-        normalized_query = normalize(query)
-
-        exact_query = "MATCH (p:Player) WHERE toLower(p.name) = toLower($name) RETURN p.name AS player_name LIMIT 1"
-        exact_result = conn.execute_query(exact_query, {"name": query})
-        if exact_result:
-            resolved_query = repair_mojibake(exact_result[0]["player_name"])
-        else:
-            all_query = "MATCH (p:Player) RETURN p.name AS player_name"
-            all_players = conn.execute_query(all_query, {})
-            matching_names = [
-                repair_mojibake(row["player_name"])
-                for row in all_players
-                if normalize(row["player_name"]) in normalized_query
-            ]
-            if not matching_names:
-                matching_names = [
-                    repair_mojibake(row["player_name"])
-                    for row in all_players
-                    if normalized_query in normalize(row["player_name"])
-                ]
-            if matching_names:
-                resolved_query = max(matching_names, key=len)
+        index = await get_player_index_async(conn)
+        resolved = index.resolve(text) or next(iter(index.mentions(text, limit=1)), text)
+    except HTTPException:
+        raise
     except Exception:
-        resolved_query = query
+        pass
 
-    image_url = get_player_avatar_url(resolved_query)
+    image_url = await avatar_for(resolved)
     if not image_url:
         source = None
-    elif "resources.premierleague.com" in image_url or "fantasy.premierleague.com" in image_url:
+    elif "premierleague.com" in image_url:
         source = "fpl_official"
+    elif "wikimedia.org" in image_url:
+        source = "wikipedia"
     else:
         source = "google_custom_search"
-    return ImageSearchResponse(query=resolved_query, image_url=image_url, source=source)
+    return ImageSearchResponse(query=resolved, image_url=image_url, source=source)
 
 
 @app.get("/api/images/proxy")
 async def proxy_image(url: str):
     """
-    Fetch an external image and stream it from the backend origin.
-    Handles rate limits gracefully by returning a fallback placeholder.
+    Stream an allow-listed external image from the backend origin.
+    Only known image hosts are fetched (no arbitrary URLs), and responses are
+    cacheable by the browser/CDN for a week.
     """
-    if not url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="Invalid image URL")
+    if not is_proxy_allowed(url):
+        raise HTTPException(status_code=400, detail="Image host not allowed")
+    proxy: Optional[ImageProxy] = app_state["image_proxy"]
+    if proxy is None:
+        raise HTTPException(status_code=503, detail="Image proxy not ready")
 
     try:
-        # Some domains (like Wikipedia) block requests without a proper User-Agent
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "image/*,*/*;q=0.8",
-        }
-        # Some CDNs (e.g., resources.premierleague.com) deny requests without a Referer.
-        # Add a sensible Referer when requesting known image hosts to avoid Access Denied.
-        try:
-            parsed = urlparse(url)
-            hostname = (parsed.hostname or '').lower()
-            if 'premierleague.com' in hostname or 'fantasy.premierleague.com' in hostname:
-                headers['Referer'] = 'https://fantasy.premierleague.com/'
-        except Exception:
-            pass
-        # Allow redirects and stream the response
-        response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
-        response.raise_for_status()
-        content_type = response.headers.get("content-type", "image/jpeg")
-        # Stream the content back to the client
-        return StreamingResponse(io.BytesIO(response.content), media_type=content_type)
-    except requests.exceptions.HTTPError as e:
-        # Handle rate limits (429) or other HTTP errors gracefully
-        status_code = e.response.status_code if e.response else 502
-        if status_code == 429:
-            # Return a 503 (Service Unavailable) with retry hint instead of crashing
-            raise HTTPException(
-                status_code=503,
-                detail="Image source is rate-limited. Try again in a few moments.",
-                headers={"Retry-After": "60"}
-            )
-        elif status_code == 404:
-            raise HTTPException(status_code=404, detail="Image not found at source")
-        elif status_code == 403:
-            raise HTTPException(status_code=403, detail="Access forbidden by image source")
-        else:
-            raise HTTPException(status_code=502, detail=f"Image proxy failed: HTTP {status_code}")
-    except requests.exceptions.Timeout:
+        content, content_type = await proxy.fetch(url)
+    except PermissionError:
+        raise HTTPException(status_code=400, detail="Image redirected to a host that is not allowed")
+    except httpx.HTTPStatusError as e:
+        status = e.response.status_code
+        if status == 429:
+            raise HTTPException(status_code=503, detail="Image source is rate-limited. Try again in a few moments.",
+                                headers={"Retry-After": "60"})
+        if status in (403, 404):
+            raise HTTPException(status_code=status, detail="Image not available at source")
+        raise HTTPException(status_code=502, detail=f"Image proxy failed: HTTP {status}")
+    except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Image source timed out")
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Image proxy failed: {exc}")
+
+    return Response(
+        content=content,
+        media_type=content_type,
+        headers={"Cache-Control": "public, max-age=604800, immutable"},
+    )
 
 
 @app.post("/api/data/load")
 async def load_fpl_data(request: DataLoadRequest, conn=Depends(get_neo4j_conn)):
     """Load FPL data into Neo4j."""
     try:
+        # Takes minutes; run it off the event loop so the API stays responsive
         loader = FPLDataLoader(conn)
-        stats = loader.load_all(DATA_PATH, clear_existing=request.clear_existing)
-        
-        # Reload player names for entity extraction (if already loaded)
-        if app_state["entity_extractor"]:
-            query, _ = CypherQueries.get_all_player_names()
-            results = conn.execute_query(query)
-            if results:
-                players = {r['player_name'] for r in results}
-                app_state["entity_extractor"].set_known_players(players)
+        stats = await asyncio.to_thread(loader.load_all, DATA_PATH, request.clear_existing)
 
-        app_state["player_search_cache"] = None
-        get_player_search_cache(conn)
+        reset_graph_caches()
+        _health_stats_cache["at"] = 0.0
+        index = await asyncio.to_thread(get_player_index, conn)
+        if app_state["entity_extractor"]:
+            app_state["entity_extractor"].set_known_players({e.player_name for e in index.entries})
         
         return {"success": True, "stats": stats}
     except Exception as e:
@@ -1844,13 +1684,179 @@ async def load_fpl_data(request: DataLoadRequest, conn=Depends(get_neo4j_conn)):
 
 
 @app.get("/api/stats/database")
-async def get_database_stats(conn=Depends(get_neo4j_conn)):
+def get_database_stats(conn=Depends(get_neo4j_conn)):
     """Get Neo4j database statistics."""
     try:
         stats = conn.get_database_stats()
         return stats
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Fixture Management Endpoints
+# ============================================================================
+
+@app.post("/api/fixtures/load", response_model=FixtureLoadResponse)
+def load_fixtures(request: FixtureLoadRequest, conn=Depends(get_neo4j_conn)):
+    """
+    Load fixture data from CSV file into Neo4j.
+    
+    This endpoint is admin-only and requires a valid CSV file with fixture schedule data.
+    
+    Request Body:
+    - csv_path: Path to the CSV file containing fixture data
+    - season_id: Season identifier (e.g., "2026-27")
+    - clear_existing: Whether to clear existing fixtures for the season (default: False)
+    
+    CSV Format:
+    - Required columns: Matchday, Home Team, Away Team, Date
+    - Optional columns: Time (defaults to 15:00 if not provided)
+    
+    Returns:
+    - success: Whether the operation succeeded
+    - fixtures_loaded: Number of fixtures successfully loaded
+    - message: Descriptive message about the operation
+    """
+    try:
+        # Get ML integration to access fixture service
+        ml_integration = app_state.get("ml_integration")
+        if not ml_integration:
+            raise HTTPException(
+                status_code=503,
+                detail="Fixture service not initialized"
+            )
+        
+        fixture_service = ml_integration.fixture_service
+        
+        # Validate CSV file exists
+        if not os.path.exists(request.csv_path):
+            raise HTTPException(
+                status_code=400,
+                detail=f"CSV file not found: {request.csv_path}"
+            )
+        
+        # Optional: Clear existing fixtures for the season if requested
+        if request.clear_existing:
+            logger.info(f"Clearing existing fixtures for season {request.season_id}")
+            clear_query = """
+            MATCH (f:Fixture {season_id: $season_id})
+            DETACH DELETE f
+            """
+            conn.execute_write(clear_query, {"season_id": request.season_id})
+        
+        # Load fixtures from CSV
+        logger.info(f"Loading fixtures from {request.csv_path} for season {request.season_id}")
+        fixtures_loaded = fixture_service.load_fixtures_from_csv(
+            csv_path=request.csv_path,
+            season_id=request.season_id
+        )
+        
+        return FixtureLoadResponse(
+            success=True,
+            fixtures_loaded=fixtures_loaded,
+            message=f"Successfully loaded {fixtures_loaded} fixtures for season {request.season_id}"
+        )
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # Handle validation errors from fixture service
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to load fixtures: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to load fixtures: {str(e)}")
+
+
+def _serialize_fixture(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Neo4j returns its own DateTime type; convert to an ISO string for JSON."""
+    fixture = dict(row)
+    match_date = fixture.get("match_date")
+    if hasattr(match_date, "to_native"):
+        match_date = match_date.to_native()
+    if isinstance(match_date, datetime):
+        fixture["match_date"] = match_date.isoformat()
+    return fixture
+
+
+@app.get("/api/fixtures/next", response_model=NextFixtureResponse)
+def get_next_fixtures(team: Optional[str] = None, conn=Depends(get_neo4j_conn)):
+    """
+    Get upcoming fixtures for all teams or a specific team.
+    
+    Query Parameters:
+    - team (optional): Team name to filter fixtures for a specific team
+    
+    Returns:
+    - fixtures: List of upcoming fixtures with home_team, away_team, match_date, and matchday
+    
+    If a team is specified, returns only fixtures for that team.
+    If no team is specified, returns the next fixture for each team in the league.
+    """
+    try:
+        # Get ML integration to access fixture service
+        ml_integration = app_state.get("ml_integration")
+        if not ml_integration:
+            raise HTTPException(
+                status_code=503,
+                detail="Fixture service not initialized"
+            )
+        
+        fixture_service = ml_integration.fixture_service
+        current_date = datetime.now(timezone.utc)
+        
+        if team:
+            # Get next fixture for specific team
+            fixture_context = fixture_service.get_team_next_match(team, current_date)
+            
+            if not fixture_context:
+                return NextFixtureResponse(fixtures=[])
+            
+            # Query to get full fixture details including both teams
+            fixture_query = """
+            MATCH (f:Fixture {id: $fixture_id})
+            MATCH (f)-[:PLAYS_HOME]->(home:Team)
+            MATCH (f)-[:PLAYS_AWAY]->(away:Team)
+            RETURN home.name AS home_team,
+                   away.name AS away_team,
+                   f.kickoff_time AS match_date,
+                   f.matchday AS matchday
+            """
+            results = conn.execute_query(
+                fixture_query,
+                {"fixture_id": fixture_context.fixture_id}
+            )
+            
+            if not results:
+                return NextFixtureResponse(fixtures=[])
+            
+            return NextFixtureResponse(fixtures=[_serialize_fixture(results[0])])
+        
+        else:
+            # Next fixture for every team in one query (was two queries per team)
+            all_query = """
+            MATCH (t:Team)<-[:PLAYS_HOME|PLAYS_AWAY]-(f:Fixture)
+            WHERE f.kickoff_time > $current_date
+            WITH t, f ORDER BY f.kickoff_time ASC
+            WITH t, collect(f)[0] AS f
+            WITH DISTINCT f
+            MATCH (f)-[:PLAYS_HOME]->(home:Team)
+            MATCH (f)-[:PLAYS_AWAY]->(away:Team)
+            RETURN home.name AS home_team,
+                   away.name AS away_team,
+                   f.kickoff_time AS match_date,
+                   f.matchday AS matchday
+            ORDER BY match_date
+            """
+            rows = conn.execute_query(all_query, {"current_date": current_date})
+            fixtures = [_serialize_fixture(row) for row in rows]
+            return NextFixtureResponse(fixtures=fixtures)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get next fixtures: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get next fixtures: {str(e)}")
 
 
 # ============================================================================

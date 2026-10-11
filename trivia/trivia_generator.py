@@ -62,7 +62,8 @@ class TriviaGenerator:
     
     def _get_random_season(self) -> str:
         """Get a random season from the database."""
-        query = "MATCH (s:Season) RETURN s.id AS season ORDER BY s.id"
+        # Only seasons with played matches (future seasons only have fixtures)
+        query = "MATCH (s:Season) WHERE EXISTS { ()-[:SEASON_STATS]->(s) } RETURN s.id AS season ORDER BY s.id"
         try:
             results = self.conn.execute_query(query, {})
             if results:
@@ -80,8 +81,8 @@ class TriviaGenerator:
                     "difficulty": Difficulty.EASY,
                     "template": "Who was the top goal scorer in the {season} season?",
                     "query": """
-                        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-                        WITH p, SUM(r.goals_scored) AS goals
+                        MATCH (p:Player)-[r:SEASON_STATS]->(s:Season {id: $season})
+                        WITH p, SUM(r.goals) AS goals
                         RETURN p.name AS answer, goals
                         ORDER BY goals DESC
                         LIMIT 5
@@ -94,8 +95,8 @@ class TriviaGenerator:
                     "template": "Who scored the most goals among {position}s in {season}?",
                     "query": """
                         MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: $position})
-                        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-                        WITH p, SUM(r.goals_scored) AS goals
+                        MATCH (p)-[r:SEASON_STATS]->(s:Season {id: $season})
+                        WITH p, SUM(r.goals) AS goals
                         RETURN p.name AS answer, goals
                         ORDER BY goals DESC
                         LIMIT 5
@@ -110,7 +111,7 @@ class TriviaGenerator:
                     "difficulty": Difficulty.EASY,
                     "template": "How many FPL points did {player} score in {season}?",
                     "query": """
-                        MATCH (p:Player {name: $player})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+                        MATCH (p:Player {name: $player})-[r:SEASON_STATS]->(s:Season {id: $season})
                         RETURN SUM(r.total_points) AS answer
                     """,
                     "answer_field": "answer",
@@ -122,7 +123,7 @@ class TriviaGenerator:
                     "difficulty": Difficulty.MEDIUM,
                     "template": "How many assists did {player} provide in {season}?",
                     "query": """
-                        MATCH (p:Player {name: $player})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+                        MATCH (p:Player {name: $player})-[r:SEASON_STATS]->(s:Season {id: $season})
                         RETURN SUM(r.assists) AS answer
                     """,
                     "answer_field": "answer",
@@ -136,8 +137,8 @@ class TriviaGenerator:
                     "difficulty": Difficulty.HARD,
                     "template": "What was the highest single gameweek score in {season}?",
                     "query": """
-                        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-                        RETURN p.name AS player, gw.number AS gameweek, r.total_points AS answer
+                        MATCH (:Fixture {season_id: $season})<-[r:PLAYED_IN]-(p:Player)
+                        RETURN p.name AS player, r.gameweek AS gameweek, r.total_points AS answer
                         ORDER BY r.total_points DESC
                         LIMIT 1
                     """,
@@ -150,7 +151,7 @@ class TriviaGenerator:
                     "template": "Which goalkeeper made the most saves in {season}?",
                     "query": """
                         MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: 'GK'})
-                        MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+                        MATCH (p)-[r:SEASON_STATS]->(s:Season {id: $season})
                         WITH p, SUM(r.saves) AS saves
                         RETURN p.name AS answer, saves
                         ORDER BY saves DESC
@@ -166,8 +167,8 @@ class TriviaGenerator:
                     "difficulty": Difficulty.EASY,
                     "template": "True or False: {player} scored more than {threshold} goals in {season}.",
                     "query": """
-                        MATCH (p:Player {name: $player})-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-                        RETURN SUM(r.goals_scored) AS goals
+                        MATCH (p:Player {name: $player})-[r:SEASON_STATS]->(s:Season {id: $season})
+                        RETURN SUM(r.goals) AS goals
                     """,
                     "answer_field": "goals",
                     "comparison": "threshold",
@@ -177,7 +178,7 @@ class TriviaGenerator:
                     "difficulty": Difficulty.MEDIUM,
                     "template": "True or False: {player} had more assists than {player2} in {season}.",
                     "query": """
-                        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+                        MATCH (p:Player)-[r:SEASON_STATS]->(s:Season {id: $season})
                         WHERE p.name IN [$player, $player2]
                         WITH p.name AS name, SUM(r.assists) AS assists
                         RETURN name, assists
@@ -204,7 +205,7 @@ class TriviaGenerator:
                     "difficulty": Difficulty.MEDIUM,
                     "template": "Which player scored the most FPL points in {season}?",
                     "query": """
-                        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+                        MATCH (p:Player)-[r:SEASON_STATS]->(s:Season {id: $season})
                         WITH p, SUM(r.total_points) AS points
                         RETURN p.name AS answer, points
                         ORDER BY points DESC
@@ -220,7 +221,7 @@ class TriviaGenerator:
                     "difficulty": Difficulty.MEDIUM,
                     "template": "Who had more FPL points in {season}: {player} or {player2}?",
                     "query": """
-                        MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+                        MATCH (p:Player)-[r:SEASON_STATS]->(s:Season {id: $season})
                         WHERE p.name IN [$player, $player2]
                         WITH p.name AS name, SUM(r.total_points) AS points
                         RETURN name, points
@@ -236,9 +237,8 @@ class TriviaGenerator:
                     "difficulty": Difficulty.MEDIUM,
                     "template": "What was the highest-scoring fixture in {season}?",
                     "query": """
-                        MATCH (f:Fixture)-[:HOME_TEAM]->(ht:Team)
+                        MATCH (f:Fixture {season_id: $season})-[:HOME_TEAM]->(ht:Team)
                         MATCH (f)-[:AWAY_TEAM]->(at:Team)
-                        MATCH (f)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
                         WITH f, ht, at, (f.home_score + f.away_score) AS total_goals
                         RETURN ht.name AS home, at.name AS away, f.home_score AS home_score, 
                                f.away_score AS away_score, total_goals
@@ -256,7 +256,7 @@ class TriviaGenerator:
         if position:
             query = """
                 MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position {code: $position})
-                MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+                MATCH (p)-[r:SEASON_STATS]->(s:Season {id: $season})
                 WITH p, SUM(r.total_points) AS points
                 WHERE points > 50
                 RETURN p.name AS name
@@ -266,7 +266,7 @@ class TriviaGenerator:
             params = {"season": season, "position": position, "count": count}
         else:
             query = """
-                MATCH (p:Player)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
+                MATCH (p:Player)-[r:SEASON_STATS]->(s:Season {id: $season})
                 WITH p, SUM(r.total_points) AS points
                 WHERE points > 100
                 RETURN p.name AS name
@@ -286,8 +286,8 @@ class TriviaGenerator:
         """Get top players for generating meaningful questions."""
         query = """
             MATCH (p:Player)-[:PLAYS_POSITION]->(pos:Position)
-            MATCH (p)-[r:PLAYED_IN]->(f:Fixture)-[:PART_OF]->(gw:Gameweek)-[:IN_SEASON]->(s:Season {id: $season})
-            WITH p, pos, SUM(r.total_points) AS points, SUM(r.goals_scored) AS goals, SUM(r.assists) AS assists
+            MATCH (p)-[r:SEASON_STATS]->(s:Season {id: $season})
+            WITH p, pos, SUM(r.total_points) AS points, SUM(r.goals) AS goals, SUM(r.assists) AS assists
             WHERE points > 100
             RETURN p.name AS name, pos.code AS position, points, goals, assists
             ORDER BY points DESC

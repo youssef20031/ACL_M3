@@ -153,7 +153,7 @@ class TestAppPipeline(unittest.TestCase):
             expected_intent=Intent.TEAM_ANALYSIS,
             expected_method="get_team_top_performers",
             expected_params_subset={"team_name": "Arsenal", "season": "2022-23"},
-            expected_cypher_strings=["MATCH (t:Team {name: $team_name})", "ORDER BY total_points DESC"]
+            expected_cypher_strings=["WHERE st.team = $team_name", "ORDER BY total_points DESC"]
         )
 
     def test_query_7_fixture_results(self):
@@ -162,7 +162,7 @@ class TestAppPipeline(unittest.TestCase):
             expected_intent=Intent.FIXTURE_RESULTS,
             expected_method="get_fixture_results",
             expected_params_subset={"team_name": "Liverpool", "season": "2022-23"},
-            expected_cypher_strings=["MATCH (t:Team {name: $team_name})", "ORDER BY gw.number"]
+            expected_cypher_strings=["MATCH (:Team {name: $team_name})<-[:HOME_TEAM|AWAY_TEAM]-(f:Fixture)", "ORDER BY season, gameweek"]
         )
 
     def test_query_8_head_to_head(self):
@@ -171,7 +171,7 @@ class TestAppPipeline(unittest.TestCase):
             expected_intent=Intent.HEAD_TO_HEAD,
             expected_method="get_head_to_head",
             expected_params_subset={"team1": "Arsenal", "team2": "Spurs"},
-            expected_cypher_strings=["WHERE (ht.name = $team1 AND at.name = $team2)"]
+            expected_cypher_strings=["MATCH (:Team {name: $team1})<-[:HOME_TEAM|AWAY_TEAM]-(f:Fixture)-[:HOME_TEAM|AWAY_TEAM]->(:Team {name: $team2})"]
         )
 
     def test_query_9_best_value(self):
@@ -246,7 +246,7 @@ class TestAppPipeline(unittest.TestCase):
             prompt="search for player Raya",
             expected_intent=Intent.PLAYER_SEARCH,
             expected_method="search_players_by_name",
-            expected_cypher_strings=["WHERE toLower(p.name) CONTAINS toLower($name_pattern)"]
+            expected_cypher_strings=["WHERE p.name_normalized CONTAINS $name_pattern"]
         )
         
     def test_query_20_season_summary(self):
