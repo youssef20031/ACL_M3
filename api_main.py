@@ -205,8 +205,12 @@ async def lifespan(app: FastAPI):
     print("🚀 Initializing FPL FantasyTrivia API...")
     
     # Initialize LLM manager first (lightweight)
-    if HUGGINGFACE_API_TOKEN:
-        app_state["llm_manager"] = LLMManager(api_token=HUGGINGFACE_API_TOKEN)
+    # Groq (GROQ_API_KEY) serves all current models; HuggingFace is optional
+    llm_manager = LLMManager(api_token=HUGGINGFACE_API_TOKEN)
+    if llm_manager.available:
+        app_state["llm_manager"] = llm_manager
+    else:
+        print("⚠️  No LLM provider configured (set GROQ_API_KEY); answers will show raw graph data")
 
     app_state["trivia_cache"] = TriviaQuestionCache()
 
@@ -1331,7 +1335,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         
         # Step 7: Generate LLM response
         answer = ""
-        if app_state["llm_manager"] and app_state["llm_manager"].client:
+        if app_state["llm_manager"] and app_state["llm_manager"].available:
             data_scope = f"the {params['season']} season" if "season" in params else f"all seasons ({', '.join(SEASONS)})"
             full_prompt = PromptTemplates.qa_template(
                 question=request.question,
