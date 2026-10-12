@@ -34,6 +34,8 @@ v3 rebuilds the data instead:
 
 Like for like with the approach it replaced (v2 models plus synthetic rows), on 2026-27 GW3-5 top-30 picks with a model that never saw 2026-27: **4.98 vs 4.14** actual points.
 
+**Full evaluation:** [`docs/ml_evaluation/README.md`](../docs/ml_evaluation/README.md) covers bootstrap confidence intervals, breakdowns, calibration, feature importance, ablations, a leakage audit and error analysis. Regenerate it with `python -m ml.evaluate_points_v3` (about 4 minutes).
+
 Everything below documents the legacy v2/V6 pipeline. It is still loaded by the API as a fallback when no predictions file exists; don't build on it.
 
 ## Improvements Implemented
