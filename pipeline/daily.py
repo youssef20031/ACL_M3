@@ -80,11 +80,22 @@ def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False) -> Dict[str, A
     else:
         summary["graph"] = "skipped (no newly finished fixtures)"
 
-    from pipeline.predict_next_gw import predict_next_gameweek
-    summary["predictions"] = predict_next_gameweek(live_dir=live_dir)
+    # A prediction failure must not undo the refresh: the API still reloads the new
+    # graph data and keeps serving the previous predictions file. The run is then
+    # reported as failed so the healthcheck alerts.
+    prediction_error = None
+    try:
+        from pipeline.predict_next_gw import predict_next_gameweek
+        summary["predictions"] = predict_next_gameweek(live_dir=live_dir)
+    except Exception:
+        prediction_error = traceback.format_exc()
+        summary["predictions"] = "failed"
+        logger.error("Prediction step failed:\n%s", prediction_error)
 
     summary["backend_reload"] = _reload_backend()
     summary["seconds"] = round(time.time() - started, 1)
+    if prediction_error:
+        raise RuntimeError(f"predictions failed (data refresh succeeded): {json.dumps(summary, default=str)}\n{prediction_error}")
     return summary
 
 

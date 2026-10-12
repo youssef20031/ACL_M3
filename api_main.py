@@ -581,6 +581,23 @@ async def run_db(conn, query: str, params: Optional[Dict[str, Any]] = None) -> L
     return await asyncio.to_thread(conn.execute_query, query, params or {})
 
 
+_STATUS_LABELS = {"d": "doubtful", "i": "injured", "s": "suspended", "u": "unavailable", "n": "not in squad"}
+
+
+def _availability_note(row, inline: bool = False) -> str:
+    """FPL's official availability for a predictions row (status/news columns), if any."""
+    status = str(row.get("status") or "a") if hasattr(row, "get") else "a"
+    if status in ("a", "nan"):
+        return ""
+    news = row.get("news")
+    news = "" if news is None or str(news) == "nan" else str(news).strip()
+    chance = row.get("chance_of_playing_next_round")
+    chance_text = "" if chance is None or str(chance) == "nan" else f", {int(float(chance))}% chance of playing"
+    label = _STATUS_LABELS.get(status, status)
+    detail = f"{label}{chance_text}" + (f": {news}" if news else "")
+    return f" [{detail}]" if inline else f"\n- Availability (official FPL news): {detail}"
+
+
 def get_player_index(conn=None) -> PlayerIndex:
     """Shared in-memory player index; built at startup and rebuilt after data loads."""
     index = app_state["player_index"]
@@ -1135,6 +1152,9 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         
         # Step 3: Get query parameters
         params = entity_extractor.get_query_parameters(entities)
+        # "Top scorers" means goals; without this the generic query ranks by FPL points
+        if intent_result.intent == Intent.TOP_SCORERS and "sort_by" not in params:
+            params["sort_by"] = "goals"
         
         # Step 4: Execute Cypher query
         query_executor = QueryExecutor(conn)
@@ -1222,6 +1242,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                                     opponent = row['opponent']
                                     home_away = "Home" if row['is_home'] else "Away"
                                     ml_context = f"ML Prediction for {row['name']}:\n- Predicted points: {row['predicted_points']:.1f} pts\n- Next match: vs {opponent} ({home_away})\n- Gameweek: {int(row['gameweek'])}"
+                                    ml_context += _availability_note(row)
                                 else:
                                     # Fallback to Neo4j-based prediction
                                     pred_req = PlayerPredictionRequest(player_name=player_name)
@@ -1254,7 +1275,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                                 for idx, row in top_5.iterrows():
                                     opponent = row['opponent']
                                     home_away = "H" if row['is_home'] else "A"
-                                    ml_context += f"- {row['name']} ({row['position']}): {row['predicted_points']:.1f} pts vs {opponent} ({home_away})\n"
+                                    ml_context += f"- {row['name']} ({row['position']}): {row['predicted_points']:.1f} pts vs {opponent} ({home_away}){_availability_note(row, inline=True)}\n"
                             else:
                                 # Fallback to Neo4j
                                 pos = entities.positions[0] if entities.positions else None
