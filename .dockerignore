@@ -41,3 +41,4 @@ tests
 deploy
 **/.env
 **/.env.*
+data/live

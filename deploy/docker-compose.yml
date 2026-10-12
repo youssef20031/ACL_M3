@@ -47,6 +47,7 @@ services:
       AVATAR_CACHE_PATH: /app/.cache/avatars.json
     volumes:
       - backend_cache:/app/.cache
+      - live_data:/app/data/live   # current-season files from the daily pipeline
     depends_on:
       neo4j:
         condition: service_healthy
@@ -78,5 +79,6 @@ volumes:
   neo4j_data:
   neo4j_logs:
   backend_cache:
+  live_data:
   caddy_data:
   caddy_config:
