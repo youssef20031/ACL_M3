@@ -100,6 +100,26 @@ bash deploy/deploy.sh --load-data   # first time: build, start, load the graph (
 
 Open `https://<SITE_ADDRESS>` (shown in `deploy/.env`). Caddy gets the certificate on the first request.
 
+## 4. Turn on the daily season refresh
+
+`pipeline/daily.py` keeps the current season up to date from the official FPL API:
+- new results once FPL finalizes them (bonus confirmed)
+- team news and availability (injuries, suspensions, transfers)
+- the graph and next-gameweek predictions
+
+When it finishes it tells the API to reload, so there's no restart. Install the timer once; it runs at 06:00 and 18:00 UTC:
+
+```bash
+bash deploy/install-daily-job.sh
+sudo systemctl start fpl-daily.service   # optional: run it right away
+```
+
+Optional failure alerts:
+1. Create a free check on [healthchecks.io](https://healthchecks.io) with period 12 hours and grace 2 hours.
+2. Put its ping URL in `deploy/.env` as `HEALTHCHECK_URL=https://hc-ping.com/...`, then run `bash deploy/deploy.sh`.
+
+You get an email if a run fails or doesn't happen.
+
 ## Day-to-day
 
 | Task | Command |
@@ -107,6 +127,8 @@ Open `https://<SITE_ADDRESS>` (shown in `deploy/.env`). Caddy gets the certifica
 | Deploy the latest `main` | `bash deploy/deploy.sh` |
 | Reload the graph after changing the CSVs or the loader | `bash deploy/deploy.sh --load-data` |
 | Reload only promoted teams + 2026-27 fixtures (after editing the fixtures CSV) | `bash deploy/deploy.sh --load-fixtures` |
+| Refresh the current season now (results, team news, predictions) | `bash deploy/deploy.sh --run-daily` |
+| Daily job status / logs | `systemctl list-timers fpl-daily.timer`, `journalctl -u fpl-daily.service --no-pager \| tail -50` |
 | Tail backend logs | `docker compose -f deploy/docker-compose.yml logs -f backend` |
 | Status | `docker compose -f deploy/docker-compose.yml ps` |
 | Neo4j Browser | `ssh -L 7474:localhost:7474 -L 7687:localhost:7687 azureuser@<vm-ip>` (`ubuntu@` on Oracle), then open http://localhost:7474 (user `neo4j`, password from `deploy/.env`) |

@@ -7,7 +7,7 @@ os.environ['TRANSFORMERS_NO_TF'] = '1'          # skip TF/Keras import entirely
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -15,6 +15,7 @@ from dataclasses import asdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import asyncio
+import hmac
 import json
 import inspect
 import time
@@ -1672,6 +1673,31 @@ async def proxy_image(url: str):
         media_type=content_type,
         headers={"Cache-Control": "public, max-age=604800, immutable"},
     )
+
+
+@app.post("/api/admin/reload")
+async def admin_reload(x_admin_token: Optional[str] = Header(default=None), conn=Depends(get_neo4j_conn)):
+    """Rebuild graph-derived caches after the daily pipeline updated the graph.
+
+    Disabled unless ADMIN_TOKEN is set; callers send it in the X-Admin-Token header.
+    Prediction files are picked up automatically by mtime and need no reload.
+    """
+    expected = os.getenv("ADMIN_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    started = time.time()
+    reset_graph_caches()
+    _health_stats_cache["at"] = 0.0
+    index = await asyncio.to_thread(get_player_index, conn)
+    if app_state["entity_extractor"]:
+        app_state["entity_extractor"].set_known_players({e.player_name for e in index.entries})
+    if app_state["avatar_service"]:
+        await app_state["avatar_service"].refresh_fpl_codes()
+    latest = await asyncio.to_thread(get_latest_season, conn)
+    return {"players_indexed": len(index), "latest_season": latest, "seconds": round(time.time() - started, 2)}
 
 
 @app.post("/api/data/load")
