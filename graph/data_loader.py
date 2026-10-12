@@ -162,6 +162,32 @@ class FPLDataLoader:
         ]].drop_duplicates(subset=['fixture', 'season']).to_dict('records')
         logger.info(f"Found {len(fixtures)} unique fixtures")
 
+        performances = self.performance_records(df)
+        logger.info(f"Prepared {len(performances)} performance records")
+
+        return {
+            'players': players,
+            'teams': teams,
+            'seasons': seasons,
+            'gameweeks': gameweeks,
+            'fixtures': fixtures,
+            'performances': performances,
+            'season_stats': self.build_season_stats(df),
+        }
+
+    @staticmethod
+    def season_file_frame(df: pd.DataFrame, season: str) -> pd.DataFrame:
+        """Adapt a single-season file (FPL_YYYY_YYYY.csv layout: `team`, no `season`)
+        to the merged-CSV layout the rest of the loader expects."""
+        df = df.copy()
+        if 'team_x' not in df.columns and 'team' in df.columns:
+            df = df.rename(columns={'team': 'team_x'})
+        df['season'] = season
+        return df
+
+    @staticmethod
+    def performance_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """One PLAYED_IN property map per (player, fixture) row, NaN -> None."""
         perf_columns = [
             'name', 'season', 'fixture', 'GW', 'minutes', 'goals_scored', 'assists',
             'clean_sheets', 'bonus', 'bps', 'total_points', 'ict_index',
@@ -179,18 +205,7 @@ class FPLDataLoader:
         ]
         perf_columns += [c for c in optional_perf_columns if c in df.columns]
         perf_df = df[perf_columns].astype(object).where(df[perf_columns].notna(), None)
-        performances = perf_df.to_dict('records')
-        logger.info(f"Prepared {len(performances)} performance records")
-
-        return {
-            'players': players,
-            'teams': teams,
-            'seasons': seasons,
-            'gameweeks': gameweeks,
-            'fixtures': fixtures,
-            'performances': performances,
-            'season_stats': self.build_season_stats(df),
-        }
+        return perf_df.to_dict('records')
 
     def build_season_stats(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
         """Aggregate per-match rows into one record per (player, season)."""
@@ -274,7 +289,9 @@ class FPLDataLoader:
         UNWIND $batch AS fix
         MERGE (f:Fixture {id: toString(fix.fixture) + '-' + fix.season})
         SET f.fixture_id = fix.fixture,
-            f.kickoff_time = fix.kickoff_time,
+            // Stored as a DateTime (as 2026-27 fixtures are) so ordering and
+            // comparisons with datetime parameters work across every season
+            f.kickoff_time = CASE WHEN fix.kickoff_time IS NULL THEN null ELSE datetime(fix.kickoff_time) END,
             f.home_score = fix.team_h_score,
             f.away_score = fix.team_a_score,
             f.season_id = fix.season,
@@ -346,6 +363,26 @@ class FPLDataLoader:
         REMOVE st.name
         """
         self._run_batches(query, season_stats, "Season stats")
+
+    def replace_season_stats(self, season: str, season_stats: List[Dict]):
+        """Drop one season's SEASON_STATS and write them again (idempotent refresh)."""
+        self.conn.execute_write(
+            "MATCH (:Player)-[st:SEASON_STATS]->(:Season {id: $season}) DELETE st",
+            {"season": season},
+        )
+        self.create_season_stats(season_stats)
+
+    def convert_kickoff_strings(self) -> int:
+        """Turn Fixture.kickoff_time strings (graphs loaded before kickoff times were
+        DateTimes) into DateTimes. A no-op once converted."""
+        rows = self.conn.execute_query(
+            """
+            MATCH (f:Fixture) WHERE f.kickoff_time IS :: STRING
+            SET f.kickoff_time = datetime(f.kickoff_time)
+            RETURN count(f) AS converted
+            """
+        )
+        return rows[0]["converted"] if rows else 0
 
     def load_all(self, filepath: str, clear_existing: bool = True):
         """

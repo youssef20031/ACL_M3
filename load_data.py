@@ -1,9 +1,14 @@
 """
 Load FPL data into Neo4j using the credentials in .env.
 
-    python load_data.py                  # wipe and reload everything, including 2026-27 fixtures
-    python load_data.py --no-fixtures
-    python load_data.py --fixtures-only  # (re)load promoted teams + 2026-27 fixtures, keep the rest
+    python load_data.py                  # wipe and reload everything, including 2026-27
+    python load_data.py --no-fixtures    # history only (no 2026-27 fixtures or current season)
+    python load_data.py --fixtures-only  # (re)load promoted teams + 2026-27 fixtures/season, keep the rest
+    python load_data.py --current-only   # just refresh the current season from data/live
+
+The current season (2026-27) comes from data/live/ (pipeline.current_season) and is loaded
+by pipeline.load_current, with fixtures from the FPL API. Without live data, or if the
+API is unreachable, the 2026-27 schedule falls back to FIXTURES_CSV.
 """
 import argparse
 import logging
@@ -18,6 +23,7 @@ import pandas as pd
 from config.settings import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, DATA_PATH
 from graph.connection import Neo4jConnection
 from graph.data_loader import FPLDataLoader
+from pipeline.load_current import has_live_data, load_current_season
 from services.fixture_service import FixtureService
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -57,7 +63,16 @@ def add_promoted_teams(conn: Neo4jConnection) -> List[str]:
 
 
 def load_fixtures(conn: Neo4jConnection) -> None:
+    """Promoted teams, then the current season from data/live (fixtures from the FPL API).
+    The fixture CSV is the fallback when there is no live data or the API fails."""
     add_promoted_teams(conn)
+    if has_live_data():
+        try:
+            counts = load_current_season(conn)
+            logger.info(f"Loaded current season: {counts}")
+            return
+        except Exception as e:
+            logger.error(f"Current-season load failed ({e}); falling back to {FIXTURES_CSV}")
     loaded = FixtureService(conn).load_fixtures_from_csv(FIXTURES_CSV, season_id=FIXTURES_SEASON)
     logger.info(f"Loaded {loaded} {FIXTURES_SEASON} fixtures from {FIXTURES_CSV}")
 
@@ -69,15 +84,20 @@ def main() -> int:
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--no-fixtures", action="store_true", help=f"Skip loading {FIXTURES_SEASON} fixtures")
     group.add_argument("--fixtures-only", action="store_true",
-                       help=f"Only (re)load promoted teams and {FIXTURES_SEASON} fixtures")
+                       help=f"Only (re)load promoted teams and {FIXTURES_SEASON} fixtures and season data")
+    group.add_argument("--current-only", action="store_true",
+                       help="Only load the current season from data/live (pipeline.load_current)")
     args = parser.parse_args()
 
     conn = Neo4jConnection(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
     try:
-        if not args.fixtures_only:
-            FPLDataLoader(conn).load_all(args.csv, clear_existing=not args.keep_existing)
-        if not args.no_fixtures:
-            load_fixtures(conn)
+        if args.current_only:
+            print(load_current_season(conn))
+        else:
+            if not args.fixtures_only:
+                FPLDataLoader(conn).load_all(args.csv, clear_existing=not args.keep_existing)
+            if not args.no_fixtures:
+                load_fixtures(conn)
 
         stats = conn.get_database_stats()
         print(f"\nTotal nodes: {stats['total_nodes']:,}")

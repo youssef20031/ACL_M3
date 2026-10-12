@@ -320,6 +320,18 @@ class FixtureService:
             logger.error(f"Error checking if fixture is past: {e}")
             raise
     
+    def _api_fixture_count(self, season_id: str) -> int:
+        """Fixtures of a season loaded from the FPL API (they carry fixture_id)."""
+        rows = self.conn.execute_query(
+            "MATCH (f:Fixture {season_id: $season_id}) WHERE f.fixture_id IS NOT NULL "
+            "RETURN count(f) AS api_fixtures",
+            {"season_id": season_id},
+        )
+        if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+            count = rows[0].get("api_fixtures")
+            return count if isinstance(count, int) else 0
+        return 0
+
     def load_fixtures_from_csv(
         self,
         csv_path: str,
@@ -345,7 +357,17 @@ class FixtureService:
             if not required_columns.issubset(df.columns):
                 missing = required_columns - set(df.columns)
                 raise ValueError(f"Missing required columns: {missing}")
-            
+
+            # This CSV is the offline fallback. Once the season's fixtures come from the
+            # FPL API (pipeline/load_current.py, keyed by FPL fixture id) loading it too
+            # would create a second node per match.
+            api_fixtures = self._api_fixture_count(season_id)
+            if api_fixtures:
+                logger.info(
+                    f"Skipping {csv_path}: {api_fixtures} {season_id} fixtures from the FPL API are already loaded"
+                )
+                return 0
+
             # Get valid team names from Neo4j
             valid_teams_query = "MATCH (t:Team) RETURN t.name AS name"
             valid_teams_results = self.conn.execute_query(valid_teams_query)

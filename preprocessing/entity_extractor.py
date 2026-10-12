@@ -409,10 +409,16 @@ class EntityExtractor:
                 add(start_year)
                 spans.append(m.span())
 
-        # Relative phrases refer to the most recent season with data
-        if re.search(r"\b(this|last|previous|current)\s+season\b", text_lower):
-            if SEASONS[-1] not in seasons:
-                seasons.append(SEASONS[-1])
+        # Relative phrases: SEASONS[-1] is the season in progress, so "this/current
+        # season" is that one and "last/previous season" the one before it.
+        relative = []
+        if re.search(r"\b(this|current)\s+season\b", text_lower):
+            relative.append(SEASONS[-1])
+        if re.search(r"\b(last|previous)\s+season\b", text_lower):
+            relative.append(SEASONS[-2] if len(SEASONS) > 1 else SEASONS[-1])
+        for season in relative:
+            if season not in seasons:
+                seasons.append(season)
 
         # A lone year: the season starting that year, else the one ending in it
         for m in re.finditer(r"\b(20\d{2})\b", text_lower):

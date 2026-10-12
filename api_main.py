@@ -1707,6 +1707,11 @@ async def load_fpl_data(request: DataLoadRequest, conn=Depends(get_neo4j_conn)):
         # Takes minutes; run it off the event loop so the API stays responsive
         loader = FPLDataLoader(conn)
         stats = await asyncio.to_thread(loader.load_all, DATA_PATH, request.clear_existing)
+        # A wipe drops the current season; re-apply it from data/live when present
+        from pipeline.load_current import has_live_data, load_current_season
+        if has_live_data():
+            await asyncio.to_thread(load_current_season, conn)
+            stats = await asyncio.to_thread(conn.get_database_stats)
 
         reset_graph_caches()
         _health_stats_cache["at"] = 0.0
@@ -1775,8 +1780,11 @@ def load_fixtures(request: FixtureLoadRequest, conn=Depends(get_neo4j_conn)):
         # Optional: Clear existing fixtures for the season if requested
         if request.clear_existing:
             logger.info(f"Clearing existing fixtures for season {request.season_id}")
+            # Only CSV-keyed schedule nodes: FPL-keyed fixtures (pipeline.load_current) carry
+            # the season's PLAYED_IN rows and must survive a CSV reload
             clear_query = """
             MATCH (f:Fixture {season_id: $season_id})
+            WHERE f.id STARTS WITH 'fixture-'
             DETACH DELETE f
             """
             conn.execute_write(clear_query, {"season_id": request.season_id})
