@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ArrowLeftRight,
@@ -33,9 +33,9 @@ import { apiService, handleApiError } from '../services/api';
 import { cn } from '../utils/cn';
 import { getClubLogoPath } from '../utils/clubLogos';
 import { AvatarImage } from '../components/AvatarImage';
+import { usePlayerAvatars } from '../hooks/usePlayerAvatars';
 
 const SEARCH_DEBOUNCE_MS = 200;
-const AVATAR_STALE_MS = 24 * 60 * 60 * 1000;
 
 const SEASONS = ['', '2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26'];
 
@@ -164,33 +164,10 @@ export function PlayerComparison() {
     }
   };
 
-  // Avatars for suggestions that don't already carry one. One cached query per player name (24h),
-  // so each name is looked up at most once per session; lookups for names that drop out of the
-  // list while typing are aborted.
-  const namesNeedingAvatar = Array.from(
-    new Set([...p1Suggestions, ...p2Suggestions].filter((s) => s.name && !s.avatar).map((s) => s.name))
+  // Avatars for suggestions that don't already carry one (cached per name, shared with Search)
+  const avatarByName = usePlayerAvatars(
+    [...p1Suggestions, ...p2Suggestions].filter((s) => s.name && !s.avatar).map((s) => s.name)
   );
-  const avatarQueries = useQueries({
-    queries: namesNeedingAvatar.map((name) => ({
-      queryKey: ['player-avatar', name],
-      queryFn: async ({ signal }: { signal: AbortSignal }) => {
-        try {
-          const result = await apiService.searchImage(name, signal);
-          return result.image_url ?? null;
-        } catch (err) {
-          if (signal.aborted) throw err;
-          return null; // no avatar on lookup failure; don't retry
-        }
-      },
-      staleTime: AVATAR_STALE_MS,
-      gcTime: AVATAR_STALE_MS,
-      retry: false,
-    })),
-  });
-  const avatarByName: Record<string, string | null | undefined> = {};
-  namesNeedingAvatar.forEach((name, i) => {
-    avatarByName[name] = avatarQueries[i]?.data;
-  });
 
   useEffect(() => {
     const seq = ++p1SearchSeq.current;

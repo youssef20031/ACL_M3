@@ -106,6 +106,7 @@ Open `https://<SITE_ADDRESS>` (shown in `deploy/.env`). Caddy gets the certifica
 |---|---|
 | Deploy the latest `main` | `bash deploy/deploy.sh` |
 | Reload the graph after changing the CSVs or the loader | `bash deploy/deploy.sh --load-data` |
+| Reload only promoted teams + 2026-27 fixtures (after editing the fixtures CSV) | `bash deploy/deploy.sh --load-fixtures` |
 | Tail backend logs | `docker compose -f deploy/docker-compose.yml logs -f backend` |
 | Status | `docker compose -f deploy/docker-compose.yml ps` |
 | Neo4j Browser | `ssh -L 7474:localhost:7474 -L 7687:localhost:7687 azureuser@<vm-ip>` (`ubuntu@` on Oracle), then open http://localhost:7474 (user `neo4j`, password from `deploy/.env`) |

@@ -4,6 +4,7 @@
 #   bash deploy/deploy.sh               # pull latest code, rebuild, restart
 #   bash deploy/deploy.sh --no-pull     # rebuild what's checked out
 #   bash deploy/deploy.sh --load-data   # also (re)load the graph from the CSVs
+#   bash deploy/deploy.sh --load-fixtures  # only (re)load promoted teams + 2026-27 fixtures
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -11,10 +12,12 @@ COMPOSE=(docker compose -f deploy/docker-compose.yml)
 
 pull=1
 load_data=0
+load_fixtures=0
 for arg in "$@"; do
   case "$arg" in
     --no-pull) pull=0 ;;
     --load-data) load_data=1 ;;
+    --load-fixtures) load_fixtures=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -34,6 +37,10 @@ if [ "$load_data" = 1 ]; then
   echo "==> Loading the graph (wipes Neo4j, takes a minute or two)"
   "${COMPOSE[@]}" run --rm backend python load_data.py
   # The running backend caches the player index and season list built at startup
+  "${COMPOSE[@]}" restart backend
+elif [ "$load_fixtures" = 1 ]; then
+  echo "==> Loading promoted teams and fixtures"
+  "${COMPOSE[@]}" run --rm backend python load_data.py --fixtures-only
   "${COMPOSE[@]}" restart backend
 fi
 
