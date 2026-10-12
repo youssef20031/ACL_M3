@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { cn } from '../utils/cn';
 import { PlayerWithClub } from '../components/PlayerWithClub';
 import { AvatarImage } from '../components/AvatarImage';
+import { usePlayerAvatars } from '../hooks/usePlayerAvatars';
 
 const POSITION_COLORS: Record<string, string> = {
   GK: 'bg-yellow-100 text-yellow-800',
@@ -72,6 +73,11 @@ export function PlayerSearch() {
       setHasSearched(true);
     },
   });
+
+  // Results carry an avatar when the backend knows it instantly; the rest load per row
+  const avatarByName = usePlayerAvatars(
+    selectedPlayer ? [] : results.filter((p) => !p.avatar).map((p) => p.player_name ?? p.name)
+  );
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,7 +182,7 @@ export function PlayerSearch() {
               >
                 <div className="flex items-center gap-3">
                   <AvatarImage
-                    src={player.avatar}
+                    src={player.avatar ?? avatarByName[player.player_name ?? player.name]}
                     alt={player.player_name ?? player.name}
                     className="w-10 h-10 rounded-full object-cover"
                     size={40}

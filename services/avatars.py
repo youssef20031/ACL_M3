@@ -251,6 +251,16 @@ class AvatarService:
         self._schedule_save()
         return _public_url(url)
 
+    def peek(self, name: str, team: Optional[str] = None) -> Optional[str]:
+        """Avatar URL only if it's known without a network call (cache hit or FPL code)."""
+        key = normalize_name(name)
+        if not key:
+            return None
+        cached = self._cache.get(key)
+        if cached and cached[0]:
+            return _public_url(cached[0])
+        return _public_url(self._fpl_photo(name, team))
+
     async def enrich(self, rows: Iterable[Dict[str, Any]], team_of=None) -> List[Dict[str, Any]]:
         """Return copies of rows with an `avatar` field, looked up concurrently."""
         rows = [dict(r) for r in rows]

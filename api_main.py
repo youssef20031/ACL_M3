@@ -1579,6 +1579,12 @@ async def search_players(request: PlayerSearchRequest, conn=Depends(get_neo4j_co
         index = await get_player_index_async(conn)
         results = index.search(request.query, request.limit)
         if not request.include_avatars:
+            # Attach avatars that need no network call (FPL photos, cached lookups); the
+            # frontend fetches the rest per row so results render immediately.
+            service: Optional[AvatarService] = app_state["avatar_service"]
+            if service is not None:
+                for row in results:
+                    row["avatar"] = service.peek(row["player_name"], row.get("team_name"))
             return {"players": results}
 
         results = await enrich_rows_with_avatars(results)
