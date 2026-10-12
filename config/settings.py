@@ -57,7 +57,11 @@ POSITION_NAMES = {
     "FWD": "Forward"
 }
 
-SEASONS = ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26"]
+# Seasons with data, oldest first. The last one is the current season: its per-match
+# rows come from the FPL API (pipeline/current_season.py -> data/live/) instead of
+# cleaned_merged_seasons_cleaned.csv, and pipeline/load_current.py loads it.
+SEASONS = ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
+CURRENT_SEASON = SEASONS[-1]
 
 # Stats columns for embeddings
 STAT_COLUMNS = [

@@ -7,7 +7,7 @@ os.environ['TRANSFORMERS_NO_TF'] = '1'          # skip TF/Keras import entirely
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel
@@ -15,6 +15,7 @@ from dataclasses import asdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import asyncio
+import hmac
 import json
 import inspect
 import time
@@ -580,6 +581,23 @@ async def run_db(conn, query: str, params: Optional[Dict[str, Any]] = None) -> L
     return await asyncio.to_thread(conn.execute_query, query, params or {})
 
 
+_STATUS_LABELS = {"d": "doubtful", "i": "injured", "s": "suspended", "u": "unavailable", "n": "not in squad"}
+
+
+def _availability_note(row, inline: bool = False) -> str:
+    """FPL's official availability for a predictions row (status/news columns), if any."""
+    status = str(row.get("status") or "a") if hasattr(row, "get") else "a"
+    if status in ("a", "nan"):
+        return ""
+    news = row.get("news")
+    news = "" if news is None or str(news) == "nan" else str(news).strip()
+    chance = row.get("chance_of_playing_next_round")
+    chance_text = "" if chance is None or str(chance) == "nan" else f", {int(float(chance))}% chance of playing"
+    label = _STATUS_LABELS.get(status, status)
+    detail = f"{label}{chance_text}" + (f": {news}" if news else "")
+    return f" [{detail}]" if inline else f"\n- Availability (official FPL news): {detail}"
+
+
 def get_player_index(conn=None) -> PlayerIndex:
     """Shared in-memory player index; built at startup and rebuilt after data loads."""
     index = app_state["player_index"]
@@ -1134,6 +1152,9 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         
         # Step 3: Get query parameters
         params = entity_extractor.get_query_parameters(entities)
+        # "Top scorers" means goals; without this the generic query ranks by FPL points
+        if intent_result.intent == Intent.TOP_SCORERS and "sort_by" not in params:
+            params["sort_by"] = "goals"
         
         # Step 4: Execute Cypher query
         query_executor = QueryExecutor(conn)
@@ -1221,6 +1242,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                                     opponent = row['opponent']
                                     home_away = "Home" if row['is_home'] else "Away"
                                     ml_context = f"ML Prediction for {row['name']}:\n- Predicted points: {row['predicted_points']:.1f} pts\n- Next match: vs {opponent} ({home_away})\n- Gameweek: {int(row['gameweek'])}"
+                                    ml_context += _availability_note(row)
                                 else:
                                     # Fallback to Neo4j-based prediction
                                     pred_req = PlayerPredictionRequest(player_name=player_name)
@@ -1253,7 +1275,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                                 for idx, row in top_5.iterrows():
                                     opponent = row['opponent']
                                     home_away = "H" if row['is_home'] else "A"
-                                    ml_context += f"- {row['name']} ({row['position']}): {row['predicted_points']:.1f} pts vs {opponent} ({home_away})\n"
+                                    ml_context += f"- {row['name']} ({row['position']}): {row['predicted_points']:.1f} pts vs {opponent} ({home_away}){_availability_note(row, inline=True)}\n"
                             else:
                                 # Fallback to Neo4j
                                 pos = entities.positions[0] if entities.positions else None
@@ -1674,6 +1696,31 @@ async def proxy_image(url: str):
     )
 
 
+@app.post("/api/admin/reload")
+async def admin_reload(x_admin_token: Optional[str] = Header(default=None), conn=Depends(get_neo4j_conn)):
+    """Rebuild graph-derived caches after the daily pipeline updated the graph.
+
+    Disabled unless ADMIN_TOKEN is set; callers send it in the X-Admin-Token header.
+    Prediction files are picked up automatically by mtime and need no reload.
+    """
+    expected = os.getenv("ADMIN_TOKEN", "")
+    if not expected:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, expected):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    started = time.time()
+    reset_graph_caches()
+    _health_stats_cache["at"] = 0.0
+    index = await asyncio.to_thread(get_player_index, conn)
+    if app_state["entity_extractor"]:
+        app_state["entity_extractor"].set_known_players({e.player_name for e in index.entries})
+    if app_state["avatar_service"]:
+        await app_state["avatar_service"].refresh_fpl_codes()
+    latest = await asyncio.to_thread(get_latest_season, conn)
+    return {"players_indexed": len(index), "latest_season": latest, "seconds": round(time.time() - started, 2)}
+
+
 @app.post("/api/data/load")
 async def load_fpl_data(request: DataLoadRequest, conn=Depends(get_neo4j_conn)):
     """Load FPL data into Neo4j."""
@@ -1681,6 +1728,11 @@ async def load_fpl_data(request: DataLoadRequest, conn=Depends(get_neo4j_conn)):
         # Takes minutes; run it off the event loop so the API stays responsive
         loader = FPLDataLoader(conn)
         stats = await asyncio.to_thread(loader.load_all, DATA_PATH, request.clear_existing)
+        # A wipe drops the current season; re-apply it from data/live when present
+        from pipeline.load_current import has_live_data, load_current_season
+        if has_live_data():
+            await asyncio.to_thread(load_current_season, conn)
+            stats = await asyncio.to_thread(conn.get_database_stats)
 
         reset_graph_caches()
         _health_stats_cache["at"] = 0.0
@@ -1749,8 +1801,11 @@ def load_fixtures(request: FixtureLoadRequest, conn=Depends(get_neo4j_conn)):
         # Optional: Clear existing fixtures for the season if requested
         if request.clear_existing:
             logger.info(f"Clearing existing fixtures for season {request.season_id}")
+            # Only CSV-keyed schedule nodes: FPL-keyed fixtures (pipeline.load_current) carry
+            # the season's PLAYED_IN rows and must survive a CSV reload
             clear_query = """
             MATCH (f:Fixture {season_id: $season_id})
+            WHERE f.id STARTS WITH 'fixture-'
             DETACH DELETE f
             """
             conn.execute_write(clear_query, {"season_id": request.season_id})

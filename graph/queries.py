@@ -293,15 +293,16 @@ class CypherQueries:
             team_name: Team name
             season: Season ID (e.g., '2022-23') - if None, returns from all seasons
         """
-        season_filter = "WHERE f.season_id = $season" if season else ""
+        # Played matches only: the current season's unplayed fixtures have no score
+        season_filter = "AND f.season_id = $season" if season else ""
         query = f"""
         MATCH (:Team {{name: $team_name}})<-[:HOME_TEAM|AWAY_TEAM]-(f:Fixture)
-        {season_filter}
+        WHERE f.home_score IS NOT NULL {season_filter}
         MATCH (f)-[:HOME_TEAM]->(ht:Team)
         MATCH (f)-[:AWAY_TEAM]->(at:Team)
         RETURN f.season_id AS season, f.gameweek AS gameweek, ht.name AS home_team, at.name AS away_team,
                f.home_score AS home_score, f.away_score AS away_score,
-               f.kickoff_time AS kickoff_time
+               toString(f.kickoff_time) AS kickoff_time
         ORDER BY season, gameweek
         """
         return query, _with_season({"team_name": team_name}, season)
@@ -313,6 +314,7 @@ class CypherQueries:
         """
         query = """
         MATCH (:Team {name: $team1})<-[:HOME_TEAM|AWAY_TEAM]-(f:Fixture)-[:HOME_TEAM|AWAY_TEAM]->(:Team {name: $team2})
+        WHERE f.home_score IS NOT NULL
         MATCH (f)-[:HOME_TEAM]->(ht:Team)
         MATCH (f)-[:AWAY_TEAM]->(at:Team)
         RETURN f.season_id AS season, f.gameweek AS gameweek,
@@ -594,9 +596,11 @@ class CypherQueries:
         """
         query = """
         MATCH (s:Season {id: $season})
-        WITH s, COUNT { (:Gameweek)-[:IN_SEASON]->(s) } AS total_gameweeks
-        OPTIONAL MATCH (f:Fixture {season_id: s.id})-[:PART_OF]->(:Gameweek)
-        WITH s, total_gameweeks, COUNT(f) AS total_fixtures, SUM(f.home_score + f.away_score) AS total_goals
+        // Played fixtures only, so a season in progress reports what has happened so far
+        OPTIONAL MATCH (f:Fixture {season_id: s.id})-[:PART_OF]->(gw:Gameweek)
+        WHERE f.home_score IS NOT NULL
+        WITH s, COUNT(DISTINCT gw) AS total_gameweeks, COUNT(f) AS total_fixtures,
+             SUM(f.home_score + f.away_score) AS total_goals
         WHERE total_fixtures > 0
         OPTIONAL MATCH (:Player)-[st:SEASON_STATS]->(s)
         WITH s, total_gameweeks, total_fixtures, total_goals,
@@ -614,9 +618,11 @@ class CypherQueries:
         """
         query = """
         MATCH (s:Season)
-        WITH s, COUNT { (:Gameweek)-[:IN_SEASON]->(s) } AS total_gameweeks
-        OPTIONAL MATCH (f:Fixture {season_id: s.id})-[:PART_OF]->(:Gameweek)
-        WITH s, total_gameweeks, COUNT(f) AS total_fixtures, SUM(f.home_score + f.away_score) AS total_goals
+        // Played fixtures only, so a season in progress reports what has happened so far
+        OPTIONAL MATCH (f:Fixture {season_id: s.id})-[:PART_OF]->(gw:Gameweek)
+        WHERE f.home_score IS NOT NULL
+        WITH s, COUNT(DISTINCT gw) AS total_gameweeks, COUNT(f) AS total_fixtures,
+             SUM(f.home_score + f.away_score) AS total_goals
         WHERE total_fixtures > 0
         OPTIONAL MATCH (:Player)-[st:SEASON_STATS]->(s)
         WITH s, total_gameweeks, total_fixtures, total_goals,
@@ -684,6 +690,7 @@ class CypherQueries:
         """
         query = """
         MATCH (f:Fixture {season_id: $season})-[:HOME_TEAM]->(ht:Team)
+        WHERE f.home_score IS NOT NULL
         MATCH (f)-[:AWAY_TEAM]->(at:Team)
         WITH f, ht, at, (f.home_score + f.away_score) AS total_goals
         RETURN ht.name AS home_team, at.name AS away_team,

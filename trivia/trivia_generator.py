@@ -238,6 +238,7 @@ class TriviaGenerator:
                     "template": "What was the highest-scoring fixture in {season}?",
                     "query": """
                         MATCH (f:Fixture {season_id: $season})-[:HOME_TEAM]->(ht:Team)
+                        WHERE f.home_score IS NOT NULL  // unplayed 2026-27 fixtures sort first otherwise
                         MATCH (f)-[:AWAY_TEAM]->(at:Team)
                         WITH f, ht, at, (f.home_score + f.away_score) AS total_goals
                         RETURN ht.name AS home, at.name AS away, f.home_score AS home_score, 

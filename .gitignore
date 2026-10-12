@@ -33,3 +33,6 @@ Thumbs.db
 
 # Runtime caches (avatar lookups)
 .cache/
+
+# Current-season files written by the pipeline (pipeline/current_season.py)
+data/live/

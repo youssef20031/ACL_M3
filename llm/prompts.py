@@ -3,6 +3,13 @@ Prompt Templates for FPL Graph-RAG System
 """
 from typing import Dict, Any, Optional, List
 
+from config.settings import SEASONS, CURRENT_SEASON
+
+# Season wording for prompts, derived so it stays right as seasons are added
+_FIRST, _LAST, _N = SEASONS[0], SEASONS[-1], len(SEASONS)
+_ALL_SEASONS = ", ".join(SEASONS)
+_PREV_SEASON = SEASONS[-2] if CURRENT_SEASON == _LAST and _N > 1 else _LAST
+
 
 class PromptTemplates:
     """Collection of prompt templates for different use cases."""
@@ -63,7 +70,7 @@ You present data clearly and draw meaningful conclusions."""
             embedding_context: Optional context from embedding search
             ml_context: Optional context from ML prediction engine (XGBoost forecasts)
             persona: Persona key
-            data_scope: Description of the data scope (e.g., "all seasons (2020-21 through 2025-26)" or "2025-26 season")
+            data_scope: Description of the data scope (e.g., "all seasons (...)" or "2025-26 season")
             chat_history: Previous conversation messages for context
             model_key: The model being used (to customize prompt)
         """
@@ -79,9 +86,10 @@ You present data clearly and draw meaningful conclusions."""
             if "all seasons" in data_scope.lower():
                 scope_text = f"""
 **⚠️ CRITICAL - Data Scope**: This data covers {data_scope}.
-**ALL STATISTICS BELOW ARE COMBINED/TOTAL ACROSS ALL SIX SEASONS (2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26)**
-When you mention ANY statistic, you MUST say "across all seasons (2020-21 through 2025-26)" or "combined total across six seasons".
-NEVER quote a number without this qualifier. A player's combined goals across 6 seasons is NOT their goals in one season.
+**ALL STATISTICS BELOW ARE COMBINED/TOTAL ACROSS ALL {_N} SEASONS ({_ALL_SEASONS})**
+When you mention ANY statistic, you MUST say "across all seasons ({_FIRST} through {_LAST})" or "combined total across {_N} seasons".
+NEVER quote a number without this qualifier. A player's combined goals across {_N} seasons is NOT their goals in one season.
+The {CURRENT_SEASON} season is still in progress, so its numbers are "so far this season".
 """
             else:
                 scope_text = f"""
@@ -138,17 +146,18 @@ FirstMessage: {str(is_first_message)}
 **CRITICAL - SEASON CLARITY:**
 - ALWAYS explicitly state which season(s) the statistics are from
 - If the data scope says "2025-26 season", ALL numbers you mention are ONLY for that season
-- If the data scope says "all seasons", the numbers are COMBINED across all six seasons (2020-21, 2021-22, 2022-23, 2023-24, 2024-25, 2025-26)
+- If the data scope says "all seasons", the numbers are COMBINED across all {_N} seasons ({_ALL_SEASONS})
+- The {CURRENT_SEASON} season is IN PROGRESS: say "so far this season" for its numbers
 - NEVER say "Harry Kane scored 70 goals" without saying "across all seasons" or "in the 2022-23 season"
-- Format: "[Player] scored [X] goals in [specific season]" OR "[Player] scored [X] goals across all seasons (2020-21 through 2025-26)"
+- Format: "[Player] scored [X] goals in [specific season]" OR "[Player] scored [X] goals across all seasons ({_FIRST} through {_LAST})"
 
 **ML FORECAST RULES:**
-- If "ML Predictions" are provided above, those are the CURRENT/FUTURE predictions for the UPCOMING 2026-27 season.
+- If "ML Predictions" are provided above, those are forecasts for the NEXT GAMEWEEK of the current {CURRENT_SEASON} season.
 - ML predictions are forecasts based on recent form and upcoming fixtures - they are NOT historical stats.
 - When asked about "next gameweek" or "upcoming matches" or "who to pick", ALWAYS use ML Predictions if available.
 - Always distinguish between "Historical Stats" (from Knowledge Graph) and "ML Forecasts" (for next gameweek).
-- When discussing recent form for context, use stats from the 2025-26 season (the most recent complete season before the upcoming 2026-27).
-- Example: "Haaland averaged 8 goals in 2025-26, and our ML model predicts he will score 8.0 points in his next match vs Bournemouth."
+- When discussing recent form for context, prefer {CURRENT_SEASON} stats so far; {_PREV_SEASON} is the most recent complete season.
+- Example: "Haaland has 5 goals so far in {CURRENT_SEASON}, and our ML model predicts 8.0 points in his next match vs Bournemouth."
 - If ML Predictions show Haaland with 8.03 predicted points, that is THE answer when asked "who should I pick" or "how many points will he get".
 - NEVER ignore ML Predictions when they are present - they are the most important data for future performance questions.
 
@@ -204,7 +213,7 @@ Good: "In the 2025-26 season specifically, Harry Kane scored 30 goals and Son sc
 Bad: "Harry Kane scored 70 goals" (WRONG - this is a combined total, not one season)
 
 IF DATA SCOPE IS "all seasons":
-Good: "Across all six seasons (2020-21 through 2025-26), Harry Kane scored 70 goals total and Son scored 40 goals total."
+Good: "Across all {_N} seasons ({_FIRST} through {_LAST}), Harry Kane scored 70 goals total and Son scored 40 goals total."
 Bad: "Harry Kane scored 70 goals" (WRONG - doesn't clarify it's combined)
 
 ### Answer:"""

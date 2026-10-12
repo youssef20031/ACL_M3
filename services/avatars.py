@@ -105,6 +105,10 @@ class AvatarService:
         await self._save_cache_file()
         await self.client.aclose()
 
+    async def refresh_fpl_codes(self) -> None:
+        """Re-read the FPL bootstrap (new signings get photo codes during the season)."""
+        await self._load_fpl_codes()
+
     def _load_cache_file(self) -> None:
         try:
             with open(self.cache_path, encoding="utf-8") as f:

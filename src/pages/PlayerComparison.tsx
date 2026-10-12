@@ -37,7 +37,7 @@ import { usePlayerAvatars } from '../hooks/usePlayerAvatars';
 
 const SEARCH_DEBOUNCE_MS = 200;
 
-const SEASONS = ['', '2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26'];
+const SEASONS = ['', '2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26', '2026-27'];
 
 const EXAMPLE_PAIRS = [
   { p1: 'Mohamed Salah', p2: 'Son Heung-min' },
