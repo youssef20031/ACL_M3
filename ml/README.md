@@ -4,13 +4,37 @@
 
 This module integrates machine learning predictions into the FPL RAG system. It predicts player performance (FPL points) for the next gameweek based on recent form, historical statistics, and match context.
 
-## Current Status (V6 - Leakage Corrected) ✅
+## Current Status: v3 (production since 2026-10)
 
-**Performance**: R² = 0.720, MAE = 0.48 pts (+122% improvement over baseline)
-**Status**: Validated, leakage-free, production-ready (pending calibration analysis)
-**Models**: XGBoost position-specific (GK, DEF, MID, FWD)
+**Model:** `ml/points_model.py`, saved as `ml/models/points_v3.json` (XGBoost native JSON).
+Retrain with `python -m ml.train_points_v3`; metrics land in `ml/models/points_v3_report.json`.
 
-**See**: `docs/archive/ML_V6_LEAKAGE_CORRECTED.md` for complete documentation
+**Why v3 exists.** The v2/V6 numbers below (R² 0.72-0.87) were not real:
+- **Row duplication:** `FeatureEngineer`'s opponent-strength merges joined per-player-row values on (season, team, GW). That duplicated rows about 20x, so the `shift(-1)` target mostly landed on a copy of the same match.
+- **Wrong context:** the fixture features described the previous match, not the predicted one.
+- **Leaky xP:** FPL's historical `xP` was recorded inside the gameweek. Ranking by it alone picks ~7 actual points per player in 2023-24/2024-25, versus ~4.4 for any honest pre-deadline signal.
+
+v3 rebuilds the data instead:
+- one row per player per fixture, scored on that fixture's points
+- features only from earlier gameweeks, with double-gameweek fixtures sharing pre-deadline values
+- a per-team-per-match table for team strength
+- no xP
+
+`tests/test_points_model.py` pins these guarantees.
+
+**Honest results.** Trained on 2020-21..2023-24, early-stopped on 2024-25, tested on unseen seasons. "Top-20" is the mean actual points of the 20 highest predictions per gameweek; "captain" is the actual points of the single top pick.
+
+| Test season | Metric | v3 | Last-3 avg | Season pts/game |
+|---|---|---|---|---|
+| 2025-26 | top-20 | **4.55** | 3.78 | 4.21 |
+| 2025-26 | captain | 6.00 | 4.66 | 6.22 |
+| 2025-26 | MAE | **1.006** | 1.054 | 1.060 |
+| 2026-27 (GW1-5) | top-20 | **4.91** | 3.84 | 4.18 |
+| 2026-27 (GW1-5) | captain | **8.40** | 3.60 | 2.00 |
+
+Like for like with the approach it replaced (v2 models plus synthetic rows), on 2026-27 GW3-5 top-30 picks with a model that never saw 2026-27: **4.98 vs 4.14** actual points.
+
+Everything below documents the legacy v2/V6 pipeline. It is still loaded by the API as a fallback when no predictions file exists; don't build on it.
 
 ## Improvements Implemented
 

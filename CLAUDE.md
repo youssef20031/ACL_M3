@@ -78,15 +78,23 @@ The Neo4j driver and the LLM clients are synchronous. Inside `async def` routes,
 
 Results, including misses (which expire), persist to `.cache/avatars.json`. `/api/images/proxy` only fetches allow-listed hosts, checks every redirect hop, and keeps a small in-memory LRU.
 
-**ML** (`ml/`): `ml/api_integration.py` defines `MLAPIIntegration` and `register_ml_routes` (`/api/ml/predict/*`, `/api/ml/status`). Routes are registered at import time against `_LazyMLIntegration`, a proxy that resolves the real instance from `app_state` after startup. Startup loads `ml/models/xgboost_{gk,def,mid,fwd}_v2.pkl`, falling back to linear regression. `/api/ml/top-performers` and `/api/ml/best-value` in `api_main.py` serve the precomputed CSV instead.
+**ML** — the production model is **v3** (`ml/points_model.py`, `ml/models/points_v3.json` + `_meta.json`, XGBoost native JSON):
+- **Data:** one row per player per fixture; the target is that fixture's points.
+- **Features** (`build_features`) use only earlier gameweeks: rolling player form, season to date, and team/opponent goals and xG from a per-team-per-match table. Both fixtures of a double gameweek share pre-deadline values. The predicted fixture adds home/away, rest, fixtures in the gameweek, price and ownership rank.
+- **Inference** appends "upcoming" rows to the same function, so training and serving can't drift apart.
+- **Excluded:** FPL's historical `xP` is deliberately not a feature. It was recorded during gameweeks (it knows lineups) and leaked badly.
+- **Retrain:** `python -m ml.train_points_v3` (~40 s). It trains on 2020-21..2023-24, early-stops on 2024-25, tests on 2025-26 plus the current season against baselines, then refits on everything and writes `ml/models/points_v3_report.json`.
+- **Evaluation:** judge changes by test top-20 pick points and captain points, not training R².
+- **Leakage tests:** `tests/test_points_model.py` checks no row duplication, gameweek freezing, and team strength excluding the match itself.
 
-`pipeline/predict_next_gw.py` builds that CSV for the next FPL gameweek:
-- one synthetic row per player per fixture: per-match stats are the last-5 average; history features come from his real earlier rows, cut off before the predicted gameweek
-- double gameweeks are summed; blank gameweeks get 0
-- points are scaled by chance of playing, or set to 0 when the player is unavailable
-- `--backtest GW` evaluates the approach on a past gameweek
+`pipeline/predict_next_gw.py` serves v3 for the next FPL gameweek:
+- It reads the last 3 historical seasons plus the current one. Measured against all seasons: correlation 0.9998, same top 20, half the memory.
+- Double gameweeks are summed; blank gameweeks get 0.
+- Points are scaled by chance of playing, or set to 0 when the player is unavailable.
 
-**Known issue:** the v2 XGBoost models were trained on rows that `FeatureEngineer`'s opponent merges duplicated about 20x, so the `shift(-1)` target mostly matched the same match (that is where R² ≈ 0.87 comes from). The synthetic-row approach works around this; retraining on de-duplicated rows is the real fix (see `ml/README.md`). Feature engineering and leakage checks are in `ml/feature_engineering.py` and `ml/validate_no_leakage.py`; promoted-team handling uses EFL data in `EFL_Data_All_Seasons/`.
+All user-facing predictions come from that file: chat, search, `/api/ml/top-performers`, `/api/ml/best-value`, and `POST /api/ml/predict/player` via `_LazyMLIntegration`. A player missing from it isn't in the current FPL game, and gets a 404 or "no prediction", not a guess.
+
+The legacy v2 stack is still loaded at startup by `ml/api_integration.py` (`MLAPIIntegration`, `xgboost_*_v2.pkl`, `ml/feature_engineering.py`), but only as a fallback when no predictions file exists. Its training pipeline duplicated rows about 20x through `FeatureEngineer`'s opponent merges, so don't build on it. Promoted-team handling there uses EFL data in `EFL_Data_All_Seasons/`.
 
 ## Frontend architecture
 
