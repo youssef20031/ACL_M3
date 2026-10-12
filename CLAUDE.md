@@ -83,7 +83,8 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. `/ap
 - **Features** (`build_features`) use only earlier gameweeks: rolling player form, season to date, and team/opponent goals and xG from a per-team-per-match table. Both fixtures of a double gameweek share pre-deadline values. The predicted fixture adds home/away, rest, fixtures in the gameweek, price and ownership rank.
 - **Inference** appends "upcoming" rows to the same function, so training and serving can't drift apart.
 - **Excluded:** FPL's historical `xP` is deliberately not a feature. It was recorded during gameweeks (it knows lineups) and leaked badly.
-- **Retrain:** `python -m ml.train_points_v3` (~40 s). It trains on 2020-21..2023-24, early-stops on 2024-25, tests on 2025-26 plus the current season against baselines, then refits on everything and writes `ml/models/points_v3_report.json`.
+- **Retrain:** `python -m ml.train_points_v3` (~40 s, `train_and_report()`). It trains on 2020-21..2023-24, early-stops on 2024-25, tests on 2025-26 plus the current season against baselines, then refits on everything and writes `ml/models/points_v3_report.json`.
+- **Weekly retrain on the VM:** `pipeline/retrain.py`, run by the Monday-morning daily job in a child process (training peaks ~0.8 GB). A candidate goes to `$LIVE_DATA_DIR/models/` and replaces the active model only if its held-out top-20 beats every baseline and is within 10% of the active model's. Every attempt is logged in `retrain_history.json`. `pm.active_model_paths()` / `pm.load_model()` serve the live copy when present, else the bundled `ml/models/points_v3.json`. Force a run with `python -m pipeline.retrain --force` or `python -m pipeline.daily --retrain`.
 - **Evaluation:** judge changes by test top-20 pick points and captain points, not training R².
 - **Leakage tests:** `tests/test_points_model.py` checks no row duplication, gameweek freezing, and team strength excluding the match itself.
 

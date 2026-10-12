@@ -1,0 +1,131 @@
+"""
+Weekly retraining of the v3 points model, run from pipeline/daily.py.
+
+    python -m pipeline.retrain            # retrain if it's due (Mondays, at most every 5 days)
+    python -m pipeline.retrain --force
+
+The model is trained and evaluated with ml.train_points_v3 (held-out test seasons) and
+written to LIVE_DATA_DIR/models/ as a candidate. It only replaces the active model when
+it passes the guardrail:
+  * on the held-out test seasons its top-20 picks beat every simple baseline, and
+  * they are no more than MAX_REGRESSION worse than the active model's recorded result.
+ml.points_model.active_model_paths() serves the live copy when present, else the bundled
+ml/models/points_v3.json. Every attempt is appended to LIVE_DATA_DIR/models/retrain_history.json.
+"""
+import argparse
+import json
+import logging
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, Tuple
+
+from ml import points_model as pm
+
+logger = logging.getLogger(__name__)
+
+RETRAIN_WEEKDAY = 0                 # Monday: the morning run after the weekend's matches are final
+MIN_INTERVAL = timedelta(days=5)    # the timer runs twice a day; retrain once per week
+MAX_REGRESSION = 0.10               # reject a candidate >10% worse than the active model on top-20 picks
+BASELINES = ("last3_avg", "last6_avg", "season_ppg")
+HISTORY_LIMIT = 52
+
+
+# ------------------------------------------------------------------ decisions (pure)
+
+def is_due(now: datetime, last_trained: Optional[datetime]) -> bool:
+    if now.weekday() != RETRAIN_WEEKDAY:
+        return False
+    return last_trained is None or now - last_trained >= MIN_INTERVAL
+
+
+def passes_guardrail(candidate: Dict[str, Any], active: Optional[Dict[str, Any]]) -> Tuple[bool, str]:
+    """candidate/active: test metrics as in report["test"]["all"] ({"v3": {...}, "last3_avg": {...}, ...})."""
+    top20 = candidate["v3"]["top20_points"]
+    best_baseline = max((candidate[b]["top20_points"] for b in BASELINES if b in candidate), default=float("-inf"))
+    if top20 <= best_baseline:
+        return False, f"top-20 {top20:.3f} does not beat the best baseline ({best_baseline:.3f})"
+    if active and "v3" in active:
+        floor = active["v3"]["top20_points"] * (1 - MAX_REGRESSION)
+        if top20 < floor:
+            return False, f"top-20 {top20:.3f} is more than {MAX_REGRESSION:.0%} below the active model's {active['v3']['top20_points']:.3f}"
+    return True, f"top-20 {top20:.3f} (best baseline {best_baseline:.3f})"
+
+
+# ------------------------------------------------------------------ orchestration
+
+def _read_json(path: str) -> Optional[Dict[str, Any]]:
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _parse_time(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    t = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def last_trained_at() -> Optional[datetime]:
+    """When the active model was trained (live copy, else the bundled one)."""
+    _, meta_path = pm.active_model_paths()
+    meta = _read_json(meta_path) or {}
+    return _parse_time(meta.get("trained_at"))
+
+
+def maybe_retrain(force: bool = False, now: Optional[datetime] = None) -> Dict[str, Any]:
+    from ml.train_points_v3 import train_and_report
+
+    now = now or datetime.now(timezone.utc)
+    last = last_trained_at()
+    if not force and not is_due(now, last):
+        return {"status": "skipped", "reason": "not due", "last_trained": last.isoformat() if last else None}
+
+    out_dir = pm.live_model_dir()
+    os.makedirs(out_dir, exist_ok=True)
+    cand_model = os.path.join(out_dir, "points_v3.candidate.json")
+    cand_meta = os.path.join(out_dir, "points_v3_meta.candidate.json")
+    report_path = os.path.join(out_dir, "points_v3_report.json")
+
+    active_meta = _read_json(pm.active_model_paths()[1]) or {}
+    report = train_and_report(cand_model, cand_meta, report_path)
+    candidate = report["test"]["all"]
+    ok, reason = passes_guardrail(candidate, active_meta.get("test_metrics"))
+
+    live_model = os.path.join(out_dir, "points_v3.json")
+    live_meta = os.path.join(out_dir, "points_v3_meta.json")
+    if ok:
+        # Model first, meta last: active_model_paths needs both, and meta marks completion
+        os.replace(cand_model, live_model)
+        os.replace(cand_meta, live_meta)
+    else:
+        for path in (cand_model, cand_meta):
+            if os.path.exists(path):
+                os.remove(path)
+
+    entry = {
+        "at": now.isoformat(timespec="seconds"), "accepted": ok, "reason": reason,
+        "rows": report.get("production", {}).get("rows"), "seconds": report.get("seconds"),
+        "test_top20": candidate["v3"]["top20_points"], "test_mae": candidate["v3"]["mae"],
+        "previous_test_top20": (active_meta.get("test_metrics") or {}).get("v3", {}).get("top20_points"),
+    }
+    history_path = os.path.join(out_dir, "retrain_history.json")
+    history = (_read_json(history_path) or [])[-(HISTORY_LIMIT - 1):] + [entry]
+    with open(history_path, "w", encoding="utf-8") as f:
+        json.dump(history, f, indent=2)
+    logger.info("Retrain %s: %s", "accepted" if ok else "rejected", reason)
+    return {"status": "accepted" if ok else "rejected", **entry}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Weekly retraining of the v3 points model")
+    parser.add_argument("--force", action="store_true", help="Retrain now regardless of the schedule")
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    print(json.dumps(maybe_retrain(force=args.force), indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
