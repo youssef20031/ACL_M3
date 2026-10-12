@@ -32,8 +32,20 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 HISTORY_CSV = "cleaned_merged_seasons_cleaned.csv"
+# Bundled with the code; the weekly retrain (pipeline/retrain.py) writes newer copies to the
+# live data volume, which take precedence (see active_model_paths)
 MODEL_PATH = os.path.join("ml", "models", "points_v3.json")
 META_PATH = os.path.join("ml", "models", "points_v3_meta.json")
+
+
+def live_model_dir() -> str:
+    return os.path.join(os.getenv("LIVE_DATA_DIR", os.path.join("data", "live")), "models")
+
+
+def active_model_paths():
+    """(model, meta) to serve: the retrained copy in LIVE_DATA_DIR/models if present, else bundled."""
+    live = (os.path.join(live_model_dir(), "points_v3.json"), os.path.join(live_model_dir(), "points_v3_meta.json"))
+    return live if all(os.path.exists(p) for p in live) else (MODEL_PATH, META_PATH)
 
 POSITIONS = ["GK", "DEF", "MID", "FWD"]
 
@@ -296,7 +308,9 @@ def save_model(model, meta: dict, model_path: str = MODEL_PATH, meta_path: str =
         json.dump({**meta, "features": feature_columns()}, f, indent=2)
 
 
-def load_model(model_path: str = MODEL_PATH, meta_path: str = META_PATH):
+def load_model(model_path: Optional[str] = None, meta_path: Optional[str] = None):
+    if model_path is None or meta_path is None:
+        model_path, meta_path = active_model_paths()
     xgb = _xgb()
     booster = xgb.Booster()
     booster.load_model(model_path)

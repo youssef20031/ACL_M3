@@ -106,6 +106,7 @@ Open `https://<SITE_ADDRESS>` (shown in `deploy/.env`). Caddy gets the certifica
 - new results once FPL finalizes them (bonus confirmed)
 - team news and availability (injuries, suspensions, transfers)
 - the graph and next-gameweek predictions
+- on Mondays, a retrain of the points model on everything up to the weekend. The new model is kept only if it still beats the simple baselines on held-out seasons and isn't more than 10% worse than the current one; otherwise the current model stays. Each attempt is logged in the `live_data` volume at `models/retrain_history.json`. To force one now: `docker compose -f deploy/docker-compose.yml run --rm backend python -m pipeline.retrain --force`
 
 When it finishes it tells the API to reload, so there's no restart. Install the timer once; it runs at 06:00 and 18:00 UTC:
 

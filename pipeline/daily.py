@@ -9,9 +9,11 @@ Steps:
      history only when FPL has finalized new results
   2. pipeline.load_current: apply new results, squads and availability to the graph
      (skipped when nothing new was fetched, unless --force)
-  3. pipeline.predict_next_gw: regenerate next-gameweek predictions (availability changes daily)
-  4. POST /api/admin/reload so the running API rebuilds its caches without a restart
-  5. Ping HEALTHCHECK_URL (e.g. healthchecks.io) on success, HEALTHCHECK_URL/fail on failure,
+  3. pipeline.retrain (Mondays): retrain the v3 points model on everything up to the weekend;
+     the new model is only used if it passes the guardrail in pipeline/retrain.py
+  4. pipeline.predict_next_gw: regenerate next-gameweek predictions (availability changes daily)
+  5. POST /api/admin/reload so the running API rebuilds its caches without a restart
+  6. Ping HEALTHCHECK_URL (e.g. healthchecks.io) on success, HEALTHCHECK_URL/fail on failure,
      so a silent failure turns into an email
 
 Environment: LIVE_DATA_DIR, BACKEND_URL (default http://backend:8000), ADMIN_TOKEN,
@@ -21,6 +23,7 @@ import argparse
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
 import traceback
@@ -60,7 +63,17 @@ def _reload_backend() -> str:
         return f"failed: {exc}"
 
 
-def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False) -> Dict[str, Any]:
+def _run_retrain(force: bool = False) -> Dict[str, Any]:
+    """pipeline.retrain in a child process: training peaks around 0.8 GB, and a separate
+    process guarantees that memory is returned before predictions run on the 4 GB VM."""
+    cmd = [sys.executable, "-m", "pipeline.retrain"] + (["--force"] if force else [])
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+    if proc.returncode != 0:
+        raise RuntimeError(f"pipeline.retrain exited {proc.returncode}:\n{proc.stderr[-4000:]}")
+    return json.loads(proc.stdout)
+
+
+def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False, retrain: bool = False) -> Dict[str, Any]:
     summary: Dict[str, Any] = {}
     started = time.time()
 
@@ -80,22 +93,31 @@ def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False) -> Dict[str, A
     else:
         summary["graph"] = "skipped (no newly finished fixtures)"
 
-    # A prediction failure must not undo the refresh: the API still reloads the new
-    # graph data and keeps serving the previous predictions file. The run is then
-    # reported as failed so the healthcheck alerts.
-    prediction_error = None
+    # Neither step may undo the refresh: on failure the active model / previous predictions
+    # stay in place, the API still reloads, and the run is reported as failed so the
+    # healthcheck alerts.
+    errors = []
+    try:
+        summary["retrain"] = _run_retrain(force=retrain)
+    except Exception:
+        errors.append(("retrain", traceback.format_exc()))
+        summary["retrain"] = "failed"
+        logger.error("Retrain step failed:\n%s", errors[-1][1])
+
     try:
         from pipeline.predict_next_gw import predict_next_gameweek
         summary["predictions"] = predict_next_gameweek(live_dir=live_dir)
     except Exception:
-        prediction_error = traceback.format_exc()
+        errors.append(("predictions", traceback.format_exc()))
         summary["predictions"] = "failed"
-        logger.error("Prediction step failed:\n%s", prediction_error)
+        logger.error("Prediction step failed:\n%s", errors[-1][1])
 
     summary["backend_reload"] = _reload_backend()
     summary["seconds"] = round(time.time() - started, 1)
-    if prediction_error:
-        raise RuntimeError(f"predictions failed (data refresh succeeded): {json.dumps(summary, default=str)}\n{prediction_error}")
+    if errors:
+        failed = ", ".join(step for step, _ in errors)
+        details = "\n".join(tb for _, tb in errors)
+        raise RuntimeError(f"{failed} failed (data refresh succeeded): {json.dumps(summary, default=str)}\n{details}")
     return summary
 
 
@@ -104,13 +126,14 @@ def main() -> int:
     parser.add_argument("--live-dir", default=LIVE_DATA_DIR)
     parser.add_argument("--force", action="store_true",
                         help="Re-fetch all history and reload the graph even if nothing changed")
+    parser.add_argument("--retrain", action="store_true", help="Retrain the model now, not just on Mondays")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
     _ping("/start")
     try:
-        summary = run_daily(args.live_dir, force=args.force)
+        summary = run_daily(args.live_dir, force=args.force, retrain=args.retrain)
     except Exception:
         details = traceback.format_exc()
         logger.error("Daily refresh failed:\n%s", details)

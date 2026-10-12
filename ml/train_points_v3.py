@@ -39,12 +39,12 @@ def _live_csv() -> tuple:
     return os.path.join(LIVE_DATA_DIR, meta["files"]["season"]), meta["season"]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Train/evaluate the v3 points model")
-    parser.add_argument("--eval-only", action="store_true", help="Don't refit/save the production model")
-    args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+def train_and_report(model_path: str = pm.MODEL_PATH, meta_path: str = pm.META_PATH,
+                     report_path: str = REPORT_PATH, eval_only: bool = False) -> dict:
+    """Evaluate on the held-out seasons, then (unless eval_only) refit on everything and save.
 
+    Returns the report dict; report["test"]["all"] holds the combined test metrics.
+    """
     t0 = time.time()
     live_csv, live_season = _live_csv()
     history = pm.load_history(live_csv=live_csv, live_season=live_season)
@@ -77,27 +77,35 @@ def main() -> int:
             res["v3_same_rows_as_xP"] = pm.evaluate(both, "pred_v3").as_dict()
         report["test"][season] = res
 
-    booster = model.get_booster()
-    gain = booster.get_score(importance_type="gain")
+    gain = model.get_booster().get_score(importance_type="gain")
     report["top_features"] = sorted(gain.items(), key=lambda kv: -kv[1])[:15]
+
+    if not eval_only:
+        # Refit on all seasons; scale trees with the extra data, capped
+        n_trees = min(int(best_trees * len(feats) / len(train)), 4000)
+        final = pm.fit(feats, None, n_estimators=n_trees)
+        meta = {"version": "v3", "trained_at": pd.Timestamp.utcnow().isoformat(timespec="seconds"),
+                "seasons": sorted(feats["season"].unique().tolist()), "rows": len(feats),
+                "n_trees": n_trees, "params": pm.XGB_PARAMS, "test_metrics": report["test"].get("all")}
+        pm.save_model(final, meta, model_path, meta_path)
+        report["production"] = {k: v for k, v in meta.items() if k != "test_metrics"}
+        logger.info("Saved %s (%d trees, %d rows)", model_path, n_trees, len(feats))
+
+    report["seconds"] = round(time.time() - t0, 1)
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2, default=str)
+    logger.info("Report: %s (%.0fs total)", report_path, time.time() - t0)
+    return report
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Train/evaluate the v3 points model")
+    parser.add_argument("--eval-only", action="store_true", help="Don't refit/save the production model")
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    report = train_and_report(eval_only=args.eval_only)
     print(json.dumps(report["test"], indent=2))
     print("top features:", [k for k, _ in report["top_features"]])
-
-    if not args.eval_only:
-        # Refit on all seasons; scale trees with the extra data, capped
-        all_rows = feats
-        n_trees = min(int(best_trees * len(all_rows) / len(train)), 4000)
-        final = pm.fit(all_rows, None, n_estimators=n_trees)
-        meta = {"version": "v3", "trained_at": pd.Timestamp.utcnow().isoformat(timespec="seconds"),
-                "seasons": sorted(all_rows["season"].unique().tolist()), "rows": len(all_rows),
-                "n_trees": n_trees, "params": pm.XGB_PARAMS, "test_metrics": report["test"].get("all")}
-        pm.save_model(final, meta)
-        report["production"] = {k: v for k, v in meta.items() if k != "test_metrics"}
-        logger.info("Saved %s (%d trees, %d rows)", pm.MODEL_PATH, n_trees, len(all_rows))
-
-    with open(REPORT_PATH, "w", encoding="utf-8") as f:
-        json.dump(report, f, indent=2, default=str)
-    logger.info("Report: %s (%.0fs total)", REPORT_PATH, time.time() - t0)
     return 0
 
 
