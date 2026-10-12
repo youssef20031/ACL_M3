@@ -73,34 +73,6 @@ def test_availability_factor(status, chance, expected):
     assert png.availability_factor(status, chance) == pytest.approx(expected)
 
 
-# ------------------------------------------------------------------ team strength
-
-def test_expected_goals_mixes_team_and_opponent_form():
-    form = {"Arsenal": (2.0, 0.6), "Ipswich": (0.8, 2.2)}
-    gf, ga = png.expected_goals("Arsenal", "Ipswich", form)
-    assert gf == pytest.approx((2.0 + 2.2) / 2)
-    assert ga == pytest.approx((0.6 + 0.8) / 2)
-    assert png.expected_goals("X", "Y", {}) == (png.DEFAULT_TEAM_GOALS, png.DEFAULT_TEAM_GOALS)
-
-
-def test_team_goal_form_dedupes_players_and_prefers_current_season():
-    rows = []
-    # two players of the same match must count once
-    for name in ("1", "2"):
-        rows.append({"season_x": "2026-27", "team_x": "Arsenal", "kickoff_time": "2026-09-01T15:00:00Z",
-                     "was_home": True, "team_h_score": 3, "team_a_score": 1, "name": name})
-    rows.append({"season_x": "2026-27", "team_x": "Arsenal", "kickoff_time": "2026-09-08T15:00:00Z",
-                 "was_home": False, "team_h_score": 2, "team_a_score": 0, "name": "1"})
-    rows.append({"season_x": "2025-26", "team_x": "Arsenal", "kickoff_time": "2026-05-01T15:00:00Z",
-                 "was_home": True, "team_h_score": 5, "team_a_score": 5, "name": "1"})
-    df = pd.DataFrame(rows)
-    df["kickoff_time"] = pd.to_datetime(df["kickoff_time"], utc=True)
-
-    assert png.team_goal_form(df, "2026-27", n=2)["Arsenal"] == pytest.approx(((3 + 0) / 2, (1 + 2) / 2))
-    # fewer current matches than n: topped up with last season's
-    assert png.team_goal_form(df, "2026-27", n=3)["Arsenal"] == pytest.approx(((3 + 0 + 5) / 3, (1 + 2 + 5) / 3))
-
-
 def test_promoted_teams():
     assert png.promoted_teams(["Arsenal", "Chelsea"], ["Arsenal", "Hull City", "Chelsea", "Hull City"]) == ["Hull City"]
     assert png.promoted_teams([], ["Arsenal"]) == []
@@ -125,8 +97,8 @@ def players_frame():
 
 def test_assemble_output_applies_availability_blank_and_schema():
     by_team = png.gameweek_fixtures(GW_FIXTURES, 7, TEAMS)
-    predictions = {"1": {"points": 9.0, "method": "xgboost_v2"}, "2": {"points": 4.0, "method": "xgboost_v2"},
-                   "3": {"points": 5.0, "method": "xgboost_v2"}, "5": {"points": 3.0, "method": "xgboost_v2"}}
+    predictions = {"1": {"points": 9.0, "method": "xgboost_v3"}, "2": {"points": 4.0, "method": "xgboost_v3"},
+                   "3": {"points": 5.0, "method": "xgboost_v3"}, "5": {"points": 3.0, "method": "xgboost_v3"}}
     out = png.assemble_output(players_frame(), predictions, by_team, 7, "2026-10-17T10:00:00Z", ["Hull City"])
     rows = out.set_index("name")
 
@@ -190,71 +162,54 @@ def live_dir(tmp_path):
 
 
 def test_load_history_excludes_predicted_gameweek_and_later(live_dir):
-    players = players_frame()
-    history, previous = png.load_history(players, str(live_dir / "FPL_2026_2027.csv"), "2026-27",
-                                         before_gw=6, before_time="2026-10-17T10:00:00Z",
-                                         history_csv=str(live_dir / "history.csv"))
-    current = history[history["season_x"] == "2026-27"]
+    history = png.load_history(str(live_dir / "FPL_2026_2027.csv"), "2026-27", before_gw=6,
+                               before_time="2026-10-17T10:00:00Z", history_csv=str(live_dir / "history.csv"))
+    current = history[history["season"] == "2026-27"]
     assert current["GW"].max() == 5                     # GW6/GW7 rows never feed features
-    assert set(history["name"]) == {"1", "2", "3"}      # keyed by element; non-current players dropped
-    assert len(history[(history["name"] == "1") & (history["season_x"] == "2025-26")]) == 1  # name-matched
-    assert previous == ["Arsenal", "Leeds"]
-    assert history.groupby("name")["kickoff_time"].apply(lambda s: s.is_monotonic_increasing).all()
+    assert len(history[history["season"] == "2025-26"]) == 2
+    assert png.previous_season_teams(history, "2026-27") == ["Arsenal", "Leeds"]
 
     # kickoff cutoff also applies (a later-round match played early would be dropped)
-    history, _ = png.load_history(players, str(live_dir / "FPL_2026_2027.csv"), "2026-27",
-                                  before_gw=8, before_time="2026-09-10T00:00:00Z",
-                                  history_csv=str(live_dir / "history.csv"))
-    assert history.loc[history["season_x"] == "2026-27", "GW"].max() == 3
+    history = png.load_history(str(live_dir / "FPL_2026_2027.csv"), "2026-27", before_gw=8,
+                               before_time="2026-09-10T00:00:00Z", history_csv=str(live_dir / "history.csv"))
+    assert history.loc[history["season"] == "2026-27", "GW"].max() == 3
 
 
-class ConstantModel:
+class RecordingModel:
+    """Stands in for the v3 booster: constant points, keeps the feature rows it saw."""
+
     def __init__(self, value):
         self.value = value
         self.seen = []
 
-    def predict(self, X):
-        self.seen.append(X.copy())
-        return np.full(len(X), self.value)
+    def __call__(self, frame):
+        self.seen.append(frame.copy())
+        return np.full(len(frame), self.value)
 
 
-def stub_models(value=2.5):
-    from ml.feature_engineering import FeatureEngineer
-    models = png.PositionModels.__new__(png.PositionModels)
-    models.models, models.engineers = {}, {}
-    for pos in png.POSITIONS:
-        fe = FeatureEngineer()
-        fe.load_mappings(os.path.join(png.MODELS_DIR, f"xgboost_{pos.lower()}_v2_mappings.json"))
-        models.engineers[pos] = fe
-        models.models[pos] = ConstantModel(value)
-    return models
-
-
-def test_predict_players_sums_double_gameweek_and_sets_context(live_dir):
+def test_predict_players_sums_double_gameweek_and_uses_prior_matches_only(live_dir):
     players = players_frame()
-    history, _ = png.load_history(players, str(live_dir / "FPL_2026_2027.csv"), "2026-27", before_gw=7,
-                                  before_time=None, history_csv=str(live_dir / "history.csv"))
+    history = png.load_history(str(live_dir / "FPL_2026_2027.csv"), "2026-27", before_gw=7,
+                               before_time=None, history_csv=str(live_dir / "history.csv"))
     by_team = png.gameweek_fixtures(GW_FIXTURES, 7, TEAMS)
-    models = stub_models(2.5)
-    form = {"Arsenal": (2.0, 1.0), "Chelsea": (1.0, 1.0), "Spurs": (1.0, 2.0)}
-    out = png.predict_players(models, players, history, by_team, "2026-27", 7, form)
+    model = RecordingModel(2.5)
+    out = png.predict_players(players, history, by_team, "2026-27", 7, model)
 
     assert out["1"]["points"] == pytest.approx(5.0)      # Arsenal double: 2 x 2.5
     assert out["2"]["points"] == pytest.approx(2.5)
     assert "4" not in out                                 # blank (Hull City): no model row
-    assert out["5"]["method"] == png.COLD_START_METHOD   # no match rows at all
-    assert out["5"]["points"] > 0
+    assert out["5"]["points"] == pytest.approx(5.0)      # no match rows at all: still predicted
+    assert {v["method"] for v in out.values()} == {png.MODEL_METHOD}
 
-    mid_rows = pd.concat(models.models["MID"].seen)       # Fit Gunner's two fixture rows
-    assert list(mid_rows["was_home"]) == [1, 1]
-    assert set(mid_rows["fixtures_this_gw"]) == {2}
-    assert set(mid_rows["GW"]) == {7}
-    # vs Chelsea: (2.0 + 1.0) / 2 for, (1.0 + 1.0) / 2 against; vs Spurs: (2.0 + 2.0) / 2, (1.0 + 1.0) / 2
-    assert list(mid_rows["team_goals"]) == pytest.approx([1.5, 2.0])
-    # history features come from earlier rows only: form = mean of the last 4 real points (9..12)
-    assert list(mid_rows["form"]) == pytest.approx([np.mean([9, 10, 11, 12])] * 2)
-    # synthetic per-match stats are recent averages, not zeros
-    assert list(mid_rows["influence"]) == pytest.approx([30.0, 30.0])
+    rows = pd.concat(model.seen)
+    fit = rows[rows["name"] == "Fit Gunner"].sort_values("kickoff_time")
+    assert list(fit["was_home"]) == [1.0, 1.0]
+    assert set(fit["fixtures_in_gw"]) == {2.0}
+    assert set(fit["GW"]) == {7}
+    # Form only from matches before GW7 (GW4-6 points are 10, 11, 12), identical for both
+    # fixtures of the double gameweek
+    assert list(fit["total_points_r3"]) == pytest.approx([11.0, 11.0])
+    assert list(fit["opponent"]) == ["Chelsea", "Spurs"]
 
 
 class FakeClient:
@@ -273,6 +228,7 @@ class FakeClient:
 
 
 def test_predict_next_gameweek_end_to_end(live_dir):
+    # Real v3 model file, end to end
     summary = png.predict_next_gameweek(str(live_dir), client=FakeClient(),
                                         history_csv=str(live_dir / "history.csv"))
     out = pd.read_csv(live_dir / "next_gw_predictions.csv")

@@ -55,7 +55,7 @@ from services.predictions import get_predictions_df
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
-from ml.api_integration import MLAPIIntegration, register_ml_routes, PlayerPredictionRequest, TopPerformersRequest
+from ml.api_integration import MLAPIIntegration, register_ml_routes, PlayerPredictionRequest, PredictionResponse, TopPerformersRequest
 
 import httpx
 
@@ -371,6 +371,23 @@ class _LazyMLIntegration:
         return real.predictors if real else {}
 
     async def predict_player_next_gameweek(self, request):
+        # Serve the precomputed v3 predictions so every page shows the same numbers
+        df = get_predictions_df()
+        if df is not None:
+            index = app_state.get("player_index")
+            name = (index.resolve(request.player_name) if index else None) or request.player_name
+            hit = df[df["name_lower"] == name.lower()]
+            if not len(hit):
+                raise HTTPException(status_code=404, detail=f"{name} is not in the current FPL game")
+            row = hit.iloc[0]
+            return PredictionResponse(
+                player_name=row["name"], predicted_points=round(float(row["predicted_points"]), 2),
+                model_version=str(row.get("prediction_method", "xgboost_v3")), team_name=row["team"],
+                fixture_context={
+                    "opponent_team": row["opponent"], "home_away": "home" if bool(row["is_home"]) else "away",
+                    "match_date": row["kickoff_time"], "matchday": int(row["gameweek"]),
+                },
+            )
         if not self._real:
             raise HTTPException(status_code=503, detail="ML integration not initialized")
         return await self._real.predict_player_next_gameweek(request)
@@ -432,13 +449,13 @@ async def get_top_performers_csv(position: Optional[str] = None, limit: int = 10
                 "predicted_points": round(float(row['predicted_points']), 2),
                 "team_name": row['team'],
                 "position": row['position'],
-                "model_version": row.get('prediction_method', 'xgboost_v2'),
+                "model_version": row.get('prediction_method', 'xgboost_v3'),
                 "fixture_context": fixture_context
             })
         
         return {
             "predictions": predictions,
-            "model_version": "xgboost_v2",
+            "model_version": str(df['prediction_method'].mode().iat[0]) if 'prediction_method' in df.columns and len(df) else 'xgboost_v3',
             "total_predictions": len(predictions),
             "metadata": {
                 "position_filter": position,
@@ -495,13 +512,13 @@ async def get_best_value_csv(position: Optional[str] = None, limit: int = 10):
                 "position": row['position'],
                 "value": round(float(row['value']) / 10.0, 1),
                 "value_score": round(float(row['value_score']), 2),
-                "model_version": row.get('prediction_method', 'xgboost_v2'),
+                "model_version": row.get('prediction_method', 'xgboost_v3'),
                 "fixture_context": fixture_context
             })
         
         return {
             "predictions": predictions,
-            "model_version": "xgboost_v2",
+            "model_version": str(df['prediction_method'].mode().iat[0]) if 'prediction_method' in df.columns and len(df) else 'xgboost_v3',
             "total_predictions": len(predictions),
             "metadata": {
                 "position_filter": position,
@@ -1244,10 +1261,10 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                                     ml_context = f"ML Prediction for {row['name']}:\n- Predicted points: {row['predicted_points']:.1f} pts\n- Next match: vs {opponent} ({home_away})\n- Gameweek: {int(row['gameweek'])}"
                                     ml_context += _availability_note(row)
                                 else:
-                                    # Fallback to Neo4j-based prediction
-                                    pred_req = PlayerPredictionRequest(player_name=player_name)
-                                    pred = await ml_integration.predict_player_next_gameweek(pred_req)
-                                    ml_context = f"- {pred.player_name}: {pred.predicted_points:.1f} predicted points for the next gameweek"
+                                    # The file covers every player in the current FPL game, so
+                                    # a miss means he isn't in it (left the league, retired)
+                                    ml_context = (f"{player_name} is not in the current FPL game "
+                                                  "(no longer at a Premier League club), so there is no prediction.")
                             else:
                                 # No CSV, use Neo4j
                                 pred_req = PlayerPredictionRequest(player_name=player_name)
@@ -1567,17 +1584,21 @@ async def get_player_stats(request: PlayerStatsRequest, conn=Depends(get_neo4j_c
 
 
 async def _attach_predicted_points(rows: List[Dict[str, Any]]) -> None:
-    """Add next-gameweek predicted points: precomputed CSV first, live model for the rest."""
-    df = get_predictions_df()
-    missing = []
-    for row in rows:
-        name = row.get("player_name")
-        hit = df[df["name_lower"] == name.lower()] if (df is not None and name) else None
-        if hit is not None and len(hit):
-            row["predicted_points"] = round(float(hit.iloc[0]["predicted_points"]), 2)
-        elif name:
-            missing.append(row)
+    """Add next-gameweek predicted points from the predictions file (v3).
 
+    Players missing from the file aren't in the current FPL game and get none. The live
+    v2 model is only an emergency fallback when no predictions file exists at all.
+    """
+    df = get_predictions_df()
+    if df is not None:
+        for row in rows:
+            name = row.get("player_name")
+            hit = df[df["name_lower"] == name.lower()] if name else None
+            if hit is not None and len(hit):
+                row["predicted_points"] = round(float(hit.iloc[0]["predicted_points"]), 2)
+        return
+
+    missing = [row for row in rows if row.get("player_name")]
     ml_integration = app_state.get("ml_integration")
     if not missing or not (ml_integration and ml_integration.predictor_loaded):
         return
