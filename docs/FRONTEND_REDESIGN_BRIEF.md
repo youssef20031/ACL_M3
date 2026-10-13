@@ -38,24 +38,26 @@ site on phones as much as on desktop.
 
 ## 3. Design direction
 
-The owner's one hard requirement: **no purple/violet/indigo, no gradients-as-decoration, no
-glassmorphism, no emoji headings, nothing that reads as a default AI template.**
+> **Decided (October 2026): "Pitch Me".** The owner chose a recreation inspired by the
+> official FPL website rather than the editorial direction first suggested here. The ban
+> was on generic violet/indigo AI gradients, not on FPL's own palette.
 
-Recommended direction (the owner may override): **sports-data editorial**, in the spirit of
-FotMob, The Athletic's data pieces and Opta graphics.
-
-- Neutral, crisp surfaces with one confident accent (e.g. a pitch green) plus a restrained
-  secondary. Light theme first, with an equally considered dark theme.
-- Typography does the work: a strong sans for UI and headings, tabular numerals for every
-  stat, a clear type scale.
-- Data density done well: compact tables, small multiples and sparklines rather than big
-  empty cards. Numbers align. Units are explicit (£m, pts, mins).
-- Consistent semantic colors:
-  - positions: GK, DEF, MID, FWD
-  - availability: available, doubtful (with %), injured, suspended, unavailable
-  - home/away
-- Club badges from `public/logos/` and player photos are the main imagery.
-- Motion is functional (loading, transitions), never decorative.
+- **Brand:** "Pitch Me", with an original pitch-outline wordmark. Never use Premier League or
+  FPL logos, marks or fonts; the footer says the site is not affiliated.
+- **Palette:** deep purple surfaces (`#1E0123` page, `#37003C` brand), mint `#00FF85` for
+  actions and active states, cyan `#04F5FF` as secondary and focus colour. All colours are CSS
+  variables in `src/styles/tokens.css`, wired into Tailwind (`bg`, `surface`, `brand`, `fg`,
+  `accent`, …); contrast ratios are documented there.
+- **Themes:** dark only for now. Light mode is a later `[data-theme="light"]` token block; no
+  component changes should be needed.
+- **Type:** Outfit (display) and Inter (UI), self-hosted via `@fontsource`; tabular numerals for
+  stats.
+- **Components:** `src/components/ui` (live reference at the hidden `/design` route); app shell in
+  `src/components/shell`.
+- **Pages:** Home dashboard, Fixtures, Table, Team of the Week (pitch view), Players, Predictions,
+  Assistant, plus Compare, Trivia and Settings under "More". Only real data, no placeholder news.
+- Data density, semantic colours (positions, availability, fixture difficulty), club badges and
+  player photos as imagery, and functional-only motion still apply.
 
 ## 4. Hard constraints (don't break these)
 
@@ -243,13 +245,13 @@ reasonable). No Python, database or keys are needed.
 ## 9. Acceptance checklist
 
 - [ ] `npm run build` passes; no new TypeScript errors or `any` in new code.
-- [ ] No purple/violet/indigo classes or hex values remain (`grep -rniE "purple|violet|indigo" src` is empty), no emoji in headings.
+- [ ] No raw Tailwind palette classes (`purple-*`, `gray-*`, `slate-*`, …) or hex values in pages; colours come from tokens. No emoji in headings.
 - [ ] All colors come from design tokens. No `isDark ?` class ternaries. No `html.dark` overrides of utility classes.
-- [ ] All six routes work, plus navigation from search to profile to compare.
+- [ ] All routes work (old `/qa` and `/search` redirect), plus navigation from search to profile to compare.
 - [ ] Chat sends the same request body as before; retrieval details and the graph view still render.
 - [ ] Predictions show availability (status, chance, news) and fixture context.
 - [ ] Player search updates as you type, with stale-response protection.
 - [ ] Settings still writes the same store keys and values.
-- [ ] Light and dark themes both meet WCAG AA, with keyboard focus visible.
+- [ ] The dark theme meets WCAG AA, with keyboard focus visible (light theme: later).
 - [ ] Works at 360, 768, 1024 and 1440 px widths with no horizontal scroll.
 - [ ] Loading, empty and error states exist on every data view.

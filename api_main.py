@@ -50,8 +50,9 @@ except Exception:
     redis = None
 
 from services.player_index import PlayerIndex
-from services.avatars import AvatarService, ImageProxy, is_proxy_allowed
+from services.avatars import AvatarService, ImageProxy, is_proxy_allowed, FPL_PHOTO_URL
 from services.predictions import get_predictions_df
+from services import season_service
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
@@ -664,10 +665,29 @@ def get_latest_season(conn=None) -> str:
     return season
 
 
+def _ml_model_label() -> Optional[str]:
+    """Which model serves user-facing predictions: the v3 predictions file when present,
+    else the legacy v2 stack (only a fallback)."""
+    try:
+        df = get_predictions_df()
+        if df is not None and len(df):
+            return "xgboost v3"
+    except Exception:
+        pass
+    ml_integration = app_state.get("ml_integration")
+    if ml_integration:
+        if ml_integration.predictors:
+            return "xgboost v2 (fallback)"
+        if ml_integration.predictor:
+            return ml_integration.predictor.model_type
+    return None
+
+
 def reset_graph_caches() -> None:
     """Drop everything derived from graph contents (after connect or data load)."""
     app_state["player_index"] = None
     app_state["latest_season"] = None
+    season_service.clear_cache()
 
 
 async def avatar_for(player_name: str, team_name: Optional[str] = None) -> Optional[str]:
@@ -750,6 +770,112 @@ class FixtureLoadResponse(BaseModel):
 
 class NextFixtureResponse(BaseModel):
     fixtures: List[Dict[str, Any]]
+
+
+# --- Season dashboard (services/season_service.py) ---------------------------
+
+class SeasonCurrentResponse(BaseModel):
+    season: str
+    current_gameweek: Optional[int] = None
+    next_gameweek: Optional[int] = None
+    next_deadline: Optional[str] = None
+    finished_gameweeks: List[int]
+    updated_at: Optional[str] = None
+
+
+class SeasonFixture(BaseModel):
+    id: str
+    gameweek: int
+    kickoff_time: Optional[str] = None
+    status: str
+    home_team: str
+    away_team: str
+    home_score: Optional[int] = None
+    away_score: Optional[int] = None
+    home_difficulty: Optional[int] = None
+    away_difficulty: Optional[int] = None
+
+
+class FixturesResponse(BaseModel):
+    season: str
+    gameweek: int
+    gameweeks: List[int]
+    fixtures: List[SeasonFixture]
+
+
+class TableNextFixture(BaseModel):
+    opponent: str
+    home: bool
+    kickoff_time: Optional[str] = None
+
+
+class TableRow(BaseModel):
+    position: int
+    team: str
+    played: int
+    won: int
+    drawn: int
+    lost: int
+    goals_for: int
+    goals_against: int
+    goal_difference: int
+    points: int
+    form: List[str]
+    next_fixture: Optional[TableNextFixture] = None
+
+
+class TableResponse(BaseModel):
+    season: str
+    updated_at: Optional[str] = None
+    rows: List[TableRow]
+
+
+class InjuredPlayer(BaseModel):
+    name: str
+    web_name: Optional[str] = None
+    team: str
+    position: Optional[str] = None
+    status: str
+    chance_of_playing_next_round: Optional[int] = None
+    news: Optional[str] = None
+    news_added: Optional[str] = None
+    photo: Optional[str] = None
+
+
+class InjuriesResponse(BaseModel):
+    updated_at: Optional[str] = None
+    players: List[InjuredPlayer]
+
+
+class Opponent(BaseModel):
+    team: str
+    home: bool
+
+
+class TeamOfWeekPlayer(BaseModel):
+    name: str
+    team: str
+    position: str
+    points: float
+    cost: Optional[float] = None
+    captain: bool
+    vice_captain: bool
+    opponents: List[Opponent]
+    status: Optional[str] = None
+    chance_of_playing_next_round: Optional[int] = None
+    news: Optional[str] = None
+    photo: Optional[str] = None
+
+
+class TeamOfWeekResponse(BaseModel):
+    mode: str
+    gameweek: int
+    formation: str
+    total_points: float
+    total_cost: Optional[float] = None
+    budget: Optional[float] = None
+    starters: List[TeamOfWeekPlayer]
+    bench: List[TeamOfWeekPlayer]
 
 
 # ============================================================================
@@ -1074,14 +1200,8 @@ async def health_check():
             logger.warning(f"Failed to get embedding count: {e}")
             embedding_count = 0
     
-    ml_integration = app_state.get("ml_integration")
-    ml_model_type = None
-    if ml_integration:
-        if ml_integration.predictors:
-            ml_model_type = "xgboost (position-specific)"
-        elif ml_integration.predictor:
-            ml_model_type = ml_integration.predictor.model_type
-            
+    ml_model_type = _ml_model_label()
+
     return {
         "status": "healthy",
         "neo4j": neo4j_status,
@@ -1091,7 +1211,7 @@ async def health_check():
         "embedding_count": embedding_count,
         "embeddings_building": app_state["embedding_building"],
         "embedding_build_error": app_state["embedding_build_error"],
-        "ml_available": ml_integration.predictor_loaded if ml_integration else False,
+        "ml_available": bool(getattr(app_state.get("ml_integration"), "predictor_loaded", False)),
         "ml_model_type": ml_model_type,
     }
 
@@ -1428,13 +1548,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         # Build graph visualization data
         graph_data = build_graph_data(results)
         
-        ml_integration = app_state.get("ml_integration")
-        ml_model_type = None
-        if ml_integration:
-            if ml_integration.predictors:
-                ml_model_type = "xgboost (position-specific)"
-            elif ml_integration.predictor:
-                ml_model_type = ml_integration.predictor.model_type
+        ml_model_type = _ml_model_label()
 
         return QueryResponse(
             answer=answer,
@@ -1959,6 +2073,65 @@ def get_next_fixtures(team: Optional[str] = None, conn=Depends(get_neo4j_conn)):
     except Exception as e:
         logger.error(f"Failed to get next fixtures: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get next fixtures: {str(e)}")
+
+
+# ============================================================================
+# Season dashboard (read-only; logic and caching in services/season_service.py)
+# ============================================================================
+
+def _photo_for(name: str, team: Optional[str], fpl_code: Optional[int]) -> Optional[str]:
+    """Photo URL without a network call: the avatar cache/FPL feed, else the graph's FPL code."""
+    service: Optional[AvatarService] = app_state["avatar_service"]
+    url = service.peek(name, team) if service else None
+    return url or (FPL_PHOTO_URL.format(code=fpl_code) if fpl_code else None)
+
+
+def _season_call(fn, *args, **kwargs):
+    """Map season_service errors: unknown gameweek -> 404, Neo4j down -> 503."""
+    from neo4j.exceptions import DriverError
+    try:
+        return fn(*args, **kwargs)
+    except season_service.NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except DriverError as exc:
+        logger.error(f"Neo4j unavailable: {exc}")
+        raise HTTPException(status_code=503, detail="Neo4j unavailable, try again shortly")
+
+
+@app.get("/api/season/current", response_model=SeasonCurrentResponse)
+def season_current(conn=Depends(get_neo4j_conn)):
+    """Current/next gameweek, next deadline and finished gameweeks of the live season."""
+    return _season_call(season_service.get_season_current, conn)
+
+
+@app.get("/api/fixtures", response_model=FixturesResponse)
+def season_fixtures(gameweek: Optional[int] = None, conn=Depends(get_neo4j_conn)):
+    """One gameweek's fixtures (default: next, else current gameweek)."""
+    return _season_call(season_service.get_fixtures, conn, gameweek)
+
+
+@app.get("/api/table", response_model=TableResponse)
+def season_table(conn=Depends(get_neo4j_conn)):
+    """League table computed from the season's finished fixtures."""
+    return _season_call(season_service.get_table, conn)
+
+
+@app.get("/api/injuries", response_model=InjuriesResponse)
+def season_injuries(team: Optional[str] = None, conn=Depends(get_neo4j_conn)):
+    """Current-squad players flagged by FPL (injured, suspended, doubtful, ...)."""
+    return _season_call(season_service.get_injuries, conn, team, photo_for=_photo_for)
+
+
+@app.get("/api/team-of-the-week", response_model=TeamOfWeekResponse)
+def team_of_the_week(mode: str = "predicted", gameweek: Optional[int] = None):
+    """Best FPL squad for the next gameweek by predicted points (budget 100.0m, max 3
+    per club), or the best XI of a finished gameweek by actual points (mode=actual)."""
+    if mode not in ("predicted", "actual"):
+        raise HTTPException(status_code=422, detail="mode must be 'predicted' or 'actual'")
+    conn = app_state["neo4j_conn"]
+    if conn is None and mode == "actual":
+        raise HTTPException(status_code=503, detail="Neo4j not connected")
+    return _season_call(season_service.get_team_of_the_week, conn, mode, gameweek, photo_for=_photo_for)
 
 
 # ============================================================================

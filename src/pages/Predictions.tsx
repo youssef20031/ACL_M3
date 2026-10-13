@@ -1,36 +1,199 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { 
-  Sparkles, 
-  TrendingUp, 
-  Award, 
-  DollarSign, 
-  AlertCircle,
-  Shield,
-  Zap,
-  User,
-  Info,
-  Target,
-  RefreshCw,
-  Calendar,
-  MapPin,
-  Home,
-  Plane
-} from 'lucide-react';
-import { apiService, MLPrediction } from '../services/api';
+import { useState, type FormEvent } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Info, RefreshCw, Sparkles } from 'lucide-react';
+import { apiService, handleApiError, MLPrediction } from '../services/api';
 import { useAppStore } from '../store/appStore';
 import { cn } from '../utils/cn';
+import { getClubAbbreviation } from '../utils/clubLogos';
 import { PlayerWithClub } from '../components/PlayerWithClub';
+import { usePlayerAvatars } from '../hooks/usePlayerAvatars';
+import {
+  Button,
+  Card,
+  Chip,
+  ClubCrest,
+  Container,
+  DataTable,
+  EmptyState,
+  ErrorState,
+  Field,
+  Input,
+  PageHeader,
+  PositionBadge,
+  SectionHeading,
+  StatusBadge,
+  TabPanel,
+  Tabs,
+  type Column,
+} from '../components/ui';
+import { SegmentedControl } from '../components/predictions/SegmentedControl';
+
+type PositionFilter = 'ALL' | 'GK' | 'DEF' | 'MID' | 'FWD';
+type View = 'top' | 'value';
+
+const POSITIONS: { value: PositionFilter; label: string; shortLabel: string }[] = [
+  { value: 'ALL', label: 'All players', shortLabel: 'All' },
+  { value: 'GK', label: 'Goalkeepers', shortLabel: 'GK' },
+  { value: 'DEF', label: 'Defenders', shortLabel: 'DEF' },
+  { value: 'MID', label: 'Midfielders', shortLabel: 'MID' },
+  { value: 'FWD', label: 'Forwards', shortLabel: 'FWD' },
+];
+
+/** Prediction rows also carry fields the shared type doesn't declare. */
+type PredictionRow = MLPrediction & {
+  rank: number;
+  position?: string;
+  value?: number;
+  cost?: number;
+  value_score?: number;
+};
+
+// Format match date to readable local timezone format
+function formatMatchDate(dateString: string) {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+/** Best-value rows: the CSV endpoint sends price as `value` + `value_score`; the fallback sends `cost` + `value`. */
+function priceOf(r: PredictionRow): number | undefined {
+  if (typeof r.cost === 'number') return r.cost;
+  if (typeof r.value_score === 'number') return r.value;
+  return undefined;
+}
+function valueScoreOf(r: PredictionRow): number | undefined {
+  if (typeof r.value_score === 'number') return r.value_score;
+  if (typeof r.cost === 'number') return r.value;
+  return undefined;
+}
+
+function Opponent({ fixture }: { fixture: MLPrediction['fixture_context'] }) {
+  if (!fixture) return <span className="text-fg-subtle">No fixture</span>;
+  const home = fixture.home_away === 'home';
+  const abbr = getClubAbbreviation(fixture.opponent_team) || fixture.opponent_team;
+  return (
+    <span className="inline-flex items-center gap-1.5" title={`${fixture.opponent_team} (${home ? 'home' : 'away'})`}>
+      <ClubCrest team={fixture.opponent_team} size={18} />
+      <span className="font-semibold">{abbr}</span>
+      <span className="text-fg-muted">
+        <span aria-hidden="true">({home ? 'H' : 'A'})</span>
+        <span className="sr-only">{home ? 'at home' : 'away'}</span>
+      </span>
+    </span>
+  );
+}
+
+function PlayerCell({ row, avatar }: { row: PredictionRow; avatar: string | null | undefined }) {
+  const unavailable = row.status && row.status !== 'a';
+  return (
+    <span className="block max-w-[15rem] sm:max-w-[18rem]">
+      <PlayerWithClub
+        playerName={row.player_name}
+        teamName={row.team_name}
+        avatar={avatar}
+        avatarSize={36}
+        meta={
+          <>
+            <PositionBadge position={row.position} className="w-8" />
+            <StatusBadge status={row.status} chance={row.chance_of_playing_next_round} news={row.news} />
+          </>
+        }
+      />
+      {unavailable && row.news && (
+        <span className="mt-0.5 block truncate pl-[46px] text-micro text-warning" title={row.news} aria-hidden="true">
+          {row.news}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function PlayerLookup() {
+  const [name, setName] = useState('');
+  const lookup = useMutation({
+    mutationFn: (playerName: string) => apiService.predictPlayer(playerName),
+  });
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    if (name.trim()) lookup.mutate(name.trim());
+  };
+  const result = lookup.data;
+  const lookupAvatars = usePlayerAvatars(result ? [result.player_name] : []);
+
+  return (
+    <Card>
+      <SectionHeading as="h2" size="md" title="Player lookup" subtitle="Predicted points for one player" />
+      <form onSubmit={onSubmit} className="flex items-end gap-2">
+        <Field label="Player name" className="min-w-0 flex-1">
+          {(id) => (
+            <Input id={id} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Haaland" autoComplete="off" />
+          )}
+        </Field>
+        <Button type="submit" loading={lookup.isPending} disabled={!name.trim() || lookup.isPending}>
+          Predict
+        </Button>
+      </form>
+
+      <div aria-live="polite" className="mt-3">
+        {lookup.isError && (
+          <p role="alert" className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-data text-danger">
+            {handleApiError(lookup.error)}
+          </p>
+        )}
+        {result && !lookup.isError && (
+          <div className="rounded-md border border-line bg-surface-2 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <PlayerWithClub
+                playerName={result.player_name}
+                teamName={result.team_name}
+                avatar={lookupAvatars[result.player_name]}
+                avatarSize={36}
+                meta={
+                  <StatusBadge status={result.status} chance={result.chance_of_playing_next_round} news={result.news} />
+                }
+                className="min-w-0"
+              />
+              <span className="shrink-0 text-right">
+                <span className="block font-display text-h2 font-bold tabular-nums text-accent">
+                  {result.predicted_points.toFixed(1)}
+                </span>
+                <span className="block text-micro uppercase text-fg-subtle">Pred. pts</span>
+              </span>
+            </div>
+            {result.fixture_context && (
+              <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line pt-2 text-data text-fg-muted">
+                <span>GW{result.fixture_context.matchday} vs</span>
+                <Opponent fixture={result.fixture_context} />
+                <span className="text-fg-subtle">· {formatMatchDate(result.fixture_context.match_date)}</span>
+              </p>
+            )}
+            {result.news && <p className="mt-2 text-data text-warning">{result.news}</p>}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
 
 export function Predictions() {
-  const { theme, mlAvailable, mlModelType } = useAppStore();
+  const { mlAvailable, mlModelType } = useAppStore();
   const [selectedPosition, setSelectedPosition] = useState<string | undefined>(undefined);
+  const [view, setView] = useState<View>('top');
 
-  const { 
-    data: topPerformers, 
-    isLoading: loadingTop, 
+  const {
+    data: topPerformers,
+    isLoading: loadingTop,
     isError: errorTop,
-    refetch: refetchTop 
+    error: topError,
+    isFetching: fetchingTop,
+    refetch: refetchTop,
   } = useQuery({
     queryKey: ['ml', 'top-performers', selectedPosition],
     queryFn: () => apiService.predictTopPerformers(selectedPosition, 12),
@@ -39,11 +202,13 @@ export function Predictions() {
     staleTime: 15 * 60 * 1000, // precomputed predictions; manual Refresh still refetches
   });
 
-  const { 
-    data: bestValue, 
-    isLoading: loadingValue, 
+  const {
+    data: bestValue,
+    isLoading: loadingValue,
     isError: errorValue,
-    refetch: refetchValue 
+    error: valueError,
+    isFetching: fetchingValue,
+    refetch: refetchValue,
   } = useQuery({
     queryKey: ['ml', 'best-value', selectedPosition],
     queryFn: () => apiService.predictBestValue(selectedPosition, 6),
@@ -52,340 +217,254 @@ export function Predictions() {
     staleTime: 15 * 60 * 1000,
   });
 
-  const positions = [
-    { id: 'GK', label: 'Goalkeepers', icon: Shield },
-    { id: 'DEF', label: 'Defenders', icon: Shield },
-    { id: 'MID', label: 'Midfielders', icon: Zap },
-    { id: 'FWD', label: 'Forwards', icon: Target },
-  ];
+  const { data: season } = useQuery({
+    queryKey: ['season-current'],
+    queryFn: () => apiService.getCurrentSeason(),
+    staleTime: 5 * 60_000,
+    enabled: mlAvailable,
+  });
 
   const handleRefresh = () => {
     refetchTop();
     refetchValue();
   };
 
+  const topRows: PredictionRow[] = (topPerformers?.predictions ?? []).map((p, i) => ({ ...(p as PredictionRow), rank: i + 1 }));
+  const valueRows: PredictionRow[] = (bestValue?.predictions ?? []).map((p, i) => ({ ...(p as PredictionRow), rank: i + 1 }));
+
+  const avatarByName = usePlayerAvatars([...topRows, ...valueRows].map((r) => r.player_name));
+
+  const metaGw = topPerformers?.metadata?.gameweek ?? bestValue?.metadata?.gameweek;
+  const gameweek: number | undefined =
+    (typeof metaGw === 'number' ? metaGw : undefined) ??
+    topRows.find((r) => r.fixture_context)?.fixture_context?.matchday ??
+    season?.next_gameweek ??
+    undefined;
+  const deadline = season?.next_deadline ? new Date(season.next_deadline) : null;
+
   if (!mlAvailable) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
-        <div className={cn(
-          "p-6 rounded-2xl max-w-md",
-          theme === 'dark' ? "bg-slate-900 border border-slate-800" : "bg-white border border-gray-200 shadow-sm"
-        )}>
-          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-amber-500" />
-          <h2 className="mb-2 text-2xl font-bold">ML Engine Offline</h2>
-          <p className={theme === 'dark' ? "text-slate-400" : "text-gray-600"}>
-            The machine learning prediction engine is currently unavailable. This might be because the models are still training or the backend is starting up.
-          </p>
-          <div className="mt-6 p-4 rounded-lg bg-blue-500/10 text-blue-400 text-sm flex items-start gap-3 text-left">
-            <Info className="w-5 h-5 shrink-0 mt-0.5" />
-            <p>You can still use the Q&A Assistant to query historical data and current statistics while the ML engine initializes.</p>
-          </div>
-        </div>
-      </div>
+      <Container>
+        <PageHeader eyebrow="Model forecasts" title="Predictions" />
+        <Card padded={false}>
+          <EmptyState
+            icon={<Info className="h-8 w-8" aria-hidden="true" />}
+            title="Prediction engine offline"
+            description="The machine learning prediction engine is currently unavailable. This might be because the models are still training or the backend is starting up. You can still ask the assistant about historical data and current statistics."
+          />
+        </Card>
+      </Container>
     );
   }
 
-  return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-2">
-            <Sparkles className="w-6 h-6 text-violet-400" />
-            <span className="text-sm font-semibold uppercase tracking-wider text-violet-400">AI Forecasting</span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Gameweek Predictions</h1>
-          <p className={cn("mt-2 text-lg", theme === 'dark' ? "text-slate-400" : "text-gray-600")}>
-            Points forecasts generated by our leakage-free XGBoost & Linear models.
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            className={cn(
-              "p-2.5 rounded-full border transition-all hover:rotate-180 duration-500",
-              theme === 'dark' ? "bg-slate-900 border-slate-800 text-slate-400 hover:text-white" : "bg-white border-gray-200 text-gray-400 hover:text-gray-600"
-            )}
-            title="Refresh predictions"
-          >
-            <RefreshCw className={cn("w-5 h-5", (loadingTop || loadingValue) && "animate-spin")} />
-          </button>
-          <div className={cn(
-            "px-4 py-2 rounded-full text-xs font-medium border flex items-center gap-2",
-            theme === 'dark' ? "bg-slate-900 border-slate-800 text-slate-300" : "bg-gray-100 border-gray-200 text-gray-700"
-          )}>
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            Engine: <span className="font-bold text-emerald-500 uppercase">{mlModelType || 'Linear Reg'}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Position Filters */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setSelectedPosition(undefined)}
-          className={cn(
-            "px-4 py-2 rounded-xl text-sm font-medium transition-all border",
-            !selectedPosition 
-              ? "bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-500/20" 
-              : theme === 'dark' 
-                ? "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700" 
-                : "bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 shadow-sm"
-          )}
-        >
-          All Players
-        </button>
-        {positions.map((pos) => (
-          <button
-            key={pos.id}
-            onClick={() => setSelectedPosition(pos.id)}
-            className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border",
-              selectedPosition === pos.id 
-                ? "bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-500/20" 
-                : theme === 'dark' 
-                  ? "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700" 
-                  : "bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 shadow-sm"
-            )}
-          >
-            <pos.icon className="w-4 h-4" />
-            {pos.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Top Performers Section */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-emerald-500" />
-              Highest Predicted Scorers
-            </h2>
-          </div>
-
-          {loadingTop ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className={cn(
-                  "h-24 rounded-2xl animate-pulse",
-                  theme === 'dark' ? "bg-slate-900" : "bg-gray-200"
-                )} />
-              ))}
-            </div>
-          ) : errorTop ? (
-            <div className={cn("p-8 rounded-2xl text-center border border-dashed", theme === 'dark' ? "border-slate-800 bg-slate-900/30" : "border-gray-200 bg-gray-50")}>
-              <AlertCircle className="w-10 h-10 mx-auto mb-2 text-slate-500" />
-              <p className={theme === 'dark' ? "text-slate-400" : "text-gray-500"}>No predictions found for this selection.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {topPerformers?.predictions.map((player, idx) => (
-                <PredictionCard key={player.player_name} player={player} rank={idx + 1} theme={theme} />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Best Value Section */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-amber-500" />
-            Best Value (Points/£m)
-          </h2>
-          
-          <div className={cn(
-            "rounded-2xl overflow-hidden border",
-            theme === 'dark' ? "bg-slate-950 border-slate-800" : "bg-white border-gray-200 shadow-sm"
-          )}>
-            {loadingValue ? (
-              <div className="p-4 space-y-4">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className={cn("h-16 rounded-xl animate-pulse", theme === 'dark' ? "bg-slate-900" : "bg-gray-100")} />
-                ))}
-              </div>
-            ) : errorValue || !bestValue?.predictions.length ? (
-              <div className="p-8 text-center">
-                <p className="text-sm opacity-50">No value picks found.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-800/50">
-                {bestValue?.predictions.map((player) => (
-                  <div key={player.player_name} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 text-xs font-bold">
-                        V
-                      </div>
-                      <div className="min-w-0">
-                        <PlayerWithClub
-                          playerName={player.player_name}
-                          teamName={player.team_name}
-                          showAbbreviation={false}
-                          logoSize="sm"
-                          nameClassName="font-bold text-sm truncate block"
-                        />
-                        <div className="text-xs opacity-50">£{player.cost?.toFixed(1)}m</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-emerald-500">{player.predicted_points.toFixed(1)} pts</div>
-                      <div className="text-[10px] uppercase tracking-tighter opacity-50">Score: {(player.value || 0).toFixed(2)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className={cn(
-            "p-4 rounded-2xl border flex items-start gap-3",
-            theme === 'dark' ? "bg-blue-500/5 border-blue-500/20 text-blue-300" : "bg-blue-50 border-blue-100 text-blue-700"
-          )}>
-            <Award className="w-5 h-5 shrink-0" />
-            <p className="text-xs leading-relaxed">
-              <strong>Pro Tip:</strong> Look for players with high predicted points but low cost to maximize your team budget. These "Best Value" picks are ranked by predicted points per million.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PredictionCard({ player, rank, theme }: { player: MLPrediction; rank: number; theme: string }) {
-  // Format match date to readable local timezone format
-  const formatMatchDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-    } catch {
-      return dateString;
-    }
+  const rankColumn: Column<PredictionRow> = {
+    key: 'rank',
+    header: '#',
+    description: 'Rank',
+    align: 'center',
+    className: 'w-10',
+    sortValue: (r) => r.rank,
+    render: (r) => <span className="font-semibold text-fg-subtle">{r.rank}</span>,
   };
+  const playerColumn: Column<PredictionRow> = {
+    key: 'player',
+    header: 'Player',
+    sticky: true,
+    sortValue: (r) => r.player_name,
+    render: (r) => <PlayerCell row={r} avatar={avatarByName[r.player_name]} />,
+  };
+  const opponentColumn: Column<PredictionRow> = {
+    key: 'opponent',
+    header: 'Fixture',
+    render: (r) => <Opponent fixture={r.fixture_context} />,
+  };
+  const kickoffColumn: Column<PredictionRow> = {
+    key: 'kickoff',
+    header: 'Kickoff',
+    hideBelow: 'md',
+    sortValue: (r) => (r.fixture_context ? new Date(r.fixture_context.match_date).getTime() : null),
+    render: (r) => (
+      <span className="text-fg-muted">{r.fixture_context ? formatMatchDate(r.fixture_context.match_date) : '–'}</span>
+    ),
+  };
+  const pointsColumn = (highlight: boolean): Column<PredictionRow> => ({
+    key: 'predicted_points',
+    header: 'xPts',
+    description: 'Predicted points next gameweek',
+    align: 'right',
+    sortValue: (r) => r.predicted_points,
+    render: (r) => (
+      <>
+        <span className={cn('tabular-nums', highlight ? 'font-display text-h3 font-bold text-accent' : 'font-semibold text-fg')}>
+          {r.predicted_points.toFixed(1)}
+        </span>
+        {highlight && r.fixture_context && (
+          // The fixture column is hidden on phones; keep the opponent visible next to the points.
+          <span className="block text-micro font-normal text-fg-subtle sm:hidden">
+            {getClubAbbreviation(r.fixture_context.opponent_team) || r.fixture_context.opponent_team} (
+            {r.fixture_context.home_away === 'home' ? 'H' : 'A'})
+          </span>
+        )}
+      </>
+    ),
+  });
 
-  const fixtureContext = player.fixture_context;
-  
-  // Debug: Log to see what team_name we're getting
-  // console.log('Player:', player.player_name, 'Team:', player.team_name);
+  const topColumns: Column<PredictionRow>[] = [
+    rankColumn,
+    playerColumn,
+    { ...opponentColumn, hideBelow: 'sm' },
+    kickoffColumn,
+    pointsColumn(true),
+  ];
+  const valueColumns: Column<PredictionRow>[] = [
+    rankColumn,
+    playerColumn,
+    { ...opponentColumn, hideBelow: 'sm' },
+    kickoffColumn,
+    {
+      key: 'price',
+      header: 'Price',
+      align: 'right',
+      sortValue: (r) => priceOf(r),
+      render: (r) => {
+        const price = priceOf(r);
+        return price != null ? `£${price.toFixed(1)}m` : '–';
+      },
+    },
+    { ...pointsColumn(false), hideBelow: 'sm' },
+    {
+      key: 'value_score',
+      header: 'Pts/£m',
+      description: 'Predicted points per million',
+      align: 'right',
+      sortValue: (r) => valueScoreOf(r),
+      render: (r) => {
+        const score = valueScoreOf(r);
+        return (
+          <span className="font-display text-h3 font-bold tabular-nums text-accent">{score != null ? score.toFixed(2) : '–'}</span>
+        );
+      },
+    },
+  ];
+
+  const positionLabel = POSITIONS.find((p) => p.value === (selectedPosition ?? 'ALL'))?.label.toLowerCase() ?? 'players';
 
   return (
-    <div className={cn(
-      "group relative overflow-hidden rounded-2xl border p-4 transition-all duration-300",
-      theme === 'dark' 
-        ? "bg-slate-900/50 border-slate-800 hover:border-violet-500/50 hover:bg-slate-900" 
-        : "bg-white border-gray-200 hover:border-violet-300 hover:shadow-md shadow-sm"
-    )}>
-      {/* Rank Badge */}
-      <div className={cn(
-        "absolute -right-2 -top-2 w-10 h-10 flex items-center justify-center text-lg font-black opacity-10 group-hover:opacity-20 transition-opacity",
-        theme === 'dark' ? "text-white" : "text-slate-900"
-      )}>
-        #{rank}
-      </div>
+    <Container className="pb-10">
+      <PageHeader
+        eyebrow={
+          <>
+            {gameweek ? `Gameweek ${gameweek}` : 'Next gameweek'}
+            {deadline && (
+              <span className="ml-2 font-normal normal-case text-fg-muted">
+                · Deadline {deadline.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </>
+        }
+        title="Predictions"
+        description="Expected FPL points for the next gameweek from our leakage-free XGBoost model, adjusted for each player's chance of playing."
+        actions={
+          <>
+            <Chip tone="brand" icon={<Sparkles className="h-3 w-3 text-accent" aria-hidden="true" />} className="h-8 px-2.5">
+              Model: <span className="uppercase">{mlModelType || 'Linear Reg'}</span>
+            </Chip>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRefresh}
+              icon={<RefreshCw className={cn('h-4 w-4', (fetchingTop || fetchingValue) && 'animate-spin')} aria-hidden="true" />}
+            >
+              Refresh
+            </Button>
+          </>
+        }
+      />
 
-      <div className="flex items-center gap-4">
-        <div className={cn(
-          "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
-          rank <= 3 ? "bg-violet-500 text-white shadow-lg shadow-violet-500/20" : theme === 'dark' ? "bg-slate-800 text-slate-400" : "bg-gray-100 text-gray-400"
-        )}>
-          {rank <= 3 ? <Award className="w-6 h-6" /> : <User className="w-6 h-6" />}
-        </div>
-        
-        <div className="min-w-0 flex-1">
-          <PlayerWithClub
-            playerName={player.player_name}
-            teamName={player.team_name}
-            showAbbreviation={false}
-            logoSize="sm"
-            nameClassName="font-bold truncate group-hover:text-violet-400 transition-colors"
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0">
+          <Tabs
+            label="Prediction views"
+            idPrefix="predictions"
+            value={view}
+            onChange={setView}
+            items={[
+              { value: 'top', label: 'Top performers' },
+              { value: 'value', label: 'Best value' },
+            ]}
           />
-          <p className="text-xs opacity-50 flex items-center gap-1 uppercase tracking-widest font-semibold">
-            Next Gameweek Forecast
-          </p>
-        </div>
 
-        <div className="text-right">
-          <div className="text-2xl font-black text-emerald-500">
-            {player.predicted_points.toFixed(1)}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <SegmentedControl
+              label="Filter by position"
+              value={(selectedPosition ?? 'ALL') as PositionFilter}
+              onChange={(v) => setSelectedPosition(v === 'ALL' ? undefined : v)}
+              options={POSITIONS}
+            />
           </div>
-          <div className="text-[10px] uppercase font-bold opacity-40">Predicted Pts</div>
-        </div>
-      </div>
-      
-      {/* Fixture Context Display */}
-      {fixtureContext ? (
-        <div className={cn(
-          "mt-3 pt-3 border-t space-y-2",
-          theme === 'dark' ? "border-slate-800" : "border-gray-200"
-        )}>
-          {/* Opponent and Home/Away */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <MapPin className={cn("w-3.5 h-3.5 shrink-0", theme === 'dark' ? "text-slate-400" : "text-gray-400")} />
-              <span className="text-sm font-semibold truncate">{fixtureContext.opponent_team}</span>
-            </div>
-            <div className={cn(
-              "px-2 py-0.5 rounded text-xs font-bold uppercase shrink-0",
-              fixtureContext.home_away === 'home'
-                ? "bg-emerald-500/20 text-emerald-400"
-                : "bg-amber-500/20 text-amber-400"
-            )}>
-              {fixtureContext.home_away === 'home' ? (
-                <span className="flex items-center gap-1">
-                  <Home className="w-3 h-3" />
-                  H
-                </span>
+
+          <TabPanel idPrefix="predictions" value={view} className="mt-4">
+            {view === 'top' ? (
+              errorTop ? (
+                <Card padded={false}>
+                  <ErrorState
+                    title="No predictions found for this selection"
+                    description={handleApiError(topError)}
+                    onRetry={() => refetchTop()}
+                  />
+                </Card>
               ) : (
-                <span className="flex items-center gap-1">
-                  <Plane className="w-3 h-3" />
-                  A
-                </span>
-              )}
-            </div>
-          </div>
+                <DataTable
+                  key="top"
+                  caption={`Highest predicted scorers, ${positionLabel}${gameweek ? `, gameweek ${gameweek}` : ''}`}
+                  columns={topColumns}
+                  rows={topRows}
+                  rowKey={(r) => r.player_name}
+                  loading={loadingTop}
+                  skeletonRows={12}
+                  initialSort={{ key: 'predicted_points', direction: 'desc' }}
+                  empty="No predictions for this position."
+                />
+              )
+            ) : errorValue ? (
+              <Card padded={false}>
+                <ErrorState title="No value picks found" description={handleApiError(valueError)} onRetry={() => refetchValue()} />
+              </Card>
+            ) : (
+              <>
+                <DataTable
+                  key="value"
+                  caption={`Best value picks by predicted points per million, ${positionLabel}`}
+                  columns={valueColumns}
+                  rows={valueRows}
+                  rowKey={(r) => r.player_name}
+                  loading={loadingValue}
+                  skeletonRows={6}
+                  initialSort={{ key: 'value_score', direction: 'desc' }}
+                  empty="No value picks found."
+                />
+                <p className="mt-3 text-data text-fg-subtle">
+                  Ranked by predicted points per £1m of price: high predicted points at a low cost stretch your budget further.
+                </p>
+              </>
+            )}
+          </TabPanel>
+        </div>
 
-          {/* Match Date and Matchday */}
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <div className={cn("flex items-center gap-1.5", theme === 'dark' ? "text-slate-400" : "text-gray-500")}>
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{formatMatchDate(fixtureContext.match_date)}</span>
-            </div>
-            <div className={cn(
-              "px-2 py-0.5 rounded font-semibold",
-              theme === 'dark' ? "bg-slate-800 text-slate-300" : "bg-gray-100 text-gray-700"
-            )}>
-              GW {fixtureContext.matchday}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className={cn(
-          "mt-3 pt-3 border-t text-xs text-center italic",
-          theme === 'dark' ? "border-slate-800 text-slate-500" : "border-gray-200 text-gray-400"
-        )}>
-          No upcoming fixture
-        </div>
-      )}
-      
-      {/* Progress Bar (Visual indicator of score relative to 10 max) */}
-      <div className="mt-4 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-        <div 
-          className="h-full bg-gradient-to-r from-violet-500 to-emerald-500" 
-          style={{ width: `${Math.min((player.predicted_points / 12) * 100, 100)}%` }}
-        />
+        <aside className="space-y-4">
+          <PlayerLookup />
+          <Card>
+            <SectionHeading as="h2" size="md" title="How to read this" />
+            <ul className="space-y-2 text-data text-fg-muted">
+              <li>
+                <span className="font-semibold text-fg">xPts</span> is the model's expected points for the gameweek. Double gameweeks are summed.
+              </li>
+              <li>Injured and suspended players are predicted 0; doubtful players are scaled by their chance of playing.</li>
+              <li>Official FPL team news for doubtful or unavailable players is shown under their name.</li>
+            </ul>
+          </Card>
+        </aside>
       </div>
-    </div>
+    </Container>
   );
 }
-

@@ -1,8 +1,8 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Layout } from './components/Layout';
-import './App.css';
+import { AppShell } from './components/shell/AppShell';
+import { NotFound } from './pages/NotFound';
 
 // Route-level code splitting: recharts (Search/Compare), react-markdown + framer-motion (Q&A/Trivia)
 // are only downloaded with the page that needs them.
@@ -12,6 +12,11 @@ const loadPlayerSearch = () => import('./pages/PlayerSearch').then((m) => ({ def
 const loadPlayerComparison = () => import('./pages/PlayerComparison').then((m) => ({ default: m.PlayerComparison }));
 const loadPredictions = () => import('./pages/Predictions').then((m) => ({ default: m.Predictions }));
 const loadSettings = () => import('./pages/Settings').then((m) => ({ default: m.Settings }));
+const loadHome = () => import('./pages/Home').then((m) => ({ default: m.Home }));
+const loadFixtures = () => import('./pages/Fixtures').then((m) => ({ default: m.Fixtures }));
+const loadLeagueTable = () => import('./pages/LeagueTable').then((m) => ({ default: m.LeagueTable }));
+const loadTeamOfTheWeek = () => import('./pages/TeamOfTheWeek').then((m) => ({ default: m.TeamOfTheWeek }));
+const loadDesignSystem = () => import('./pages/DesignSystem').then((m) => ({ default: m.DesignSystem }));
 
 const QAAssistant = lazy(loadQAAssistant);
 const Trivia = lazy(loadTrivia);
@@ -19,6 +24,11 @@ const PlayerSearch = lazy(loadPlayerSearch);
 const PlayerComparison = lazy(loadPlayerComparison);
 const Predictions = lazy(loadPredictions);
 const Settings = lazy(loadSettings);
+const Home = lazy(loadHome);
+const Fixtures = lazy(loadFixtures);
+const LeagueTable = lazy(loadLeagueTable);
+const TeamOfTheWeek = lazy(loadTeamOfTheWeek);
+const DesignSystem = lazy(loadDesignSystem);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,16 +40,22 @@ const queryClient = new QueryClient({
   },
 });
 
+// Old URLs (/qa, /search) keep working; router state (e.g. a selected player) is carried over.
+function Redirect({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={to} replace state={location.state} />;
+}
+
 // Suspense boundary per route so the Layout (sidebar/header) stays mounted while a page chunk loads.
 function Page({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<div className="p-6 text-sm opacity-60">Loading…</div>}>{children}</Suspense>;
+  return <Suspense fallback={<div className="mx-auto max-w-page px-4 py-10 text-data text-fg-subtle sm:px-6">Loading…</div>}>{children}</Suspense>;
 }
 
 function App() {
   // Warm the remaining route chunks once the browser is idle so later navigation is instant.
   useEffect(() => {
     const preload = () => {
-      [loadQAAssistant, loadPredictions, loadTrivia, loadPlayerSearch, loadPlayerComparison, loadSettings].forEach((load) => {
+      [loadHome, loadFixtures, loadLeagueTable, loadTeamOfTheWeek, loadQAAssistant, loadPredictions, loadPlayerSearch, loadPlayerComparison, loadTrivia, loadSettings].forEach((load) => {
         void load().catch(() => undefined);
       });
     };
@@ -59,14 +75,22 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/qa" replace />} />
-            <Route path="qa" element={<Page><QAAssistant /></Page>} />
+          {/* Hidden design-system reference (not linked from the nav). */}
+          <Route path="/design" element={<Page><DesignSystem /></Page>} />
+          <Route path="/" element={<AppShell />}>
+            <Route index element={<Page><Home /></Page>} />
+            <Route path="fixtures" element={<Page><Fixtures /></Page>} />
+            <Route path="table" element={<Page><LeagueTable /></Page>} />
+            <Route path="team-of-the-week" element={<Page><TeamOfTheWeek /></Page>} />
+            <Route path="assistant" element={<Page><QAAssistant /></Page>} />
+            <Route path="players" element={<Page><PlayerSearch /></Page>} />
             <Route path="predictions" element={<Page><Predictions /></Page>} />
-            <Route path="trivia" element={<Page><Trivia /></Page>} />
-            <Route path="search" element={<Page><PlayerSearch /></Page>} />
             <Route path="compare" element={<Page><PlayerComparison /></Page>} />
+            <Route path="trivia" element={<Page><Trivia /></Page>} />
             <Route path="settings" element={<Page><Settings /></Page>} />
+            <Route path="qa" element={<Redirect to="/assistant" />} />
+            <Route path="search" element={<Redirect to="/players" />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </Router>

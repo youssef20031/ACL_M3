@@ -1,9 +1,22 @@
-﻿import { useState, useCallback, useEffect, useRef } from "react";
-import { CheckCircle, XCircle, Target, Loader2, AlertCircle } from "lucide-react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Loader2, Play, RotateCcw, Trophy, XCircle } from "lucide-react";
+import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 import { useAppStore } from "../store/appStore";
 import { apiService, handleApiError } from "../services/api";
 import type { TriviaQuestion } from "../services/api";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  Button,
+  Card,
+  Chip,
+  Container,
+  ErrorState,
+  PageHeader,
+  SectionHeading,
+  Skeleton,
+  SkeletonRows,
+  StatCard,
+} from "../components/ui";
+import { SegmentedControl } from "../components/trivia/DifficultyPicker";
 import { cn } from "../utils/cn";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,116 +34,150 @@ interface QuizAnswer {
 
 const QUESTIONS_PER_TEST = 15;
 
-const DIFFICULTY_CONFIG: Record<
-  Difficulty,
-  { label: string; color: string; bg: string; darkBg: string; darkColor: string; emoji: string; description: string }
-> = {
-  easy: {
-    label: "Easy",
-    emoji: "🟢",
-    description: "Basic FPL facts — positions, top scorers, simple stats",
-    color: "text-emerald-700",
-    bg: "bg-emerald-50 border-emerald-200 hover:bg-emerald-100",
-    darkColor: "text-emerald-300",
-    darkBg: "bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20",
-  },
-  medium: {
-    label: "Medium",
-    emoji: "🟡",
-    description: "Season stats, assists, comparisons between players",
-    color: "text-amber-700",
-    bg: "bg-amber-50 border-amber-200 hover:bg-amber-100",
-    darkColor: "text-amber-300",
-    darkBg: "bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20",
-  },
-  hard: {
-    label: "Hard",
-    emoji: "🔴",
-    description: "Records, GW scores, goalkeeper saves, tricky facts",
-    color: "text-red-700",
-    bg: "bg-red-50 border-red-200 hover:bg-red-100",
-    darkColor: "text-red-300",
-    darkBg: "bg-red-500/10 border-red-500/30 hover:bg-red-500/20",
-  },
+const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; description: string }> = {
+  easy: { label: "Easy", description: "Basic FPL facts: positions, top scorers, simple stats." },
+  medium: { label: "Medium", description: "Season stats, assists, comparisons between players." },
+  hard: { label: "Hard", description: "Records, gameweek scores, goalkeeper saves, tricky facts." },
 };
+
+const DIFFICULTIES: Difficulty[] = ["easy", "medium", "hard"];
 
 const CATEGORY_LABELS: Record<string, string> = {
-  top_scorers: "⚽ Top Scorers",
-  player_stats: "📊 Player Stats",
-  team_facts: "🏟️ Team Facts",
-  records: "🏆 Records",
-  comparisons: "⚖️ Comparisons",
-  true_false: "✅ True / False",
-  multiple_choice: "🔢 Multiple Choice",
+  top_scorers: "Top scorers",
+  player_stats: "Player stats",
+  team_facts: "Team facts",
+  records: "Records",
+  comparisons: "Comparisons",
+  true_false: "True or false",
+  multiple_choice: "Multiple choice",
 };
 
-// ─── Difficulty Selection Screen ──────────────────────────────────────────────
+const LETTERS = "ABCDEFGH";
 
-function DifficultySelect({
-  onSelect,
-  isDark,
+/** The API prefixes feedback with an emoji and "Correct!"/"Wrong!"; the UI shows its own verdict. */
+function feedbackDetail(feedback: string): string {
+  return feedback
+    .replace(/^[\s✅❌✔✖️]+/u, "")
+    .replace(/^(correct|wrong)!?\s*/i, "")
+    .trim();
+}
+
+function accuracy(score: number, total: number): string {
+  return total > 0 ? `${Math.round((score / total) * 100)}%` : "–";
+}
+
+// ─── Start screen ─────────────────────────────────────────────────────────────
+
+function StartScreen({
+  difficulty,
+  onDifficultyChange,
+  onStart,
   neo4jConnected,
 }: {
-  onSelect: (d: Difficulty) => void;
-  isDark: boolean;
+  difficulty: Difficulty;
+  onDifficultyChange: (d: Difficulty) => void;
+  onStart: (d: Difficulty) => void;
   neo4jConnected: boolean;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center flex-1 px-4 py-12">
-      <div
-        className={cn(
-          "mb-5 inline-flex h-20 w-20 items-center justify-center rounded-full",
-          isDark ? "bg-violet-500/15" : "bg-purple-100"
-        )}
-      >
-        <Target className={cn("h-10 w-10", isDark ? "text-violet-300" : "text-purple-600")} />
-      </div>
-      <h2 className={cn("text-2xl font-bold mb-2", isDark ? "text-slate-100" : "text-gray-900")}>
-        FPL FantasyTrivia
-      </h2>
-      <p className={cn("text-sm mb-8 text-center max-w-sm", isDark ? "text-slate-400" : "text-gray-500")}>
-        {QUESTIONS_PER_TEST} questions per test, randomly drawn from the question bank. Choose your difficulty:
-      </p>
+    <Card className="space-y-5">
+      <SectionHeading
+        as="h2"
+        size="md"
+        title="Start a quiz"
+        subtitle={`${QUESTIONS_PER_TEST} questions per test, randomly drawn from the question bank.`}
+        className="mb-0"
+      />
 
       {!neo4jConnected && (
-        <div
-          className={cn(
-            "mb-6 rounded-lg border p-4 flex items-start gap-3 w-full max-w-sm",
-            isDark ? "border-amber-400/20 bg-amber-500/10" : "border-yellow-200 bg-yellow-50"
-          )}
-        >
-          <AlertCircle className="w-5 h-5 text-yellow-500 mt-0.5 shrink-0" />
-          <p className={cn("text-sm", isDark ? "text-amber-200" : "text-yellow-800")}>
-            Connecting to database… please wait.
-          </p>
-        </div>
+        <p role="status" className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-data text-fg-muted">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
+          Connecting to the database, please wait.
+        </p>
       )}
 
-      <div className="flex flex-col gap-3 w-full max-w-sm">
-        {(["easy", "medium", "hard"] as Difficulty[]).map((d) => {
-          const cfg = DIFFICULTY_CONFIG[d];
-          return (
-            <button
-              key={d}
-              onClick={() => onSelect(d)}
-              disabled={!neo4jConnected}
-              className={cn(
-                "rounded-xl border-2 px-5 py-4 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-                isDark ? cfg.darkBg + " " + cfg.darkColor : cfg.bg + " " + cfg.color
-              )}
-            >
-              <div className="flex items-center gap-2 font-bold text-base mb-0.5">
-                <span>{cfg.emoji}</span>
-                <span>{cfg.label}</span>
-              </div>
-              <p className={cn("text-xs", isDark ? "text-slate-400" : "text-gray-500")}>
-                {cfg.description}
-              </p>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+      <SegmentedControl
+        label="Difficulty"
+        value={difficulty}
+        onChange={onDifficultyChange}
+        options={DIFFICULTIES.map((d) => ({ value: d, ...DIFFICULTY_CONFIG[d] }))}
+      />
+
+      <Button
+        size="lg"
+        className="w-full sm:w-auto"
+        onClick={() => onStart(difficulty)}
+        disabled={!neo4jConnected}
+        icon={<Play className="h-4 w-4" aria-hidden="true" />}
+      >
+        Start {DIFFICULTY_CONFIG[difficulty].label.toLowerCase()} quiz
+      </Button>
+    </Card>
+  );
+}
+
+// ─── Answer option ────────────────────────────────────────────────────────────
+
+function AnswerOption({
+  letter,
+  option,
+  state,
+  checking,
+  disabled,
+  onSelect,
+}: {
+  letter: string;
+  option: string;
+  /** Result for this option once the question has been answered. */
+  state: "idle" | "correct" | "wrong" | "dimmed";
+  /** This option was picked and the answer is being checked. */
+  checking: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  const label =
+    state === "correct" ? "Correct answer" : state === "wrong" ? "Your answer, incorrect" : checking ? "Checking" : null;
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      className={cn(
+        "flex min-h-[3.5rem] w-full items-center gap-3 rounded-md border-2 px-3 py-2.5 text-left text-body font-medium text-fg transition-colors sm:px-4",
+        state === "idle" && "border-line-strong bg-surface enabled:hover:border-accent enabled:hover:bg-surface-2",
+        state === "correct" && "border-accent bg-accent/10",
+        state === "wrong" && "border-danger bg-danger/10",
+        state === "dimmed" && "border-line bg-surface opacity-60",
+        checking && "border-accent-2",
+        "disabled:cursor-default",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-micro font-bold",
+          state === "correct" ? "bg-accent text-accent-on" : state === "wrong" ? "bg-danger text-white" : "bg-surface-2 text-fg-muted",
+        )}
+      >
+        {letter}
+      </span>
+      <span className="min-w-0 flex-1">{option}</span>
+      {label && (
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1.5 text-data font-semibold",
+            state === "correct" ? "text-accent" : state === "wrong" ? "text-danger" : "text-fg-subtle",
+          )}
+        >
+          {state === "correct" && <CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
+          {state === "wrong" && <XCircle className="h-5 w-5" aria-hidden="true" />}
+          {checking && state === "idle" && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+          <span className="hidden sm:inline">{label}</span>
+          <span className="sr-only sm:hidden">{label}</span>
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -138,11 +185,11 @@ function DifficultySelect({
 
 function QuizScreen({
   difficulty,
-  isDark,
+  onAnswered,
   onFinish,
 }: {
   difficulty: Difficulty;
-  isDark: boolean;
+  onAnswered: (isCorrect: boolean) => void;
   onFinish: (answers: QuizAnswer[], score: number) => void;
 }) {
   const [questionNumber, setQuestionNumber] = useState(1);
@@ -156,6 +203,8 @@ function QuizScreen({
   const [answers, setAnswers] = useState<QuizAnswer[]>([]);
   const [score, setScore] = useState(0);
   const [answering, setAnswering] = useState(false);
+  const nextRef = useRef<HTMLButtonElement | null>(null);
+  const fetchSeq = useRef(0);
 
   const cfg = DIFFICULTY_CONFIG[difficulty];
   const isMounted = useRef(true);
@@ -171,18 +220,26 @@ function QuizScreen({
     setAnswerState("idle");
     setFeedback("");
     setCorrectAnswer("");
+    // Only the latest request may set the question (StrictMode's double mount fires two).
+    const seq = ++fetchSeq.current;
+    const isLatest = () => isMounted.current && seq === fetchSeq.current;
     try {
       const q = await apiService.getNewTriviaQuestion(difficulty);
-      if (isMounted.current) setCurrentQuestion(q);
+      if (isLatest()) setCurrentQuestion(q);
     } catch (e) {
-      if (isMounted.current) setError(handleApiError(e));
+      if (isLatest()) setError(handleApiError(e));
     } finally {
-      if (isMounted.current) setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   }, [difficulty]);
 
   // Load first question on mount
   useEffect(() => { fetchQuestion(); }, [fetchQuestion]);
+
+  // The answer buttons disable once answered; move keyboard focus to "Next question".
+  useEffect(() => {
+    if (answerState !== "idle") nextRef.current?.focus();
+  }, [answerState]);
 
   const handleAnswer = async (option: string) => {
     if (answerState !== "idle" || !currentQuestion || answering) return;
@@ -205,6 +262,7 @@ function QuizScreen({
       const newScore = score + (isCorrect ? 1 : 0);
       setAnswers(newAnswers);
       setScore(newScore);
+      onAnswered(isCorrect);
 
       // If last question, finish after short delay
       if (questionNumber >= QUESTIONS_PER_TEST) {
@@ -223,176 +281,135 @@ function QuizScreen({
     fetchQuestion();
   };
 
-  return (
-    <div className="flex flex-col flex-1 min-h-0">
-      {/* Quiz header */}
-      <div
-        className={cn(
-          "px-4 py-3 flex items-center justify-between border-b",
-          isDark ? "border-slate-800 bg-slate-950/80" : "bg-white border-gray-200"
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <span className={cn("text-sm font-semibold", isDark ? cfg.darkColor : cfg.color)}>
-            {cfg.emoji} {cfg.label}
-          </span>
-          <span className={cn("text-xs", isDark ? "text-slate-400" : "text-gray-500")}>
-            · Question {questionNumber} / {QUESTIONS_PER_TEST}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={cn("text-xs font-medium", isDark ? "text-emerald-300" : "text-green-600")}>
-            {score} correct
-          </span>
-          {/* Progress bar */}
-          <div className={cn("w-24 h-2 rounded-full overflow-hidden", isDark ? "bg-slate-800" : "bg-gray-200")}>
-            <div
-              className="h-full bg-purple-500 transition-all duration-300"
-              style={{ width: `${((questionNumber - 1) / QUESTIONS_PER_TEST) * 100}%` }}
-            />
-          </div>
-        </div>
-      </div>
+  const progress = (answers.length / QUESTIONS_PER_TEST) * 100;
+  const detail = feedbackDetail(feedback);
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 max-w-2xl mx-auto w-full sm:px-6">
-        {error && (
+  const optionState = (option: string): "idle" | "correct" | "wrong" | "dimmed" => {
+    if (answerState === "idle") return "idle";
+    const isSelected = option === selectedAnswer;
+    if ((isSelected && answerState === "correct") || (answerState === "wrong" && option === correctAnswer)) return "correct";
+    if (isSelected && answerState === "wrong") return "wrong";
+    return "dimmed";
+  };
+
+  return (
+    <div className="space-y-4">
+      <Card padded={false} className="overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <p className="text-body font-semibold text-fg">
+            Question {questionNumber} <span className="font-normal text-fg-subtle">of {QUESTIONS_PER_TEST}</span>
+          </p>
+          <Chip tone="brand">{cfg.label}</Chip>
+        </div>
+        <div
+          role="progressbar"
+          aria-label="Questions answered"
+          aria-valuemin={0}
+          aria-valuemax={QUESTIONS_PER_TEST}
+          aria-valuenow={answers.length}
+          className="h-1.5 bg-surface-2"
+        >
+          <div className="h-full bg-accent transition-[width] duration-300" style={{ width: `${progress}%` }} />
+        </div>
+      </Card>
+
+      {error && (
+        <Card>
+          <ErrorState title="Something went wrong" description={error} onRetry={fetchQuestion} className="py-6" />
+        </Card>
+      )}
+
+      {loading && (
+        <div role="status" className="space-y-3">
+          <span className="sr-only">Loading question…</span>
+          <Card tone="brand" className="space-y-3">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-6 w-full" />
+          </Card>
+          <SkeletonRows rows={4} className="[&>div]:h-14" />
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        {currentQuestion && !loading && (
+          <motion.section
+            key={currentQuestion.question_id}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            aria-labelledby="trivia-question"
+            className="space-y-3"
+          >
+            <Card tone="brand">
+              <Chip tone="accent">{CATEGORY_LABELS[currentQuestion.category] ?? currentQuestion.category}</Chip>
+              <h2 id="trivia-question" className="mt-2 font-display text-h3 font-bold leading-snug text-fg sm:text-h2">
+                {currentQuestion.question}
+              </h2>
+            </Card>
+
+            <ul className="grid gap-2" aria-label="Answers">
+              {currentQuestion.options.map((option, i) => (
+                <li key={`${i}-${option}`}>
+                  <AnswerOption
+                    letter={LETTERS[i] ?? String(i + 1)}
+                    option={option}
+                    state={optionState(option)}
+                    checking={answering && option === selectedAnswer}
+                    disabled={answerState !== "idle" || answering}
+                    onSelect={() => handleAnswer(option)}
+                  />
+                </li>
+              ))}
+            </ul>
+          </motion.section>
+        )}
+      </AnimatePresence>
+
+      {/* Live region stays mounted so the verdict is announced when it appears. */}
+      <div aria-live="polite" role="status">
+        {answerState !== "idle" && !loading && (
           <div
             className={cn(
-              "rounded-lg border p-3 text-sm",
-              isDark ? "border-red-400/20 bg-red-500/10 text-red-200" : "border-red-200 bg-red-50 text-red-700"
+              "flex items-start gap-3 rounded-md border p-3 sm:p-4",
+              answerState === "correct" ? "border-accent/40 bg-accent/10" : "border-danger/40 bg-danger/10",
             )}
           >
-            {error}
-            <button onClick={fetchQuestion} className="ml-2 underline">Retry</button>
+            {answerState === "correct" ? (
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-accent" aria-hidden="true" />
+            ) : (
+              <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
+            )}
+            <div className="min-w-0">
+              <p className={cn("font-display text-h3 font-bold", answerState === "correct" ? "text-accent" : "text-danger")}>
+                {answerState === "correct" ? "Correct" : "Not quite"}
+              </p>
+              {answerState === "wrong" && correctAnswer && !detail.toLowerCase().includes(correctAnswer.toLowerCase()) && (
+                <p className="mt-0.5 text-data text-fg">
+                  The answer was <strong>{correctAnswer}</strong>.
+                </p>
+              )}
+              {detail && <p className="mt-0.5 text-data text-fg-muted">{detail}</p>}
+            </div>
           </div>
         )}
-
-        {loading && !currentQuestion && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className={cn("h-8 w-8 animate-spin", isDark ? "text-violet-400" : "text-purple-500")} />
-          </div>
-        )}
-
-        <AnimatePresence mode="wait">
-          {currentQuestion && !loading && (
-            <motion.div
-              key={currentQuestion.question_id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="space-y-4"
-            >
-              {/* Category badge */}
-              <div className="flex gap-2 flex-wrap">
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-1 text-xs font-medium",
-                    isDark ? "bg-violet-500/15 text-violet-200" : "bg-purple-100 text-purple-700"
-                  )}
-                >
-                  {CATEGORY_LABELS[currentQuestion.category] ?? currentQuestion.category}
-                </span>
-              </div>
-
-              {/* Question card */}
-              <div className="bg-gradient-to-br from-purple-600 to-indigo-700 text-white rounded-xl p-5">
-                <p className="text-base font-semibold leading-snug">{currentQuestion.question}</p>
-              </div>
-
-              {/* Options */}
-              <div className="grid grid-cols-1 gap-3">
-                {currentQuestion.options.map((option) => {
-                  let style = isDark
-                    ? "border-slate-700 bg-slate-900/60 hover:border-violet-400/40 hover:bg-slate-900 cursor-pointer text-slate-100"
-                    : "border-gray-200 bg-white hover:border-purple-400 hover:bg-purple-50 cursor-pointer";
-
-                  if (answerState !== "idle") {
-                    if (option === correctAnswer && answerState === "wrong") {
-                      style = isDark
-                        ? "border-emerald-500/40 bg-emerald-500/15 cursor-default text-slate-100"
-                        : "border-green-400 bg-green-100 cursor-default";
-                    } else if (option === selectedAnswer) {
-                      style = answerState === "correct"
-                        ? isDark
-                          ? "border-emerald-500/40 bg-emerald-500/15 cursor-default text-slate-100"
-                          : "border-green-400 bg-green-100 cursor-default"
-                        : isDark
-                        ? "border-red-500/40 bg-red-500/15 cursor-default text-slate-100"
-                        : "border-red-400 bg-red-50 cursor-default";
-                    } else {
-                      style = isDark
-                        ? "border-slate-700 bg-slate-900/40 opacity-50 cursor-default text-slate-100"
-                        : "border-gray-200 bg-gray-50 opacity-50 cursor-default";
-                    }
-                  }
-
-                  return (
-                    <button
-                      key={option}
-                      onClick={() => handleAnswer(option)}
-                      disabled={answerState !== "idle" || answering}
-                      className={cn(
-                        "flex w-full items-center justify-between gap-3 rounded-lg border-2 px-4 py-3 text-left text-sm font-medium transition-all",
-                        style
-                      )}
-                    >
-                      <span>{option}</span>
-                      {answerState !== "idle" && option === selectedAnswer && answerState === "correct" && (
-                        <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
-                      )}
-                      {answerState !== "idle" && option === selectedAnswer && answerState === "wrong" && (
-                        <XCircle className="w-5 h-5 text-red-500 shrink-0" />
-                      )}
-                      {answerState === "wrong" && option === correctAnswer && (
-                        <CheckCircle className="w-5 h-5 text-green-600 shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Feedback */}
-              {answerState !== "idle" && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={cn(
-                    "rounded-lg border p-3 text-sm",
-                    answerState === "correct"
-                      ? isDark
-                        ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-100"
-                        : "border-green-300 bg-green-100 text-green-900"
-                      : isDark
-                      ? "border-red-500/40 bg-red-500/15 text-red-100"
-                      : "border-red-200 bg-red-50 text-red-800"
-                  )}
-                >
-                  {feedback}
-                </motion.div>
-              )}
-
-              {/* Next button — only show if NOT the last question */}
-              {answerState !== "idle" && questionNumber < QUESTIONS_PER_TEST && (
-                <button
-                  onClick={handleNext}
-                  disabled={loading}
-                  className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Next Question →"}
-                </button>
-              )}
-
-              {/* Last question — show finishing message */}
-              {answerState !== "idle" && questionNumber >= QUESTIONS_PER_TEST && (
-                <div className={cn("text-center text-sm py-2", isDark ? "text-slate-400" : "text-gray-500")}>
-                  <Loader2 className="inline w-4 h-4 animate-spin mr-1" />
-                  Loading your results…
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
+
+      {/* Next button — only show if NOT the last question */}
+      {answerState !== "idle" && !loading && questionNumber < QUESTIONS_PER_TEST && (
+        <Button ref={nextRef} size="lg" className="w-full" onClick={handleNext}>
+          Next question
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      )}
+
+      {/* Last question — show finishing message */}
+      {answerState !== "idle" && questionNumber >= QUESTIONS_PER_TEST && (
+        <p className="flex items-center justify-center gap-2 py-2 text-data text-fg-muted">
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          Loading your results…
+        </p>
+      )}
     </div>
   );
 }
@@ -403,107 +420,74 @@ function ResultsScreen({
   difficulty,
   score,
   answers,
-  isDark,
   onFinish,
 }: {
   difficulty: Difficulty;
   score: number;
   answers: QuizAnswer[];
-  isDark: boolean;
   onFinish: () => void;
 }) {
   const total = QUESTIONS_PER_TEST;
-  const accuracy = Math.round((score / total) * 100);
+  const pct = Math.round((score / total) * 100);
   const cfg = DIFFICULTY_CONFIG[difficulty];
 
   const grade =
-    accuracy >= 90 ? { label: "Outstanding!", emoji: "🏆", color: isDark ? "text-yellow-300" : "text-yellow-600" } :
-    accuracy >= 70 ? { label: "Great job!", emoji: "🎯", color: isDark ? "text-emerald-300" : "text-green-600" } :
-    accuracy >= 50 ? { label: "Not bad!", emoji: "👍", color: isDark ? "text-blue-300" : "text-blue-600" } :
-    { label: "Keep practicing!", emoji: "📚", color: isDark ? "text-slate-300" : "text-gray-600" };
+    pct >= 90 ? "Outstanding" :
+    pct >= 70 ? "Great job" :
+    pct >= 50 ? "Not bad" :
+    "Keep practising";
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6 max-w-2xl mx-auto w-full sm:px-6">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="space-y-6"
-      >
-        {/* Score card */}
-        <div
-          className={cn(
-            "rounded-2xl border p-6 text-center",
-            isDark ? "border-slate-700 bg-slate-900/80" : "border-gray-200 bg-white"
-          )}
-        >
-          <div className="text-5xl mb-3">{grade.emoji}</div>
-          <h2 className={cn("text-2xl font-bold mb-1", grade.color)}>{grade.label}</h2>
-          <p className={cn("text-sm mb-5", isDark ? "text-slate-400" : "text-gray-500")}>
-            {cfg.emoji} {cfg.label} difficulty
-          </p>
-          <div className="flex justify-center gap-6">
-            <div className="text-center">
-              <div className={cn("text-3xl font-bold", isDark ? "text-slate-100" : "text-gray-900")}>
-                {score} / {total}
-              </div>
-              <div className={cn("text-xs mt-0.5", isDark ? "text-slate-400" : "text-gray-500")}>Score</div>
-            </div>
-            <div className={cn("w-px self-stretch", isDark ? "bg-slate-700" : "bg-gray-200")} />
-            <div className="text-center">
-              <div className={cn("text-3xl font-bold", isDark ? "text-slate-100" : "text-gray-900")}>
-                {accuracy}%
-              </div>
-              <div className={cn("text-xs mt-0.5", isDark ? "text-slate-400" : "text-gray-500")}>Accuracy</div>
-            </div>
+    <div className="space-y-4">
+      <Card tone="brand" className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-accent text-accent-on">
+            <Trophy className="h-6 w-6" aria-hidden="true" />
+          </span>
+          <div>
+            <h2 className="font-display text-h2 font-bold text-fg">{grade}</h2>
+            <p className="text-data text-fg-muted">
+              {score} of {total} correct on {cfg.label.toLowerCase()} ({pct}%)
+            </p>
           </div>
         </div>
-
-        {/* Question review */}
-        <div>
-          <h3 className={cn("font-semibold text-sm mb-3", isDark ? "text-slate-300" : "text-gray-700")}>
-            Review
-          </h3>
-          <div className="space-y-2">
-            {answers.map((a, i) => (
-              <div
-                key={i}
-                className={cn(
-                  "rounded-lg border p-3",
-                  a.isCorrect
-                    ? isDark ? "border-emerald-500/30 bg-emerald-500/10" : "border-green-200 bg-green-50"
-                    : isDark ? "border-red-500/30 bg-red-500/10" : "border-red-100 bg-red-50"
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  {a.isCorrect
-                    ? <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                    : <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />}
-                  <div className="min-w-0">
-                    <p className={cn("text-xs font-medium leading-snug", isDark ? "text-slate-200" : "text-gray-800")}>
-                      {i + 1}. {a.questionText}
-                    </p>
-                    {!a.isCorrect && (
-                      <p className={cn("text-xs mt-1", isDark ? "text-slate-400" : "text-gray-500")}>
-                        Your answer: <span className="text-red-400">{a.selected}</span>
-                        {" · "}
-                        Correct: <span className={isDark ? "text-emerald-300" : "text-green-700"}>{a.correct}</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Finish button */}
-        <button
-          onClick={onFinish}
-          className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-base transition-colors"
-        >
+        <Button onClick={onFinish} icon={<RotateCcw className="h-4 w-4" aria-hidden="true" />} className="w-full sm:w-auto">
           Finish
-        </button>
-      </motion.div>
+        </Button>
+      </Card>
+
+      <Card padded={false}>
+        <div className="px-4 pt-4 sm:px-5">
+          <SectionHeading as="h2" size="md" title="Review" subtitle="Every question from this quiz" />
+        </div>
+        <ol className="divide-y divide-line border-t border-line">
+          {answers.map((a, i) => (
+            <li key={i} className="flex items-start gap-3 px-4 py-3 sm:px-5">
+              {a.isCorrect ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
+              ) : (
+                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-data font-medium text-fg">
+                  <span className="text-fg-subtle">{i + 1}.</span> {a.questionText}
+                </p>
+                {a.isCorrect ? (
+                  <p className="mt-0.5 text-data text-fg-muted">
+                    <span className="font-semibold text-accent">Correct:</span> {a.selected}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-data text-fg-muted">
+                    <span className="font-semibold text-danger">Your answer:</span> {a.selected}
+                    <span className="text-fg-subtle"> · </span>
+                    <span className="font-semibold text-accent">Correct:</span> {a.correct}
+                  </p>
+                )}
+              </div>
+            </li>
+          ))}
+        </ol>
+      </Card>
     </div>
   );
 }
@@ -511,19 +495,32 @@ function ResultsScreen({
 // ─── Main Trivia Page ─────────────────────────────────────────────────────────
 
 export function Trivia() {
-  const { neo4jConnected, theme } = useAppStore();
-  const isDark = theme === "dark";
+  const { neo4jConnected, triviaScore, triviaTotal, incrementScore, incrementTotal, resetTriviaScore } = useAppStore();
 
   const [view, setView] = useState<View>("select");
   const [difficulty, setDifficulty] = useState<Difficulty>("easy");
   const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
   const [quizScore, setQuizScore] = useState(0);
+  // Running totals for the current quiz (the score cards update after every answer).
+  const [liveScore, setLiveScore] = useState(0);
+  const [liveAnswered, setLiveAnswered] = useState(0);
 
   const handleSelectDifficulty = (d: Difficulty) => {
     setDifficulty(d);
     setQuizAnswers([]);
     setQuizScore(0);
+    setLiveScore(0);
+    setLiveAnswered(0);
     setView("quiz");
+  };
+
+  const handleAnswered = (isCorrect: boolean) => {
+    setLiveAnswered((n) => n + 1);
+    incrementTotal();
+    if (isCorrect) {
+      setLiveScore((n) => n + 1);
+      incrementScore();
+    }
   };
 
   const handleQuizFinish = (answers: QuizAnswer[], score: number) => {
@@ -536,64 +533,82 @@ export function Trivia() {
     setView("select");
   };
 
-  return (
-    <div className="flex flex-col h-full">
-      {/* Page header */}
-      <div
-        className={cn(
-          "border-b px-4 py-4 sm:px-6 flex items-center justify-between shrink-0",
-          isDark ? "border-slate-800 bg-slate-950/80" : "bg-white border-gray-200"
-        )}
-      >
-        <div>
-          <h2 className={cn("text-xl font-bold sm:text-2xl", isDark ? "text-slate-100" : "text-gray-900")}>
-            🎯 FPL FantasyTrivia
-          </h2>
-          <p className={cn("text-sm", isDark ? "text-slate-400" : "text-gray-600")}>
-            Test your Fantasy Premier League knowledge
-          </p>
-        </div>
-        {view !== "select" && (
-          <button
-            onClick={handleReturnToSelect}
-            className={cn(
-              "rounded-lg border px-3 py-1.5 text-xs transition-colors",
-              isDark ? "border-slate-700 text-slate-400 hover:text-slate-200" : "border-gray-300 text-gray-500 hover:text-gray-700"
-            )}
-          >
-            ← Back
-          </button>
-        )}
-      </div>
+  const inQuiz = view !== "select";
+  const stats = inQuiz
+    ? [
+        { label: "Score", value: liveScore, detail: "Correct this quiz", highlight: true },
+        { label: "Answered", value: `${liveAnswered}/${QUESTIONS_PER_TEST}`, detail: DIFFICULTY_CONFIG[difficulty].label },
+        { label: "Accuracy", value: accuracy(liveScore, liveAnswered), detail: "This quiz" },
+      ]
+    : [
+        { label: "Score", value: triviaScore, detail: "Correct, all time", highlight: true },
+        { label: "Answered", value: triviaTotal, detail: "All time" },
+        { label: "Accuracy", value: accuracy(triviaScore, triviaTotal), detail: "All time" },
+      ];
 
-      {/* Content */}
-      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-        <AnimatePresence mode="wait">
+  return (
+    <MotionConfig reducedMotion="user">
+      <Container className="pb-10">
+        <PageHeader
+          eyebrow="Quiz"
+          title="Trivia"
+          description="Test your Fantasy Premier League knowledge against questions built from real FPL data."
+          actions={
+            inQuiz ? (
+              <Button variant="secondary" size="sm" onClick={handleReturnToSelect} icon={<ArrowLeft className="h-4 w-4" aria-hidden="true" />}>
+                Back
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetTriviaScore}
+                disabled={triviaTotal === 0}
+                icon={<RotateCcw className="h-4 w-4" aria-hidden="true" />}
+              >
+                Reset score
+              </Button>
+            )
+          }
+        />
+
+        <div className="max-w-3xl space-y-4">
+          <section aria-label={inQuiz ? "Quiz score" : "All-time score"} className="grid grid-cols-3 gap-2 sm:gap-3">
+            {stats.map((s) => (
+              <StatCard
+                key={s.label}
+                label={s.label}
+                value={<span className="text-h2 sm:text-h1">{s.value}</span>}
+                detail={s.detail}
+                highlight={s.highlight}
+                className="p-3 sm:p-4"
+              />
+            ))}
+          </section>
+
           {view === "select" && (
-            <motion.div key="select" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col flex-1">
-              <DifficultySelect onSelect={handleSelectDifficulty} isDark={isDark} neo4jConnected={neo4jConnected} />
-            </motion.div>
+            <StartScreen
+              difficulty={difficulty}
+              onDifficultyChange={setDifficulty}
+              onStart={handleSelectDifficulty}
+              neo4jConnected={neo4jConnected}
+            />
           )}
 
           {view === "quiz" && (
-            <motion.div key="quiz" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col flex-1 min-h-0">
-              <QuizScreen difficulty={difficulty} isDark={isDark} onFinish={handleQuizFinish} />
-            </motion.div>
+            <QuizScreen difficulty={difficulty} onAnswered={handleAnswered} onFinish={handleQuizFinish} />
           )}
 
           {view === "results" && (
-            <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col flex-1 min-h-0">
-              <ResultsScreen
-                difficulty={difficulty}
-                score={quizScore}
-                answers={quizAnswers}
-                isDark={isDark}
-                onFinish={handleReturnToSelect}
-              />
-            </motion.div>
+            <ResultsScreen
+              difficulty={difficulty}
+              score={quizScore}
+              answers={quizAnswers}
+              onFinish={handleReturnToSelect}
+            />
           )}
-        </AnimatePresence>
-      </div>
-    </div>
+        </div>
+      </Container>
+    </MotionConfig>
   );
 }

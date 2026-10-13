@@ -1,0 +1,77 @@
+/*
+ * Pitch Me design tokens.
+ *
+ * Every colour in the UI comes from these variables (wired into Tailwind in
+ * tailwind.config.js), so a theme is just another set of values. Colours are
+ * space-separated RGB channels so Tailwind's opacity modifiers work (bg-accent/20).
+ *
+ * Visual language: inspired by the official FPL site (deep purple, mint, cyan,
+ * dense tables) without using any Premier League marks. Dark is the first theme;
+ * a light theme is planned: add a [data-theme="light"] block that redefines the
+ * same variables, and nothing else needs to change.
+ *
+ * Contrast (WCAG 2.1, checked against --surface unless noted):
+ *   text 18:1 · text-muted 10.8:1 · text-subtle 6.4:1 (5.8:1 on surface-2) · accent 13.4:1
+ *   on-accent (brand on mint) 12.7:1 · danger 5.7:1 · warning 11.7:1
+ *   border-strong (form controls) 3.1:1 on surface-2 · FDR chips ≥ 4.9:1
+ */
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces, darkest to lightest */
+  --bg: 30 1 35;            /* #1E0123 page background */
+  --surface: 42 6 49;       /* #2A0631 cards, tables */
+  --surface-2: 54 16 61;    /* #36103D raised: table headers, hover, inputs */
+  --brand: 55 0 60;         /* #37003C header bar, selected/featured panels */
+  --brand-2: 90 20 95;      /* #5A145F brand hover */
+
+  /* Lines */
+  --border: 74 31 82;       /* #4A1F52 dividers (decorative) */
+  --border-strong: 138 90 146; /* #8A5A92 form-control outlines, focus-free boundaries */
+
+  /* Text */
+  --text: 255 255 255;
+  --text-muted: 211 196 216;  /* #D3C4D8 secondary */
+  --text-subtle: 168 148 174; /* #A894AE metadata, captions */
+
+  /* Accents */
+  --accent: 0 255 133;      /* #00FF85 mint: primary action, active nav, highlights */
+  --accent-2: 4 245 255;    /* #04F5FF cyan: secondary highlights, focus ring */
+  --on-accent: 55 0 60;     /* text on mint/cyan */
+
+  /* Semantic */
+  --success: 0 255 133;
+  --warning: 255 201 60;    /* #FFC93C doubtful */
+  --danger: 255 79 123;     /* #FF4F7B injured, suspended, errors */
+  --info: 4 245 255;
+
+  /* Positions (chips: brand-coloured text on these) */
+  --pos-gk: 255 225 77;     /* #FFE14D */
+  --pos-def: 77 224 255;    /* #4DE0FF */
+  --pos-mid: 0 255 133;     /* #00FF85 */
+  --pos-fwd: 255 92 138;    /* #FF5C8A */
+
+  /* Fixture difficulty (FPL scale) */
+  --fdr-1: 55 85 35;        /* #375523, white text */
+  --fdr-2: 1 252 122;       /* #01FC7A, brand text */
+  --fdr-3: 231 231 231;     /* #E7E7E7, brand text */
+  --fdr-4: 224 16 63;       /* #E0103F, white text */
+  --fdr-5: 128 7 45;        /* #80072D, white text */
+
+  /* Pitch stripes (Team of the Week) */
+  --pitch-a: 15 122 58;     /* #0F7A3A */
+  --pitch-b: 12 110 51;     /* #0C6E33 */
+
+  /* Shape and depth */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.35);
+  --shadow-pop: 0 12px 32px rgb(0 0 0 / 0.45);
+
+  /* Layout */
+  --page-max: 1320px;
+  --header-h: 64px;
+}
