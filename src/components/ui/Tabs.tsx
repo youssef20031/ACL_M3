@@ -42,7 +42,13 @@ export function Tabs<T extends string>({ items, value, onChange, label, idPrefix
       role="tablist"
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={cn('flex gap-1 overflow-x-auto border-b border-line', className)}
+      // The divider is an inset shadow, not a border: the tabs' mint underline paints over it
+      // without overhanging the row (a -1px overlap made the row 1px taller than its box and
+      // showed a useless vertical scrollbar). Horizontal scroll stays for narrow screens.
+      className={cn(
+        'flex gap-1 overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_rgb(var(--border))]',
+        className,
+      )}
     >
       {items.map((tab, i) => {
         const selected = tab.value === value;
@@ -58,7 +64,7 @@ export function Tabs<T extends string>({ items, value, onChange, label, idPrefix
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.value)}
             className={cn(
-              'relative -mb-px whitespace-nowrap px-3 py-2.5 text-sm font-semibold transition-colors',
+              'relative whitespace-nowrap px-3 py-2.5 text-sm font-semibold transition-colors',
               'border-b-[3px]',
               selected ? 'border-accent text-fg' : 'border-transparent text-fg-subtle hover:text-fg',
             )}
