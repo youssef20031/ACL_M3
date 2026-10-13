@@ -9,6 +9,9 @@ from typing import Dict, List, Optional, Set
 from dataclasses import dataclass, field
 import re
 
+# A season written as "2022-23", "2022/23", "2022-2023" or "22/23".
+SEASON_TEXT_RE = re.compile(r"\b(?:19|20)?\d{2}\s*[-/–]\s*(?:19|20)?\d{2}\b")
+
 
 @dataclass
 class ExtractedEntities:
@@ -463,23 +466,31 @@ class EntityExtractor:
     def _extract_numbers(self, doc: Doc, exclude_gws: List[int]) -> List[int]:
         """Extract numbers from query using spaCy (excluding gameweeks)."""
         numbers = []
-        
+        # Digits inside a season ("2022-23", "2023/24", "22/23") are not counts: spaCy splits
+        # "2022-23" into "2022", "-", "23", and the "23" used to become the result limit.
+        season_spans = [m.span() for m in SEASON_TEXT_RE.finditer(doc.text)]
+
+        def usable(text: str, start: int) -> Optional[int]:
+            if not text.isdigit() or any(a <= start < b for a, b in season_spans):
+                return None
+            num = int(text)
+            if num in exclude_gws or 1900 <= num <= 2100:  # gameweeks and years
+                return None
+            return num
+
         for token in doc:
-            if token.like_num and token.text.isdigit():
-                num = int(token.text)
-                # Exclude gameweeks and years
-                if num not in exclude_gws and num not in [2020, 2021, 2022, 2023]:
-                    if num not in numbers:
-                        numbers.append(num)
-        
+            if token.like_num:
+                num = usable(token.text, token.idx)
+                if num is not None and num not in numbers:
+                    numbers.append(num)
+
         # Also check CARDINAL entities
         for ent in doc.ents:
-            if ent.label_ == "CARDINAL" and ent.text.isdigit():
-                num = int(ent.text)
-                if num not in exclude_gws and num not in [2020, 2021, 2022, 2023]:
-                    if num not in numbers:
-                        numbers.append(num)
-        
+            if ent.label_ == "CARDINAL":
+                num = usable(ent.text, ent.start_char)
+                if num is not None and num not in numbers:
+                    numbers.append(num)
+
         return numbers
     
     def _extract_players(self, doc: Doc, entities: ExtractedEntities) -> List[str]:

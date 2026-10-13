@@ -29,6 +29,9 @@ class QueryResult:
 POSITION_ORDER = "CASE position WHEN 'GK' THEN 0 WHEN 'DEF' THEN 1 WHEN 'MID' THEN 2 ELSE 3 END"
 
 
+POSITIONS = ("GK", "DEF", "MID", "FWD")
+
+
 def _season_node(season: Optional[str]) -> str:
     return "(s:Season {id: $season})" if season else "(s:Season)"
 
@@ -127,21 +130,44 @@ class CypherQueries:
 
         params: Dict[str, Any] = {"limit": limit}
         _with_season(params, season)
-        if gameweek:
-            params["gameweek"] = gameweek
+        code = position.upper() if position and position.upper() in POSITIONS else None
+        if code:
+            params["position"] = code
 
-        if position and position.upper() in ['GK', 'DEF', 'MID', 'FWD']:
-            pos_match = "MATCH (p)-[:PLAYS_POSITION]->(pos:Position {code: $position})"
-            params["position"] = position.upper()
+        if gameweek:
+            # Per-match rows: the position filter uses the player's current position.
+            params["gameweek"] = gameweek
+            season_prop = ", season_id: $season" if season else ""
+            pos_props = " {code: $position}" if code else ""
+            totals = f"""
+        MATCH (:Fixture {{gameweek: $gameweek{season_prop}}})<-[r:PLAYED_IN]-(p:Player)
+        WITH p, SUM(r.total_points) AS total_points, SUM(r.goals_scored) AS goals,
+             SUM(r.assists) AS assists, SUM(r.bonus) AS bonus, COUNT(r) AS games,
+             head(collect(r.team)) AS team
+        MATCH (p)-[:PLAYS_POSITION]->(pos:Position{pos_props})
+        WITH p, pos.code AS position, team, total_points, goals, assists, bonus, games
+        """
         else:
-            pos_match = "MATCH (p)-[:PLAYS_POSITION]->(pos:Position)"
+            # SEASON_STATS carries the team and position the player had that season, so
+            # "midfielders in 2023-24" means midfielders then, not today's position.
+            pos_filter = "WHERE st.position = $position" if code else ""
+            totals = f"""
+        MATCH (p:Player)-[st:SEASON_STATS]->{_season_node(season)}
+        {pos_filter}
+        WITH p, SUM(st.total_points) AS total_points, SUM(st.goals) AS goals,
+             SUM(st.assists) AS assists, SUM(st.bonus) AS bonus, SUM(st.games) AS games,
+             collect(st.team) AS teams, collect(st.position) AS positions
+        OPTIONAL MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+        WITH p, total_points, goals, assists, bonus, games,
+             CASE WHEN size(teams) = 1 THEN teams[0] ELSE coalesce(p.last_team, last(teams)) END AS team,
+             CASE WHEN size(positions) = 1 THEN positions[0] ELSE {"$position" if code else "pos.code"} END AS position
+        """
 
         query = f"""
-        {_player_totals(season, gameweek)}
-        {pos_match}
-        WITH p, pos, total_points, goals, assists, bonus, games,
+        {totals}
+        WITH p, position, team, total_points, goals, assists, bonus, games,
              total_points * 1.0 / CASE WHEN games = 0 THEN 1 ELSE games END AS points_per_game
-        RETURN p.name AS player_name, pos.code AS position, total_points, goals, assists, bonus, games,
+        RETURN p.name AS player_name, position, team, total_points, goals, assists, bonus, games,
                round(points_per_game, 2) AS points_per_game
         ORDER BY {sort_field} DESC, total_points DESC, player_name
         LIMIT $limit
