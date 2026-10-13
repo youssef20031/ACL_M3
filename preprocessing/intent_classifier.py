@@ -114,7 +114,12 @@ class IntentClassifier:
                 r"highest (?:fpl\s+)?points",
                 r"(?:fpl\s+)?points? leaders?",
                 r"best (?:performing|fpl)?\s+players?",
-                r"top (?:performing\s+)?(?:gk|goalkeeper|def|defender|mid|midfielder|fwd|forward|striker)s?",
+                # "top midfielders", "top 5 midfielders", "top 10 performing defenders"
+                r"top\s+(?:\d+\s+)?(?:performing\s+)?(?:gks?|goalkeepers?|keepers?|defs?|defenders?|mids?|midfielders?|fwds?|forwards?|strikers?)\b",
+                r"top\s+\d+\s+(?:fpl\s+)?players?\b",
+                # A count makes "best/leading N ..." a ranking (plain "best midfielders for
+                # next gameweek" stays a prediction question)
+                r"(?:best|leading|highest[\s-]scoring)\s+\d+\s+(?:gks?|goalkeepers?|keepers?|defs?|defenders?|mids?|midfielders?|fwds?|forwards?|strikers?|players?)\b",
                 r"top\s+(?:scoring\s+)?players?\s+(?:by|per|for|in)\s*(?:each\s+)?position",
                 r"best\s+players?\s+(?:by|per|for|in)\s*(?:each\s+)?position",
                 r"top\s+players?\s+(?:all|each|every)\s+positions?",

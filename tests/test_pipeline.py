@@ -113,7 +113,8 @@ class TestAppPipeline(unittest.TestCase):
             expected_intent=Intent.TOP_POINTS,
             expected_method="get_top_points_by_position",
             expected_params_subset={"season": "2022-23", "position": "DEF"},
-            expected_cypher_strings=["pos:Position {code: $position}", "ORDER BY total_points DESC"]
+            # Season queries filter on the position the player had that season
+            expected_cypher_strings=["WHERE st.position = $position", "ORDER BY total_points DESC"]
         )
     
     def test_query_3_dynamic_sort_position(self):
@@ -123,7 +124,7 @@ class TestAppPipeline(unittest.TestCase):
             expected_intent=Intent.TOP_SCORERS, 
             expected_method="get_top_points_by_position",
             expected_params_subset={"position": "DEF", "sort_by": "goals"},
-            expected_cypher_strings=["pos:Position {code: $position}", "ORDER BY goals DESC"]
+            expected_cypher_strings=["WHERE st.position = $position", "ORDER BY goals DESC"]
         )
 
     def test_query_4_player_stats(self):
@@ -257,6 +258,50 @@ class TestAppPipeline(unittest.TestCase):
             expected_params_subset={"season": "2022-23"},
             expected_cypher_strings=["MATCH (s:Season {id: $season})"]
         )
+
+    # ----- Regression: "top N <position>" questions used to classify as UNKNOWN, so no
+    # query ran and the assistant said it had no data.
+
+    def test_top_n_position_by_points_with_teams(self):
+        self.verify_pipeline(
+            prompt="List the top 5 midfielders by total points in 2023-24 with their teams",
+            expected_intent=Intent.TOP_POINTS,
+            expected_method="get_top_points_by_position",
+            expected_params_subset={"position": "MID", "season": "2023-24", "limit": 5, "sort_by": "total_points"},
+            expected_cypher_strings=["WHERE st.position = $position", "AS team", "ORDER BY total_points DESC"],
+        )
+
+    def test_best_n_position_is_a_ranking(self):
+        self.verify_pipeline(
+            prompt="best 3 defenders in 2021/22",
+            expected_intent=Intent.TOP_POINTS,
+            expected_method="get_top_points_by_position",
+            expected_params_subset={"position": "DEF", "season": "2021-22", "limit": 3},
+        )
+
+    def test_top_n_position_in_gameweek_uses_current_position(self):
+        self.verify_pipeline(
+            prompt="top 3 defenders in gameweek 5 2025-26",
+            expected_intent=Intent.TOP_POINTS,
+            expected_method="get_top_points_by_position",
+            expected_params_subset={"position": "DEF", "gameweek": 5, "limit": 3},
+            expected_cypher_strings=["pos:Position {code: $position}", "head(collect(r.team)) AS team"],
+        )
+
+    def test_best_position_for_next_gameweek_stays_prediction(self):
+        self.assertEqual(
+            self.classifier.classify("Who are the best midfielders for next gameweek?").intent,
+            Intent.PREDICTION,
+        )
+
+    def test_season_digits_are_not_a_limit(self):
+        for prompt in ("Who scored the most goals in 2022-23?", "most assists in 2023/24",
+                       "top scorers 22/23", "top scorers in 2021-2022"):
+            params = self.extractor.get_query_parameters(self.extractor.extract(prompt))
+            self.assertNotIn("limit", params, f"{prompt!r} -> {params}")
+        params = self.extractor.get_query_parameters(self.extractor.extract("top 7 forwards in 2024-25"))
+        self.assertEqual(params.get("limit"), 7)
+
 
 if __name__ == "__main__":
     unittest.main()
