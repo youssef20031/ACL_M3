@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type CSSProperties } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Loader2, AlertCircle, Info, ArrowUp } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
@@ -107,6 +108,19 @@ export function QAAssistant() {
 
     queryMutation.mutate(question);
   };
+
+  // Other pages can open the assistant with a question ready to send: navigate('/assistant', { state: { question } }).
+  const location = useLocation();
+  const navigate = useNavigate();
+  const pendingQuestion = (location.state as { question?: string } | null)?.question;
+  const sentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pendingQuestion || !neo4jConnected || sentRef.current === pendingQuestion) return;
+    sentRef.current = pendingQuestion;
+    handleSendQuestion(pendingQuestion);
+    navigate(location.pathname, { replace: true, state: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuestion, neo4jConnected]);
 
   return (
     <div className="relative isolate flex flex-1 w-full min-h-0 flex-col overflow-hidden">

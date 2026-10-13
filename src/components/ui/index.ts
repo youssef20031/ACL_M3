@@ -1,6 +1,6 @@
 // Pitch Me design system. Pages import from here, never style raw primitives ad hoc.
 export { Logo } from './Logo';
-export { Button, type ButtonProps } from './Button';
+export { Button, ButtonLink, buttonClasses, type ButtonProps } from './Button';
 export { Container, Card, SectionHeading, PageHeader } from './Layout';
 export {
   Chip,

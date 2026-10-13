@@ -32,15 +32,18 @@ interface SectionHeadingProps {
   /** Right-aligned action, e.g. a "See all" link. */
   action?: ReactNode;
   as?: 'h2' | 'h3';
+  /** Visual size; defaults to match the tag (h2 large, h3 medium). */
+  size?: 'lg' | 'md';
   className?: string;
   id?: string;
 }
 
-export function SectionHeading({ title, subtitle, action, as: Tag = 'h2', className, id }: SectionHeadingProps) {
+export function SectionHeading({ title, subtitle, action, as: Tag = 'h2', size, className, id }: SectionHeadingProps) {
+  const large = (size ?? (Tag === 'h2' ? 'lg' : 'md')) === 'lg';
   return (
     <div className={cn('mb-3 flex items-end justify-between gap-3', className)}>
       <div className="min-w-0">
-        <Tag id={id} className={cn('font-display font-bold text-fg', Tag === 'h2' ? 'text-h2' : 'text-h3')}>
+        <Tag id={id} className={cn('font-display font-bold text-fg', large ? 'text-h2' : 'text-h3')}>
           {title}
         </Tag>
         {subtitle && <p className="mt-0.5 text-data text-fg-subtle">{subtitle}</p>}

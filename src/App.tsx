@@ -13,6 +13,10 @@ const loadPlayerSearch = () => import('./pages/PlayerSearch').then((m) => ({ def
 const loadPlayerComparison = () => import('./pages/PlayerComparison').then((m) => ({ default: m.PlayerComparison }));
 const loadPredictions = () => import('./pages/Predictions').then((m) => ({ default: m.Predictions }));
 const loadSettings = () => import('./pages/Settings').then((m) => ({ default: m.Settings }));
+const loadHome = () => import('./pages/Home').then((m) => ({ default: m.Home }));
+const loadFixtures = () => import('./pages/Fixtures').then((m) => ({ default: m.Fixtures }));
+const loadLeagueTable = () => import('./pages/LeagueTable').then((m) => ({ default: m.LeagueTable }));
+const loadTeamOfTheWeek = () => import('./pages/TeamOfTheWeek').then((m) => ({ default: m.TeamOfTheWeek }));
 const loadDesignSystem = () => import('./pages/DesignSystem').then((m) => ({ default: m.DesignSystem }));
 
 const QAAssistant = lazy(loadQAAssistant);
@@ -21,6 +25,10 @@ const PlayerSearch = lazy(loadPlayerSearch);
 const PlayerComparison = lazy(loadPlayerComparison);
 const Predictions = lazy(loadPredictions);
 const Settings = lazy(loadSettings);
+const Home = lazy(loadHome);
+const Fixtures = lazy(loadFixtures);
+const LeagueTable = lazy(loadLeagueTable);
+const TeamOfTheWeek = lazy(loadTeamOfTheWeek);
 const DesignSystem = lazy(loadDesignSystem);
 
 const queryClient = new QueryClient({
@@ -48,7 +56,7 @@ function App() {
   // Warm the remaining route chunks once the browser is idle so later navigation is instant.
   useEffect(() => {
     const preload = () => {
-      [loadQAAssistant, loadPredictions, loadTrivia, loadPlayerSearch, loadPlayerComparison, loadSettings].forEach((load) => {
+      [loadHome, loadFixtures, loadLeagueTable, loadTeamOfTheWeek, loadQAAssistant, loadPredictions, loadPlayerSearch, loadPlayerComparison, loadTrivia, loadSettings].forEach((load) => {
         void load().catch(() => undefined);
       });
     };
@@ -71,7 +79,10 @@ function App() {
           {/* Hidden design-system reference (not linked from the nav). */}
           <Route path="/design" element={<Page><DesignSystem /></Page>} />
           <Route path="/" element={<AppShell />}>
-            <Route index element={<Navigate to="/assistant" replace />} />
+            <Route index element={<Page><Home /></Page>} />
+            <Route path="fixtures" element={<Page><Fixtures /></Page>} />
+            <Route path="table" element={<Page><LeagueTable /></Page>} />
+            <Route path="team-of-the-week" element={<Page><TeamOfTheWeek /></Page>} />
             <Route path="assistant" element={<Page><QAAssistant /></Page>} />
             <Route path="players" element={<Page><PlayerSearch /></Page>} />
             <Route path="predictions" element={<Page><Predictions /></Page>} />

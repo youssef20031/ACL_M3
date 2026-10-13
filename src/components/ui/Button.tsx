@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { Link, type LinkProps } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
@@ -18,6 +19,14 @@ const SIZES: Record<Size, string> = {
   lg: 'h-12 px-5 text-body gap-2',
 };
 
+const BASE =
+  'inline-flex select-none items-center justify-center rounded-md transition-colors duration-150 ' +
+  'disabled:cursor-not-allowed disabled:opacity-50';
+
+export function buttonClasses(variant: Variant = 'primary', size: Size = 'md', className?: string) {
+  return cn(BASE, VARIANTS[variant], SIZES[size], className);
+}
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
@@ -35,13 +44,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(
-        'inline-flex select-none items-center justify-center rounded-md transition-colors duration-150',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        VARIANTS[variant],
-        SIZES[size],
-        className,
-      )}
+      className={buttonClasses(variant, size, className)}
       {...rest}
     >
       {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : icon}
@@ -49,3 +52,19 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     </button>
   );
 });
+
+interface ButtonLinkProps extends LinkProps {
+  variant?: Variant;
+  size?: Size;
+  icon?: ReactNode;
+}
+
+/** A router link styled as a button (never nest a <button> inside a <Link>). */
+export function ButtonLink({ variant = 'primary', size = 'md', icon, className, children, ...rest }: ButtonLinkProps) {
+  return (
+    <Link className={buttonClasses(variant, size, typeof className === 'string' ? className : undefined)} {...rest}>
+      {icon}
+      {children}
+    </Link>
+  );
+}
