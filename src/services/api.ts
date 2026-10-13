@@ -92,6 +92,12 @@ export interface MLPrediction {
     matchday: number;
     fixture_id: string;
   } | null;
+  /** FPL availability: a available, d doubtful, i injured, s suspended, u unavailable, n not in squad */
+  status?: 'a' | 'd' | 'i' | 's' | 'u' | 'n';
+  /** 0-100, or null when FPL hasn't set one */
+  chance_of_playing_next_round?: number | null;
+  /** Official FPL team news, e.g. "Hamstring injury - Expected back 24 Oct" */
+  news?: string;
 }
 
 export interface TopPerformersResponse {
