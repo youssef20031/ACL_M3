@@ -548,7 +548,8 @@ export function Trivia() {
 
   return (
     <MotionConfig reducedMotion="user">
-      <Container className="pb-10">
+      {/* One centred column: header, score and quiz share the same width */}
+      <Container className="max-w-3xl pb-10">
         <PageHeader
           eyebrow="Quiz"
           title="Trivia"
@@ -572,7 +573,7 @@ export function Trivia() {
           }
         />
 
-        <div className="max-w-3xl space-y-4">
+        <div className="space-y-4">
           <section aria-label={inQuiz ? "Quiz score" : "All-time score"} className="grid grid-cols-3 gap-2 sm:gap-3">
             {stats.map((s) => (
               <StatCard
