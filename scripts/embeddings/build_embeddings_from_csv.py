@@ -7,10 +7,10 @@ No Neo4j connection required — designed for GitHub Actions CI.
 Replicates the same aggregation as CypherQueries.get_player_embeddings_data()
 so the resulting .pkl files are 100% compatible with the runtime embedding manager.
 
-Usage:
-    python build_embeddings_from_csv.py minilm
-    python build_embeddings_from_csv.py mpnet
-    python build_embeddings_from_csv.py both        # build both models
+Usage (from the repo root):
+    python scripts/embeddings/build_embeddings_from_csv.py minilm
+    python scripts/embeddings/build_embeddings_from_csv.py mpnet
+    python scripts/embeddings/build_embeddings_from_csv.py both        # build both models
 """
 
 import os
@@ -25,8 +25,11 @@ from collections import Counter
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# scripts/embeddings/ -> repo root
+# scripts/embeddings/ -> repo root. Put it on the import path so `embeddings.embedding_manager`
+# resolves when CI runs this file by path (sys.path[0] is then scripts/embeddings/).
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 DATA_PATH = os.path.join(ROOT, "data", "cleaned_merged_seasons_cleaned.csv")
 OUTPUT_DIR = os.path.join(ROOT, "embeddings", "prebuilt")
 
@@ -156,7 +159,7 @@ def main():
 
     valid = {"minilm", "mpnet", "both"}
     if model_arg not in valid:
-        print(f"Usage: python build_embeddings_from_csv.py [minilm|mpnet|both]")
+        print("Usage: python scripts/embeddings/build_embeddings_from_csv.py [minilm|mpnet|both]")
         sys.exit(1)
 
     if not os.path.exists(DATA_PATH):
