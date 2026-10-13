@@ -1,26 +1,24 @@
-import { useState, useRef, useEffect, type CSSProperties } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Loader2, AlertCircle, Info, ArrowUp } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { AlertTriangle, Loader2, MessageCircle, PanelRightClose, PanelRightOpen, Trash2 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { apiService, handleApiError } from '../services/api';
 import type { QueryResponse } from '../services/api';
-import ReactMarkdown from 'react-markdown';
-import { GraphVisualization } from '../components/GraphVisualization';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Button } from '../components/ui';
+import { ChatMessage, ThinkingMessage } from '../components/assistant/ChatMessage';
+import { Composer } from '../components/assistant/Composer';
+import { QueryDetails } from '../components/assistant/QueryDetails';
 import { cn } from '../utils/cn';
-import fplLogo from '../images/FPL_Logo.png';
 
-const chatWallpaperStyle: CSSProperties = {
-  backgroundImage: [
-    'radial-gradient(circle at 50% 36%, rgba(168, 85, 247, 0.34) 0%, rgba(88, 28, 135, 0.18) 24%, rgba(15, 23, 42, 0) 63%)',
-    'linear-gradient(180deg, rgba(5, 8, 20, 0.98) 0%, rgba(23, 8, 40, 0.94) 48%, rgba(72, 12, 92, 0.95) 100%)',
-  ].join(', '),
-  backgroundPosition: 'center center, center center',
-  backgroundRepeat: 'no-repeat, no-repeat',
-  backgroundSize: 'cover, cover',
-  backgroundAttachment: 'scroll',
-};
+const EXAMPLES = [
+  'Who scored the most goals in 2022-23?',
+  'Which midfielder had the best points per game?',
+  'Show me top defenders by clean sheets',
+  'Who should I captain this gameweek?',
+];
+
+const DETAILS_ID = 'assistant-query-details';
 
 export function QAAssistant() {
   const [input, setInput] = useState('');
@@ -36,17 +34,19 @@ export function QAAssistant() {
     selectedModel,
     retrievalMethod,
     embeddingModel,
-    theme,
   } = useAppStore();
-  const isDark = theme === 'dark';
+
+  // Shared health query (polled by the app shell): tells "still connecting" apart from "offline".
+  const { data: health } = useQuery({
+    queryKey: ['health'],
+    queryFn: () => apiService.getHealth(),
+    staleTime: 30_000,
+  });
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    messagesEndRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'end' });
   };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [chatHistory]);
 
   const queryMutation = useMutation({
     mutationFn: (question: string) => {
@@ -55,11 +55,11 @@ export function QAAssistant() {
         role: msg.role,
         content: msg.content
       }));
-      
+
       return apiService.queryFPL(
-        question, 
-        selectedModel, 
-        retrievalMethod, 
+        question,
+        selectedModel,
+        retrievalMethod,
         embeddingModel,
         chatHistory.length === 0, // is_first_message
         historyForAPI
@@ -83,9 +83,13 @@ export function QAAssistant() {
     },
   });
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [chatHistory, queryMutation.isPending]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !neo4jConnected) return;
+    if (!input.trim() || !neo4jConnected || queryMutation.isPending) return;
 
     addMessage({
       role: 'user',
@@ -122,236 +126,164 @@ export function QAAssistant() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingQuestion, neo4jConnected]);
 
-  return (
-    <div className="relative isolate flex flex-1 w-full min-h-0 flex-col overflow-hidden">
-      {isDark && (
-        <>
-          <div aria-hidden="true" className="absolute inset-0 md:hidden" style={chatWallpaperStyle} />
-          <div aria-hidden="true" className="absolute inset-0 flex md:hidden">
-            <img
-              src={fplLogo}
-              alt=""
-              className="w-full h-full object-cover opacity-15"
-            />
-          </div>
-          <div aria-hidden="true" className="absolute inset-0 md:hidden bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.04),transparent_36%),radial-gradient(circle_at_bottom,rgba(168,85,247,0.18),transparent_42%)]" />
-        </>
-      )}
+  const connecting = !neo4jConnected && !health;
+  const isEmpty = chatHistory.length === 0 && !queryMutation.isPending;
 
-      {/* Header */}
-      <div className={cn('relative z-10 flex flex-col gap-3 border-b px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6', isDark ? 'border-white/10 bg-slate-950/70 backdrop-blur-xl' : 'border-white/30 bg-white/80 backdrop-blur-xl')}>
-        <div className="min-w-0">
-          <h2 className={cn('text-xl font-bold sm:text-2xl', isDark ? 'text-slate-100' : 'text-gray-900')}>💬 FPL Q&A Assistant</h2>
-          <p className={cn('text-sm', isDark ? 'text-slate-400' : 'text-gray-600')}>
-            Ask questions about Fantasy Premier League players and statistics
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowDetails(!showDetails)}
-            className={cn('rounded-lg px-4 py-2 text-sm transition-colors', isDark ? 'bg-white/5 text-slate-100 hover:bg-white/10' : 'bg-gray-100 text-gray-800 hover:bg-gray-200')}
-          >
-            {showDetails ? 'Hide Details' : 'Show Details'}
-          </button>
-          <button
-            onClick={() => clearChat()}
-            className={cn('rounded-lg px-4 py-2 text-sm transition-colors', isDark ? 'bg-red-500/10 text-red-200 hover:bg-red-500/20' : 'bg-red-50 text-red-600 hover:bg-red-100')}
-          >
-            Clear Chat
-          </button>
+  return (
+    <div className="flex min-h-0 w-full flex-1 flex-col">
+      {/* Page header */}
+      <div className="shrink-0 border-b border-line bg-bg">
+        <div className="mx-auto flex w-full max-w-page items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <div className="min-w-0">
+            <h1 className="font-display text-h2 font-extrabold text-fg">Assistant</h1>
+            <p className="hidden truncate text-data text-fg-subtle sm:block">
+              Ask about players, teams and seasons. Answers come from the FPL knowledge graph.
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowDetails((v) => !v)}
+              aria-expanded={showDetails}
+              aria-controls={DETAILS_ID}
+              icon={
+                showDetails ? (
+                  <PanelRightClose className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
+                )
+              }
+            >
+              {showDetails ? 'Hide details' : 'Show details'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => clearChat()}
+              disabled={chatHistory.length === 0}
+              icon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
+            >
+              <span className="hidden sm:inline">Clear chat</span>
+              <span className="sr-only sm:hidden">Clear chat</span>
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="relative z-10 flex-1 flex flex-col overflow-y-auto px-4 py-4 sm:px-6">
-        <div className="flex-1" />
-        <div className="flex flex-col space-y-4 mt-auto">
-        {!neo4jConnected && (
-          <div className={cn('flex items-start gap-3 rounded-lg border p-4 backdrop-blur-md', isDark ? 'border-amber-400/20 bg-amber-500/10' : 'border-yellow-200/90 bg-yellow-50/90')}>
-            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-            <div>
-              <p className={cn('font-medium', isDark ? 'text-amber-100' : 'text-yellow-900')}>Neo4j Not Connected</p>
-              <p className={cn('mt-1 text-sm', isDark ? 'text-amber-200' : 'text-yellow-700')}>Connecting to Neo4j... Please wait.</p>
-            </div>
-          </div>
+      {/* Chat (messages + composer) and the details panel. Below lg the panel sits between
+          the messages and the composer; from lg it is a column on the right. */}
+      <div
+        className={cn(
+          'grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_auto_auto]',
+          showDetails && 'lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:grid-rows-[minmax(0,1fr)_auto] xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]',
         )}
-
-        {chatHistory.length === 0 && neo4jConnected && (
-          <div className="text-center py-12">
-            <div className={cn('mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full backdrop-blur-md', isDark ? 'bg-violet-500/15' : 'bg-purple-100/80')}>
-              <MessageCircle className={cn('h-8 w-8', isDark ? 'text-violet-200' : 'text-purple-600')} />
-            </div>
-            <h3 className={cn('mb-2 text-lg font-semibold', isDark ? 'text-slate-100' : 'text-gray-900')}>
-              Start a Conversation
-            </h3>
-            <p className={cn('mx-auto max-w-md', isDark ? 'text-slate-400' : 'text-gray-600')}>
-              Ask me anything about FPL players, teams, and statistics. For example:
-            </p>
-            <div className="mx-auto mt-6 max-w-lg space-y-2">
-              {[
-                'Who scored the most goals in 2022-23?',
-                'Which midfielder had the best points per game?',
-                'Show me top defenders by clean sheets',
-              ].map((example, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSendQuestion(example)}
-                  disabled={queryMutation.isPending}
-                  className={cn('block w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors backdrop-blur-md', isDark ? 'border-white/10 bg-slate-900/75 text-slate-100 hover:border-violet-400/40 hover:bg-slate-900/90 disabled:opacity-50 disabled:cursor-not-allowed' : 'border-white/50 bg-white/75 text-gray-700 hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed')}
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
+      >
+        {/* Messages */}
+        <div className="row-start-1 min-h-0 overflow-y-auto lg:col-start-1">
+          <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-6 sm:px-6">
+            {isEmpty ? (
+              <div className="my-auto flex flex-col items-center py-8 text-center">
+                <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full bg-brand text-accent ring-1 ring-brand-2">
+                  <MessageCircle className="h-6 w-6" aria-hidden="true" />
+                </span>
+                <h2 className="font-display text-h2 font-bold text-fg">What do you want to know?</h2>
+                <p className="mt-2 max-w-md text-body text-fg-muted">
+                  Stats, comparisons and predictions for every Premier League season since 2020-21, plus the current one.
+                </p>
+                <ul className="mt-6 flex max-w-xl flex-wrap justify-center gap-2" aria-label="Example questions">
+                  {EXAMPLES.map((example) => (
+                    <li key={example}>
+                      <button
+                        type="button"
+                        onClick={() => handleSendQuestion(example)}
+                        disabled={!neo4jConnected || queryMutation.isPending}
+                        className={cn(
+                          'rounded-full border border-line-strong bg-surface px-3.5 py-1.5 text-data text-fg-muted transition-colors',
+                          'hover:border-accent hover:text-fg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line-strong disabled:hover:text-fg-muted',
+                        )}
+                      >
+                        {example}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <ol className="mt-auto flex flex-col gap-5" role="log" aria-live="polite" aria-label="Conversation">
+                {chatHistory.map((message, index) => (
+                  <ChatMessage key={index} message={message} />
+                ))}
+                {queryMutation.isPending && <ThinkingMessage />}
+              </ol>
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        )}
+        </div>
 
-        <AnimatePresence>
-          {chatHistory.map((message, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+        {/* Composer */}
+        <div className="row-start-3 shrink-0 border-t border-line bg-bg lg:col-start-1 lg:row-start-2">
+          <div className="mx-auto w-full max-w-3xl px-4 py-3 sm:px-6">
+            {!neo4jConnected && (
               <div
+                role="status"
                 className={cn(
-                  'max-w-3xl rounded-3xl px-5 py-4 backdrop-blur-md',
-                  message.role === 'user'
-                    ? 'bg-purple-600 text-white'
-                    : isDark
-                      ? 'border border-white/10 bg-slate-900/78 text-slate-100'
-                      : 'border border-white/70 bg-white/85 text-gray-900'
+                  'mb-2 flex items-start gap-2.5 rounded-md border px-3 py-2 text-data',
+                  connecting ? 'border-line bg-surface text-fg-muted' : 'border-warning/40 bg-warning/10 text-fg',
                 )}
               >
-                <ReactMarkdown className="prose prose-sm max-w-none">
-                  {message.content}
-                </ReactMarkdown>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {queryMutation.isPending && (
-          <div className="flex justify-start">
-            <div className={cn('flex items-center gap-2 rounded-3xl border px-5 py-4 backdrop-blur-md', isDark ? 'border-white/10 bg-slate-900/78' : 'border-white/70 bg-white/85')}>
-              <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
-              <span className={cn('text-sm', isDark ? 'text-slate-300' : 'text-gray-600')}>Analyzing your question...</span>
-            </div>
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* Query Details Panel */}
-      <AnimatePresence>
-        {showDetails && lastQueryInfo && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className={cn('relative z-20 overflow-hidden border-t backdrop-blur-xl', isDark ? 'border-white/10 bg-slate-950/90' : 'border-white/30 bg-white/90')}
-          >
-            <div className="max-h-96 overflow-y-auto p-4 sm:p-6">
-              <h3 className={cn('mb-3 flex items-center gap-2 text-base font-semibold sm:text-lg', isDark ? 'text-slate-100' : 'text-gray-900')}>
-                <Info className="w-4 h-4 sm:w-5 sm:h-5" />
-                Query Details
-              </h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <h4 className={cn('mb-1 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>Intent</h4>
-                  <span className={cn('inline-block rounded px-2 py-1 text-xs sm:text-sm', isDark ? 'bg-violet-500/15 text-violet-200' : 'bg-purple-100 text-purple-700')}>
-                    {lastQueryInfo.intent}
-                  </span>
-                </div>
-
-                <div>
-                  <h4 className={cn('mb-1 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>Entities</h4>
-                  <pre className={cn('overflow-x-auto rounded p-2 text-[10px] sm:text-xs', isDark ? 'border border-slate-800 bg-slate-900/80 text-slate-200' : 'border bg-white text-gray-900')}>
-                    {JSON.stringify(lastQueryInfo.entities, null, 2)}
-                  </pre>
-                </div>
-
-                <div>
-                  <h4 className={cn('mb-1 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>Cypher Query</h4>
-                  <pre className={cn('overflow-x-auto rounded p-2 sm:p-3 text-[10px] sm:text-xs', isDark ? 'bg-slate-950 text-emerald-300' : 'bg-gray-900 text-green-400')}>
-                    {lastQueryInfo.cypher_query}
-                  </pre>
-                </div>
-
-                {lastQueryInfo.embedding_used && (
-                  <div>
-                    <h4 className={cn('mb-1 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>
-                      🔮 Embedding Search Active
-                    </h4>
-                    <p className={cn('text-xs sm:text-sm', isDark ? 'text-slate-400' : 'text-gray-600')}>
-                      Similar players found using semantic search
-                    </p>
-                  </div>
+                {connecting ? (
+                  <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-accent-2" aria-hidden="true" />
+                ) : (
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden="true" />
                 )}
-
-                {lastQueryInfo.graph_data && (
-                  <div>
-                    <h4 className={cn('mb-2 text-xs font-medium sm:text-sm', isDark ? 'text-slate-300' : 'text-gray-700')}>
-                      Knowledge Graph Visualization
-                    </h4>
-                    <GraphVisualization data={lastQueryInfo.graph_data} isDark={isDark} />
-                  </div>
-                )}
+                <p>
+                  {connecting ? (
+                    'Connecting to the knowledge graph…'
+                  ) : (
+                    <>
+                      <span className="font-semibold">Knowledge graph offline.</span> Questions are paused until the
+                      database is reachable again. This page checks automatically.
+                    </>
+                  )}
+                </p>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Input Form */}
-      <div className={cn('relative z-10 px-4 py-4 sm:px-6 backdrop-blur-xl', isDark ? 'bg-slate-950/70' : 'bg-white/80')}>
-        <div className="max-w-3xl mx-auto w-full">
-          <form onSubmit={handleSubmit} className="relative flex items-center">
-            <input
-              type="text"
+            )}
+            <Composer
               value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={
-                neo4jConnected
-                  ? "Ask about FPL... (e.g., 'Who scored the most goals in 2022-23?')"
-                  : 'Connect to Neo4j first...'
+              onChange={setInput}
+              onSubmit={handleSubmit}
+              disabled={!neo4jConnected}
+              busy={queryMutation.isPending}
+              placeholder={neo4jConnected ? 'Ask a question about FPL…' : 'Waiting for the knowledge graph…'}
+              footer={
+                <>
+                  <span className="hidden sm:inline">Enter to send, Shift+Enter for a new line</span>
+                  <span>
+                    {selectedModel} · {retrievalMethod} retrieval ·{' '}
+                    <Link to="/settings" className="font-semibold text-accent hover:underline">
+                      Change
+                    </Link>
+                  </span>
+                </>
               }
-              disabled={!neo4jConnected || queryMutation.isPending}
-              className={cn('w-full rounded-full border px-6 py-3 pr-14 text-base focus:outline-none focus:ring-2 shadow-sm', isDark ? 'border-slate-700 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:ring-violet-500 disabled:bg-slate-900 disabled:text-slate-500' : 'border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-purple-500 disabled:bg-gray-100 disabled:cursor-not-allowed')}
             />
-            <button
-              type="submit"
-              disabled={!neo4jConnected || queryMutation.isPending || !input.trim()}
-              className="absolute right-2 w-10 h-10 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-            >
-              <ArrowUp className="w-5 h-5" />
-            </button>
-          </form>
+          </div>
         </div>
+
+        {/* Details panel */}
+        {showDetails && (
+          <QueryDetails
+            id={DETAILS_ID}
+            info={lastQueryInfo}
+            onClose={() => setShowDetails(false)}
+            className={cn(
+              'row-start-2 max-h-[45dvh] border-t border-line',
+              'lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:max-h-none lg:border-l lg:border-t-0',
+            )}
+          />
+        )}
       </div>
     </div>
-  );
-}
-
-function MessageCircle({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
   );
 }

@@ -1,16 +1,13 @@
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Sparkles,
-  Bot,
-  CheckCircle,
-  XCircle,
-  RefreshCw,
-  Server,
-} from 'lucide-react';
+import { Bot, CheckCircle2, Database, Loader2, RefreshCw, Server, XCircle } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { apiService } from '../services/api';
+import { apiService, handleApiError } from '../services/api';
+import { Button, Card, Container, ErrorState, PageHeader, SectionHeading, SkeletonRows } from '../components/ui';
+import { OptionGroup } from '../components/settings/OptionGroup';
 import { cn } from '../utils/cn';
 
+// Keep in sync with RETIRED_MODELS / FALLBACK_ORDER in llm/llm_manager.py and the store migration.
 const MODELS = [
   { key: 'gpt-oss-120b', label: 'GPT-OSS 120B', description: 'Highest quality model via Groq (recommended)' },
   { key: 'gpt-oss-20b', label: 'GPT-OSS 20B', description: 'Fast, lightweight responses' },
@@ -28,6 +25,125 @@ const EMBEDDING_MODELS = [
   { key: 'mpnet', label: 'MPNet (Quality)', description: '768-dim · higher accuracy' },
 ] as const;
 
+type Status = 'ok' | 'error' | 'pending';
+
+const STATUS_META: Record<Status, { icon: ReactNode; className: string; word: string }> = {
+  ok: { icon: <CheckCircle2 className="h-4 w-4" aria-hidden="true" />, className: 'text-success', word: 'OK' },
+  error: { icon: <XCircle className="h-4 w-4" aria-hidden="true" />, className: 'text-danger', word: 'Problem' },
+  pending: { icon: <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />, className: 'text-warning', word: 'In progress' },
+};
+
+function StatusRow({ label, value, status }: { label: string; value: string; status: Status }) {
+  const meta = STATUS_META[status];
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 sm:px-5">
+      <dt className="text-data text-fg-muted">{label}</dt>
+      <dd className={cn('flex min-w-0 items-center gap-1.5 text-right text-data font-semibold', meta.className)}>
+        {meta.icon}
+        <span className="sr-only">{meta.word}:</span>
+        <span className="truncate">{value}</span>
+      </dd>
+    </div>
+  );
+}
+
+function compact(n: number) {
+  return n.toLocaleString(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+}
+
+function SystemStatus() {
+  const { data: health, isLoading, isError, error, isFetching, refetch } = useQuery({
+    queryKey: ['health'],
+    queryFn: () => apiService.getHealth(),
+    // Polling is owned by the app shell (always mounted) on the same ['health'] key; a second
+    // interval here would double the /health traffic while this page is open.
+  });
+
+  return (
+    <Card padded={false}>
+      <div className="flex items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
+        <SectionHeading
+          as="h2"
+          size="md"
+          className="mb-3"
+          title={
+            <span className="flex items-center gap-2">
+              <Server className="h-4 w-4 text-accent" aria-hidden="true" />
+              System status
+            </span>
+          }
+          subtitle="Checked every 30 seconds"
+        />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          aria-label="Refresh status"
+          icon={<RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} aria-hidden="true" />}
+        />
+      </div>
+
+      {isLoading ? (
+        <SkeletonRows rows={5} className="px-4 pb-4 sm:px-5 sm:pb-5" />
+      ) : isError || !health ? (
+        <ErrorState
+          title="API unreachable"
+          description={error ? handleApiError(error) : 'The backend did not respond.'}
+          onRetry={() => refetch()}
+        />
+      ) : (
+        <>
+          <dl className="divide-y divide-line border-t border-line">
+            <StatusRow
+              label="API"
+              value={health.status === 'healthy' ? 'Online' : 'Error'}
+              status={health.status === 'healthy' ? 'ok' : 'error'}
+            />
+            <StatusRow
+              label="Neo4j"
+              value={
+                health.neo4j === 'connected' && health.neo4j_stats
+                  ? `Connected · ${compact(health.neo4j_stats.total_nodes)} nodes`
+                  : health.neo4j === 'connected'
+                    ? 'Connected'
+                    : health.neo4j
+              }
+              status={health.neo4j === 'connected' ? 'ok' : 'error'}
+            />
+            <StatusRow
+              label="LLM"
+              value={health.llm_available ? 'Available' : 'Not configured'}
+              status={health.llm_available ? 'ok' : 'error'}
+            />
+            <StatusRow
+              label="Embeddings"
+              value={
+                health.embeddings_building
+                  ? 'Building…'
+                  : health.embeddings_built
+                    ? `${health.embedding_count.toLocaleString()} vectors`
+                    : 'Not built'
+              }
+              status={health.embeddings_building ? 'pending' : health.embeddings_built ? 'ok' : 'error'}
+            />
+            <StatusRow
+              label="ML engine"
+              value={health.ml_available ? `Online · ${health.ml_model_type || 'XGBoost'}` : 'Offline'}
+              status={health.ml_available ? 'ok' : 'error'}
+            />
+          </dl>
+          {health.embedding_build_error && (
+            <p role="alert" className="border-t border-line px-4 py-3 text-data text-danger sm:px-5">
+              Last build error: {health.embedding_build_error}
+            </p>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
 export function Settings() {
   const {
     selectedModel,
@@ -36,182 +152,75 @@ export function Settings() {
     setSelectedModel,
     setRetrievalMethod,
     setEmbeddingModel,
-    theme,
   } = useAppStore();
-  const isDark = theme === 'dark';
-  const pageText = isDark ? 'text-slate-100' : 'text-gray-900';
-  const mutedText = isDark ? 'text-slate-400' : 'text-gray-600';
-  const panelClass = isDark ? 'border-slate-800 bg-slate-900/80 text-slate-100' : 'border-gray-200 bg-white text-gray-900';
-  const optionSelectedClass = isDark ? 'border-violet-400/60 bg-violet-500/10' : 'border-purple-500 bg-purple-50';
-  const optionIdleClass = isDark ? 'border-slate-700 bg-slate-950/60 hover:border-slate-500' : 'border-gray-200 hover:border-gray-300';
-
-  const { data: health, refetch: refetchHealth } = useQuery({
-    queryKey: ['health'],
-    queryFn: () => apiService.getHealth(),
-    // Polling is owned by Layout (always mounted) on the same ['health'] key; a second
-    // interval here would double the /health traffic while this page is open.
-  });
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <div>
-        <h2 className={cn('text-2xl font-bold', pageText)}>⚙️ Settings</h2>
-        <p className={cn('text-sm mt-1', mutedText)}>Configure database, models, and retrieval options</p>
-      </div>
+    <Container className="pb-12">
+      <PageHeader
+        eyebrow="Preferences"
+        title="Settings"
+        description="Choose the language model and how the assistant retrieves facts from the knowledge graph. Changes apply to your next question."
+      />
 
-      {/* API Status */}
-      <div className={cn('rounded-xl border p-5 space-y-3', panelClass)}>
-        <div className="flex items-center justify-between">
-          <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
-            <Server className="w-4 h-4" /> API Status
-          </h3>
-          <button
-            onClick={() => refetchHealth()}
-            className={cn('transition-colors', isDark ? 'text-slate-400 hover:text-slate-200' : 'text-gray-400 hover:text-gray-600')}
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
-        {health ? (
-          <>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <StatusRow label="API" value={health.status === 'healthy' ? 'Online' : 'Error'} ok={health.status === 'healthy'} theme={theme} />
-              <StatusRow label="Neo4j" value={health.neo4j} ok={health.neo4j === 'connected'} theme={theme} />
-              <StatusRow label="LLM" value={health.llm_available ? 'Available' : 'Not configured'} ok={health.llm_available} theme={theme} />
-              <StatusRow
-                label="Embeddings"
-                value={health.embeddings_building ? 'Building...' : health.embeddings_built ? `${health.embedding_count.toLocaleString()} vectors` : 'Not built'}
-                ok={health.embeddings_built && !health.embeddings_building}
-                theme={theme}
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:gap-6">
+        <div className="space-y-4 lg:space-y-6">
+          <Card>
+            <SectionHeading
+              as="h2"
+              size="md"
+              title={
+                <span className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-accent" aria-hidden="true" />
+                  Model
+                </span>
+              }
+              subtitle="All models are served by Groq. If one is over quota, the next one answers instead."
+            />
+            <OptionGroup
+              name="model"
+              legend="Language model"
+              options={MODELS}
+              value={selectedModel}
+              onChange={setSelectedModel}
+            />
+          </Card>
+
+          <Card>
+            <SectionHeading
+              as="h2"
+              size="md"
+              title={
+                <span className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-accent" aria-hidden="true" />
+                  Retrieval
+                </span>
+              }
+              subtitle="How facts are pulled from the graph before the model writes an answer."
+            />
+            <div className="space-y-5">
+              <OptionGroup
+                name="retrieval"
+                legend="Method"
+                options={RETRIEVAL_METHODS}
+                value={retrievalMethod}
+                onChange={setRetrievalMethod}
+                columns={3}
               />
-              <StatusRow 
-                label="ML Engine" 
-                value={health.ml_available ? `Online (${health.ml_model_type || 'XGBoost'})` : 'Offline'} 
-                ok={health.ml_available || false} 
-                theme={theme} 
+              <OptionGroup
+                name="embedding"
+                legend="Embedding model"
+                hint="Used by the Embeddings and Hybrid methods. Both are prebuilt; switching takes effect on the next query."
+                options={EMBEDDING_MODELS}
+                value={embeddingModel}
+                onChange={setEmbeddingModel}
+                columns={2}
               />
             </div>
-            {health.embedding_build_error && (
-              <p className={cn('text-xs', isDark ? 'text-red-300' : 'text-red-600')}>
-                Last build error: {health.embedding_build_error}
-              </p>
-            )}
-          </>
-        ) : (
-          <p className={cn('text-sm', mutedText)}>Connecting to API...</p>
-        )}
-      </div>
-
-
-      {/* LLM Model */}
-      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
-        <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
-          <Bot className="w-4 h-4" /> LLM Model
-        </h3>
-        <div className="grid grid-cols-1 gap-2">
-          {MODELS.map((m) => (
-            <label
-              key={m.key}
-              className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors', selectedModel === m.key ? optionSelectedClass : optionIdleClass)}
-            >
-              <input
-                type="radio"
-                name="model"
-                value={m.key}
-                checked={selectedModel === m.key}
-                onChange={() => setSelectedModel(m.key)}
-                className="mt-0.5 accent-purple-600"
-              />
-              <div>
-                <p className={cn('text-sm font-medium', pageText)}>{m.label}</p>
-                <p className={cn('text-xs', mutedText)}>{m.description}</p>
-              </div>
-            </label>
-          ))}
+          </Card>
         </div>
+
+        <SystemStatus />
       </div>
-
-      {/* Retrieval Method */}
-      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
-        <h3 className={cn('font-semibold', pageText)}>🔍 Retrieval Method</h3>
-        <div className="grid grid-cols-1 gap-2">
-          {RETRIEVAL_METHODS.map((r) => (
-            <label
-              key={r.key}
-              className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors', retrievalMethod === r.key ? optionSelectedClass : optionIdleClass)}
-            >
-              <input
-                type="radio"
-                name="retrieval"
-                value={r.key}
-                checked={retrievalMethod === r.key}
-                onChange={() => setRetrievalMethod(r.key)}
-                className="mt-0.5 accent-purple-600"
-              />
-              <div>
-                <p className={cn('text-sm font-medium', pageText)}>{r.label}</p>
-                <p className={cn('text-xs', mutedText)}>{r.description}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Embeddings */}
-      <div className={cn('rounded-xl border p-5 space-y-4', panelClass)}>
-        <div>
-          <h3 className={cn('font-semibold flex items-center gap-2', pageText)}>
-            <Sparkles className="w-4 h-4" /> Embedding Model
-          </h3>
-          <p className={cn('text-xs mt-1', mutedText)}>
-            Both models are prebuilt and ready. Switching takes effect on the next query.
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {EMBEDDING_MODELS.map((m) => (
-            <label
-              key={m.key}
-              className={cn('flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors', embeddingModel === m.key ? optionSelectedClass : optionIdleClass)}
-            >
-              <input
-                type="radio"
-                name="embedding"
-                value={m.key}
-                checked={embeddingModel === m.key}
-                onChange={() => setEmbeddingModel(m.key)}
-                className="mt-0.5 accent-purple-600"
-              />
-              <div>
-                <p className={cn('text-sm font-medium', pageText)}>{m.label}</p>
-                <p className={cn('text-xs', mutedText)}>{m.description}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-        {/* Status badge */}
-        {health?.embeddings_built && (
-          <div className={cn('flex items-center gap-2 text-sm', isDark ? 'text-emerald-300' : 'text-green-600')}>
-            <CheckCircle className="w-4 h-4" />
-            {health.embedding_count.toLocaleString()} vectors loaded
-            <span className={cn('text-xs', mutedText)}>· active model: {health.embedding_count > 0 ? embeddingModel : '—'}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function StatusRow({ label, value, ok, theme }: { label: string; value: string; ok: boolean; theme: 'light' | 'dark' }) {
-  const isDark = theme === 'dark';
-
-  return (
-    <div className={cn('flex items-center justify-between rounded-lg px-3 py-2', isDark ? 'bg-slate-950/70' : 'bg-gray-50')}>
-      <span className={isDark ? 'text-slate-400' : 'text-gray-600'}>{label}</span>
-      <span className={cn('flex items-center gap-1.5 font-medium', ok ? (isDark ? 'text-emerald-300' : 'text-green-600') : isDark ? 'text-red-300' : 'text-red-500')}>
-        {ok ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-        {value}
-      </span>
-    </div>
+    </Container>
   );
 }

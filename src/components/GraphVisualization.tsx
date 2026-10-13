@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { cn } from '../utils/cn';
 
 interface Node {
   id: string;
@@ -20,42 +21,65 @@ interface GraphData {
 
 interface GraphVisualizationProps {
   data: GraphData;
+  /** @deprecated Dark is the only theme; kept so existing callers still compile. Ignored. */
   isDark?: boolean;
+  className?: string;
 }
 
-const NODE_COLORS: Record<string, string> = {
-  player: '#3b82f6',
-  team: '#f97316',
-  season: '#10b981',
-  position: '#ef4444',
-  fixture: '#8b5cf6',
+// Node colours are design tokens (CSS variables holding RGB channels).
+const NODE_TOKENS: Record<string, string> = {
+  player: 'accent-2',
+  team: 'pos-fwd',
+  season: 'accent',
+  position: 'pos-gk',
+  fixture: 'text-muted',
 };
+const FALLBACK_TOKEN = 'text-subtle';
 
-export function GraphVisualization({ data, isDark = false }: GraphVisualizationProps) {
+const CANVAS_HEIGHT = 400;
+const NODE_RADIUS = 18;
+
+/** CSS string for the legend (follows the tokens live). */
+const cssColor = (token: string) => `rgb(var(--${token}))`;
+
+/** Canvas can't resolve var(), so read the token's channels from the document. */
+function canvasColor(token: string) {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(`--${token}`).trim();
+  return value ? `rgb(${value})` : 'rgb(128 128 128)';
+}
+
+export function GraphVisualization({ data, className }: GraphVisualizationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!canvasRef.current || !containerRef.current) return;
-    
+
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    const container = containerRef.current;
-    canvas.width = container.clientWidth;
-    canvas.height = 400;
-    
-    // Set colors based on theme
-    const edgeColor = isDark ? '#64748b' : '#cbd5e1';
-    const labelColor = isDark ? '#f1f5f9' : '#1e293b';
+    // Size the canvas to the container, rendering at device pixel ratio for crisp lines.
+    const width = canvas.clientWidth || containerRef.current.clientWidth;
+    const height = CANVAS_HEIGHT;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.height = `${height}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Simple force-directed layout simulation
-    const width = canvas.width;
-    const height = canvas.height;
+    const edgeColor = canvasColor('border-strong');
+    const labelColor = canvasColor('text');
+    const ringColor = canvasColor('surface');
+    const fontFamily = getComputedStyle(document.body).fontFamily || 'sans-serif';
+    const colors = new Map<string, string>();
+    const colorFor = (type: string) => {
+      const token = NODE_TOKENS[type] ?? FALLBACK_TOKEN;
+      if (!colors.has(token)) colors.set(token, canvasColor(token));
+      return colors.get(token)!;
+    };
 
-    // Initialize node positions
+    // Initialize node positions on a circle
     const nodeMap = new Map<string, { x: number; y: number; vx: number; vy: number; node: Node }>();
     data.nodes.forEach((node, i) => {
       const angle = (i / data.nodes.length) * 2 * Math.PI;
@@ -69,7 +93,7 @@ export function GraphVisualization({ data, isDark = false }: GraphVisualizationP
       });
     });
 
-    // Simple physics simulation
+    // Simple force-directed layout simulation
     const simulate = () => {
       // Repulsion between nodes
       nodeMap.forEach((n1, id1) => {
@@ -109,26 +133,23 @@ export function GraphVisualization({ data, isDark = false }: GraphVisualizationP
         node.vy += dy * 0.001;
       });
 
-      // Update positions with damping
+      // Update positions with damping, keeping nodes in bounds
       nodeMap.forEach((node) => {
         node.x += node.vx;
         node.y += node.vy;
         node.vx *= 0.8;
         node.vy *= 0.8;
-
-        // Keep in bounds
         node.x = Math.max(30, Math.min(width - 30, node.x));
         node.y = Math.max(30, Math.min(height - 30, node.y));
       });
     };
 
-    // Render
     const render = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Draw edges
+      // Edges
       ctx.strokeStyle = edgeColor;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       data.edges.forEach((edge) => {
         const source = nodeMap.get(edge.from);
         const target = nodeMap.get(edge.to);
@@ -140,64 +161,74 @@ export function GraphVisualization({ data, isDark = false }: GraphVisualizationP
         }
       });
 
-      // Draw nodes
+      // Nodes
       nodeMap.forEach((node) => {
-        const color = NODE_COLORS[node.node.type] || '#64748b';
-        
-        // Node circle
-        ctx.fillStyle = color;
+        ctx.fillStyle = colorFor(node.node.type);
         ctx.beginPath();
-        ctx.arc(node.x, node.y, 20, 0, 2 * Math.PI);
+        ctx.arc(node.x, node.y, NODE_RADIUS, 0, 2 * Math.PI);
         ctx.fill();
-        ctx.strokeStyle = '#ffffff';
+        ctx.strokeStyle = ringColor;
         ctx.lineWidth = 3;
         ctx.stroke();
 
-        // Label - white in dark mode, dark in light mode
         ctx.fillStyle = labelColor;
-        ctx.font = 'bold 12px sans-serif';
+        ctx.font = `600 12px ${fontFamily}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        const label = node.node.label.length > 15 
-          ? node.node.label.substring(0, 12) + '...' 
-          : node.node.label;
-        ctx.fillText(label, node.x, node.y + 25);
+        const label = node.node.label.length > 15 ? node.node.label.substring(0, 12) + '...' : node.node.label;
+        ctx.fillText(label, node.x, node.y + NODE_RADIUS + 5);
       });
     };
 
-    // Animation loop
-    let frame = 0;
-    const animate = () => {
-      if (frame < 300) {
-        simulate();
-        render();
-        frame++;
-        requestAnimationFrame(animate);
-      } else {
-        render();
-      }
-    };
+    const STEPS = 300;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let rafId = 0;
 
-    animate();
-  }, [data, isDark]);
+    if (reduceMotion) {
+      // Settle the layout off-screen and draw the final frame once.
+      for (let i = 0; i < STEPS; i++) simulate();
+      render();
+    } else {
+      let frame = 0;
+      const animate = () => {
+        if (frame < STEPS) {
+          simulate();
+          render();
+          frame++;
+          rafId = requestAnimationFrame(animate);
+        } else {
+          render();
+        }
+      };
+      animate();
+    }
+
+    return () => cancelAnimationFrame(rafId);
+  }, [data]);
+
+  const types = Array.from(new Set([...Object.keys(NODE_TOKENS), ...data.nodes.map((n) => n.type)]));
 
   return (
-    <div 
-      ref={containerRef} 
-      className={`w-full rounded-lg p-4 border ${isDark ? 'bg-slate-900 border-slate-700' : 'bg-gray-50 border-gray-200'}`}
-    >
-      <canvas ref={canvasRef} className="w-full" />
-      <div className="mt-2 flex flex-wrap gap-3 text-xs">
-        {Object.entries(NODE_COLORS).map(([type, color]) => (
-          <div key={type} className="flex items-center gap-1.5">
-            <div
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: color }}
+    <div ref={containerRef} className={cn('w-full rounded-md border border-line bg-bg p-3', className)}>
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label={`Knowledge graph with ${data.nodes.length} nodes and ${data.edges.length} relationships`}
+        className="block w-full"
+        style={{ height: CANVAS_HEIGHT }}
+      />
+      <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-line pt-3 text-micro" aria-label="Node types">
+        {types.map((type) => (
+          <li key={type} className="flex items-center gap-1.5">
+            <span
+              aria-hidden="true"
+              className="h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: cssColor(NODE_TOKENS[type] ?? FALLBACK_TOKEN) }}
             />
-            <span className={`capitalize ${isDark ? 'text-slate-300' : 'text-gray-600'}`}>{type}</span>
-          </div>
+            <span className="font-semibold uppercase text-fg-muted">{type}</span>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
