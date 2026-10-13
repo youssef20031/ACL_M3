@@ -149,6 +149,9 @@ def fixture_rows(fixtures: List[Dict[str, Any]], teams: Dict[int, str], season: 
             "away_score": fix.get("team_a_score") if finished else None,
             "home_team": home,
             "away_team": away,
+            # FPL's fixture difficulty rating (1-5) for each side
+            "home_difficulty": fix.get("team_h_difficulty"),
+            "away_difficulty": fix.get("team_a_difficulty"),
         })
     return rows
 
@@ -238,7 +241,9 @@ SET f.fixture_id = fix.fixture_id,
     f.kickoff_time = CASE WHEN fix.kickoff_time IS NULL THEN null ELSE datetime(fix.kickoff_time) END,
     f.status = fix.status,
     f.home_score = fix.home_score,
-    f.away_score = fix.away_score
+    f.away_score = fix.away_score,
+    f.home_difficulty = fix.home_difficulty,
+    f.away_difficulty = fix.away_difficulty
 MERGE (home:Team {name: fix.home_team})
 MERGE (away:Team {name: fix.away_team})
 MERGE (f)-[:PLAYS_HOME]->(home)
