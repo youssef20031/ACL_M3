@@ -665,6 +665,24 @@ def get_latest_season(conn=None) -> str:
     return season
 
 
+def _ml_model_label() -> Optional[str]:
+    """Which model serves user-facing predictions: the v3 predictions file when present,
+    else the legacy v2 stack (only a fallback)."""
+    try:
+        df = get_predictions_df()
+        if df is not None and len(df):
+            return "xgboost v3"
+    except Exception:
+        pass
+    ml_integration = app_state.get("ml_integration")
+    if ml_integration:
+        if ml_integration.predictors:
+            return "xgboost v2 (fallback)"
+        if ml_integration.predictor:
+            return ml_integration.predictor.model_type
+    return None
+
+
 def reset_graph_caches() -> None:
     """Drop everything derived from graph contents (after connect or data load)."""
     app_state["player_index"] = None
@@ -1182,14 +1200,8 @@ async def health_check():
             logger.warning(f"Failed to get embedding count: {e}")
             embedding_count = 0
     
-    ml_integration = app_state.get("ml_integration")
-    ml_model_type = None
-    if ml_integration:
-        if ml_integration.predictors:
-            ml_model_type = "xgboost (position-specific)"
-        elif ml_integration.predictor:
-            ml_model_type = ml_integration.predictor.model_type
-            
+    ml_model_type = _ml_model_label()
+
     return {
         "status": "healthy",
         "neo4j": neo4j_status,
@@ -1536,13 +1548,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         # Build graph visualization data
         graph_data = build_graph_data(results)
         
-        ml_integration = app_state.get("ml_integration")
-        ml_model_type = None
-        if ml_integration:
-            if ml_integration.predictors:
-                ml_model_type = "xgboost (position-specific)"
-            elif ml_integration.predictor:
-                ml_model_type = ml_integration.predictor.model_type
+        ml_model_type = _ml_model_label()
 
         return QueryResponse(
             answer=answer,
