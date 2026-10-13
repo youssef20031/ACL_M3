@@ -7,7 +7,7 @@ Inputs:
   * FPL API: the next gameweek (bootstrap event with `is_next`) and its fixtures.
   * LIVE_DATA_DIR (written by `python -m pipeline.current_season`): this season's
     finished matches (FPL_YYYY_YYYY.csv) and every current player's status/news.
-  * cleaned_merged_seasons_cleaned.csv: all historical seasons.
+  * data/cleaned_merged_seasons_cleaned.csv: all historical seasons.
   * The v3 points model (ml/models/points_v3.json, trained by `python -m ml.train_points_v3`).
 
 Output: LIVE_DATA_DIR/next_gw_predictions.csv (+ .json), same schema as the old

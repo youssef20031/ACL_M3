@@ -166,7 +166,7 @@ from ml.minutes_model import MinutesPredictor
 import pandas as pd
 
 # Load data
-df = pd.read_csv('FPL_2023_2024.csv')
+df = pd.read_csv('data/FPL_2023_2024.csv')
 
 # Temporal split
 train_df = df.iloc[:int(len(df)*0.72)]
@@ -234,6 +234,6 @@ print(f"Expected minutes: {result.features_used['expected_minutes']:.1f}")
 ## References
 
 - Implementation Plan: `implementation_plan.md`
-- Task List: `tasks_list`
+- Task List: `docs/tasks_list`
 - Feature Engineering: `ml/feature_engineering.py`
 - Promoted Teams: `ml/PROMOTED_TEAMS_README.md`

@@ -350,7 +350,7 @@ async def load_fixtures(request: DataLoadRequest):
     
     Request Body:
     {
-        "csv_path": "FPL_2026_2027_fixtures.csv",
+        "csv_path": "data/FPL_2026_2027_fixtures.csv",
         "season_id": "2026-27",
         "clear_existing": true
     }

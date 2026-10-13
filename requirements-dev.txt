@@ -9,14 +9,14 @@ hypothesis>=6.100
 # --- Training / analysis scripts --------------------------------------------
 # ml/train.py, ml/calibrate_start_probability.py, ml/investigate_leakage.py,
 # ml/production_readiness.py, ml/verify_production_readiness.py,
-# ml/features/adaptation_curve.py, evaluate_llm_models.py, ...
+# ml/features/adaptation_curve.py, scripts/analysis/evaluate_llm_models.py, ...
 matplotlib>=3.8.0
 seaborn>=0.12.0
 scipy>=1.11
 joblib>=1.3.0
-psutil>=5.9                 # build_embeddings_offline.py
+psutil>=5.9                 # scripts/embeddings/build_embeddings_offline.py
 
-# --- Legacy Streamlit UI (app.py) and utils/visualization.py -----------------
+# --- Legacy Streamlit UI (legacy/app.py) and utils/visualization.py -----------------
 streamlit>=1.29.0
 plotly>=5.18.0
 networkx>=3.2.1

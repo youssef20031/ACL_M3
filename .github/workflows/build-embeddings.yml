@@ -19,9 +19,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'cleaned_merged_seasons_cleaned.csv'
+      - 'data/cleaned_merged_seasons_cleaned.csv'
       - 'embeddings/embedding_manager.py'
-      - 'build_embeddings_from_csv.py'
+      - 'scripts/embeddings/build_embeddings_from_csv.py'
       - 'preprocessing/merge_seasons.py'
 
 jobs:
@@ -62,7 +62,7 @@ jobs:
         run: |
           MODEL="${{ github.event.inputs.model || 'both' }}"
           echo "Building model(s): $MODEL"
-          python build_embeddings_from_csv.py "$MODEL"
+          python scripts/embeddings/build_embeddings_from_csv.py "$MODEL"
 
       # ── 5. Upload as artifacts (always available for download) ───────────
       - name: Upload minilm artifact

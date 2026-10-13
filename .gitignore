@@ -29,7 +29,7 @@ dist/
 Thumbs.db
 
 # Data (large files — load via the app instead)
-# cleaned_merged_seasons_cleaned.csv  # keep this committed so Railway can access it
+# data/*.csv stays committed: the loader, ML training and the embeddings build read it
 
 # Runtime caches (avatar lookups)
 .cache/

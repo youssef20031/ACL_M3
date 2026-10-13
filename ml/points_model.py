@@ -31,7 +31,8 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-HISTORY_CSV = "cleaned_merged_seasons_cleaned.csv"
+HISTORY_CSV = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "data", "cleaned_merged_seasons_cleaned.csv")
 # Bundled with the code; the weekly retrain (pipeline/retrain.py) writes newer copies to the
 # live data volume, which take precedence (see active_model_paths)
 MODEL_PATH = os.path.join("ml", "models", "points_v3.json")

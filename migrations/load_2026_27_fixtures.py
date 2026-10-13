@@ -47,8 +47,8 @@ Examples:
     parser.add_argument(
         '--csv-path',
         type=str,
-        default='FPL_2026_2027_fixtures.csv',
-        help='Path to CSV file containing fixture data (default: FPL_2026_2027_fixtures.csv)'
+        default='data/FPL_2026_2027_fixtures.csv',
+        help='Path to CSV file containing fixture data (default: data/FPL_2026_2027_fixtures.csv)'
     )
     
     parser.add_argument(

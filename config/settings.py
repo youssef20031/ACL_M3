@@ -59,7 +59,7 @@ POSITION_NAMES = {
 
 # Seasons with data, oldest first. The last one is the current season: its per-match
 # rows come from the FPL API (pipeline/current_season.py -> data/live/) instead of
-# cleaned_merged_seasons_cleaned.csv, and pipeline/load_current.py loads it.
+# data/cleaned_merged_seasons_cleaned.csv, and pipeline/load_current.py loads it.
 SEASONS = ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
 CURRENT_SEASON = SEASONS[-1]
 
@@ -70,8 +70,10 @@ STAT_COLUMNS = [
     "creativity", "threat", "value", "form", "selected"
 ]
 
-# Data path
-DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cleaned_merged_seasons_cleaned.csv")
+# Committed datasets live in data/ (data/live/ is the pipeline's working directory)
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+DATA_PATH = os.path.join(DATA_DIR, "cleaned_merged_seasons_cleaned.csv")  # historical per-match rows
+FIXTURES_FALLBACK_CSV = os.path.join(DATA_DIR, "FPL_2026_2027_fixtures_fixed.csv")  # offline schedule
 
 # UI Configuration
 APP_TITLE = "FPL FantasyTrivia"

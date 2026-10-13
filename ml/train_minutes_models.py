@@ -30,9 +30,9 @@ def load_fpl_data() -> pd.DataFrame:
         Combined dataframe from all seasons
     """
     data_files = [
-        'FPL_2023_2024.csv',
-        'FPL_2024_2025.csv',
-        'FPL_2025_2026.csv'
+        'data/FPL_2023_2024.csv',
+        'data/FPL_2024_2025.csv',
+        'data/FPL_2025_2026.csv'
     ]
     
     dfs = []

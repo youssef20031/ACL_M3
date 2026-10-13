@@ -41,7 +41,7 @@ class ModelRetrainer:
         """Load historical data from CSV file."""
         logger.info("Loading training data from CSV...")
         
-        csv_path = 'cleaned_merged_seasons_cleaned.csv'
+        csv_path = 'data/cleaned_merged_seasons_cleaned.csv'
         df = pd.read_csv(csv_path)
         
         # Rename columns to match expected names

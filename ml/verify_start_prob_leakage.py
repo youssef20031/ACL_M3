@@ -15,7 +15,7 @@ print("START PROBABILITY LEAKAGE VERIFICATION")
 print("="*60)
 
 # Load small sample
-df = pd.read_csv("cleaned_merged_seasons_cleaned.csv", nrows=10000)
+df = pd.read_csv("data/cleaned_merged_seasons_cleaned.csv", nrows=10000)
 df = df[df['season_x'].isin(['2023-24', '2024-25', '2025-26'])]
 
 print(f"\n📊 Sample data: {len(df)} rows")

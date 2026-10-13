@@ -39,9 +39,9 @@ class ArchetypeDatabaseBuilderV2:
         """
         self.champ_path = championship_data_path
         self.epl_paths = epl_data_paths or [
-            'FPL_2023_2024.csv',
-            'FPL_2024_2025.csv',
-            'FPL_2025_2026.csv'
+            'data/FPL_2023_2024.csv',
+            'data/FPL_2024_2025.csv',
+            'data/FPL_2025_2026.csv'
         ]
         self.archetypes = []
         self.scaler = StandardScaler()

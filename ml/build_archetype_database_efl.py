@@ -87,9 +87,9 @@ def load_epl_data():
     
     # Load individual season files (2023-24 onwards - have team column)
     epl_files = [
-        ('FPL_2023_2024.csv', 'team'),
-        ('FPL_2024_2025.csv', 'team'),
-        ('FPL_2025_2026.csv', 'team'),
+        ('data/FPL_2023_2024.csv', 'team'),
+        ('data/FPL_2024_2025.csv', 'team'),
+        ('data/FPL_2025_2026.csv', 'team'),
     ]
     
     for fname, team_col in epl_files:
@@ -104,7 +104,7 @@ def load_epl_data():
             print(f"  Loaded {fname}: {len(df)} records")
     
     # Load cleaned_merged_seasons_cleaned for historical data (2020-21, 2021-22, 2022-23)
-    merged_path = Path('C:/ACL2/FPL/ACL_M3/cleaned_merged_seasons_cleaned.csv')
+    merged_path = Path('C:/ACL2/FPL/ACL_M3/data/cleaned_merged_seasons_cleaned.csv')
     if merged_path.exists():
         df_merged = pd.read_csv(merged_path)
         
@@ -118,7 +118,7 @@ def load_epl_data():
         df_merged['team'] = df_merged['team_x']  # Standardize team column name
         
         all_dfs.append(df_merged)
-        print(f"  Loaded cleaned_merged_seasons_cleaned.csv: {len(df_merged)} records")
+        print(f"  Loaded data/cleaned_merged_seasons_cleaned.csv: {len(df_merged)} records")
         print(f"    Seasons: {sorted(df_merged['season_x'].unique())}")
     
     if all_dfs:

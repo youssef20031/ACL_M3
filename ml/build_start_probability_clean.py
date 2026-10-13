@@ -22,7 +22,7 @@ print("Target AUC: 0.75-0.82 (realistic)")
 
 # Load data
 print("\n📂 Loading dataset...")
-df = pd.read_csv("cleaned_merged_seasons_cleaned.csv")
+df = pd.read_csv("data/cleaned_merged_seasons_cleaned.csv")
 print(f"✅ Loaded {len(df):,} rows")
 
 # Filter and sort

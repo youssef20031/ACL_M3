@@ -21,7 +21,7 @@ print("="*60)
 
 # Load data
 print("\n📂 Loading dataset...")
-data_file = "cleaned_merged_seasons_cleaned.csv"
+data_file = "data/cleaned_merged_seasons_cleaned.csv"
 if not Path(data_file).exists():
     print(f"❌ Dataset not found: {data_file}")
     sys.exit(1)

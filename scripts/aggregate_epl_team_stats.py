@@ -1,7 +1,7 @@
 """
 Aggregate EPL team-level statistics from FPL player data.
 
-Creates epl_team_stats.csv required for Model A training.
+Creates data/epl_team_stats.csv required for Model A training.
 Aggregates goals, clean sheets, and calculates team-level metrics.
 """
 import os
@@ -96,9 +96,9 @@ def main():
     
     # Load EPL player data
     epl_files = [
-        ('FPL_2023_2024.csv', '2023-24'),
-        ('FPL_2024_2025.csv', '2024-25'),
-        ('FPL_2025_2026.csv', '2025-26')
+        ('data/FPL_2023_2024.csv', '2023-24'),
+        ('data/FPL_2024_2025.csv', '2024-25'),
+        ('data/FPL_2025_2026.csv', '2025-26')
     ]
     
     all_team_stats = []
@@ -124,7 +124,7 @@ def main():
     combined_stats = pd.concat(all_team_stats, ignore_index=True)
     
     # Save
-    output_path = 'epl_team_stats.csv'
+    output_path = 'data/epl_team_stats.csv'
     combined_stats.to_csv(output_path, index=False)
     logger.info(f"\n✅ Saved team statistics to {output_path}")
     

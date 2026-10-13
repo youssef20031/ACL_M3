@@ -19,7 +19,7 @@ with open(calib_path, 'rb') as f:
 
 # Load data
 print("\n[*] Loading dataset...")
-df = pd.read_csv("cleaned_merged_seasons_cleaned.csv")
+df = pd.read_csv("data/cleaned_merged_seasons_cleaned.csv")
 df = df[df['season_x'].isin(['2023-24', '2024-25', '2025-26'])]
 df['kickoff_time'] = pd.to_datetime(df['kickoff_time'], errors='coerce')
 df = df.sort_values('kickoff_time').reset_index(drop=True)

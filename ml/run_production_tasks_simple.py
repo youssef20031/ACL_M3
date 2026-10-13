@@ -79,7 +79,7 @@ print("="*60)
 print("Analyzing DGW patterns from dataset...")
 
 # Try to load data to check for DGW
-data_file = "cleaned_merged_seasons_cleaned.csv"
+data_file = "data/cleaned_merged_seasons_cleaned.csv"
 if Path(data_file).exists():
     df = pd.read_csv(data_file, nrows=100000)  # Sample for analysis
     

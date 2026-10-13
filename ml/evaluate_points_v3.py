@@ -1031,7 +1031,7 @@ def build_readme(m: dict) -> str:
             for s, role in m["data"]["season_roles"].items()]
     w(_table(["Season", "Rows (player x fixture)", "Gameweeks", "Role"], rows))
     w("")
-    w(f"Sources: `cleaned_merged_seasons_cleaned.csv` (2020-21 to 2025-26) and the current-season file "
+    w(f"Sources: `data/cleaned_merged_seasons_cleaned.csv` (2020-21 to 2025-26) and the current-season file "
       f"`{m['data']['live_csv']}` ({seasons[-1]} GW1-{m['data']['gameweeks_by_season'][seasons[-1]]}), loaded with "
       "`ml.points_model.load_history` exactly as in training. Features: "
       f"{m['protocol']['n_features']} columns from `ml.points_model.feature_columns()`.")

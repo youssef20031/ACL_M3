@@ -162,7 +162,7 @@ POST /api/fixtures/load
 
 ```json
 {
-  "csv_path": "/path/to/FPL_2026_2027_fixtures.csv",
+  "csv_path": "/path/to/data/FPL_2026_2027_fixtures.csv",
   "season_id": "2026-27",
   "clear_existing": false
 }
@@ -213,7 +213,7 @@ Matchday,Home Team,Away Team,Date,Time
 curl -X POST "http://localhost:8000/api/fixtures/load" \
   -H "Content-Type: application/json" \
   -d '{
-    "csv_path": "FPL_2026_2027_fixtures.csv",
+    "csv_path": "data/FPL_2026_2027_fixtures.csv",
     "season_id": "2026-27",
     "clear_existing": false
   }'
@@ -226,7 +226,7 @@ import requests
 
 url = "http://localhost:8000/api/fixtures/load"
 payload = {
-    "csv_path": "FPL_2026_2027_fixtures.csv",
+    "csv_path": "data/FPL_2026_2027_fixtures.csv",
     "season_id": "2026-27",
     "clear_existing": False
 }

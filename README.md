@@ -150,55 +150,38 @@ This wipes Neo4j and loads all six seasons plus the 2026-27 fixtures (about 30 s
 
 ```
 ACL_M3/
-├── api_main.py               # FastAPI backend (replaces app.py)
-├── app.py                    # Original Streamlit app (legacy)
-├── load_data.py              # Standalone data loading script
-├── requirements.txt          # Python dependencies
-├── .env                      # Environment variables (HF token, Neo4j creds)
-├── cleaned_merged_seasons_cleaned.csv  # FPL data (2020-21, 2021-22, 2022-23)
+├── api_main.py            # FastAPI backend (all routes)
+├── load_data.py           # Load or reload the Neo4j graph
+├── Dockerfile, docker-compose.yml, requirements*.txt
+├── package.json, vite.config.ts, tailwind.config.js, tsconfig*.json, index.html
 │
-├── src/                      # React frontend (Vite + TypeScript)
-│   ├── main.tsx              # Entry point
-│   ├── App.tsx               # Router setup
-│   ├── App.css / index.css   # Global styles
-│   ├── components/
-│   │   ├── Layout.tsx        # Sidebar + navigation
-│   │   └── GraphVisualization.tsx  # Canvas-based graph renderer
-│   ├── pages/
-│   │   ├── QAAssistant.tsx   # Chat interface
-│   │   ├── Trivia.tsx        # Trivia game
-│   │   ├── PlayerSearch.tsx  # Player search + detail view
-│   │   ├── PlayerComparison.tsx  # Head-to-head comparison
-│   │   └── Settings.tsx      # Connection + config panel
-│   ├── services/
-│   │   └── api.ts            # Axios API client
-│   ├── store/
-│   │   └── appStore.ts       # Zustand global state
-│   └── utils/
-│       └── cn.ts             # Tailwind class helper
+├── src/                   # React frontend ("Pitch Me"): pages/, components/ui (design system),
+│                          # components/shell (header, footer, search), services/api.ts, store/
+├── public/                # Static assets (club crests in public/logos/)
 │
-├── config/
-│   └── settings.py           # App configuration
-├── graph/
-│   ├── connection.py         # Neo4j connection handler
-│   ├── queries.py            # Cypher query library (20+ queries)
-│   ├── schema.py             # Graph schema definition
-│   └── data_loader.py        # CSV → Neo4j loader
-├── preprocessing/
-│   ├── intent_classifier.py  # Query intent classification
-│   └── entity_extractor.py   # Named entity extraction
-├── embeddings/
-│   └── embedding_manager.py  # Sentence-transformer embeddings
-├── llm/
-│   ├── llm_manager.py        # HuggingFace LLM integration
-│   └── prompts.py            # Prompt templates
-├── trivia/
-│   └── trivia_generator.py   # Trivia question generation
+├── config/                # settings.py: env vars, seasons, data paths
+├── graph/                 # Neo4j connection, schema, loader, Cypher query library
+├── preprocessing/         # Intent classifier and entity extractor (Q&A pipeline)
+├── embeddings/            # Sentence-transformer embeddings (+ prebuilt pickles)
+├── llm/                   # LLM manager (Groq) and prompt templates
+├── services/              # Player index, avatars, predictions, fixtures, season dashboard
+├── pipeline/              # Daily current-season job (FPL API -> data/live -> graph -> predictions)
+├── ml/                    # Points model (v3), training, evaluation, legacy v2 stack
+├── trivia/, utils/, migrations/
+├── tests/                 # pytest suite
 │
-├── vite.config.ts            # Vite config (proxies /api → :8000)
-├── tailwind.config.js        # Tailwind CSS config
-├── tsconfig.json             # TypeScript config
-└── package.json              # Node dependencies
+├── data/                  # Committed datasets: historical per-match CSVs, fixture lists
+│   └── live/              # Pipeline output (gitignored; a Docker volume on the VM)
+├── EFL_Data_All_Seasons/  # Championship data for promoted teams
+├── scripts/               # One-off tools; run from the repo root: python -m scripts.<group>.<name>
+│   ├── checks/            #   database/API checks and ad-hoc test scripts
+│   ├── data/              #   fixture and season data preparation
+│   ├── efl/               #   EFL (Championship) data ingestion
+│   ├── embeddings/        #   rebuild embeddings from the CSV (used by CI)
+│   └── analysis/          #   LLM evaluation, prediction plots
+├── deploy/                # VM deployment: compose file, Caddy, deploy/setup scripts
+├── docs/                  # Design brief, ML evaluation, reports, notes; docs/archive = history
+└── legacy/                # Original Streamlit app and old API (not used)
 ```
 
 ---
