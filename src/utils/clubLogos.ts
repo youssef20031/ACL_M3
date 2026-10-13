@@ -19,6 +19,7 @@ export const CLUB_MAPPING: Record<string, ClubInfo> = {
   'Everton': { abbreviation: 'EVE', logoPath: '/logos/Everton.png' },
   'Fulham': { abbreviation: 'FUL', logoPath: '/logos/Fulham.png' },
   'Ipswich Town': { abbreviation: 'IPS', logoPath: '/logos/Ipswich_Town.png' },
+  'Ipswich': { abbreviation: 'IPS', logoPath: '/logos/Ipswich_Town.png' }, // graph / FPL short name
   'Liverpool': { abbreviation: 'LIV', logoPath: '/logos/Liverpool.png' },
   'Manchester City': { abbreviation: 'MCI', logoPath: '/logos/Man_City.png' },
   'Man City': { abbreviation: 'MCI', logoPath: '/logos/Man_City.png' },

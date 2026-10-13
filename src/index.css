@@ -1,6 +1,43 @@
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ---------------------------------------------------------------- design system base */
+@layer base {
+  /* Keyboard focus: one visible convention everywhere (cyan ring) */
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent-2));
+    outline-offset: 2px;
+  }
+
+  /* Redesigned surfaces opt in with .pm-root (the app shell sets it); legacy pages keep
+     their own colours until they're rebuilt */
+  .pm-root {
+    @apply bg-bg font-sans text-body text-fg antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  .pm-root h1,
+  .pm-root h2,
+  .pm-root h3 {
+    @apply font-display;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------- legacy (pre-redesign)
+   Everything below styles the old pages and is deleted once they're rebuilt (Phase 3). */
 
 @layer base {
   html {

@@ -12,6 +12,7 @@ const loadPlayerSearch = () => import('./pages/PlayerSearch').then((m) => ({ def
 const loadPlayerComparison = () => import('./pages/PlayerComparison').then((m) => ({ default: m.PlayerComparison }));
 const loadPredictions = () => import('./pages/Predictions').then((m) => ({ default: m.Predictions }));
 const loadSettings = () => import('./pages/Settings').then((m) => ({ default: m.Settings }));
+const loadDesignSystem = () => import('./pages/DesignSystem').then((m) => ({ default: m.DesignSystem }));
 
 const QAAssistant = lazy(loadQAAssistant);
 const Trivia = lazy(loadTrivia);
@@ -19,6 +20,7 @@ const PlayerSearch = lazy(loadPlayerSearch);
 const PlayerComparison = lazy(loadPlayerComparison);
 const Predictions = lazy(loadPredictions);
 const Settings = lazy(loadSettings);
+const DesignSystem = lazy(loadDesignSystem);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,6 +61,8 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <Router>
         <Routes>
+          {/* Hidden design-system reference (not linked from the nav). */}
+          <Route path="/design" element={<Page><DesignSystem /></Page>} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="/qa" replace />} />
             <Route path="qa" element={<Page><QAAssistant /></Page>} />
