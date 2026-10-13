@@ -36,132 +36,33 @@
   }
 }
 
-/* ---------------------------------------------------------------- legacy (pre-redesign)
-   Everything below styles the old pages and is deleted once they're rebuilt (Phase 3). */
-
 @layer base {
   html {
     @apply bg-bg text-fg;
+    scrollbar-color: rgb(var(--border-strong)) rgb(var(--bg));
   }
 
-  body {
-    @apply min-h-screen bg-inherit text-inherit antialiased;
-  }
-
+  body,
   #root {
     @apply min-h-screen;
   }
-}
 
-html.dark .bg-white {
-  background-color: #0f172a;
-  color: #e2e8f0;
-}
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
 
-html.dark .bg-gray-50 {
-  background-color: #111827;
-}
+  ::-webkit-scrollbar-track {
+    background: rgb(var(--bg));
+  }
 
-html.dark .bg-gray-100 {
-  background-color: #1f2937;
-}
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--border));
+    border: 2px solid rgb(var(--bg));
+    border-radius: 999px;
+  }
 
-html.dark .border-white {
-  border-color: rgba(148, 163, 184, 0.12);
-}
-
-html.dark .border-gray-200,
-html.dark .border-gray-300,
-html.dark .border-gray-400 {
-  border-color: #334155;
-}
-
-html.dark .text-gray-900,
-html.dark .text-gray-800,
-html.dark .text-gray-700 {
-  color: #e2e8f0;
-}
-
-html.dark .text-gray-600,
-html.dark .text-gray-500,
-html.dark .text-gray-400 {
-  color: #94a3b8;
-}
-
-/* Smooth scrollbar */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #c4b5fd #f3f4f6;
-}
-
-html.dark * {
-  scrollbar-color: #7c3aed #0f172a;
-}
-
-*::-webkit-scrollbar {
-  width: 6px;
-}
-
-*::-webkit-scrollbar-track {
-  background: #f3f4f6;
-}
-
-html.dark *::-webkit-scrollbar-track {
-  background: #0f172a;
-}
-
-*::-webkit-scrollbar-thumb {
-  background-color: #c4b5fd;
-  border-radius: 3px;
-}
-
-html.dark *::-webkit-scrollbar-thumb {
-  background-color: #7c3aed;
-}
-
-/* Prose overrides for ReactMarkdown */
-.prose pre {
-  background-color: #1e293b;
-  color: #e2e8f0;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  overflow-x: auto;
-}
-
-.prose code {
-  background-color: #f1f5f9;
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
-  font-size: 0.875em;
-}
-
-html.dark .prose code {
-  background-color: #1e293b;
-  color: #e2e8f0;
-}
-
-html.dark .bg-yellow-50 {
-  background-color: rgba(245, 158, 11, 0.12);
-}
-
-html.dark .bg-red-50 {
-  background-color: rgba(239, 68, 68, 0.12);
-}
-
-html.dark .bg-purple-50 {
-  background-color: rgba(124, 58, 237, 0.16);
-}
-
-html.dark .text-yellow-900,
-html.dark .text-yellow-800,
-html.dark .text-red-700,
-html.dark .text-red-600,
-html.dark .text-purple-700,
-html.dark .text-purple-600 {
-  color: #e2e8f0;
-}
-
-.prose pre code {
-  background-color: transparent;
-  padding: 0;
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--border-strong));
+  }
 }

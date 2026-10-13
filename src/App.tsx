@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppShell } from './components/shell/AppShell';
 import { NotFound } from './pages/NotFound';
-import './App.css';
 
 // Route-level code splitting: recharts (Search/Compare), react-markdown + framer-motion (Q&A/Trivia)
 // are only downloaded with the page that needs them.
