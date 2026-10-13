@@ -170,6 +170,7 @@ function NextFixtures() {
               awayScore={f.away_score}
               kickoff={f.kickoff_time}
               status={STATUS[f.status]}
+              showDay
             />
           ))}
         </div>

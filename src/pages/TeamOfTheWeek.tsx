@@ -54,8 +54,9 @@ function TeamPitch({ starters, mode, gameweek }: { starters: TeamOfWeekPlayer[];
                 opponents={p.opponents}
                 captain={p.captain}
                 viceCaptain={p.vice_captain}
-                status={p.status}
-                statusNote={p.news}
+                // Availability is today's; only meaningful for the upcoming gameweek.
+                status={mode === 'predicted' ? p.status : null}
+                statusNote={mode === 'predicted' ? p.news : null}
                 value={`${fmtPoints(p.points, mode)} pts`}
               />
             ))}

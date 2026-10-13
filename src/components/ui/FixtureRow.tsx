@@ -10,18 +10,21 @@ interface FixtureRowProps {
   awayScore?: number | null;
   kickoff?: string | Date | null;
   status?: FixtureStatus;
+  /** Include the weekday with the kickoff time (for lists not grouped by day). */
+  showDay?: boolean;
   className?: string;
 }
 
-function formatKickoff(kickoff: string | Date | null | undefined): string {
+function formatKickoff(kickoff: string | Date | null | undefined, showDay: boolean): string {
   if (!kickoff) return 'TBC';
   const d = new Date(kickoff);
   if (Number.isNaN(d.getTime())) return 'TBC';
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return showDay ? `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${time}` : time;
 }
 
 /** Home crest/name · score or kickoff · away crest/name, centred on the score like FPL's fixtures list. */
-export function FixtureRow({ home, away, homeScore, awayScore, kickoff, status = 'scheduled', className }: FixtureRowProps) {
+export function FixtureRow({ home, away, homeScore, awayScore, kickoff, status = 'scheduled', showDay = false, className }: FixtureRowProps) {
   const hasScore = homeScore != null && awayScore != null && (status === 'finished' || status === 'live');
   const statusLabel = status === 'finished' ? 'FT' : status === 'live' ? 'Live' : status === 'postponed' ? 'Postponed' : null;
 
@@ -51,8 +54,13 @@ export function FixtureRow({ home, away, homeScore, awayScore, kickoff, status =
             {awayScore}
           </span>
         ) : (
-          <span className="min-w-[4.5rem] rounded-sm border border-line px-2 py-1 text-center text-sm font-semibold tabular-nums text-fg-muted">
-            {status === 'postponed' ? 'P–P' : formatKickoff(kickoff)}
+          <span
+            className={cn(
+              'rounded-sm border border-line px-2 py-1 text-center text-sm font-semibold tabular-nums text-fg-muted',
+              showDay ? 'min-w-[7.5rem]' : 'min-w-[4.5rem]',
+            )}
+          >
+            {status === 'postponed' ? 'P–P' : formatKickoff(kickoff, showDay)}
           </span>
         )}
         {statusLabel && (
