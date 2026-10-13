@@ -302,6 +302,45 @@ class TestAppPipeline(unittest.TestCase):
         params = self.extractor.get_query_parameters(self.extractor.extract("top 7 forwards in 2024-25"))
         self.assertEqual(params.get("limit"), 7)
 
+    # ----- Regression: captain questions were RECOMMENDATION -> best-value query without a
+    # season -> all-time fallback, which suggested players who have left the league.
+
+    def test_captain_questions_are_predictions(self):
+        for prompt in ("Who should I captain this gameweek?", "Who should I captain?",
+                       "who to captain in gw8", "captaincy options this week"):
+            self.assertEqual(self.classifier.classify(prompt).intent, Intent.PREDICTION, prompt)
+
+    def test_recommendations_without_captain_unchanged(self):
+        for prompt in ("recommend a cheap defender", "suggest some midfielders"):
+            self.assertEqual(self.classifier.classify(prompt).intent, Intent.RECOMMENDATION, prompt)
+
+
+class TestDefaultRequiredSeason(unittest.TestCase):
+    """The /api/query handler fills a missing required season with the latest one."""
+
+    @classmethod
+    def setUpClass(cls):
+        from api_main import default_required_season
+        cls.fill = staticmethod(default_required_season)
+
+    def test_fills_required_season(self):
+        params = {"position": "DEF"}
+        self.fill(CypherQueries.get_best_value_players, params, "2026-27")
+        self.assertEqual(params["season"], "2026-27")
+        query, q_params = CypherQueries.get_best_value_players(**params)
+        self.assertEqual(q_params.get("season"), "2026-27")
+
+    def test_keeps_season_from_question(self):
+        params = {"season": "2023-24"}
+        self.fill(CypherQueries.get_best_value_players, params, "2026-27")
+        self.assertEqual(params["season"], "2023-24")
+
+    def test_optional_season_stays_all_seasons(self):
+        # get_top_points_by_position takes season=None to mean all seasons; leave it alone
+        params = {}
+        self.fill(CypherQueries.get_top_points_by_position, params, "2026-27")
+        self.assertNotIn("season", params)
+
 
 if __name__ == "__main__":
     unittest.main()
