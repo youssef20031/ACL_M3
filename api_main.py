@@ -1211,7 +1211,7 @@ async def health_check():
         "embedding_count": embedding_count,
         "embeddings_building": app_state["embedding_building"],
         "embedding_build_error": app_state["embedding_build_error"],
-        "ml_available": ml_integration.predictor_loaded if ml_integration else False,
+        "ml_available": bool(getattr(app_state.get("ml_integration"), "predictor_loaded", False)),
         "ml_model_type": ml_model_type,
     }
 
