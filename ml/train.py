@@ -1053,9 +1053,9 @@ def main():
     # This gives us enough data while focusing on recent trends
     
     dataset_options = {
-        "2_seasons": ["FPL_2024_2025.csv", "FPL_2025_2026.csv"],
-        "3_seasons": ["FPL_2023_2024.csv", "FPL_2024_2025.csv", "FPL_2025_2026.csv"],
-        "all_6_seasons": "cleaned_merged_seasons_cleaned.csv"
+        "2_seasons": ["data/FPL_2024_2025.csv", "data/FPL_2025_2026.csv"],
+        "3_seasons": ["data/FPL_2023_2024.csv", "data/FPL_2024_2025.csv", "data/FPL_2025_2026.csv"],
+        "all_6_seasons": "data/cleaned_merged_seasons_cleaned.csv"
     }
     
     # Use 3 most recent seasons for good balance
@@ -1074,7 +1074,7 @@ def main():
             dfs.append(df)
         
         combined_df = pd.concat(dfs, ignore_index=True)
-        data_path = "merged_recent_seasons.csv"
+        data_path = "data/merged_recent_seasons.csv"
         combined_df.to_csv(data_path, index=False)
         logger.info(f"Merged {len(dfs)} files into {data_path}: {len(combined_df)} records")
     

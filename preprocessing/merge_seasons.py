@@ -3,7 +3,7 @@ merge_seasons.py
 ----------------
 Preprocesses and merges new FPL season CSVs (2023-24, 2024-25, 2025-26) into
 the format expected by FPLDataLoader, then appends them to the existing master
-CSV (cleaned_merged_seasons_cleaned.csv).
+CSV (data/cleaned_merged_seasons_cleaned.csv).
 
 Column mapping differences between old and new data
 -----------------------------------------------------
@@ -34,14 +34,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-MASTER_CSV = os.path.join(ROOT, "cleaned_merged_seasons_cleaned.csv")
-OUTPUT_CSV = os.path.join(ROOT, "cleaned_merged_seasons_cleaned.csv")  # overwrite in-place
+MASTER_CSV = os.path.join(ROOT, "data/cleaned_merged_seasons_cleaned.csv")
+OUTPUT_CSV = os.path.join(ROOT, "data/cleaned_merged_seasons_cleaned.csv")  # overwrite in-place
 
 # New season files with their season labels
 NEW_SEASON_FILES = {
-    "2023-24": os.path.join(ROOT, "FPL_2023_2024.csv"),
-    "2024-25": os.path.join(ROOT, "FPL_2024_2025.csv"),
-    "2025-26": os.path.join(ROOT, "FPL_2025_2026.csv"),
+    "2023-24": os.path.join(ROOT, "data/FPL_2023_2024.csv"),
+    "2024-25": os.path.join(ROOT, "data/FPL_2024_2025.csv"),
+    "2025-26": os.path.join(ROOT, "data/FPL_2025_2026.csv"),
 }
 
 # ---------------------------------------------------------------------------
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Merge new FPL season CSVs into master dataset.")
     parser.add_argument(
         "--output", default=OUTPUT_CSV,
-        help="Output CSV path (default: overwrites cleaned_merged_seasons_cleaned.csv)"
+        help="Output CSV path (default: overwrites data/cleaned_merged_seasons_cleaned.csv)"
     )
     parser.add_argument(
         "--dry-run", action="store_true",

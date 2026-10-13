@@ -20,7 +20,7 @@ print("="*80)
 
 # Load raw data
 print("\n1. Loading raw dataset...")
-df = pd.read_csv("merged_recent_seasons.csv", low_memory=False)
+df = pd.read_csv("data/merged_recent_seasons.csv", low_memory=False)
 print(f"Loaded {len(df)} records")
 
 # Focus on defenders

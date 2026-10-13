@@ -9,7 +9,7 @@ print("DGW FEATURE TEST")
 print("="*70)
 
 # Load data
-df = pd.read_csv("cleaned_merged_seasons_cleaned.csv")
+df = pd.read_csv("data/cleaned_merged_seasons_cleaned.csv")
 df = df[df['season_x'].isin(['2023-24', '2024-25', '2025-26'])]
 
 print(f"\n[*] Loaded {len(df):,} records from 3 seasons")

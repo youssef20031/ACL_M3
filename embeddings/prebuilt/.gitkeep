@@ -1,2 +1,2 @@
 # This directory will contain prebuilt embeddings
-# Run: python build_embeddings_offline.py
+# Run: python scripts/embeddings/build_embeddings_from_csv.py

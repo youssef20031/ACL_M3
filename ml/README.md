@@ -168,7 +168,7 @@ Training uses the **3 most recent seasons** (2023-24, 2024-25, 2025-26):
 - ✅ Recent trends and meta changes
 - ✅ Avoids outdated patterns from 2016-17 era
 
-Alternative: Use all 6 seasons from `cleaned_merged_seasons_cleaned.csv` for maximum data.
+Alternative: Use all 6 seasons from `data/cleaned_merged_seasons_cleaned.csv` for maximum data.
 
 ## Models (V6)
 
@@ -254,9 +254,9 @@ python ml/train.py
 Edit `ml/train.py` to choose dataset:
 ```python
 dataset_options = {
-    "2_seasons": ["FPL_2024_2025.csv", "FPL_2025_2026.csv"],
-    "3_seasons": ["FPL_2023_2024.csv", "FPL_2024_2025.csv", "FPL_2025_2026.csv"],
-    "all_6_seasons": "cleaned_merged_seasons_cleaned.csv"
+    "2_seasons": ["data/FPL_2024_2025.csv", "data/FPL_2025_2026.csv"],
+    "3_seasons": ["data/FPL_2023_2024.csv", "data/FPL_2024_2025.csv", "data/FPL_2025_2026.csv"],
+    "all_6_seasons": "data/cleaned_merged_seasons_cleaned.csv"
 }
 
 choice = "3_seasons"  # Change here

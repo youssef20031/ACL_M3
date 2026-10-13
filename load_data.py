@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pandas as pd
 
-from config.settings import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, DATA_PATH
+from config.settings import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, DATA_PATH, FIXTURES_FALLBACK_CSV
 from graph.connection import Neo4jConnection
 from graph.data_loader import FPLDataLoader
 from pipeline.load_current import has_live_data, load_current_season
@@ -29,7 +29,7 @@ from services.fixture_service import FixtureService
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-FIXTURES_CSV = "FPL_2026_2027_fixtures_fixed.csv"
+FIXTURES_CSV = FIXTURES_FALLBACK_CSV
 FIXTURES_SEASON = "2026-27"
 # Championship table for the season before FIXTURES_SEASON: the source of promoted clubs
 EFL_TEAMS_FILE = "EFL_Data_All_Seasons/EFL-2025-2026/2025-2026_Standard_Teams.txt"

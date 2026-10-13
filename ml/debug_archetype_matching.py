@@ -14,7 +14,7 @@ for col in numeric_cols:
         efl_df[col] = pd.to_numeric(efl_df[col], errors='coerce')
 
 # Load EPL data
-epl_df = pd.read_csv('C:/ACL2/FPL/ACL_M3/cleaned_merged_seasons_cleaned.csv')
+epl_df = pd.read_csv('C:/ACL2/FPL/ACL_M3/data/cleaned_merged_seasons_cleaned.csv')
 
 # Test case: Brentford 2020-21 Championship -> 2021-22 EPL
 print("="*80)

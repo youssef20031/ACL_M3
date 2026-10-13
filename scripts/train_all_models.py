@@ -96,7 +96,7 @@ def main():
     # Phase 4-5: Translation models
     # Skipping for now - requires manual EPL team stats aggregation
     logger.info("\n⚠️  Phase 4-5 (translation models) require manual setup:")
-    logger.info("   1. Create epl_team_stats.csv (aggregate from FPL data)")
+    logger.info("   1. Create data/epl_team_stats.csv (aggregate from FPL data)")
     logger.info("   2. Run: python ml/translation/model_a_team.py")
     logger.info("   3. Run: python ml/translation/model_b_player.py")
     
@@ -118,7 +118,7 @@ def main():
     if success_count == len(steps):
         logger.info("\n✅ All steps completed successfully!")
         logger.info("\nNext steps:")
-        logger.info("1. Create epl_team_stats.csv for Model A training")
+        logger.info("1. Create data/epl_team_stats.csv for Model A training")
         logger.info("2. Train translation models (Phases 4-5)")
         logger.info("3. Run validation: python ml/validation/walk_forward_promoted.py")
         return 0

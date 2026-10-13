@@ -40,9 +40,9 @@ def load_and_prepare_data():
     
     # Load merged dataset
     data_files = [
-        "cleaned_merged_seasons_cleaned.csv",
-        "merged_recent_seasons.csv",
-        "FPL_2023_2024.csv"
+        "data/cleaned_merged_seasons_cleaned.csv",
+        "data/merged_recent_seasons.csv",
+        "data/FPL_2023_2024.csv"
     ]
     
     df = None

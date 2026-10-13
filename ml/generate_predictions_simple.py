@@ -37,7 +37,7 @@ def main():
         logger.info(f"✅ Loaded {pos} model")
     
     # Load historical data to get latest player stats
-    df = pd.read_csv('cleaned_merged_seasons_cleaned.csv')
+    df = pd.read_csv('data/cleaned_merged_seasons_cleaned.csv')
     
     # Get latest season data (2025-26)
     latest_season = df[df['season_x'] == '2025-26'].copy()

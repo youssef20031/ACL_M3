@@ -28,7 +28,7 @@ The model predicts a player's FPL points for one fixture, before the gameweek de
 | 2025-26 | 29,757 | 38 | test |
 | 2026-27 | 3,216 | 5 | test |
 
-Sources: `cleaned_merged_seasons_cleaned.csv` (2020-21 to 2025-26) and the current-season file `data\live\FPL_2026_2027.csv` (2026-27 GW1-5), loaded with `ml.points_model.load_history` exactly as in training. Features: 61 columns from `ml.points_model.feature_columns()`.
+Sources: `data/cleaned_merged_seasons_cleaned.csv` (2020-21 to 2025-26) and the current-season file `data\live\FPL_2026_2027.csv` (2026-27 GW1-5), loaded with `ml.points_model.load_history` exactly as in training. Features: 61 columns from `ml.points_model.feature_columns()`.
 
 ![Target distribution](fig_points_distribution.png)
 

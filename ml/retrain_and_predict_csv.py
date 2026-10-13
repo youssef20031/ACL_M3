@@ -37,7 +37,7 @@ class ModelRetrainer:
         """Load historical data from CSV file."""
         logger.info("Loading training data from CSV...")
         
-        csv_path = 'cleaned_merged_seasons_cleaned.csv'
+        csv_path = 'data/cleaned_merged_seasons_cleaned.csv'
         df = pd.read_csv(csv_path)
         
         # Rename columns to match expected names
@@ -224,10 +224,10 @@ class PredictionGenerator:
         logger.info("Loading historical data and fixtures...")
         
         # Load historical data
-        self.historical_data = pd.read_csv('cleaned_merged_seasons_cleaned.csv')
+        self.historical_data = pd.read_csv('data/cleaned_merged_seasons_cleaned.csv')
         
         # Load fixtures
-        self.fixtures = pd.read_csv('FPL_2026_2027_fixtures_processed.csv')
+        self.fixtures = pd.read_csv('data/FPL_2026_2027_fixtures_processed.csv')
         
         logger.info(f"✅ Loaded {len(self.historical_data):,} historical records")
         logger.info(f"✅ Loaded {len(self.fixtures):,} fixtures for 2026-27")

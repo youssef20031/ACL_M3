@@ -21,9 +21,7 @@ vite.config.ts
 tailwind.config.js
 postcss.config.js
 vercel.json
-/*.tsx
-/*.ts
-# Docs, reports, specs, CI, tests
+# Docs, reports, specs, CI, tests, one-off scripts and the legacy apps
 *.md
 *.pdf
 *.tex
@@ -32,6 +30,8 @@ docs
 .claude
 .github
 tests
+scripts
+legacy
 .pytest_cache
 .hypothesis
 .cache
