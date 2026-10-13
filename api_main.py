@@ -450,7 +450,8 @@ async def get_top_performers_csv(position: Optional[str] = None, limit: int = 10
                 "team_name": row['team'],
                 "position": row['position'],
                 "model_version": row.get('prediction_method', 'xgboost_v3'),
-                "fixture_context": fixture_context
+                "fixture_context": fixture_context,
+                **_availability_fields(row),
             })
         
         return {
@@ -513,7 +514,8 @@ async def get_best_value_csv(position: Optional[str] = None, limit: int = 10):
                 "value": round(float(row['value']) / 10.0, 1),
                 "value_score": round(float(row['value_score']), 2),
                 "model_version": row.get('prediction_method', 'xgboost_v3'),
-                "fixture_context": fixture_context
+                "fixture_context": fixture_context,
+                **_availability_fields(row),
             })
         
         return {
@@ -599,6 +601,20 @@ async def run_db(conn, query: str, params: Optional[Dict[str, Any]] = None) -> L
 
 
 _STATUS_LABELS = {"d": "doubtful", "i": "injured", "s": "suspended", "u": "unavailable", "n": "not in squad"}
+
+
+def _availability_fields(row) -> Dict[str, Any]:
+    """status / chance_of_playing_next_round / news from a predictions row, JSON-safe."""
+    def clean(value):
+        return None if value is None or (isinstance(value, float) and value != value) else value
+    status = clean(row.get("status")) if hasattr(row, "get") else None
+    chance = clean(row.get("chance_of_playing_next_round")) if hasattr(row, "get") else None
+    news = clean(row.get("news")) if hasattr(row, "get") else None
+    return {
+        "status": str(status) if status is not None else "a",
+        "chance_of_playing_next_round": int(float(chance)) if chance is not None else None,
+        "news": str(news) if news else "",
+    }
 
 
 def _availability_note(row, inline: bool = False) -> str:

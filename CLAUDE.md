@@ -15,6 +15,7 @@ Backend (run from repo root; modules are imported relative to it):
 Frontend (dev server on :3000, proxies `/api`, `/health`, `/ws` to :8000 via `vite.config.ts`):
 ```bash
 npm run dev
+npm run dev:live   # same, but proxies the API to the deployed site (.env.live) — no backend needed
 npm run build      # tsc && vite build → dist/
 ```
 Load or reload the graph. A full load wipes the DB (~3 min against Aura), then adds promoted teams and the current season from `data/live/` (falling back to `FPL_2026_2027_fixtures_fixed.csv` for the schedule when no live data exists). The UI has no load button.
@@ -99,7 +100,7 @@ The legacy v2 stack is still loaded at startup by `ml/api_integration.py` (`MLAP
 
 ## Frontend architecture
 
-Routes in `src/App.tsx` (`/qa`, `/predictions`, `/trivia`, `/search`, `/compare`, `/settings`) under `components/Layout.tsx`. All HTTP goes through `src/services/api.ts` (axios, 60s timeout); global state in `src/store/appStore.ts` (zustand); TanStack Query for fetching. Pages are lazy-loaded per route; player photos render through `components/AvatarImage.tsx`. Search results carry an `avatar` when the backend knows it without a network call (`AvatarService.peek`); rows without one are filled by `hooks/usePlayerAvatars.ts`, which caches per name under `['player-avatar', name]`, shared across pages. Styling is Tailwind with no theme tokens — colors are hardcoded utility classes per page, and dark mode is done by overriding gray/white classes in `src/index.css`.
+Routes in `src/App.tsx` (`/qa`, `/predictions`, `/trivia`, `/search`, `/compare`, `/settings`) under `components/Layout.tsx`. All HTTP goes through `src/services/api.ts` (axios, 60s timeout); global state in `src/store/appStore.ts` (zustand); TanStack Query for fetching. Pages are lazy-loaded per route; player photos render through `components/AvatarImage.tsx`. Search results carry an `avatar` when the backend knows it without a network call (`AvatarService.peek`); rows without one are filled by `hooks/usePlayerAvatars.ts`, which caches per name under `['player-avatar', name]`, shared across pages. Styling is Tailwind with no theme tokens — colors are hardcoded utility classes per page, and dark mode is done by overriding gray/white classes in `src/index.css`. A UI overhaul is planned; `docs/FRONTEND_REDESIGN_BRIEF.md` lists the constraints any redesign must respect (API contract, query keys, store shape/migrations, routes, acceptance checklist).
 
 ## Deployment
 
