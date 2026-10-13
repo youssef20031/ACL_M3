@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { cn } from '../../utils/cn';
-import { PlayerAvatar } from './Identity';
+import { ClubCrest, PlayerAvatar } from './Identity';
+import { getClubAbbreviation } from '../../utils/clubLogos';
 
 /** Green striped pitch with markings drawn in CSS/SVG. Children are PitchRow lines, GK first. */
 export function Pitch({ children, label, className }: { children: ReactNode; label: string; className?: string }) {
@@ -29,7 +30,7 @@ export function Pitch({ children, label, className }: { children: ReactNode; lab
           <rect x="38" y="130" width="24" height="7" />
         </g>
       </svg>
-      <div className="relative flex min-h-[28rem] flex-col justify-around gap-3 px-2 py-5 sm:min-h-[34rem] sm:py-8">
+      <div className="relative flex min-h-[30rem] flex-col justify-around gap-3 px-2 py-5 sm:min-h-[38rem] sm:py-8">
         {children}
       </div>
     </section>
@@ -44,54 +45,106 @@ export function PitchRow({ children, label }: { children: ReactNode; label?: str
   );
 }
 
+export interface PitchOpponent {
+  team: string;
+  home: boolean;
+}
+
 interface PitchPlayerProps {
   name: string;
-  /** Short club/fixture line, e.g. "ARS (H)". */
-  subtitle?: ReactNode;
-  /** Value under the plate, e.g. predicted points. */
+  /** The player's club: crest on the photo. */
+  team?: string | null;
+  /** Who they played (or play). Several entries for a double gameweek. */
+  opponents?: PitchOpponent[];
+  /** Bottom strip, e.g. "12 pts". */
   value?: ReactNode;
   photo?: string | null;
   captain?: boolean;
   viceCaptain?: boolean;
-  /** Small corner flag (e.g. a StatusBadge) for injury/doubt. */
-  flag?: ReactNode;
+  /** FPL availability code; doubtful/injured/suspended tint the name plate like FPL does. */
+  status?: string | null;
+  /** Tooltip/sr text for the status, e.g. the FPL news line. */
+  statusNote?: string | null;
   onClick?: () => void;
 }
 
-/** One player on the pitch: photo, name plate and value strip. */
-export function PitchPlayer({ name, subtitle, value, photo, captain, viceCaptain, flag, onClick }: PitchPlayerProps) {
-  const shortName = name.split(' ').slice(-1)[0] || name;
-  const Inner = onClick ? 'button' : 'div';
+const PLATE: Record<string, string> = {
+  d: 'bg-warning text-accent-on',
+  i: 'bg-danger text-white',
+  s: 'bg-danger text-white',
+  u: 'bg-fg-subtle text-accent-on',
+};
+const STATUS_TEXT: Record<string, string> = { d: 'doubtful', i: 'injured', s: 'suspended', u: 'unavailable' };
+
+function Armband({ letter, label }: { letter: 'C' | 'V'; label: string }) {
   return (
-    <li className="w-[4.6rem] sm:w-24">
+    <span className="absolute -left-1 -top-1 z-[1] flex h-5 w-5 items-center justify-center rounded-full bg-black text-micro font-extrabold leading-none text-white ring-1 ring-white/70 sm:h-6 sm:w-6">
+      <span aria-hidden="true">{letter}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+/** One player on the pitch: photo with crest and armband, name plate, opponent and value strips. */
+export function PitchPlayer({
+  name,
+  team,
+  opponents,
+  value,
+  photo,
+  captain,
+  viceCaptain,
+  status,
+  statusNote,
+  onClick,
+}: PitchPlayerProps) {
+  const shortName = name.split(' ').slice(-1)[0] || name;
+  const code = (status ?? '').toLowerCase();
+  const plate = PLATE[code] ?? 'bg-fg text-brand';
+  const Inner = onClick ? 'button' : 'div';
+
+  return (
+    <li className="w-[4.6rem] sm:w-[6.25rem]">
       <Inner
         {...(onClick ? { type: 'button' as const, onClick } : {})}
         className="relative flex w-full flex-col items-center text-center"
-        title={name}
+        title={statusNote ? `${name}: ${statusNote}` : name}
       >
         <span className="relative">
-          <PlayerAvatar name={name} src={photo} size={52} className="rounded-b-none bg-transparent sm:h-16 sm:w-16" />
-          {(captain || viceCaptain) && (
-            <span
-              className={cn(
-                'absolute -left-1.5 -top-1 flex h-5 w-5 items-center justify-center rounded-full text-micro font-extrabold',
-                captain ? 'bg-fg text-brand' : 'bg-surface-2 text-fg',
-              )}
-            >
-              {captain ? 'C' : 'V'}
-              <span className="sr-only">{captain ? ' captain' : ' vice-captain'}</span>
+          <PlayerAvatar name={name} src={photo} size={56} className="rounded-b-none bg-transparent sm:h-[4.5rem] sm:w-[4.5rem]" />
+          {captain && <Armband letter="C" label="Captain" />}
+          {!captain && viceCaptain && <Armband letter="V" label="Vice-captain" />}
+          {team && (
+            <span className="absolute -right-1.5 -top-1 rounded-full bg-white/90 p-0.5 shadow-card">
+              <ClubCrest team={team} size={16} />
             </span>
           )}
-          {flag && <span className="absolute -right-2 -top-1">{flag}</span>}
         </span>
-        <span className="w-full truncate rounded-t-sm bg-fg px-1 py-0.5 text-micro font-bold text-brand">
+
+        <span className={cn('w-full truncate rounded-t-sm px-1 py-0.5 text-micro font-bold', plate)}>
           <span aria-hidden="true">{shortName}</span>
-          <span className="sr-only">{name}</span>
-        </span>
-        {(subtitle || value != null) && (
-          <span className="w-full truncate rounded-b-sm bg-brand px-1 py-0.5 text-micro font-semibold text-fg">
-            {value ?? subtitle}
+          <span className="sr-only">
+            {name}
+            {STATUS_TEXT[code] ? ` (${STATUS_TEXT[code]}${statusNote ? `: ${statusNote}` : ''})` : ''}
           </span>
+        </span>
+
+        {opponents && opponents.length > 0 && (
+          <span className="flex w-full flex-wrap items-center justify-center gap-x-1 bg-brand-2 px-1 py-0.5 text-micro font-semibold text-fg">
+            {opponents.map((o, i) => (
+              <span key={`${o.team}-${i}`} className="inline-flex items-center gap-0.5">
+                <span className="sr-only">{i === 0 ? 'versus ' : 'and '}</span>
+                <ClubCrest team={o.team} size={12} className="hidden sm:inline-flex" />
+                {getClubAbbreviation(o.team) || o.team.slice(0, 3).toUpperCase()}
+                <span aria-hidden="true">({o.home ? 'H' : 'A'})</span>
+                <span className="sr-only">{o.home ? ' at home' : ' away'}</span>
+              </span>
+            ))}
+          </span>
+        )}
+
+        {value != null && (
+          <span className="w-full truncate rounded-b-sm bg-brand px-1 py-0.5 text-micro font-bold text-fg">{value}</span>
         )}
       </Inner>
     </li>

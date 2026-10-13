@@ -11,9 +11,9 @@
  * same variables, and nothing else needs to change.
  *
  * Contrast (WCAG 2.1, checked against --surface unless noted):
- *   text 20:1 (bg) · text-muted 11.7:1 · text-subtle 6.9:1 · accent 14.4:1
- *   on-accent (brand on mint) 12.7:1 · danger 6.1:1 · warning 12.6:1
- *   border-strong (form controls) 3.7:1 · FDR chips ≥ 4.9:1
+ *   text 18:1 · text-muted 10.8:1 · text-subtle 6.4:1 (5.8:1 on surface-2) · accent 13.4:1
+ *   on-accent (brand on mint) 12.7:1 · danger 5.7:1 · warning 11.7:1
+ *   border-strong (form controls) 3.1:1 on surface-2 · FDR chips ≥ 4.9:1
  */
 
 :root,
@@ -21,14 +21,14 @@
   color-scheme: dark;
 
   /* Surfaces, darkest to lightest */
-  --bg: 20 0 23;            /* #140017 page background */
-  --surface: 30 1 35;       /* #1E0123 cards, tables */
-  --surface-2: 42 6 49;     /* #2A0631 raised: table headers, hover, inputs */
+  --bg: 30 1 35;            /* #1E0123 page background */
+  --surface: 42 6 49;       /* #2A0631 cards, tables */
+  --surface-2: 54 16 61;    /* #36103D raised: table headers, hover, inputs */
   --brand: 55 0 60;         /* #37003C header bar, selected/featured panels */
   --brand-2: 90 20 95;      /* #5A145F brand hover */
 
   /* Lines */
-  --border: 62 23 69;       /* #3E1745 dividers (decorative) */
+  --border: 74 31 82;       /* #4A1F52 dividers (decorative) */
   --border-strong: 138 90 146; /* #8A5A92 form-control outlines, focus-free boundaries */
 
   /* Text */

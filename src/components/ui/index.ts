@@ -17,5 +17,5 @@ export { Field, Input, Select, SearchInput } from './Forms';
 export { Tabs, TabPanel, type TabItem } from './Tabs';
 export { StatCard, Countdown } from './Stats';
 export { DataTable, type Column, type SortState, type SortDirection } from './DataTable';
-export { Pitch, PitchRow, PitchPlayer } from './Pitch';
+export { Pitch, PitchRow, PitchPlayer, type PitchOpponent } from './Pitch';
 export { FixtureRow, type FixtureStatus } from './FixtureRow';

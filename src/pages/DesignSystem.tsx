@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from 'react';
-import { Search, Trophy, TrendingUp, Users } from 'lucide-react';
+import { Trophy, TrendingUp, Users } from 'lucide-react';
+import { SiteHeader } from '../components/shell/SiteHeader';
+import { DeadlineBar } from '../components/shell/DeadlineBar';
 import {
   Button,
   Card,
   Chip,
   type Column,
   Container,
-  Countdown,
   DataTable,
   EmptyState,
   ErrorState,
@@ -108,40 +109,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** First pass at the Phase 2 header so the overall look can be reviewed. Not wired to routing yet. */
-function HeaderPreview() {
-  const nav = ['Home', 'Fixtures', 'Table', 'Team of the Week', 'Players', 'Predictions', 'Assistant', 'Trivia'];
-  return (
-    <div className="border-b border-brand-2 bg-brand">
-      <Container className="flex h-header items-center gap-6">
-        <Logo size={26} />
-        <nav aria-label="Header preview" className="hidden flex-1 items-stretch gap-1 self-stretch lg:flex">
-          {nav.map((item, i) => (
-            <span
-              key={item}
-              className={
-                'flex items-center border-b-[3px] px-2.5 text-sm font-semibold ' +
-                (i === 0 ? 'border-accent text-fg' : 'border-transparent text-fg-muted')
-              }
-            >
-              {item}
-            </span>
-          ))}
-        </nav>
-        <Button variant="ghost" size="sm" className="ml-auto text-fg" icon={<Search className="h-4 w-4" aria-hidden="true" />}>
-          <span className="hidden sm:inline">Find a player</span>
-        </Button>
-      </Container>
-      <div className="border-t border-brand-2 bg-bg/40">
-        <Container className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2 text-data">
-          <span className="font-semibold text-fg">Gameweek 8 deadline</span>
-          <Countdown target={new Date(Date.now() + 2 * 86400000 + 5 * 3600000)} />
-          <span className="text-fg-subtle">(sample time)</span>
-        </Container>
-      </div>
-    </div>
-  );
-}
+// Sample deadline two days and five hours out, fixed per page load.
+const SAMPLE_DEADLINE = new Date(Date.now() + 2 * 86400000 + 5 * 3600000);
 
 export function DesignSystem() {
   const [tab, setTab] = useState<'overview' | 'stats' | 'fixtures'>('overview');
@@ -149,7 +118,8 @@ export function DesignSystem() {
 
   return (
     <div data-theme="dark" className="pm-root min-h-screen">
-      <HeaderPreview />
+      <SiteHeader activePath="/" />
+      <DeadlineBar gameweek={8} deadline={SAMPLE_DEADLINE} />
       <Container>
         <PageHeader
           eyebrow="Internal · sample data"
@@ -162,6 +132,14 @@ export function DesignSystem() {
             </>
           }
         />
+
+        <Section title="Logo">
+          <div className="flex flex-wrap items-center gap-8">
+            <Logo size={44} />
+            <Logo size={28} />
+            <Logo size={28} iconOnly />
+          </div>
+        </Section>
 
         <Section title="Colour tokens">
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 lg:grid-cols-11">
@@ -306,23 +284,23 @@ export function DesignSystem() {
           <div className="mx-auto max-w-2xl">
             <Pitch label="Sample team of the week">
               <PitchRow label="Goalkeeper">
-                <PitchPlayer name="Placeholder Keeper" value="6 pts" />
+                <PitchPlayer name="Placeholder Keeper" team="Brighton" opponents={[{ team: 'Everton', home: true }]} value="6 pts" />
               </PitchRow>
               <PitchRow label="Defenders">
-                <PitchPlayer name="Demo Defender" value="8 pts" />
-                <PitchPlayer name="Another Defender" value="7 pts" />
-                <PitchPlayer name="Third Defender" value="6 pts" flag={<StatusBadge status="d" chance={75} />} />
-                <PitchPlayer name="Fourth Defender" value="6 pts" />
+                <PitchPlayer name="Demo Defender" team="Chelsea" opponents={[{ team: 'Fulham', home: false }]} value="8 pts" />
+                <PitchPlayer name="Another Defender" team="Arsenal" opponents={[{ team: 'Sunderland', home: true }]} value="7 pts" />
+                <PitchPlayer name="Third Defender" team="Liverpool" opponents={[{ team: 'Ipswich', home: true }]} value="6 pts" status="d" statusNote="Sample: knock, 75% chance" />
+                <PitchPlayer name="Fourth Defender" team="Newcastle" opponents={[{ team: 'Brentford', home: false }]} value="6 pts" />
               </PitchRow>
               <PitchRow label="Midfielders">
-                <PitchPlayer name="Example Winger" value="15 pts" captain />
-                <PitchPlayer name="Mock Midfielder" value="9 pts" viceCaptain />
-                <PitchPlayer name="Sample Playmaker" value="8 pts" />
-                <PitchPlayer name="Test Midfielder" value="7 pts" />
+                <PitchPlayer name="Example Winger" team="Liverpool" opponents={[{ team: 'Ipswich', home: true }]} value="15 pts" captain />
+                <PitchPlayer name="Mock Midfielder" team="Man City" opponents={[{ team: 'Spurs', home: false }]} value="9 pts" viceCaptain />
+                <PitchPlayer name="Sample Playmaker" team="Aston Villa" opponents={[{ team: 'Bournemouth', home: true }, { team: 'Leeds', home: false }]} value="8 pts" />
+                <PitchPlayer name="Test Midfielder" team="Brighton" opponents={[{ team: 'Everton', home: true }]} value="7 pts" status="i" statusNote="Sample: hamstring" />
               </PitchRow>
               <PitchRow label="Forwards">
-                <PitchPlayer name="Sample Striker" value="12 pts" />
-                <PitchPlayer name="Second Striker" value="9 pts" />
+                <PitchPlayer name="Sample Striker" team="Arsenal" opponents={[{ team: 'Sunderland', home: true }]} value="12 pts" />
+                <PitchPlayer name="Second Striker" team="Chelsea" opponents={[{ team: 'Fulham', home: false }]} value="9 pts" />
               </PitchRow>
             </Pitch>
           </div>

@@ -23,7 +23,7 @@ export function Logo({ size = 28, iconOnly = false, className }: LogoProps) {
           className="font-display font-extrabold leading-none tracking-tight text-fg"
           style={{ fontSize: size * 0.82 }}
         >
-          Pitch<span className="text-accent">Me</span>
+          <span className="text-accent">Pitch</span>Me
         </span>
       )}
       <span className="sr-only">Pitch Me</span>
