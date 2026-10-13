@@ -7,6 +7,9 @@ os.environ['TRANSFORMERS_NO_TF'] = '1'          # skip TF/Keras import entirely
 os.environ['TRANSFORMERS_NO_ADVISORY_WARNINGS'] = '1'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
+from utils.console import ensure_utf8_stdio
+ensure_utf8_stdio()  # before any startup print/log (emoji crash cp1252 on Windows)
+
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
