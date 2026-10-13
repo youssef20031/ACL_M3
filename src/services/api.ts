@@ -125,6 +125,105 @@ export interface ImageSearchResponse {
   source?: string | null;
 }
 
+// --- Season dashboard (Pitch Me redesign) ---------------------------------
+export type FixtureStatusCode = 'scheduled' | 'in_progress' | 'finished';
+export type PositionCode = 'GK' | 'DEF' | 'MID' | 'FWD';
+
+export interface SeasonInfo {
+  season: string;
+  current_gameweek: number | null;
+  next_gameweek: number | null;
+  next_deadline: string | null;
+  finished_gameweeks: number[];
+  updated_at: string | null;
+}
+
+export interface SeasonFixture {
+  id: string;
+  gameweek: number;
+  kickoff_time: string | null;
+  status: FixtureStatusCode;
+  home_team: string;
+  away_team: string;
+  home_score: number | null;
+  away_score: number | null;
+  home_difficulty: number | null;
+  away_difficulty: number | null;
+}
+
+export interface FixturesResponse {
+  season: string;
+  gameweek: number;
+  gameweeks: number[];
+  fixtures: SeasonFixture[];
+}
+
+export interface TableRow {
+  position: number;
+  team: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goals_for: number;
+  goals_against: number;
+  goal_difference: number;
+  points: number;
+  form: Array<'W' | 'D' | 'L'>;
+  next_fixture: { opponent: string; home: boolean; kickoff_time: string | null } | null;
+}
+
+export interface LeagueTableResponse {
+  season: string;
+  updated_at: string | null;
+  rows: TableRow[];
+}
+
+export interface InjuredPlayer {
+  name: string;
+  web_name: string | null;
+  team: string;
+  position: PositionCode;
+  status: 'd' | 'i' | 's' | 'u' | 'n';
+  chance_of_playing_next_round: number | null;
+  news: string | null;
+  news_added: string | null;
+  photo: string | null;
+}
+
+export interface InjuriesResponse {
+  updated_at: string | null;
+  players: InjuredPlayer[];
+}
+
+export interface TeamOfWeekPlayer {
+  name: string;
+  team: string;
+  position: PositionCode;
+  points: number;
+  cost: number | null;
+  captain: boolean;
+  vice_captain: boolean;
+  opponents: Array<{ team: string; home: boolean }>;
+  status: string | null;
+  chance_of_playing_next_round: number | null;
+  news: string | null;
+  photo: string | null;
+}
+
+export type TeamOfWeekMode = 'predicted' | 'actual';
+
+export interface TeamOfWeekResponse {
+  mode: TeamOfWeekMode;
+  gameweek: number;
+  formation: string;
+  total_points: number;
+  total_cost: number | null;
+  budget: number | null;
+  starters: TeamOfWeekPlayer[];
+  bench: TeamOfWeekPlayer[];
+}
+
 // API functions
 export const apiService = {
   // Health & Connection
@@ -286,6 +385,34 @@ export const apiService = {
     const { data } = await api.get<ImageSearchResponse>('/api/images/search', {
       params: { query },
       signal,
+    });
+    return data;
+  },
+
+  // Season dashboard
+  async getCurrentSeason(): Promise<SeasonInfo> {
+    const { data } = await api.get<SeasonInfo>('/api/season/current');
+    return data;
+  },
+
+  async getFixtures(gameweek?: number): Promise<FixturesResponse> {
+    const { data } = await api.get<FixturesResponse>('/api/fixtures', { params: gameweek ? { gameweek } : undefined });
+    return data;
+  },
+
+  async getLeagueTable(): Promise<LeagueTableResponse> {
+    const { data } = await api.get<LeagueTableResponse>('/api/table');
+    return data;
+  },
+
+  async getInjuries(team?: string): Promise<InjuriesResponse> {
+    const { data } = await api.get<InjuriesResponse>('/api/injuries', { params: team ? { team } : undefined });
+    return data;
+  },
+
+  async getTeamOfTheWeek(mode: TeamOfWeekMode = 'predicted', gameweek?: number): Promise<TeamOfWeekResponse> {
+    const { data } = await api.get<TeamOfWeekResponse>('/api/team-of-the-week', {
+      params: { mode, ...(gameweek ? { gameweek } : {}) },
     });
     return data;
   },

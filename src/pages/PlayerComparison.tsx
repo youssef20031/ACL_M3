@@ -547,7 +547,7 @@ export function PlayerComparison() {
             p2={p2Data}
             isDark={isDark}
             onOpenDetails={(player) =>
-              navigate('/search', {
+              navigate('/players', {
                 state: {
                   player,
                   season: season || 'All seasons',

@@ -94,8 +94,8 @@ export const useAppStore = create<AppState>()(
       setRetrievalMethod: (method) => set({ retrievalMethod: method }),
       setEmbeddingModel: (model) => set({ embeddingModel: model }),
 
-      // Theme
-      theme: 'light',
+      // Theme: dark only until the light token set exists (see src/styles/tokens.css)
+      theme: 'dark',
       setTheme: (theme) => set({ theme }),
       toggleTheme: () =>
         set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
@@ -109,7 +109,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'fpl-app-storage',
-      version: 3, // bump version to force migration
+      version: 4, // bump version to force migration
       partialize: (state) => ({
         selectedModel: state.selectedModel,
         retrievalMethod: state.retrievalMethod,
@@ -138,6 +138,10 @@ export const useAppStore = create<AppState>()(
           if (current && retired[current]) {
             persistedState.selectedModel = retired[current];
           }
+        }
+        // v3 → v4: the Pitch Me redesign is dark-first; light mode returns later
+        if (version < 4 && persistedState) {
+          persistedState.theme = 'dark';
         }
         return persistedState;
       },

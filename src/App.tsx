@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Layout } from './components/Layout';
+import { AppShell } from './components/shell/AppShell';
+import { NotFound } from './pages/NotFound';
 import './App.css';
 
 // Route-level code splitting: recharts (Search/Compare), react-markdown + framer-motion (Q&A/Trivia)
@@ -32,9 +33,15 @@ const queryClient = new QueryClient({
   },
 });
 
+// Old URLs (/qa, /search) keep working; router state (e.g. a selected player) is carried over.
+function Redirect({ to }: { to: string }) {
+  const location = useLocation();
+  return <Navigate to={to} replace state={location.state} />;
+}
+
 // Suspense boundary per route so the Layout (sidebar/header) stays mounted while a page chunk loads.
 function Page({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<div className="p-6 text-sm opacity-60">Loading…</div>}>{children}</Suspense>;
+  return <Suspense fallback={<div className="mx-auto max-w-page px-4 py-10 text-data text-fg-subtle sm:px-6">Loading…</div>}>{children}</Suspense>;
 }
 
 function App() {
@@ -63,14 +70,17 @@ function App() {
         <Routes>
           {/* Hidden design-system reference (not linked from the nav). */}
           <Route path="/design" element={<Page><DesignSystem /></Page>} />
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/qa" replace />} />
-            <Route path="qa" element={<Page><QAAssistant /></Page>} />
+          <Route path="/" element={<AppShell />}>
+            <Route index element={<Navigate to="/assistant" replace />} />
+            <Route path="assistant" element={<Page><QAAssistant /></Page>} />
+            <Route path="players" element={<Page><PlayerSearch /></Page>} />
             <Route path="predictions" element={<Page><Predictions /></Page>} />
-            <Route path="trivia" element={<Page><Trivia /></Page>} />
-            <Route path="search" element={<Page><PlayerSearch /></Page>} />
             <Route path="compare" element={<Page><PlayerComparison /></Page>} />
+            <Route path="trivia" element={<Page><Trivia /></Page>} />
             <Route path="settings" element={<Page><Settings /></Page>} />
+            <Route path="qa" element={<Redirect to="/assistant" />} />
+            <Route path="search" element={<Redirect to="/players" />} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </Router>

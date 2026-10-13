@@ -257,7 +257,13 @@ export function PlayerSearch() {
                     setDetailCompareState(null);
                   }
             }
-            backLabel={detailOrigin === 'history' ? 'Back to compare players' : 'Back to results'}
+            backLabel={
+              detailOrigin === 'history'
+                ? detailCompareState?.player1 && detailCompareState?.player2
+                  ? 'Back to compare players'
+                  : 'Back'
+                : 'Back to results'
+            }
           />
         )}
       </div>
