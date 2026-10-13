@@ -1,4 +1,6 @@
-import { getClubLogoPath, getClubAbbreviation } from '../utils/clubLogos';
+import type { ReactNode } from 'react';
+import { ClubCrest, PlayerAvatar } from './ui';
+import { getClubAbbreviation } from '../utils/clubLogos';
 import { cn } from '../utils/cn';
 
 interface PlayerWithClubProps {
@@ -9,52 +11,69 @@ interface PlayerWithClubProps {
   className?: string;
   nameClassName?: string;
   clubClassName?: string;
+  /**
+   * Player photo. Passing the prop (even `null` or `undefined` while it loads) switches to
+   * the two-line layout: photo, then name over crest + club; omit it for the inline layout.
+   */
+  avatar?: string | null;
+  avatarSize?: number;
+  /** Extra content on the club line of the two-line layout, e.g. a position or status badge. */
+  meta?: ReactNode;
 }
 
-/**
- * Component to display a player name with their club logo and abbreviation
- */
-export function PlayerWithClub({
-  playerName,
-  teamName,
-  showAbbreviation = true,
-  logoSize = 'md',
-  className,
-  nameClassName,
-  clubClassName,
-}: PlayerWithClubProps) {
-  const logoPath = getClubLogoPath(teamName);
-  const abbreviation = getClubAbbreviation(teamName);
+const CREST_PX: Record<NonNullable<PlayerWithClubProps['logoSize']>, number> = {
+  sm: 16,
+  md: 20,
+  lg: 24,
+  xl: 40,
+  '2xl': 56,
+};
 
-  const sizeClasses = {
-    sm: 'h-4 w-4',
-    md: 'h-5 w-5',
-    lg: 'h-6 w-6',
-    xl: 'h-10 w-10',
-    '2xl': 'h-14 w-14',
-  };
+/** A player name with their club crest (and optionally photo + abbreviation). */
+export function PlayerWithClub(props: PlayerWithClubProps) {
+  const {
+    playerName,
+    teamName,
+    showAbbreviation = true,
+    logoSize = 'md',
+    className,
+    nameClassName,
+    clubClassName,
+    avatar,
+    avatarSize = 36,
+    meta,
+  } = props;
+  const abbreviation = getClubAbbreviation(teamName) || (teamName ?? '').slice(0, 3).toUpperCase();
+  const crestPx = CREST_PX[logoSize];
+  const twoLine = 'avatar' in props || meta != null;
+
+  if (twoLine) {
+    return (
+      <span className={cn('flex min-w-0 items-center gap-2.5', className)}>
+        <PlayerAvatar name={playerName} src={avatar} size={avatarSize} />
+        <span className="min-w-0">
+          <span className={cn('block truncate font-semibold text-fg', nameClassName)}>{playerName}</span>
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-data text-fg-subtle">
+            {teamName && <ClubCrest team={teamName} size={Math.min(crestPx, 16)} />}
+            {teamName && (
+              <span className={cn('truncate', clubClassName)}>
+                {showAbbreviation ? abbreviation : teamName}
+              </span>
+            )}
+            {meta}
+          </span>
+        </span>
+      </span>
+    );
+  }
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
-      {logoPath && (
-        <img
-          src={logoPath}
-          alt={`${teamName} logo`}
-          className={cn('object-contain shrink-0', sizeClasses[logoSize])}
-          loading="lazy"
-          decoding="async"
-          onError={(e) => {
-            // Hide image if it fails to load
-            (e.target as HTMLImageElement).style.display = 'none';
-          }}
-        />
-      )}
-      <span className={nameClassName}>{playerName}</span>
+    <span className={cn('flex min-w-0 items-center gap-2', className)}>
+      {teamName && <ClubCrest team={teamName} size={crestPx} />}
+      <span className={cn('truncate', nameClassName)}>{playerName}</span>
       {showAbbreviation && teamName && (
-        <span className={cn('text-xs opacity-60 shrink-0', clubClassName)}>
-          ({abbreviation})
-        </span>
+        <span className={cn('shrink-0 text-micro font-semibold text-fg-subtle', clubClassName)}>{abbreviation}</span>
       )}
-    </div>
+    </span>
   );
 }
