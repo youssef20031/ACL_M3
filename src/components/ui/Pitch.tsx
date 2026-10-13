@@ -115,8 +115,8 @@ export function PitchPlayer({
           {captain && <Armband letter="C" label="Captain" />}
           {!captain && viceCaptain && <Armband letter="V" label="Vice-captain" />}
           {team && (
-            <span className="absolute -right-1.5 -top-1 rounded-full bg-white/90 p-0.5 shadow-card">
-              <ClubCrest team={team} size={16} />
+            <span className="absolute -right-2.5 -top-1.5 drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)]">
+              <ClubCrest team={team} size={26} />
             </span>
           )}
         </span>
@@ -134,7 +134,7 @@ export function PitchPlayer({
             {opponents.map((o, i) => (
               <span key={`${o.team}-${i}`} className="inline-flex items-center gap-0.5">
                 <span className="sr-only">{i === 0 ? 'versus ' : 'and '}</span>
-                <ClubCrest team={o.team} size={12} className="hidden sm:inline-flex" />
+                <ClubCrest team={o.team} size={14} className="hidden sm:inline-flex" />
                 {getClubAbbreviation(o.team) || o.team.slice(0, 3).toUpperCase()}
                 <span aria-hidden="true">({o.home ? 'H' : 'A'})</span>
                 <span className="sr-only">{o.home ? ' at home' : ' away'}</span>
