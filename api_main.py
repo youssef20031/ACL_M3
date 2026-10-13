@@ -668,6 +668,20 @@ def get_latest_season(conn=None) -> str:
     return season
 
 
+def default_required_season(method, params: Dict[str, Any], latest_season: Optional[str]) -> None:
+    """Give season-scoped queries the latest season when the question names none.
+
+    Without it a query like get_best_value_players(season) had a missing required param and
+    fell back to an all-seasons ranking, which recommended players who have left the league
+    ("captain Salah ... across all seasons 2020-21 through 2026-27").
+    """
+    if "season" in params or not latest_season:
+        return
+    param = inspect.signature(method).parameters.get("season")
+    if param is not None and param.default is inspect.Parameter.empty:
+        params["season"] = latest_season
+
+
 def _ml_model_label() -> Optional[str]:
     """Which model serves user-facing predictions: the v3 predictions file when present,
     else the legacy v2 stack (only a fallback)."""
@@ -1356,6 +1370,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             method = getattr(CypherQueries, query_method)
             sig = inspect.signature(method)
             
+            default_required_season(method, params, latest_season)
             required_params = [
                 p.name for p in sig.parameters.values() 
                 if p.default == inspect.Parameter.empty

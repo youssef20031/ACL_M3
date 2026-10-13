@@ -208,6 +208,10 @@ class IntentClassifier:
                 r"who to (?:pick|choose|select|captain)",
                 r"(?:good|best) (?:picks?|choice|option|captain) for (?:next|upcoming)",
                 r"captain(?:cy)? (?:pick|choice|option)",
+                # The captain is always chosen for the next deadline, so any captaincy question
+                # is a prediction (it used to fall to RECOMMENDATION -> an all-time ranking)
+                r"\bcaptain(?:cy|s|ing)?\b",
+                r"who should (?:i|we) (?:captain|start|bench|play)\b",
                 r"points? (?:for|in) (?:next|upcoming) (?:gw|gameweek)",
                 r"(?:how many|what) points? (?:will|do you think|is|are|can|might) (?:he|she|they|him|her|\w+)?\s*(?:gonna|going to)? (?:earn|get|score|make)",
                 r"(?:will|do you think|can|might) (?:he|she|they|\w+)\s*(?:get|score|earn|make) (?:any\s+)?points?",
@@ -228,8 +232,7 @@ class IntentClassifier:
                 r"suggest",
                 r"who should (?:i|we)\s+(?:pick|get|buy|transfer)",
                 r"(?:good|best)\s+(?:picks?|options?|choices?)",
-                r"captain(?:cy)?",
-                r"who to (?:pick|get|captain)",
+                r"who to (?:pick|get)",
             ],
             
             Intent.SEASON_SUMMARY: [
