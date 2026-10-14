@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Logo } from '../ui';
 import { MORE_NAV, PRIMARY_NAV } from './SiteHeader';
+import { RepoLink } from './RepoLink';
 
 export function SiteFooter() {
   return (
@@ -12,6 +13,7 @@ export function SiteFooter() {
             Fantasy Premier League stats, fixtures and machine-learning predictions, with an assistant that answers
             questions from a knowledge graph of every season since 2020-21.
           </p>
+          <RepoLink label="Source code on GitHub" className="mt-4" />
         </div>
         <nav aria-label="Footer: main">
           <ul className="space-y-1.5 text-data">
