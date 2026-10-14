@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from dataclasses import asdict
-from typing import List, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any
 from datetime import datetime, timezone
 import asyncio
 import json
@@ -33,7 +33,7 @@ from urllib.parse import quote_plus, urlparse
 # Import project modules
 from config.settings import (
     NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD,
-    HUGGINGFACE_API_TOKEN, DATA_PATH, SEASONS,
+    HUGGINGFACE_API_TOKEN, DATA_PATH, SEASONS, CURRENT_SEASON,
     GOOGLE_CUSTOM_SEARCH_API_KEY, GOOGLE_CUSTOM_SEARCH_CX
 )
 from graph.connection import Neo4jConnection
@@ -914,6 +914,36 @@ class TeamOfWeekResponse(BaseModel):
     budget: Optional[float] = None
     starters: List[TeamOfWeekPlayer]
     bench: List[TeamOfWeekPlayer]
+
+
+# Keep in sync with season_service.LEADER_SORTS (tests/test_player_leaders.py checks it).
+LeaderSort = Literal["total_points", "goals", "assists", "clean_sheets", "bonus", "points_per_game", "minutes"]
+LeaderPosition = Literal["GK", "DEF", "MID", "FWD"]
+
+
+class PlayerLeader(BaseModel):
+    name: str
+    team: Optional[str] = None
+    position: Optional[str] = None
+    games: int
+    minutes: int
+    goals: int
+    assists: int
+    clean_sheets: int
+    bonus: int
+    total_points: int
+    points_per_game: float
+    status: Optional[str] = None
+    chance_of_playing_next_round: Optional[int] = None
+    news: Optional[str] = None
+    photo: Optional[str] = None
+
+
+class PlayerLeadersResponse(BaseModel):
+    season: str
+    sort: str
+    position: Optional[str] = None
+    players: List[PlayerLeader]
 
 
 # ============================================================================
@@ -2173,6 +2203,21 @@ def team_of_the_week(mode: str = "predicted", gameweek: Optional[int] = None):
     if conn is None and mode == "actual":
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     return _season_call(season_service.get_team_of_the_week, conn, mode, gameweek, photo_for=_photo_for)
+
+
+@app.get("/api/players/leaders", response_model=PlayerLeadersResponse)
+def player_leaders(
+    season: str = Query(CURRENT_SEASON, max_length=16),
+    position: Optional[LeaderPosition] = None,
+    sort: LeaderSort = "total_points",
+    limit: int = Query(50, ge=1, le=100),
+    conn=Depends(get_neo4j_conn),
+):
+    """Season leaders table from SEASON_STATS: one row per player, optionally one
+    position (that season's), sorted by `sort` then total points. Availability
+    (status/news) is only filled for the current season. Unknown season -> 404."""
+    return _season_call(season_service.get_player_leaders, conn, season, position, sort, limit,
+                        photo_for=_photo_for)
 
 
 # ============================================================================
