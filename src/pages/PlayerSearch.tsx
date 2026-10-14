@@ -3,8 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, ChevronRight, Loader2, Search, Sparkles, UserX } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
-import { apiService, handleApiError } from '../services/api';
+import { apiService, handleApiError, type PlayerLeader } from '../services/api';
 import { PlayerWithClub } from '../components/PlayerWithClub';
+import { SeasonLeaders, type LeadersFilters } from '../components/players/SeasonLeaders';
 import { usePlayerAvatars } from '../hooks/usePlayerAvatars';
 import {
   Button,
@@ -30,6 +31,11 @@ import { StatBarChart } from '../components/players/StatBarChart';
 
 const EXAMPLE_SEARCHES = ['Salah', 'Haaland', 'De Bruyne', 'Trent', 'Saka'];
 
+/** Seasons with stats, newest first (the profile picker adds "All seasons"). */
+const PLAYER_SEASONS = ['2026-27', '2025-26', '2024-25', '2023-24', '2022-23', '2021-22', '2020-21'];
+
+const DEFAULT_LEADERS_FILTERS: LeadersFilters = { season: PLAYER_SEASONS[0], position: null, sort: 'total_points' };
+
 type PlayerResult = Record<string, any>;
 type PlayerSearchRouteState = {
   player?: PlayerResult;
@@ -41,6 +47,21 @@ type PlayerSearchRouteState = {
     season?: string;
   };
 };
+/** Where the open profile came from, which decides what "Back" does. */
+type DetailOrigin = 'history' | 'results' | 'leaders';
+
+/** A season-leaders row in the shape the profile view reads from a search result. */
+function leaderToPlayer(leader: PlayerLeader): PlayerResult {
+  return {
+    player_name: leader.name,
+    team_name: leader.team ?? undefined,
+    position: leader.position ?? undefined,
+    avatar: leader.photo ?? undefined,
+    status: leader.status ?? undefined,
+    chance_of_playing_next_round: leader.chance_of_playing_next_round,
+    news: leader.news ?? undefined,
+  };
+}
 
 export function PlayerSearch() {
   const { neo4jConnected } = useAppStore();
@@ -49,10 +70,12 @@ export function PlayerSearch() {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlayerResult[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(null);
-  const [detailOrigin, setDetailOrigin] = useState<'history' | 'results' | null>(null);
+  const [detailOrigin, setDetailOrigin] = useState<DetailOrigin | null>(null);
   const [detailSeason, setDetailSeason] = useState<string>('All seasons');
   const [detailCompareState, setDetailCompareState] = useState<PlayerSearchRouteState['compare'] | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  // Lives here (not in the table) so filters survive opening a profile and coming back.
+  const [leadersFilters, setLeadersFilters] = useState<LeadersFilters>(DEFAULT_LEADERS_FILTERS);
 
   const queryClient = useQueryClient();
   // Only the most recently submitted search may write results (guards against out-of-order responses).
@@ -93,6 +116,32 @@ export function PlayerSearch() {
     searchMutation.mutate(name);
   };
 
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    // An emptied search box goes back to the season leaders (ignoring any search in flight).
+    if (!value.trim() && !selectedPlayer) {
+      latestSearchRef.current = '';
+      searchMutation.reset();
+      setResults([]);
+      setHasSearched(false);
+    }
+  };
+
+  /** Opens a player's profile; `from` also sets where "Back" returns and the season shown. */
+  const openPlayer = (player: PlayerResult, from?: { origin: DetailOrigin; season: string }) => {
+    setSelectedPlayer(player);
+    if (from) {
+      setDetailOrigin(from.origin);
+      setDetailSeason(from.season);
+      setDetailCompareState(null);
+    }
+  };
+
+  const openLeader = (leader: PlayerLeader, season: string) => {
+    openPlayer(leaderToPlayer(leader), { origin: 'leaders', season });
+    window.scrollTo({ top: 0 });
+  };
+
   useEffect(() => {
     const state = location.state as PlayerSearchRouteState | null;
     if (!state?.player) {
@@ -107,19 +156,20 @@ export function PlayerSearch() {
   }, [location.state]);
 
   const showSkeleton = searchMutation.isPending && results.length === 0 && !selectedPlayer;
+  const showLeaders = !selectedPlayer && results.length === 0 && !searchMutation.isPending;
 
   return (
     <Container className="pb-10">
       <PageHeader
         eyebrow="Player stats"
         title="Players"
-        description="Search any FPL player since 2020-21 for season totals, per-game rates and next-gameweek predictions."
+        description="Browse each season's leaders, or search any FPL player since 2020-21 for season totals, per-game rates and next-gameweek predictions."
       />
 
       <form onSubmit={handleSearch} role="search" className="flex flex-col gap-2 sm:flex-row">
         <SearchInput
           value={query}
-          onChange={setQuery}
+          onChange={handleQueryChange}
           label="Player name"
           placeholder={neo4jConnected ? 'Search by player name…' : 'Connecting to the database…'}
           disabled={!neo4jConnected}
@@ -186,7 +236,16 @@ export function PlayerSearch() {
           <ResultsList
             results={results}
             avatarByName={avatarByName}
-            onSelect={(player) => setSelectedPlayer(player)}
+            onSelect={(player) => openPlayer(player)}
+          />
+        )}
+
+        {showLeaders && (
+          <SeasonLeaders
+            seasons={PLAYER_SEASONS}
+            filters={leadersFilters}
+            onFiltersChange={setLeadersFilters}
+            onSelectPlayer={openLeader}
           />
         )}
 
@@ -218,7 +277,9 @@ export function PlayerSearch() {
                 ? detailCompareState?.player1 && detailCompareState?.player2
                   ? 'Back to compare players'
                   : 'Back'
-                : 'Back to results'
+                : detailOrigin === 'leaders'
+                  ? 'Back to season leaders'
+                  : 'Back to results'
             }
           />
         )}
@@ -306,7 +367,7 @@ function PlayerDetail({
   backLabel: string;
   initialSeason: string;
 }) {
-  const resolvedInitialSeason = initialSeason === 'All seasons' ? '2026-27' : initialSeason;
+  const resolvedInitialSeason = initialSeason === 'All seasons' ? PLAYER_SEASONS[0] : initialSeason;
   const [selectedSeason, setSelectedSeason] = useState<string>(resolvedInitialSeason);
 
   const playerName: string | undefined = player.player_name ?? player.name;
@@ -408,7 +469,7 @@ function PlayerDetail({
     { label: 'Max selected', value: maxSelected ? maxSelected.toLocaleString() : '—' },
   ];
 
-  const seasons = ['All seasons', '2026-27', '2025-26', '2024-25', '2023-24', '2022-23', '2021-22', '2020-21'];
+  const seasons = ['All seasons', ...PLAYER_SEASONS];
   const status: string | undefined = stats.status ?? player.status;
   const news: string | undefined = stats.news ?? player.news;
   const chance: number | null | undefined = stats.chance_of_playing_next_round ?? player.chance_of_playing_next_round;

@@ -89,9 +89,9 @@ export function LeagueTable() {
       ),
     },
     { key: 'played', header: 'Pl', description: 'Played', align: 'right' },
-    { key: 'won', header: 'W', description: 'Won', align: 'right' },
-    { key: 'drawn', header: 'D', description: 'Drawn', align: 'right' },
-    { key: 'lost', header: 'L', description: 'Lost', align: 'right' },
+    { key: 'won', header: 'W', description: 'Won', align: 'right', hideBelow: 'sm' },
+    { key: 'drawn', header: 'D', description: 'Drawn', align: 'right', hideBelow: 'sm' },
+    { key: 'lost', header: 'L', description: 'Lost', align: 'right', hideBelow: 'sm' },
     { key: 'goals_for', header: 'GF', description: 'Goals for', align: 'right', hideBelow: 'md' },
     { key: 'goals_against', header: 'GA', description: 'Goals against', align: 'right', hideBelow: 'md' },
     {

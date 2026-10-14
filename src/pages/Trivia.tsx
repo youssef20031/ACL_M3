@@ -536,12 +536,12 @@ export function Trivia() {
   const inQuiz = view !== "select";
   const stats = inQuiz
     ? [
-        { label: "Score", value: liveScore, detail: "Correct this quiz", highlight: true },
+        { label: "Score", value: liveScore, detail: "This quiz", highlight: true },
         { label: "Answered", value: `${liveAnswered}/${QUESTIONS_PER_TEST}`, detail: DIFFICULTY_CONFIG[difficulty].label },
         { label: "Accuracy", value: accuracy(liveScore, liveAnswered), detail: "This quiz" },
       ]
     : [
-        { label: "Score", value: triviaScore, detail: "Correct, all time", highlight: true },
+        { label: "Score", value: triviaScore, detail: "All time", highlight: true },
         { label: "Answered", value: triviaTotal, detail: "All time" },
         { label: "Accuracy", value: accuracy(triviaScore, triviaTotal), detail: "All time" },
       ];

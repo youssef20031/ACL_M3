@@ -224,6 +224,51 @@ export interface TeamOfWeekResponse {
   bench: TeamOfWeekPlayer[];
 }
 
+export type PlayerLeaderSort =
+  | 'total_points'
+  | 'goals'
+  | 'assists'
+  | 'clean_sheets'
+  | 'bonus'
+  | 'points_per_game'
+  | 'minutes';
+
+export interface PlayerLeader {
+  name: string;
+  team: string | null;
+  /** The player's position in that season. */
+  position: PositionCode | null;
+  games: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  clean_sheets: number;
+  bonus: number;
+  total_points: number;
+  /** total_points / games, 2 dp. */
+  points_per_game: number;
+  /** FPL availability; current season only (null for past seasons). */
+  status: string | null;
+  chance_of_playing_next_round: number | null;
+  news: string | null;
+  photo: string | null;
+}
+
+export interface PlayerLeadersResponse {
+  season: string;
+  sort: PlayerLeaderSort;
+  position: PositionCode | null;
+  players: PlayerLeader[];
+}
+
+export interface PlayerLeadersParams {
+  season?: string;
+  position?: PositionCode;
+  sort?: PlayerLeaderSort;
+  /** 1–100, default 50. */
+  limit?: number;
+}
+
 // API functions
 export const apiService = {
   // Health & Connection
@@ -378,6 +423,11 @@ export const apiService = {
       player2,
       season,
     });
+    return data;
+  },
+
+  async getPlayerLeaders(params: PlayerLeadersParams = {}, signal?: AbortSignal): Promise<PlayerLeadersResponse> {
+    const { data } = await api.get<PlayerLeadersResponse>('/api/players/leaders', { params, signal });
     return data;
   },
 

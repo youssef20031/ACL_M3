@@ -1,5 +1,22 @@
 import { cn } from '../../utils/cn';
 import { ClubCrest } from './Identity';
+import { getClubAbbreviation } from '../../utils/clubLogos';
+
+/** Full club name from sm up; the three-letter code on phones, where names used to truncate. */
+function TeamName({ team }: { team: string }) {
+  const code = getClubAbbreviation(team);
+  return (
+    <span className="truncate text-sm font-semibold text-fg">
+      <span className={code ? 'hidden sm:inline' : undefined}>{team}</span>
+      {code && (
+        <abbr title={team} className="no-underline sm:hidden">
+          <span aria-hidden="true">{code}</span>
+          <span className="sr-only">{team}</span>
+        </abbr>
+      )}
+    </span>
+  );
+}
 
 export type FixtureStatus = 'scheduled' | 'live' | 'finished' | 'postponed';
 
@@ -36,7 +53,7 @@ export function FixtureRow({ home, away, homeScore, awayScore, kickoff, status =
       )}
     >
       <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-        <span className="truncate text-sm font-semibold text-fg">{home}</span>
+        <TeamName team={home} />
         <ClubCrest team={home} size={24} />
       </div>
 
@@ -72,7 +89,7 @@ export function FixtureRow({ home, away, homeScore, awayScore, kickoff, status =
 
       <div className="flex min-w-0 items-center gap-2">
         <ClubCrest team={away} size={24} />
-        <span className="truncate text-sm font-semibold text-fg">{away}</span>
+        <TeamName team={away} />
       </div>
     </div>
   );

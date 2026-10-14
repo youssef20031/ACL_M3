@@ -10,12 +10,12 @@ import {
   Card,
   ClubCrest,
   Container,
-  Countdown,
   EmptyState,
   ErrorState,
   FixtureRow,
   PlayerAvatar,
   SectionHeading,
+  Skeleton,
   SkeletonRows,
   StatusBadge,
   type FixtureStatus,
@@ -97,45 +97,87 @@ function AskBox() {
   );
 }
 
+// Shared with TopPicks below, so the hero adds no extra request.
+const TOP_PICKS_QUERY = {
+  queryKey: ['top-performers', 'all', 6],
+  queryFn: () => apiService.predictTopPerformers(undefined, 6),
+  staleTime: 5 * 60_000,
+};
+
+function lastName(name: string) {
+  return name.split(' ').slice(-1)[0] || name;
+}
+
+/** The model's top prediction for the gameweek, featured in the hero. */
+function CaptainPick() {
+  const { data, isLoading } = useQuery(TOP_PICKS_QUERY);
+  const [top, ...rest] = data?.predictions ?? [];
+  const avatars = usePlayerAvatars(top ? [top.player_name] : []);
+
+  if (isLoading) return <Skeleton className="mt-6 h-[6.5rem] w-full max-w-xl rounded-lg" />;
+  if (!top) return null;
+  const opp = top.fixture_context;
+  const oppLabel = opp ? `v ${getClubAbbreviation(opp.opponent_team) || opp.opponent_team} (${opp.home_away === 'home' ? 'H' : 'A'})` : null;
+
+  return (
+    <div className="mt-6 flex max-w-xl items-center gap-4 rounded-lg border border-white/10 bg-black/25 p-4">
+      <PlayerAvatar name={top.player_name} src={avatars[top.player_name]} size={72} loading="eager" />
+      <div className="min-w-0 flex-1">
+        <p className="text-micro font-semibold uppercase text-accent">Model&rsquo;s captain pick</p>
+        <p className="truncate font-display text-h3 font-bold text-fg sm:text-h2">{top.player_name}</p>
+        <p className="flex items-center gap-1.5 text-data text-fg-muted">
+          {top.team_name && <ClubCrest team={top.team_name} size={16} />}
+          <span className="truncate">{[top.team_name, oppLabel].filter(Boolean).join(' · ')}</span>
+        </p>
+        {rest.length > 0 && (
+          <p className="mt-1 truncate text-micro text-fg-subtle">
+            Next best: {rest.slice(0, 2).map((p) => `${lastName(p.player_name)} ${p.predicted_points.toFixed(1)}`).join(' · ')}
+          </p>
+        )}
+      </div>
+      <div className="shrink-0 text-right">
+        <span className="block font-display text-h1 font-extrabold leading-none tabular-nums text-accent sm:text-display">
+          {top.predicted_points.toFixed(1)}
+        </span>
+        <span className="text-micro font-semibold uppercase text-fg-subtle">
+          <abbr title="Predicted points" className="no-underline">xPts</abbr>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function Hero() {
   const { data: season } = useQuery({
     queryKey: ['season-current'],
     queryFn: () => apiService.getCurrentSeason(),
     staleTime: 5 * 60_000,
   });
-  const deadline = season?.next_deadline ? new Date(season.next_deadline) : null;
+  const gw = season?.next_gameweek;
 
+  // The countdown lives in the deadline bar on every page; the hero leads with the model's pick.
   return (
     <section
       aria-labelledby="home-title"
       className="border-b border-line"
       style={{ backgroundImage: 'linear-gradient(135deg, rgb(var(--brand)) 0%, rgb(var(--bg)) 70%)' }}
     >
-      <Container className="grid gap-6 py-8 sm:py-10 lg:grid-cols-[1.1fr_1fr] lg:items-center">
+      <Container className="grid grid-cols-1 gap-6 py-8 sm:py-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center">
         <div>
-          <p className="text-micro font-semibold uppercase text-accent">
-            {season?.season ?? 'Fantasy Premier League'}
-            {season?.next_gameweek ? ` · Gameweek ${season.next_gameweek}` : ''}
-          </p>
+          <p className="text-micro font-semibold uppercase text-accent">{season?.season ?? 'Fantasy Premier League'}</p>
           <h1 id="home-title" className="mt-1 font-display text-h1 font-extrabold text-fg sm:text-display">
-            {deadline ? 'Next deadline' : 'Pitch Me'}
+            {gw ? `Gameweek ${gw}` : 'Pitch Me'}
           </h1>
-          {deadline ? (
-            <>
-              <p className="mt-1 text-body text-fg-muted">
-                {deadline.toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
-              </p>
-              <Countdown target={deadline} className="mt-4 gap-4 [&_span.font-display]:text-h1" />
-            </>
-          ) : (
-            <p className="mt-2 max-w-lg text-body text-fg-muted">Fixtures, the table, model predictions and an AI assistant for FPL.</p>
-          )}
+          <p className="mt-1 max-w-lg text-body text-fg-muted">
+            Model picks, fixtures and team news for the next deadline.
+          </p>
+          <CaptainPick />
           <div className="mt-6 flex flex-wrap gap-2">
             <ButtonLink to="/team-of-the-week" icon={<Sparkles className="h-4 w-4" aria-hidden="true" />}>
               Predicted team
             </ButtonLink>
-            <ButtonLink to="/fixtures" variant="secondary">
-              Fixtures
+            <ButtonLink to="/predictions" variant="secondary">
+              All predictions
             </ButtonLink>
           </div>
         </div>
@@ -225,11 +267,7 @@ function MiniTable() {
 }
 
 function TopPicks() {
-  const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['top-performers', 'all', 6],
-    queryFn: () => apiService.predictTopPerformers(undefined, 6),
-    staleTime: 5 * 60_000,
-  });
+  const { data, isLoading, isError, refetch } = useQuery(TOP_PICKS_QUERY);
   const players = data?.predictions ?? [];
   const avatars = usePlayerAvatars(players.map((p) => p.player_name));
 
@@ -314,15 +352,17 @@ export function Home() {
   return (
     <>
       <Hero />
-      <Container className="grid gap-5 py-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      {/* Two independent columns, so cards keep their natural height (rows of paired cards
+          stretched the shorter one and left empty blocks). */}
+      <Container className="grid items-start gap-5 py-6 lg:grid-cols-3">
+        <div className="space-y-5 lg:col-span-2">
           <NextFixtures />
-        </div>
-        <MiniTable />
-        <div className="lg:col-span-2">
           <TopPicks />
         </div>
-        <TeamNews />
+        <div className="space-y-5">
+          <MiniTable />
+          <TeamNews />
+        </div>
       </Container>
     </>
   );

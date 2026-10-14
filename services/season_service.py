@@ -1,11 +1,12 @@
 """
 Current-season views for the read-only season endpoints: season status, fixtures,
-league table, injuries and team of the week.
+league table, injuries and team of the week, plus the per-season player leaders
+table (any season with SEASON_STATS).
 
 Layout:
   * pure functions over plain lists/dicts (summarize_season, fixtures_for_gameweek,
-    compute_table, sort_injuries, team_opponents, build_team_of_the_week) - tested
-    without Neo4j;
+    compute_table, sort_injuries, team_opponents, build_team_of_the_week,
+    leader_rows) - tested without Neo4j;
   * loaders that run one Cypher query each and read data/live files, cached in-process
     by input (cleared by clear_cache(), called from api_main.reset_graph_caches, and
     expiring after CACHE_TTL_SECONDS as a safety net);
@@ -23,7 +24,7 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-from config.settings import CURRENT_SEASON
+from config.settings import CURRENT_SEASON, SEASONS
 from services import team_optimizer as opt
 
 logger = logging.getLogger(__name__)
@@ -432,6 +433,41 @@ def build_team_of_the_week(selection: opt.Selection, details: Dict[str, Dict[str
     }
 
 
+# ------------------------------------------------------------------ pure: player leaders
+
+def leader_rows(raw: Iterable[Dict[str, Any]], include_availability: bool) -> List[Dict[str, Any]]:
+    """Raw LEADERS_QUERY rows -> API rows (photo left to the caller via `_code`).
+
+    Keeps the query's order. games is matches played (appearances); points_per_game is
+    total_points / games (0 when no games),
+    rounded to 2 dp. FPL availability describes the player today, so it is only
+    returned for the current season (include_availability) and is null otherwise.
+    """
+    out = []
+    for r in raw:
+        games = _int_or_none(r.get("games")) or 0
+        total_points = _int_or_none(r.get("total_points")) or 0
+        out.append({
+            "name": r["name"],
+            "team": _str_or_none(r.get("team")),
+            "position": normalize_position(r.get("position")),
+            "games": games,
+            "minutes": _int_or_none(r.get("minutes")) or 0,
+            "goals": _int_or_none(r.get("goals")) or 0,
+            "assists": _int_or_none(r.get("assists")) or 0,
+            "clean_sheets": _int_or_none(r.get("clean_sheets")) or 0,
+            "bonus": _int_or_none(r.get("bonus")) or 0,
+            "total_points": total_points,
+            "points_per_game": round(total_points / games, 2) if games > 0 else 0.0,
+            "status": _str_or_none(r.get("status")) if include_availability else None,
+            "chance_of_playing_next_round":
+                _int_or_none(r.get("chance_of_playing_next_round")) if include_availability else None,
+            "news": _str_or_none(r.get("news")) if include_availability else None,
+            "_code": _int_or_none(r.get("fpl_code")),
+        })
+    return out
+
+
 def with_photos(payload: Any, photo_for: Optional[PhotoFn]) -> Any:
     """Deep copy with every player's internal `_code` replaced by a `photo` URL."""
     if isinstance(payload, list):
@@ -473,6 +509,53 @@ RETURN p.name AS name, pos.code AS position, r.team AS team, r.total_points AS t
        p.news AS news, p.fpl_code AS fpl_code
 """
 
+# Sort key (API value) -> ORDER BY column of LEADERS_QUERY. The only text spliced into
+# the query; user input never reaches it unchecked.
+LEADER_SORTS = {
+    "total_points": "total_points",
+    "goals": "goals",
+    "assists": "assists",
+    "clean_sheets": "clean_sheets",
+    "bonus": "bonus",
+    "points_per_game": "points_per_game",
+    "minutes": "minutes",
+}
+LEADER_POSITIONS = ("GK", "DEF", "MID", "FWD")
+# Rates need a sample: without it a single 15-point cameo tops "points per game".
+PPG_MIN_MINUTES = 270
+
+# SEASON_STATS holds per-season sums plus the team and position the player had that
+# season, so "midfielders in 2022-23" means midfielders then, not today.
+LEADERS_QUERY = """
+MATCH (p:Player)-[st:SEASON_STATS]->(:Season {id: $season})
+WHERE ($position IS NULL OR st.position = $position) AND coalesce(st.minutes, 0) >= $min_minutes
+// games = matches actually played (minutes > 0), FPL's basis for points per game. st.games
+// counts every gameweek row, including ones on the bench or injured.
+WITH p, st, coalesce(st.appearances, st.games, 0) AS games, coalesce(st.total_points, 0) AS total_points
+RETURN p.name AS name, st.team AS team, st.position AS position, games,
+       coalesce(st.minutes, 0) AS minutes, coalesce(st.goals, 0) AS goals,
+       coalesce(st.assists, 0) AS assists, coalesce(st.clean_sheets, 0) AS clean_sheets,
+       coalesce(st.bonus, 0) AS bonus, total_points,
+       CASE WHEN games > 0 THEN total_points * 1.0 / games ELSE 0.0 END AS points_per_game,
+       p.status AS status, p.chance_of_playing_next_round AS chance_of_playing_next_round,
+       p.news AS news, p.fpl_code AS fpl_code
+ORDER BY {order_by} DESC, total_points DESC, name
+LIMIT $limit
+"""
+
+
+def leaders_query(sort: str = "total_points", position: Optional[str] = None,
+                  season: str = CURRENT_SEASON, limit: int = 50) -> Tuple[str, Dict[str, Any]]:
+    """(cypher, params) for the season leaders table. Raises ValueError on an unknown
+    sort key or position."""
+    if sort not in LEADER_SORTS:
+        raise ValueError(f"sort must be one of {', '.join(LEADER_SORTS)}")
+    if position is not None and position not in LEADER_POSITIONS:
+        raise ValueError(f"position must be one of {', '.join(LEADER_POSITIONS)}")
+    query = LEADERS_QUERY.replace("{order_by}", LEADER_SORTS[sort])
+    min_minutes = PPG_MIN_MINUTES if sort == "points_per_game" else 0
+    return query, {"season": season, "position": position, "limit": int(limit), "min_minutes": min_minutes}
+
 # ------------------------------------------------------------------ loaders (cached)
 
 def load_fixtures(conn, season: str = CURRENT_SEASON) -> List[Dict[str, Any]]:
@@ -513,6 +596,21 @@ def get_injuries(conn, team: Optional[str] = None, photo_for: Optional[PhotoFn] 
         wanted = team.strip().lower()
         rows = [r for r in rows if (r.get("team") or "").lower() == wanted]
     return {"updated_at": read_meta(season).get("status_fetched_at"),
+            "players": with_photos(rows, photo_for)}
+
+
+def get_player_leaders(conn, season: str = CURRENT_SEASON, position: Optional[str] = None,
+                       sort: str = "total_points", limit: int = 50,
+                       photo_for: Optional[PhotoFn] = None) -> Dict[str, Any]:
+    """Season leaders: one row per player with SEASON_STATS in `season`, sorted by `sort`
+    (desc), then total points and name. Unknown season -> NotFoundError."""
+    if season not in SEASONS:
+        raise NotFoundError(f"Unknown season {season}; expected one of {', '.join(SEASONS)}")
+    query, params = leaders_query(sort, position, season, limit)
+    rows = _cached(("leaders", season, position, sort, int(limit)),
+                   lambda: leader_rows(conn.execute_query(query, params),
+                                       include_availability=season == CURRENT_SEASON))
+    return {"season": season, "sort": sort, "position": position,
             "players": with_photos(rows, photo_for)}
 
 

@@ -70,7 +70,8 @@ export function Fixtures() {
   };
 
   return (
-    <Container>
+    // A centred column: rows are centred on the score, so a full-width card left them stranded
+    <Container className="max-w-4xl">
       <PageHeader
         eyebrow={data?.season ?? 'This season'}
         title="Fixtures & results"
