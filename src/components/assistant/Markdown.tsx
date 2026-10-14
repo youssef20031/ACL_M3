@@ -74,7 +74,11 @@ const COMPONENTS: Components = {
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <div className={cn('min-w-0 break-words text-body text-fg', className)}>
-      <ReactMarkdown components={COMPONENTS}>{children}</ReactMarkdown>
+      {/* skipHtml: raw HTML in an answer is dropped, never rendered (react-markdown escapes it
+          without rehype-raw anyway; this keeps it that way if plugins are added later) */}
+      <ReactMarkdown components={COMPONENTS} skipHtml>
+        {children}
+      </ReactMarkdown>
     </div>
   );
 }

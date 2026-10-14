@@ -10,15 +10,14 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from utils.console import ensure_utf8_stdio
 ensure_utf8_stdio()  # before any startup print/log (emoji crash cp1252 on Windows)
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from dataclasses import asdict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import asyncio
-import hmac
 import json
 import inspect
 import time
@@ -56,6 +55,7 @@ from services.player_index import PlayerIndex
 from services.avatars import AvatarService, ImageProxy, is_proxy_allowed, FPL_PHOTO_URL
 from services.predictions import get_predictions_df
 from services import season_service
+from services.security import RateLimiter, limits_from_env, require_admin
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
 from llm.prompts import PromptTemplates
@@ -416,7 +416,7 @@ register_ml_routes(app, _lazy_ml)
 # ============================================================================
 
 @app.get("/api/ml/top-performers")
-async def get_top_performers_csv(position: Optional[str] = None, limit: int = 10):
+async def get_top_performers_csv(position: Optional[str] = None, limit: int = Query(10, ge=1, le=50)):
     """
     Get top performers from precomputed predictions CSV.
     This endpoint provides faster responses by using pre-generated predictions.
@@ -475,7 +475,7 @@ async def get_top_performers_csv(position: Optional[str] = None, limit: int = 10
 
 
 @app.get("/api/ml/best-value")
-async def get_best_value_csv(position: Optional[str] = None, limit: int = 10):
+async def get_best_value_csv(position: Optional[str] = None, limit: int = Query(10, ge=1, le=50)):
     """
     Get best value players from precomputed predictions CSV.
     Value is calculated as predicted_points / (value / 10).
@@ -554,13 +554,34 @@ class ConnectionResponse(BaseModel):
     stats: Optional[Dict[str, int]] = None
 
 
+MAX_QUESTION_CHARS = 1000
+MAX_HISTORY_MESSAGES = 20
+MAX_HISTORY_CHARS = 2000
+
+
 class QueryRequest(BaseModel):
-    question: str
-    model: str = "gpt-oss-120b"
-    retrieval_method: str = "Hybrid"  # "Baseline", "Embeddings", "Hybrid"
-    embedding_model: str = "minilm"  # "minilm" or "mpnet"
-    is_first_message: bool = False
-    chat_history: List[Dict[str, str]] = []  # List of {"role": "user"/"assistant", "content": "..."}
+    question: str = Field(min_length=1, max_length=MAX_QUESTION_CHARS)
+    model: str = Field(default="gpt-oss-120b", max_length=64)  # checked against LLMManager.MODELS
+    retrieval_method: str = Field(default="Hybrid", max_length=32)  # "Baseline", "Embeddings", "Hybrid"
+    embedding_model: str = Field(default="minilm", max_length=32)  # "minilm" or "mpnet"
+    is_first_message: bool = False  # only allows a greeting; the system prompt is always used
+    chat_history: List[Dict[str, str]] = Field(default_factory=list)  # [{"role": "user"/"assistant", "content": ...}]
+
+    @field_validator("chat_history")
+    @classmethod
+    def _bound_history(cls, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Keep the client-sent transcript small and to plain user/assistant turns.
+
+        The prompt only uses the last few turns, but an unbounded list or huge messages would
+        still cost tokens; other roles (e.g. "system") are dropped rather than trusted.
+        """
+        cleaned = []
+        for msg in history[-MAX_HISTORY_MESSAGES:]:
+            role = msg.get("role")
+            if role not in ("user", "assistant"):
+                continue
+            cleaned.append({"role": role, "content": str(msg.get("content", ""))[:MAX_HISTORY_CHARS]})
+        return cleaned
 
 
 class QueryResponse(BaseModel):
@@ -758,8 +779,8 @@ class EmbeddingBuildResponse(BaseModel):
 
 
 class PlayerSearchRequest(BaseModel):
-    query: str
-    limit: int = 20
+    query: str = Field(max_length=100)
+    limit: int = Field(default=20, ge=1, le=50)
     include_avatars: bool = False  # Default to False for fast search
 
 
@@ -1233,7 +1254,7 @@ async def health_check():
     }
 
 
-@app.post("/api/connection/connect", response_model=ConnectionResponse)
+@app.post("/api/connection/connect", response_model=ConnectionResponse, dependencies=[Depends(require_admin)])
 async def connect_neo4j(request: ConnectionRequest):
     """Connect to Neo4j database."""
     try:
@@ -1278,7 +1299,7 @@ async def connect_neo4j(request: ConnectionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/connection/disconnect")
+@app.post("/api/connection/disconnect", dependencies=[Depends(require_admin)])
 async def disconnect_neo4j():
     """Disconnect from Neo4j."""
     if app_state["neo4j_conn"]:
@@ -1289,7 +1310,12 @@ async def disconnect_neo4j():
     return {"success": True, "message": "Disconnected"}
 
 
-@app.post("/api/query", response_model=QueryResponse)
+# Per-client limits for the LLM endpoint: every answer spends the shared Groq quota.
+# Override with QUERY_RATE_LIMITS="count/seconds,..." (default 10/min and 120/hour).
+query_limiter = RateLimiter(limits_from_env("QUERY_RATE_LIMITS", "10/60,120/3600"))
+
+
+@app.post("/api/query", response_model=QueryResponse, dependencies=[Depends(query_limiter.dependency)])
 async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
     """Process FPL query and return answer."""
     try:
@@ -1581,12 +1607,15 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             graph_data=graph_data,
             model_type=ml_model_type
         )
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Query failed")
+        raise HTTPException(status_code=500, detail="The assistant couldn't answer that right now. Please try again.")
 
 
-@app.post("/api/embeddings/build", response_model=EmbeddingBuildResponse)
+@app.post("/api/embeddings/build", response_model=EmbeddingBuildResponse, dependencies=[Depends(require_admin)])
 async def build_embeddings(request: EmbeddingBuildRequest, conn=Depends(get_neo4j_conn)):
     """Build player embeddings from Neo4j data."""
     try:
@@ -1865,19 +1894,13 @@ async def proxy_image(url: str):
     )
 
 
-@app.post("/api/admin/reload")
-async def admin_reload(x_admin_token: Optional[str] = Header(default=None), conn=Depends(get_neo4j_conn)):
+@app.post("/api/admin/reload", dependencies=[Depends(require_admin)])
+async def admin_reload(conn=Depends(get_neo4j_conn)):
     """Rebuild graph-derived caches after the daily pipeline updated the graph.
 
     Disabled unless ADMIN_TOKEN is set; callers send it in the X-Admin-Token header.
     Prediction files are picked up automatically by mtime and need no reload.
     """
-    expected = os.getenv("ADMIN_TOKEN", "")
-    if not expected:
-        raise HTTPException(status_code=404, detail="Not found")
-    if not x_admin_token or not hmac.compare_digest(x_admin_token, expected):
-        raise HTTPException(status_code=403, detail="Forbidden")
-
     started = time.time()
     reset_graph_caches()
     _health_stats_cache["at"] = 0.0
@@ -1890,7 +1913,7 @@ async def admin_reload(x_admin_token: Optional[str] = Header(default=None), conn
     return {"players_indexed": len(index), "latest_season": latest, "seconds": round(time.time() - started, 2)}
 
 
-@app.post("/api/data/load")
+@app.post("/api/data/load", dependencies=[Depends(require_admin)])
 async def load_fpl_data(request: DataLoadRequest, conn=Depends(get_neo4j_conn)):
     """Load FPL data into Neo4j."""
     try:
@@ -1928,7 +1951,7 @@ def get_database_stats(conn=Depends(get_neo4j_conn)):
 # Fixture Management Endpoints
 # ============================================================================
 
-@app.post("/api/fixtures/load", response_model=FixtureLoadResponse)
+@app.post("/api/fixtures/load", response_model=FixtureLoadResponse, dependencies=[Depends(require_admin)])
 def load_fixtures(request: FixtureLoadRequest, conn=Depends(get_neo4j_conn)):
     """
     Load fixture data from CSV file into Neo4j.
