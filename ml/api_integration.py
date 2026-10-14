@@ -3,7 +3,7 @@ API Integration for ML Predictions
 Extends the FastAPI backend with ML prediction endpoints
 """
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Tuple
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -64,7 +64,7 @@ class PlayerPredictionRequest(BaseModel):
 class TopPerformersRequest(BaseModel):
     """Request for top performers prediction."""
     position: Optional[str] = None
-    top_k: int = 10
+    top_k: int = Field(default=10, ge=1, le=50)
     season: Optional[str] = None
 
 
@@ -72,7 +72,7 @@ class BestValueRequest(BaseModel):
     """Request for best value players."""
     position: Optional[str] = None
     max_price: Optional[float] = None
-    top_k: int = 10
+    top_k: int = Field(default=10, ge=1, le=50)
 
 
 class PredictionResponse(BaseModel):
