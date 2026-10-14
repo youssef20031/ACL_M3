@@ -93,7 +93,8 @@ function Opponent({ fixture }: { fixture: MLPrediction['fixture_context'] }) {
 function PlayerCell({ row, avatar }: { row: PredictionRow; avatar: string | null | undefined }) {
   const unavailable = row.status && row.status !== 'a';
   return (
-    <span className="block max-w-[15rem] sm:max-w-[18rem]">
+    // Narrow on phones so rank + player + xPts fit 390px without hiding the points off-screen
+    <span className="block max-w-[11.5rem] sm:max-w-[18rem]">
       <PlayerWithClub
         playerName={row.player_name}
         teamName={row.team_name}
