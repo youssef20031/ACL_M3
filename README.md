@@ -1,4 +1,4 @@
-# FPL FantasyTrivia - Graph-RAG System
+# PitchMe - Graph-RAG & ML System
 
 A **Graph-RAG** (Retrieval-Augmented Generation) powered Fantasy Premier League trivia and Q&A assistant using Neo4j, React, FastAPI, and multiple LLMs via HuggingFace.
 
