@@ -1,5 +1,6 @@
 import { Clock } from 'lucide-react';
 import { Countdown } from '../ui';
+import { RepoLink } from './RepoLink';
 
 interface DeadlineBarProps {
   gameweek: number;
@@ -25,7 +26,11 @@ export function DeadlineBar({ gameweek, deadline }: DeadlineBarProps) {
           <span className="font-semibold text-fg">Gameweek {gameweek} deadline</span>
           <span className="text-fg-subtle">{when}</span>
         </p>
-        <Countdown target={date} className="text-data" />
+        <div className="flex items-center gap-4">
+          <Countdown target={date} className="text-data" />
+          <span aria-hidden="true" className="h-4 w-px bg-line" />
+          <RepoLink label="GitHub" />
+        </div>
       </div>
     </div>
   );
