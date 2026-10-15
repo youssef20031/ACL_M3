@@ -49,7 +49,7 @@ Environment caveat: `.venv` is Python 3.14, while Docker/Railway/CI use 3.11.
 
 ## Backend architecture
 
-`api_main.py` (~2000 lines) holds nearly all routes and glue. Shared state lives in the module-level `app_state` dict, populated in `lifespan()`: Neo4j connection, LLM manager, trivia cache, player index, avatar service/image proxy, embedding manager, ML integration. Routes get the connection through the `get_neo4j_conn` dependency; the connection can also be swapped at runtime via `POST /api/connection/connect` (Settings page), which calls `reset_graph_caches()`.
+`api_main.py` (~2000 lines) holds nearly all routes and glue. Shared state lives in the module-level `app_state` dict, populated in `lifespan()`: Neo4j connection, LLM manager, trivia cache, player index, avatar service/image proxy, embedding manager, ML integration. Routes get the connection through the `get_neo4j_conn` dependency; the connection can also be swapped at runtime via `POST /api/connection/connect` (Settings page). Both paths go through `_attach_neo4j()`, which resets graph caches, repoints the ML integration and rebuilds the player index. If Neo4j isn't reachable at startup, `lifespan()` keeps retrying in a background task (2 s doubling to 30 s) instead of giving up. After a VM reboot Docker restarts every container at once, ignoring `depends_on: service_healthy`, so the backend often starts before Neo4j.
 
 The Neo4j driver and the LLM clients are synchronous. Inside `async def` routes, wrap them (`await run_db(conn, q, p)`, `await asyncio.to_thread(...)`) or make the route a plain `def` so FastAPI runs it in its threadpool; a bare call blocks every other request for its full duration.
 
