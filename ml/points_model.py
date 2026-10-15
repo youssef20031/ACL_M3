@@ -8,10 +8,10 @@ a copy of the same match, and whose context features described the previous matc
 Design:
 - One row per player per fixture; the target is that fixture's total_points.
 - Player features use only matches from earlier gameweeks (rolling means, season to
-  date). Within a double gameweek both fixtures share the pre-deadline features, which
-  is exactly what's known when predicting.
+  date, the last match on its own). Within a double gameweek both fixtures share the
+  pre-deadline features, which is exactly what's known when predicting.
 - Team features come from a team-match table (one row per team per fixture, not per
-  player), also rolled over earlier gameweeks only.
+  player), also rolled over earlier gameweeks only, over 6 and 20 matches.
 - Context of the predicted fixture: home/away, opponent strength, rest days, fixtures
   in the gameweek, price, ownership rank. (FPL's xP is excluded; see feature_columns.)
 - The same build_features() runs for training and for inference: inference appends
@@ -58,6 +58,12 @@ FORM_STATS = [
     "defensive_contribution",
 ]
 WINDOWS = (3, 6)
+# The previous match on its own (`*_r1`): whether a player started it is the strongest single
+# signal for the next lineup (rotation, injuries, new signings), which the 3/6-match means blur.
+LAST_MATCH_STATS = ["minutes", "started", "total_points"]
+# Team / opponent strength over the last 6 matches (team_gf ...) and 20 (team_gf20 ...)
+TEAM_WINDOWS = (6, 20)
+TEAM_STATS = ["gf", "ga", "xgf", "xga"]
 
 # Promoted/new teams have no rolling history: start them a bit below average
 NEW_TEAM_PRIOR = {"team_gf": 1.1, "team_ga": 1.7, "team_xgf": 1.1, "team_xga": 1.7}
@@ -168,7 +174,8 @@ def build_features(history: pd.DataFrame, upcoming: Optional[pd.DataFrame] = Non
 
     # ---- player form, earlier gameweeks only
     form = _rolling_before_gameweek(df, "name", FORM_STATS, WINDOWS)
-    df = df.join(form)
+    last_match = _rolling_before_gameweek(df, "name", LAST_MATCH_STATS, (1,))
+    df = df.join(form).join(last_match)
 
     # Season to date: points per match played, appearances, minutes share
     df = df.sort_values(["name", "kickoff_time"])
@@ -189,27 +196,27 @@ def build_features(history: pd.DataFrame, upcoming: Optional[pd.DataFrame] = Non
 
     # ---- team strength (own team and opponent), earlier gameweeks only
     tm = _team_match_table(df[~df["is_upcoming"]])
-    tm_cols = ["gf", "ga", "xgf", "xga"]
-    team_form = _rolling_before_gameweek(tm, "team", tm_cols, (6,))
+    team_form = _rolling_before_gameweek(tm, "team", TEAM_STATS, TEAM_WINDOWS)
     tm = tm.join(team_form)
     # Upcoming fixtures have no team-match rows: give each team its form after its last match
     last = tm.sort_values("kickoff_time").groupby("team").tail(1)
     latest = {}
     for row in last.itertuples(index=False):
-        # Form including the last match = rolling over its last 6 incl. that one
-        hist = tm[tm["team"] == row.team].sort_values("kickoff_time").tail(6)
-        latest[row.team] = {c: hist[c].mean() for c in tm_cols}
-    keyed = tm.set_index(["season", "fixture", "team"])[[f"{c}_r6" for c in tm_cols]]
+        # Form including the last match = rolling over its last w incl. that one
+        hist = tm[tm["team"] == row.team].sort_values("kickoff_time")
+        latest[row.team] = {(c, w): hist[c].tail(w).mean() for w in TEAM_WINDOWS for c in TEAM_STATS}
+    pairs = [(c, w) for w in TEAM_WINDOWS for c in TEAM_STATS]
+    keyed = tm.set_index(["season", "fixture", "team"])[[f"{c}_r{w}" for c, w in pairs]]
 
     def team_feats(team_col: str, prefix: str) -> pd.DataFrame:
         idx = pd.MultiIndex.from_frame(df[["season", "fixture", team_col]].rename(columns={team_col: "team"}))
         vals = keyed.reindex(idx).to_numpy()
-        feats = pd.DataFrame(vals, index=df.index, columns=[f"{prefix}_{c}" for c in tm_cols])
+        feats = pd.DataFrame(vals, index=df.index, columns=[_team_feature(prefix, c, w) for c, w in pairs])
         up = df["is_upcoming"].to_numpy()
-        for c in tm_cols:
-            col = f"{prefix}_{c}"
+        for c, w in pairs:
+            col = _team_feature(prefix, c, w)
             if up.any():
-                fill = df.loc[up, team_col].map(lambda t: latest.get(t, {}).get(c, np.nan))
+                fill = df.loc[up, team_col].map(lambda t: latest.get(t, {}).get((c, w), np.nan))
                 feats.loc[up, col] = fill.astype(float).to_numpy()
             prior = NEW_TEAM_PRIOR[f"team_{c}"]
             feats[col] = feats[col].fillna(prior) if c in ("gf", "ga") else feats[col]
@@ -232,16 +239,27 @@ def build_features(history: pd.DataFrame, upcoming: Optional[pd.DataFrame] = Non
     return df.sort_values(["kickoff_time", "fixture", "name"]).reset_index(drop=True)
 
 
+def _team_feature(prefix: str, stat: str, window: int) -> str:
+    """team_gf for the 6-match window (its original name), team_gf20 for 20 matches."""
+    return f"{prefix}_{stat}" if window == 6 else f"{prefix}_{stat}{window}"
+
+
 def feature_columns() -> List[str]:
     cols = [f"{c}_r{w}" for w in WINDOWS for c in FORM_STATS]
     cols += ["season_matches_before", "season_ppg", "season_minutes_share", "career_matches_before", "days_rest"]
-    cols += [f"{p}_{c}" for p in ("team", "opp") for c in ("gf", "ga", "xgf", "xga")]
+    cols += [_team_feature(p, c, 6) for p in ("team", "opp") for c in TEAM_STATS]
     # FPL's xP is deliberately NOT a feature: in the historical files it was recorded inside
     # the gameweek (2023-24/2024-25: ranking by xP alone picks ~7 pts/player vs ~4.4 for any
     # pre-deadline feature, i.e. it knows lineups) and is inconsistent in 2025-26, so it
     # doesn't match the pre-deadline ep_next available at prediction time.
     cols += ["fixtures_in_gw", "was_home", "price", "selected_rank"]
     cols += [f"pos_{p}" for p in POSITIONS]
+    # Added 2026-10 (order kept so training reproduces the backtest exactly). Rolling-origin
+    # backtest over 2023-24 .. 2026-27 (scripts/analysis/ml_backtest.py): RMSE -0.020 in every
+    # season, top-50 picks +0.1 pts/player. Per-90 rates, a 10-match window, recency weighting,
+    # DC-points features and shallower trees were tried too and didn't help reliably.
+    cols += [f"{c}_r1" for c in LAST_MATCH_STATS]
+    cols += [_team_feature(p, c, 20) for p in ("team", "opp") for c in TEAM_STATS]
     return cols
 
 
