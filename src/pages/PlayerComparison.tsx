@@ -19,6 +19,7 @@ import {
 } from '../components/ui';
 import { PlayerCombobox, type PlayerSuggestion } from '../components/compare/PlayerCombobox';
 import { ComparisonResults, type PlayerStats } from '../components/compare/ComparisonResults';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const SEARCH_DEBOUNCE_MS = 200;
 
@@ -57,12 +58,14 @@ function ResultsSkeleton() {
 }
 
 export function PlayerComparison() {
+  usePageMeta({ title: "Compare players", description: "Compare two FPL players head to head across any season: points, goals, assists, bonus, form and more." });
   const { neo4jConnected } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
 
   const [player1, setPlayer1] = useState('');
   const [player2, setPlayer2] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<{ p1: string | null; p2: string | null }>({ p1: null, p2: null });
   const [p1Suggestions, setP1Suggestions] = useState<Suggestion[]>([]);
   const [p2Suggestions, setP2Suggestions] = useState<Suggestion[]>([]);
   const [p1Index, setP1Index] = useState(-1);
@@ -104,7 +107,21 @@ export function PlayerComparison() {
 
   const handleCompare = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!player1.trim() || !player2.trim() || !neo4jConnected) return;
+    if (!neo4jConnected) return;
+    // Say what's missing instead of silently ignoring the click
+    const errors = {
+      p1: player1.trim() ? null : 'Choose a player.',
+      p2: !player2.trim()
+        ? 'Choose a second player.'
+        : player1.trim().toLowerCase() === player2.trim().toLowerCase()
+          ? 'Pick a different player to compare with.'
+          : null,
+    };
+    setFieldErrors(errors);
+    if (errors.p1 || errors.p2) {
+      (errors.p1 ? p1InputRef : p2InputRef).current?.focus();
+      return;
+    }
 
     // Deactivate autocomplete and clear suggestions to prevent them from reappearing
     p1AutocompleteActive.current = false;
@@ -122,6 +139,7 @@ export function PlayerComparison() {
   };
 
   const handleExample = (p1: string, p2: string) => {
+    setFieldErrors({ p1: null, p2: null });
     p1AutocompleteActive.current = false;
     p2AutocompleteActive.current = false;
     setPlayer1(p1);
@@ -305,6 +323,7 @@ export function PlayerComparison() {
     p1AutocompleteActive.current = false;
     p1SuppressSearch.current = true;
     setPlayer1(s.name);
+    setFieldErrors((f) => ({ ...f, p1: null }));
     setP1Suggestions([]);
     p1InputRef.current?.focus();
   };
@@ -313,6 +332,7 @@ export function PlayerComparison() {
     p2AutocompleteActive.current = false;
     p2SuppressSearch.current = true;
     setPlayer2(s.name);
+    setFieldErrors((f) => ({ ...f, p2: null }));
     setP2Suggestions([]);
     p2InputRef.current?.focus();
   };
@@ -357,6 +377,7 @@ export function PlayerComparison() {
                 label="Player 1"
                 side={1}
                 name="player1_search"
+                error={fieldErrors.p1}
                 value={player1}
                 placeholder="e.g. Mohamed Salah"
                 disabled={!neo4jConnected}
@@ -366,6 +387,7 @@ export function PlayerComparison() {
                 inputRef={p1InputRef}
                 onChange={(v) => {
                   p1AutocompleteActive.current = true;
+                  setFieldErrors((f) => ({ ...f, p1: null }));
                   setPlayer1(v);
                 }}
                 onKeyDown={onP1KeyDown}
@@ -383,6 +405,7 @@ export function PlayerComparison() {
                 label="Player 2"
                 side={2}
                 name="player2_search"
+                error={fieldErrors.p2}
                 value={player2}
                 placeholder="e.g. Son Heung-min"
                 disabled={!neo4jConnected}
@@ -392,6 +415,7 @@ export function PlayerComparison() {
                 inputRef={p2InputRef}
                 onChange={(v) => {
                   p2AutocompleteActive.current = true;
+                  setFieldErrors((f) => ({ ...f, p2: null }));
                   setPlayer2(v);
                 }}
                 onKeyDown={onP2KeyDown}
@@ -415,7 +439,7 @@ export function PlayerComparison() {
                 type="submit"
                 className="w-full sm:w-auto"
                 loading={compareMutation.isPending}
-                disabled={!neo4jConnected || !player1.trim() || !player2.trim()}
+                disabled={!neo4jConnected}
                 icon={<ArrowLeftRight className="h-4 w-4" aria-hidden="true" />}
               >
                 Compare

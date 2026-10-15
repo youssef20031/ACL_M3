@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppShell } from './components/shell/AppShell';
 import { NotFound } from './pages/NotFound';
+import { PageSkeleton } from './components/shell/PageSkeleton';
 
 // Route-level code splitting: recharts (Search/Compare), react-markdown + framer-motion (Q&A/Trivia)
 // are only downloaded with the page that needs them.
@@ -16,6 +17,9 @@ const loadHome = () => import('./pages/Home').then((m) => ({ default: m.Home }))
 const loadFixtures = () => import('./pages/Fixtures').then((m) => ({ default: m.Fixtures }));
 const loadLeagueTable = () => import('./pages/LeagueTable').then((m) => ({ default: m.LeagueTable }));
 const loadTeamOfTheWeek = () => import('./pages/TeamOfTheWeek').then((m) => ({ default: m.TeamOfTheWeek }));
+const loadPrivacy = () => import('./pages/Privacy').then((m) => ({ default: m.Privacy }));
+const loadTerms = () => import('./pages/Terms').then((m) => ({ default: m.Terms }));
+const loadContact = () => import('./pages/Contact').then((m) => ({ default: m.Contact }));
 const loadDesignSystem = () => import('./pages/DesignSystem').then((m) => ({ default: m.DesignSystem }));
 
 const QAAssistant = lazy(loadQAAssistant);
@@ -28,6 +32,9 @@ const Home = lazy(loadHome);
 const Fixtures = lazy(loadFixtures);
 const LeagueTable = lazy(loadLeagueTable);
 const TeamOfTheWeek = lazy(loadTeamOfTheWeek);
+const Privacy = lazy(loadPrivacy);
+const Terms = lazy(loadTerms);
+const Contact = lazy(loadContact);
 const DesignSystem = lazy(loadDesignSystem);
 
 const queryClient = new QueryClient({
@@ -48,7 +55,7 @@ function Redirect({ to }: { to: string }) {
 
 // Suspense boundary per route so the Layout (sidebar/header) stays mounted while a page chunk loads.
 function Page({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<div className="mx-auto max-w-page px-4 py-10 text-data text-fg-subtle sm:px-6">Loading…</div>}>{children}</Suspense>;
+  return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
 }
 
 function App() {
@@ -88,6 +95,9 @@ function App() {
             <Route path="compare" element={<Page><PlayerComparison /></Page>} />
             <Route path="trivia" element={<Page><Trivia /></Page>} />
             <Route path="settings" element={<Page><Settings /></Page>} />
+            <Route path="privacy" element={<Page><Privacy /></Page>} />
+            <Route path="terms" element={<Page><Terms /></Page>} />
+            <Route path="contact" element={<Page><Contact /></Page>} />
             <Route path="qa" element={<Redirect to="/assistant" />} />
             <Route path="search" element={<Redirect to="/players" />} />
             <Route path="*" element={<NotFound />} />

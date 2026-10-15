@@ -21,6 +21,7 @@ import {
   type FixtureStatus,
 } from '../components/ui';
 import { getClubAbbreviation } from '../utils/clubLogos';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const STATUS: Record<SeasonFixture['status'], FixtureStatus> = {
   scheduled: 'scheduled',
@@ -76,6 +77,7 @@ function AskBox() {
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="e.g. Best defenders under £5m"
+          maxLength={1000}
           className="h-10 min-w-0 flex-1 rounded-md border border-line-strong bg-surface-2 px-3 text-sm text-fg placeholder:text-fg-subtle"
         />
         <Button type="submit" disabled={!question.trim()}>Ask</Button>
@@ -349,6 +351,7 @@ function TeamNews() {
 }
 
 export function Home() {
+  usePageMeta({ description: "Gameweek captain pick, fixtures, the league table, team news and an AI assistant for Fantasy Premier League." });
   return (
     <>
       <Hero />

@@ -477,6 +477,12 @@ export const apiService = {
     const { data } = await api.get('/api/stats/database');
     return data;
   },
+
+  // Cookie-free page-view counter (aggregate counts only; called only after consent).
+  // Fire-and-forget: analytics must never surface an error to the visitor.
+  trackPageview(path: string, referrer: string | null): void {
+    api.post('/api/analytics/pageview', { path, referrer }, { timeout: 5000 }).catch(() => undefined);
+  },
 };
 
 // Error handling

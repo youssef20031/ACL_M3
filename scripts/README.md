@@ -15,6 +15,7 @@ so project imports (`config`, `graph`, …) and data paths (`data/…`) resolve:
 | `efl/` | Championship (EFL) data ingestion and validation for promoted teams |
 | `embeddings/` | `build_embeddings_from_csv.py` rebuilds `embeddings/prebuilt/` (run by the `build-embeddings` workflow) |
 | `analysis/` | LLM evaluation (writes `docs/reports/evaluation_results/`) and prediction plots |
+| `site/` | `node scripts/site/render.mjs` regenerates the OG image and favicon set in `public/` (headless Edge/Chrome + Pillow) |
 | top level | Model training helpers and promoted-team deployment |
 
 Many of these were written for earlier stages of the project and may need updates before

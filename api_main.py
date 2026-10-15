@@ -10,7 +10,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from utils.console import ensure_utf8_stdio
 ensure_utf8_stdio()  # before any startup print/log (emoji crash cp1252 on Windows)
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header, Query
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
@@ -55,6 +55,7 @@ from services.player_index import PlayerIndex
 from services.avatars import AvatarService, ImageProxy, is_proxy_allowed, FPL_PHOTO_URL
 from services.predictions import get_predictions_df
 from services import season_service
+from services import analytics
 from services.security import RateLimiter, limits_from_env, require_admin
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
@@ -219,6 +220,9 @@ async def lifespan(app: FastAPI):
 
     app_state["trivia_cache"] = TriviaQuestionCache()
 
+    # Page-view counts (aggregate only) from LIVE_DATA_DIR/analytics.json
+    await asyncio.to_thread(analytics.get_store)
+
     # Avatar lookups (FPL photo codes load in the background)
     avatar_service = AvatarService(
         google_api_key=GOOGLE_CUSTOM_SEARCH_API_KEY, google_cx=GOOGLE_CUSTOM_SEARCH_CX
@@ -314,6 +318,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    await asyncio.to_thread(analytics.close_store)
     if app_state["avatar_service"]:
         await app_state["avatar_service"].close()
     if app_state["neo4j_conn"]:
@@ -2218,6 +2223,61 @@ def player_leaders(
     (status/news) is only filled for the current season. Unknown season -> 404."""
     return _season_call(season_service.get_player_leaders, conn, season, position, sort, limit,
                         photo_for=_photo_for)
+
+
+# ============================================================================
+# Page-view analytics (aggregate counts only; logic in services/analytics.py)
+# ============================================================================
+
+class PageViewRequest(BaseModel):
+    path: str = Field(max_length=200)
+    referrer: Optional[str] = Field(default=None, max_length=500)
+
+
+class AnalyticsDay(BaseModel):
+    date: str
+    views: int
+
+
+class AnalyticsPath(BaseModel):
+    path: str
+    views: int
+
+
+class AnalyticsReferrer(BaseModel):
+    host: str
+    views: int
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    days: int
+    total_views: int
+    by_day: List[AnalyticsDay]
+    top_paths: List[AnalyticsPath]
+    top_referrers: List[AnalyticsReferrer]
+
+
+pageview_limiter = RateLimiter(limits_from_env("PAGEVIEW_RATE_LIMITS", "60/60,600/3600"))
+
+
+@app.post("/api/analytics/pageview", status_code=204,
+          dependencies=[Depends(pageview_limiter.dependency)])
+def record_pageview(body: PageViewRequest, request: Request):
+    """Count one page view (sent by the frontend after cookie consent).
+
+    Stores no IP, user agent or identifier: only the normalised path and the external
+    referring host are added to that day's totals.
+    """
+    analytics.record_pageview(body.path, body.referrer, own_host=request.headers.get("host"))
+    return Response(status_code=204)
+
+
+@app.get("/api/admin/analytics", response_model=AnalyticsSummaryResponse,
+         dependencies=[Depends(require_admin)])
+def admin_analytics(days: int = Query(30, ge=1, le=400)):
+    """Page views over the last `days` UTC days: daily totals (zero-filled, oldest first),
+    top 20 paths and top 20 external referrers."""
+    return analytics.get_store().summary(days)
 
 
 # ============================================================================

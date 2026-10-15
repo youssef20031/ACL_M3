@@ -6,10 +6,18 @@
 # Variables come from deploy/.env (copy deploy/.env.example).
 name: fpl
 
+# Access logs include client IPs (see /privacy): keep only a few MB per service, rotated.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   neo4j:
     image: neo4j:5.26-community
     restart: unless-stopped
+    logging: *default-logging
     environment:
       # Don't add other NEO4J_* variables here: the image turns every NEO4J_* env var
       # into a config setting and refuses to start on unknown ones.
@@ -40,6 +48,7 @@ services:
       context: ..
       dockerfile: Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     env_file: .env
     environment:
       NEO4J_URI: bolt://neo4j:7687
@@ -62,7 +71,11 @@ services:
     build:
       context: ..
       dockerfile: deploy/web.Dockerfile
+      args:
+        # Absolute URLs in index.html (canonical, og:url/og:image), robots.txt and sitemap.xml
+        SITE_URL: https://${SITE_ADDRESS}
     restart: unless-stopped
+    logging: *default-logging
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in deploy/.env}
     ports:

@@ -15,6 +15,7 @@ import {
   SkeletonRows,
   type FixtureStatus,
 } from '../components/ui';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const STATUS: Record<SeasonFixture['status'], FixtureStatus> = {
   scheduled: 'scheduled',
@@ -49,6 +50,7 @@ function groupByDay(fixtures: SeasonFixture[]) {
 }
 
 export function Fixtures() {
+  usePageMeta({ title: "Fixtures & results", description: "Every Premier League fixture and result of the 2026-27 season by gameweek, with kick-off times in your time zone." });
   const [params, setParams] = useSearchParams();
   const requested = Number(params.get('gw')) || undefined;
 

@@ -27,6 +27,7 @@ import {
   type Column,
 } from '../components/ui';
 import { SegmentedControl } from '../components/predictions/SegmentedControl';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 type PositionFilter = 'ALL' | 'GK' | 'DEF' | 'MID' | 'FWD';
 type View = 'top' | 'value';
@@ -118,12 +119,17 @@ function PlayerCell({ row, avatar }: { row: PredictionRow; avatar: string | null
 
 function PlayerLookup() {
   const [name, setName] = useState('');
+  const [missingName, setMissingName] = useState(false);
   const lookup = useMutation({
     mutationFn: (playerName: string) => apiService.predictPlayer(playerName),
   });
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (name.trim()) lookup.mutate(name.trim());
+    if (!name.trim()) {
+      setMissingName(true); // explain instead of a silently disabled button
+      return;
+    }
+    lookup.mutate(name.trim());
   };
   const result = lookup.data;
   const lookupAvatars = usePlayerAvatars(result ? [result.player_name] : []);
@@ -131,13 +137,25 @@ function PlayerLookup() {
   return (
     <Card>
       <SectionHeading as="h2" size="md" title="Player lookup" subtitle="Predicted points for one player" />
-      <form onSubmit={onSubmit} className="flex items-end gap-2">
-        <Field label="Player name" className="min-w-0 flex-1">
-          {(id) => (
-            <Input id={id} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Haaland" autoComplete="off" />
+      <form onSubmit={onSubmit} noValidate className="flex items-start gap-2">
+        <Field label="Player name" className="min-w-0 flex-1" error={missingName ? 'Type a player name first.' : undefined}>
+          {(id, a11y) => (
+            <Input
+              id={id}
+              {...a11y}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setMissingName(false);
+              }}
+              placeholder="e.g. Haaland"
+              autoComplete="off"
+              maxLength={100}
+            />
           )}
         </Field>
-        <Button type="submit" loading={lookup.isPending} disabled={!name.trim() || lookup.isPending}>
+        {/* mt-5 lines the button up with the input, below the field label */}
+        <Button type="submit" className="mt-5" loading={lookup.isPending} disabled={lookup.isPending}>
           Predict
         </Button>
       </form>
@@ -184,6 +202,7 @@ function PlayerLookup() {
 }
 
 export function Predictions() {
+  usePageMeta({ title: "Predictions", description: "Expected FPL points for every player next gameweek from a leakage-free XGBoost model, adjusted for availability." });
   const { mlAvailable, mlModelType } = useAppStore();
   const [selectedPosition, setSelectedPosition] = useState<string | undefined>(undefined);
   const [view, setView] = useState<View>('top');
