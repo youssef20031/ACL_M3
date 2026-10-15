@@ -13,6 +13,14 @@
 		# Vite emits content-hashed filenames under /assets
 		@assets path /assets/*
 		header @assets Cache-Control "public, max-age=31536000, immutable"
+		# Club crests and the favicon change rarely and aren't hashed
+		@static path /logos/* /favicon.svg
+		header @static Cache-Control "public, max-age=86400"
+		# Everything else is index.html (every SPA route falls back to it). It names the current
+		# build's asset files, so browsers must revalidate it (cheap: ETag -> 304); without a
+		# header they cached it heuristically and kept showing the previous build after a deploy.
+		@html not path /assets/* /logos/* /favicon.svg
+		header @html Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}
