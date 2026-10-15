@@ -1,0 +1,85 @@
+name: ML backtest (experiment)
+
+# Experiment branch only: compares v3 points-model variants on held-out seasons.
+on:
+  push:
+    branches: [exp/ml-backtest]
+    paths:
+      - 'scripts/analysis/ml_backtest.py'
+      - 'ml/points_model.py'
+      - '.github/workflows/ml-backtest.yml'
+  workflow_dispatch:
+
+jobs:
+  features:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install pandas numpy xgboost-cpu scikit-learn httpx
+      - name: Fetch the current season from the FPL API
+        run: python -m pipeline.current_season --out-dir data/live || echo "::warning::live fetch failed; current season fold skipped"
+      - run: python -m scripts.analysis.ml_backtest features --out feats.pkl.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feats
+          path: feats.pkl.gz
+          retention-days: 3
+
+  run:
+    needs: features
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        group: ['base', 'd6,d4', 'mcw200,hl1', 'hl2,last3', 'p90', 'r1,r10', 'team20,nocareer', 'all']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install pandas numpy xgboost-cpu scikit-learn httpx
+      - uses: actions/download-artifact@v4
+        with:
+          name: feats
+      - name: Run variants
+        run: |
+          OUT="res_$(echo '${{ matrix.group }}' | tr ',' '_').json"
+          python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.group }}' --out "$OUT"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: res-${{ strategy.job-index }}
+          path: ${{ env.OUT }}
+          retention-days: 7
+
+  report:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install pandas numpy xgboost-cpu scikit-learn
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: res-*
+          merge-multiple: true
+      - run: python -m scripts.analysis.ml_backtest report 'res_*.json' --out report.md
+      - run: cat report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: |
+            report.md
+            res_*.json
+          retention-days: 7
