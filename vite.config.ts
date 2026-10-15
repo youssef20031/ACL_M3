@@ -6,6 +6,22 @@ import react from '@vitejs/plugin-react';
 // SITE_URL in the environment or a .env file; deploy/web.Dockerfile takes it as a build arg.
 const DEFAULT_SITE_URL = 'https://20-215-33-13.sslip.io';
 
+/**
+ * Accepts a full URL or a Caddy site address, which may list several addresses separated by
+ * commas or spaces ("pitchme.example.cloudapp.azure.com, 1-2-3-4.sslip.io") and may omit the
+ * scheme. Uses the first entry as the canonical origin. Anything unusable (e.g. ":80") falls back
+ * to the default with a warning: SEO metadata must never break a deploy.
+ */
+export function toSiteUrl(raw: string | undefined): string {
+  const first = (raw ?? '').split(/[,\s]+/).find(Boolean);
+  if (!first) return DEFAULT_SITE_URL;
+  const withScheme = /^https?:\/\//i.test(first) ? first : `https://${first}`;
+  const url = withScheme.replace(/\/+$/, '');
+  if (/^https?:\/\/[a-z0-9.-]+(:\d+)?$/i.test(url)) return url.toLowerCase();
+  console.warn(`[site] Ignoring unusable SITE_URL "${raw}"; using ${DEFAULT_SITE_URL}`);
+  return DEFAULT_SITE_URL;
+}
+
 // Indexable routes for sitemap.xml. Keep in sync with the routes in src/App.tsx and the route
 // list in deploy/Caddyfile. Left out on purpose: /settings (per-browser preferences), /design
 // (internal reference page), and the /qa and /search redirects.
@@ -74,10 +90,7 @@ function siteEssentials(siteUrl: string): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const target = env.API_PROXY_TARGET || 'http://localhost:8000';
-  const siteUrl = (env.SITE_URL || DEFAULT_SITE_URL).trim().replace(/\/+$/, '');
-  if (!/^https?:\/\/[^/\s]+$/.test(siteUrl)) {
-    throw new Error(`SITE_URL must be an origin like https://example.com (got "${siteUrl}")`);
-  }
+  const siteUrl = toSiteUrl(env.SITE_URL);
   return {
     plugins: [react(), siteEssentials(siteUrl)],
     server: {
