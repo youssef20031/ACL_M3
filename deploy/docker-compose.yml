@@ -72,8 +72,9 @@ services:
       context: ..
       dockerfile: deploy/web.Dockerfile
       args:
-        # Absolute URLs in index.html (canonical, og:url/og:image), robots.txt and sitemap.xml
-        SITE_URL: https://${SITE_ADDRESS}
+        # Absolute URLs in index.html (canonical, og:url/og:image), robots.txt and sitemap.xml.
+        # Passed as-is: vite.config.ts takes the first address of a Caddy list and adds https://.
+        SITE_URL: ${SITE_ADDRESS}
     restart: unless-stopped
     logging: *default-logging
     environment:
