@@ -204,6 +204,64 @@ class TriviaQuestionCache:
         self._recent_questions[key] = time.time() + self.repeat_window_seconds
 
 
+NEO4J_RETRY_FIRST_DELAY = 2.0
+NEO4J_RETRY_MAX_DELAY = 30.0
+
+
+def _try_connect_neo4j() -> Optional[Neo4jConnection]:
+    """One attempt at the configured Neo4j; returns a verified connection or None."""
+    try:
+        conn = Neo4jConnection(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
+    except Exception as e:
+        logger.warning("Neo4j connection failed: %s", e)
+        return None
+    if conn.test_connection():
+        return conn
+    conn.close()
+    return None
+
+
+async def _attach_neo4j(conn: Neo4jConnection) -> None:
+    """Make `conn` the app's connection and rebuild everything derived from the graph."""
+    app_state["neo4j_conn"] = conn
+    reset_graph_caches()
+    _health_stats_cache["at"] = 0.0
+    app_state["entity_extractor"] = None  # rebuilt lazily with the player names (missing if built while disconnected)
+    ml = app_state.get("ml_integration")
+    if ml is not None:  # it was handed the connection at startup, possibly None
+        ml.neo4j_conn = conn
+        if getattr(ml, "fixture_service", None) is not None:
+            ml.fixture_service.conn = conn
+    try:
+        index = await asyncio.to_thread(get_player_index, conn)  # also feeds the entity extractor
+        logger.info("Player index built (%d players)", len(index))
+    except Exception as index_error:
+        logger.warning("Player index build failed: %s", index_error)
+
+
+async def _reconnect_neo4j_until_connected() -> None:
+    """Retry with backoff until Neo4j answers, then attach it.
+
+    After a VM reboot Docker restarts every container at once (depends_on/service_healthy only
+    applies to `docker compose up`), so the backend can start before Neo4j accepts connections.
+    Without this it stayed "disconnected" and every graph endpoint returned 503 until restarted.
+    """
+    delay = NEO4J_RETRY_FIRST_DELAY
+    while app_state["neo4j_conn"] is None:
+        await asyncio.sleep(delay)
+        if app_state["neo4j_conn"] is not None:  # attached via the admin connect endpoint meanwhile
+            return
+        conn = await asyncio.to_thread(_try_connect_neo4j)
+        if conn is not None:
+            if app_state["neo4j_conn"] is None:  # the admin connect endpoint may have won the race
+                await _attach_neo4j(conn)
+                logger.info("Neo4j connected after retrying")
+            else:
+                conn.close()
+            return
+        delay = min(delay * 2, NEO4J_RETRY_MAX_DELAY)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize resources on startup, cleanup on shutdown."""
@@ -231,19 +289,15 @@ async def lifespan(app: FastAPI):
     app_state["avatar_service"] = avatar_service
     app_state["image_proxy"] = ImageProxy(avatar_service.client)
     
-    # Connect to Neo4j (fast)
-    try:
-        conn = Neo4jConnection(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
-        if conn.test_connection():
-            app_state["neo4j_conn"] = conn
-            print("✅ Neo4j connected")
-            try:
-                index = await asyncio.to_thread(get_player_index, conn)
-                print(f"✅ Player index built ({len(index)} players)")
-            except Exception as cache_error:
-                print(f"⚠️ Player index build failed: {cache_error}")
-    except Exception as e:
-        print(f"⚠️  Neo4j connection failed: {e}")
+    # Connect to Neo4j; if it isn't up yet (e.g. right after a reboot), keep retrying in the background
+    conn = await asyncio.to_thread(_try_connect_neo4j)
+    reconnect_task = None
+    if conn is not None:
+        await _attach_neo4j(conn)
+        print("✅ Neo4j connected")
+    else:
+        print("⚠️  Neo4j not reachable yet; retrying in the background")
+        reconnect_task = asyncio.create_task(_reconnect_neo4j_until_connected())
     
     # Load prebuilt embeddings on startup (avoids building them in-process)
     print("🔮 Checking for prebuilt embeddings...")
@@ -318,6 +372,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    if reconnect_task is not None and not reconnect_task.done():
+        reconnect_task.cancel()
     await asyncio.to_thread(analytics.close_store)
     if app_state["avatar_service"]:
         await app_state["avatar_service"].close()
@@ -1305,17 +1361,9 @@ async def connect_neo4j(request: ConnectionRequest):
             # Close old connection
             if app_state["neo4j_conn"]:
                 app_state["neo4j_conn"].close()
-            
-            app_state["neo4j_conn"] = conn
-            reset_graph_caches()
-            _health_stats_cache["at"] = 0.0
+
+            await _attach_neo4j(conn)
             stats = await asyncio.to_thread(conn.get_database_stats)
-            
-            # Rebuild the player index (also feeds the entity extractor)
-            try:
-                await asyncio.to_thread(get_player_index, conn)
-            except Exception as index_error:
-                logger.warning("Player index rebuild failed: %s", index_error)
             
             # Only return top-level int fields for Pydantic validation
             simple_stats = {
