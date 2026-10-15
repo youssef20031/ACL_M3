@@ -12,21 +12,21 @@
     "2025-26",
     "2026-27"
   ],
-  "best_trees": 96,
+  "best_trees": 111,
   "rows": {
     "train": 106042,
     "valid": 27283,
-    "test": 32973
+    "test": 33640
   },
   "test": {
     "2025-26": {
       "v3": {
         "rows": 29757,
-        "mae": 1.006,
-        "rmse": 1.94,
-        "spearman": 0.714,
-        "top20_points": 4.554,
-        "captain_points": 6.0
+        "mae": 0.979,
+        "rmse": 1.917,
+        "spearman": 0.724,
+        "top20_points": 4.664,
+        "captain_points": 6.211
       },
       "last3_avg": {
         "rows": 29463,
@@ -62,79 +62,79 @@
       },
       "v3_same_rows_as_xP": {
         "rows": 29757,
-        "mae": 1.006,
-        "rmse": 1.94,
-        "spearman": 0.714,
-        "top20_points": 4.554,
-        "captain_points": 6.0
+        "mae": 0.979,
+        "rmse": 1.917,
+        "spearman": 0.724,
+        "top20_points": 4.664,
+        "captain_points": 6.211
       }
     },
     "2026-27": {
       "v3": {
-        "rows": 3216,
-        "mae": 1.268,
-        "rmse": 2.203,
-        "spearman": 0.665,
-        "top20_points": 4.91,
-        "captain_points": 8.4
+        "rows": 3883,
+        "mae": 1.222,
+        "rmse": 2.154,
+        "spearman": 0.68,
+        "top20_points": 4.925,
+        "captain_points": 9.167
       },
       "last3_avg": {
-        "rows": 3068,
-        "mae": 1.38,
-        "rmse": 2.468,
-        "spearman": 0.609,
-        "top20_points": 3.84,
-        "captain_points": 3.6
+        "rows": 3735,
+        "mae": 1.353,
+        "rmse": 2.448,
+        "spearman": 0.619,
+        "top20_points": 3.775,
+        "captain_points": 3.167
       },
       "last6_avg": {
-        "rows": 3068,
-        "mae": 1.419,
-        "rmse": 2.444,
-        "spearman": 0.573,
-        "top20_points": 3.87,
-        "captain_points": 2.2
+        "rows": 3735,
+        "mae": 1.391,
+        "rmse": 2.413,
+        "spearman": 0.582,
+        "top20_points": 3.975,
+        "captain_points": 2.833
       },
       "season_ppg": {
-        "rows": 2549,
-        "mae": 1.316,
-        "rmse": 2.529,
-        "spearman": 0.671,
-        "top20_points": 4.175,
-        "captain_points": 2.0
+        "rows": 3216,
+        "mae": 1.298,
+        "rmse": 2.474,
+        "spearman": 0.668,
+        "top20_points": 4.19,
+        "captain_points": 2.8
       }
     },
     "all": {
       "v3": {
-        "rows": 32973,
-        "mae": 1.032,
-        "rmse": 1.968,
-        "spearman": 0.708,
-        "top20_points": 4.595,
-        "captain_points": 6.279
+        "rows": 33640,
+        "mae": 1.007,
+        "rmse": 1.946,
+        "spearman": 0.718,
+        "top20_points": 4.7,
+        "captain_points": 6.614
       },
       "last3_avg": {
-        "rows": 32531,
-        "mae": 1.085,
-        "rmse": 2.199,
-        "spearman": 0.711,
-        "top20_points": 3.785,
-        "captain_points": 4.535
+        "rows": 33198,
+        "mae": 1.088,
+        "rmse": 2.202,
+        "spearman": 0.71,
+        "top20_points": 3.777,
+        "captain_points": 4.455
       },
       "last6_avg": {
-        "rows": 32531,
-        "mae": 1.087,
-        "rmse": 2.132,
-        "spearman": 0.69,
-        "top20_points": 3.884,
-        "captain_points": 4.721
+        "rows": 33198,
+        "mae": 1.091,
+        "rmse": 2.134,
+        "spearman": 0.689,
+        "top20_points": 3.898,
+        "captain_points": 4.75
       },
       "season_ppg": {
-        "rows": 31462,
-        "mae": 1.08,
-        "rmse": 2.101,
-        "spearman": 0.692,
-        "top20_points": 4.204,
-        "captain_points": 5.805
+        "rows": 32129,
+        "mae": 1.084,
+        "rmse": 2.104,
+        "spearman": 0.691,
+        "top20_points": 4.205,
+        "captain_points": 5.81
       },
       "fpl_xP": {
         "rows": 29757,
@@ -146,79 +146,79 @@
       },
       "v3_same_rows_as_xP": {
         "rows": 29757,
-        "mae": 1.006,
-        "rmse": 1.94,
-        "spearman": 0.714,
-        "top20_points": 4.554,
-        "captain_points": 6.0
+        "mae": 0.979,
+        "rmse": 1.917,
+        "spearman": 0.724,
+        "top20_points": 4.664,
+        "captain_points": 6.211
       }
     }
   },
   "top_features": [
     [
+      "minutes_r1",
+      3732.73876953125
+    ],
+    [
       "minutes_r3",
-      2306.953369140625
-    ],
-    [
-      "total_points_r3",
-      901.6387939453125
-    ],
-    [
-      "ict_index_r3",
-      429.69097900390625
-    ],
-    [
-      "played_r3",
-      416.8856506347656
-    ],
-    [
-      "ict_index_r6",
-      181.4676971435547
+      854.1968383789062
     ],
     [
       "season_ppg",
-      169.62403869628906
+      252.13278198242188
+    ],
+    [
+      "ict_index_r3",
+      241.8238067626953
+    ],
+    [
+      "total_points_r3",
+      214.9398193359375
+    ],
+    [
+      "started_r1",
+      213.61453247070312
+    ],
+    [
+      "ict_index_r6",
+      180.1041259765625
+    ],
+    [
+      "played_r3",
+      170.99757385253906
     ],
     [
       "selected_rank",
-      146.46575927734375
+      164.02699279785156
+    ],
+    [
+      "total_points_r1",
+      127.2274398803711
     ],
     [
       "price",
-      126.14208221435547
+      126.82608795166016
     ],
     [
-      "pos_GK",
-      123.63543701171875
-    ],
-    [
-      "total_points_r6",
-      104.1693115234375
+      "opp_gf20",
+      102.09144592285156
     ],
     [
       "was_home",
-      95.4880599975586
-    ],
-    [
-      "opp_gf",
-      82.70706939697266
-    ],
-    [
-      "saves_r6",
-      78.54489135742188
-    ],
-    [
-      "opp_ga",
-      77.78922271728516
+      99.7917709350586
     ],
     [
       "assists_r3",
-      76.67547607421875
+      94.52349853515625
+    ],
+    [
+      "pos_GK",
+      93.2657470703125
     ]
   ],
   "production": {
     "version": "v3",
-    "trained_at": "2026-10-12T14:03:51+00:00",
+    "trained_at": "2026-10-15T02:54:50+00:00",
     "seasons": [
       "2020-21",
       "2021-22",
@@ -228,8 +228,8 @@
       "2025-26",
       "2026-27"
     ],
-    "rows": 166298,
-    "n_trees": 150,
+    "rows": 166965,
+    "n_trees": 174,
     "params": {
       "objective": "reg:squarederror",
       "tree_method": "hist",
@@ -240,5 +240,6 @@
       "colsample_bytree": 0.8,
       "reg_lambda": 2.0
     }
-  }
+  },
+  "seconds": 19.7
 }

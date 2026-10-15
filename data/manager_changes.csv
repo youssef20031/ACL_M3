@@ -1,0 +1,99 @@
+season,team,outgoing,manner,vacancy,position,incoming,incoming_interim,appointed
+2019-20,Brighton,Chris Hughton,Sacked,2019-05-13,Pre-season,Graham Potter,False,2019-05-20
+2019-20,Chelsea,Maurizio Sarri,Signed by Juventus,2019-06-16,Pre-season,Frank Lampard,False,2019-07-04
+2019-20,Newcastle,Rafael Benítez,End of contract,2019-06-30,Pre-season,Steve Bruce,False,2019-07-17
+2019-20,Watford,Javi Gracia,Sacked,2019-09-07,20th,Quique Sánchez Flores,False,2019-09-07
+2019-20,Spurs,Mauricio Pochettino,Sacked,2019-11-19,14th,José Mourinho,False,2019-11-20
+2019-20,Arsenal,Unai Emery,Sacked,2019-11-29,8th,Mikel Arteta,False,2019-12-20
+2019-20,Watford,Quique Sánchez Flores,Sacked,2019-12-01,20th,Nigel Pearson,False,2019-12-06
+2019-20,Everton,Marco Silva,Sacked,2019-12-05,18th,Carlo Ancelotti,False,2019-12-21
+2019-20,West Ham,Manuel Pellegrini,Sacked,2019-12-28,17th,David Moyes,False,2019-12-29
+2019-20,Watford,Nigel Pearson,Sacked,2020-07-19,17th,Hayden Mullins,True,2020-07-19
+2020-21,West Brom,Slaven Bilić,Sacked,2020-12-16,19th,Sam Allardyce,False,2020-12-16
+2020-21,Chelsea,Frank Lampard,Sacked,2021-01-25,9th,Thomas Tuchel,False,2021-01-26
+2020-21,Sheffield Utd,Chris Wilder,Sacked,2021-03-13,20th,Paul Heckingbottom,True,2021-03-13
+2020-21,Spurs,José Mourinho,Sacked,2021-04-19,7th,Ryan Mason,True,2021-04-19
+2021-22,Crystal Palace,Roy Hodgson,End of contract,2021-05-24,Pre-season,Patrick Vieira,False,2021-07-04
+2021-22,Wolves,Nuno Espírito Santo,Mutual consent,2021-05-24,Pre-season,Bruno Lage,False,2021-06-09
+2021-22,Everton,Carlo Ancelotti,Signed by Real Madrid,2021-06-01,Pre-season,Rafael Benítez,False,2021-06-30
+2021-22,Spurs,Ryan Mason,End of caretaker spell,2021-06-30,Pre-season,Nuno Espírito Santo,False,2021-06-30
+2021-22,Watford,Xisco Muñoz,Sacked,2021-10-03,14th,Claudio Ranieri,False,2021-10-04
+2021-22,Newcastle,Steve Bruce,Mutual consent,2021-10-20,19th,Graeme Jones,True,2021-10-20
+2021-22,Spurs,Nuno Espírito Santo,Sacked,2021-11-01,8th,Antonio Conte,False,2021-11-02
+2021-22,Norwich,Daniel Farke,Sacked,2021-11-06,20th,Dean Smith,False,2021-11-15
+2021-22,Aston Villa,Dean Smith,Sacked,2021-11-07,15th,Steven Gerrard,False,2021-11-11
+2021-22,Newcastle,Graeme Jones,End of interim spell,2021-11-08,19th,Eddie Howe,False,2021-11-08
+2021-22,Man Utd,Ole Gunnar Solskjær,Sacked,2021-11-21,7th,Michael Carrick,True,2021-11-21
+2021-22,Man Utd,Michael Carrick,End of caretaker spell,2021-12-02,7th,Ralf Rangnick,True,2021-12-03
+2021-22,Everton,Rafael Benítez,Sacked,2022-01-16,15th,Duncan Ferguson,True,2022-01-18
+2021-22,Watford,Claudio Ranieri,Sacked,2022-01-24,19th,Roy Hodgson,False,2022-01-25
+2021-22,Everton,Duncan Ferguson,End of caretaker spell,2022-01-31,16th,Frank Lampard,False,2022-01-31
+2021-22,Leeds,Marcelo Bielsa,Sacked,2022-02-27,16th,Jesse Marsch,False,2022-02-28
+2021-22,Burnley,Sean Dyche,Sacked,2022-04-15,18th,Mike Jackson (lead caretaker),True,2022-04-15
+2022-23,Man Utd,Ralf Rangnick,End of interim spell,2022-05-22,Pre-season,Erik ten Hag,False,2022-05-23
+2022-23,Bournemouth,Scott Parker,Sacked,2022-08-30,17th,Gary O'Neil,False,2022-08-30
+2022-23,Chelsea,Thomas Tuchel,Sacked,2022-09-07,6th,Graham Potter,False,2022-09-08
+2022-23,Brighton,Graham Potter,Signed by Chelsea,2022-09-08,4th,Roberto De Zerbi,False,2022-09-18
+2022-23,Wolves,Bruno Lage,Sacked,2022-10-02,18th,Steve Davis,True,2022-10-02
+2022-23,Aston Villa,Steven Gerrard,Sacked,2022-10-20,17th,Aaron Danks,True,2022-10-21
+2022-23,Aston Villa,Aaron Danks,End of interim spell,2022-11-01,16th,Unai Emery,False,2022-11-01
+2022-23,Southampton,Ralph Hasenhüttl,Sacked,2022-11-07,18th,Nathan Jones,False,2022-11-10
+2022-23,Wolves,Steve Davis,End of interim spell,2022-11-14,20th,Julen Lopetegui,False,2022-11-14
+2022-23,Everton,Frank Lampard,Sacked,2023-01-23,19th,Sean Dyche,False,2023-01-30
+2022-23,Leeds,Jesse Marsch,Sacked,2023-02-06,17th,Michael Skubala,True,2023-02-06
+2022-23,Southampton,Nathan Jones,Sacked,2023-02-12,20th,Rubén Sellés,False,2023-02-12
+2022-23,Leeds,Michael Skubala,End of interim spell,2023-02-21,19th,Javi Gracia,False,2023-02-21
+2022-23,Crystal Palace,Patrick Vieira,Sacked,2023-03-17,12th,Paddy McCarthy,True,2023-03-17
+2022-23,Crystal Palace,Paddy McCarthy,End of interim spell,2023-03-21,12th,Roy Hodgson,True,2023-03-21
+2022-23,Spurs,Antonio Conte,Mutual consent,2023-03-26,4th,Cristian Stellini,True,2023-03-26
+2022-23,Leicester,Brendan Rodgers,Mutual consent,2023-04-02,19th,Adam Sadler,True,2023-04-04
+2022-23,Chelsea,Graham Potter,Sacked,2023-04-02,11th,Bruno Saltor,True,2023-04-02
+2022-23,Chelsea,Bruno Saltor,End of interim spell,2023-04-06,11th,Frank Lampard,True,2023-04-06
+2022-23,Leicester,Adam Sadler,End of interim spell,2023-04-10,19th,Dean Smith,False,2023-04-10
+2022-23,Spurs,Cristian Stellini (interim),Sacked,2023-04-24,5th,Ryan Mason,True,2023-04-24
+2022-23,Leeds,Javi Gracia,Sacked,2023-05-03,17th,Sam Allardyce,False,2023-05-03
+2023-24,Chelsea,Frank Lampard,End of interim spell,2023-05-28,Pre-season,Mauricio Pochettino,False,2023-05-29
+2023-24,Spurs,Ryan Mason,End of interim spell,2023-05-28,Pre-season,Ange Postecoglou,False,2023-06-06
+2023-24,Bournemouth,Gary O'Neil,Sacked,2023-06-19,Pre-season,Andoni Iraola,False,2023-06-19
+2023-24,Wolves,Julen Lopetegui,Mutual consent,2023-08-08,Pre-season,Gary O'Neil,False,2023-08-09
+2023-24,Sheffield Utd,Paul Heckingbottom,Sacked,2023-12-05,20th,Chris Wilder,False,2023-12-05
+2023-24,Nott'm Forest,Steve Cooper,Sacked,2023-12-19,17th,Nuno Espírito Santo,False,2023-12-20
+2023-24,Crystal Palace,Roy Hodgson,Resigned,2024-02-19,16th,Oliver Glasner,False,2024-02-19
+2024-25,Brighton,Roberto De Zerbi,Mutual consent,2024-05-19,Pre-season,Fabian Hürzeler,False,2024-06-15
+2024-25,Liverpool,Jürgen Klopp,Resigned,2024-05-19,Pre-season,Arne Slot,False,2024-06-01
+2024-25,West Ham,David Moyes,End of contract,2024-05-19,Pre-season,Julen Lopetegui,False,2024-07-01
+2024-25,Chelsea,Mauricio Pochettino,Mutual consent,2024-05-21,Pre-season,Enzo Maresca,False,2024-06-03
+2024-25,Leicester,Enzo Maresca,Signed by Chelsea,2024-06-03,Pre-season,Steve Cooper,False,2024-06-20
+2024-25,Man Utd,Erik ten Hag,Sacked,2024-10-28,14th,Ruud van Nistelrooy,True,2024-10-28
+2024-25,Man Utd,Ruud van Nistelrooy,End of interim spell,2024-11-11,13th,Ruben Amorim,False,2024-11-11
+2024-25,Leicester,Steve Cooper,Sacked,2024-11-24,16th,Ben Dawson,True,2024-11-24
+2024-25,Leicester,Ben Dawson,End of interim spell,2024-12-01,16th,Ruud van Nistelrooy,False,2024-12-01
+2024-25,Wolves,Gary O'Neil,Sacked,2024-12-15,19th,Vítor Pereira,False,2024-12-19
+2024-25,Southampton,Russell Martin,Sacked,2024-12-15,20th,Simon Rusk,True,2024-12-15
+2024-25,Southampton,Simon Rusk,End of interim spell,2024-12-22,20th,Ivan Jurić,False,2024-12-22
+2024-25,West Ham,Julen Lopetegui,Sacked,2025-01-08,14th,Graham Potter,False,2025-01-09
+2024-25,Everton,Sean Dyche,Sacked,2025-01-09,16th,Leighton Baines,True,2025-01-09
+2024-25,Everton,Leighton Baines,End of interim spell,2025-01-11,16th,David Moyes,False,2025-01-11
+2024-25,Southampton,Ivan Jurić,Mutual consent,2025-04-07,20th,Simon Rusk,True,2025-04-07
+2025-26,Spurs,Ange Postecoglou,Sacked,2025-06-06,Pre-season,Thomas Frank,False,2025-06-12
+2025-26,Brentford,Thomas Frank,Signed by Tottenham Hotspur,2025-06-12,Pre-season,Keith Andrews,False,2025-06-27
+2025-26,Nott'm Forest,Nuno Espírito Santo,Sacked,2025-09-08,10th,Ange Postecoglou,False,2025-09-09
+2025-26,West Ham,Graham Potter,Sacked,2025-09-27,19th,Nuno Espírito Santo,False,2025-09-27
+2025-26,Nott'm Forest,Ange Postecoglou,Sacked,2025-10-18,18th,Sean Dyche,False,2025-10-21
+2025-26,Wolves,Vítor Pereira,Sacked,2025-11-02,20th,Rob Edwards,False,2025-11-12
+2025-26,Chelsea,Enzo Maresca,Resigned,2026-01-01,5th,Liam Rosenior,False,2026-01-08
+2025-26,Man Utd,Ruben Amorim,Sacked,2026-01-05,6th,Michael Carrick,False,2026-01-13
+2025-26,Spurs,Thomas Frank,Sacked,2026-02-11,16th,Igor Tudor,False,2026-02-14
+2025-26,Nott'm Forest,Sean Dyche,Sacked,2026-02-12,17th,Vítor Pereira,False,2026-02-15
+2025-26,Spurs,Igor Tudor,Mutual consent,2026-03-29,17th,Roberto De Zerbi,False,2026-03-31
+2025-26,Chelsea,Liam Rosenior,Sacked,2026-04-22,7th,Calum McFarlane,True,2026-04-22
+2025-26,Burnley,Scott Parker,Mutual consent,2026-04-30,19th,Mike Jackson,True,2026-04-30
+2026-27,Bournemouth,Andoni Iraola,End of contract,2026-05-24,Pre-season,Marco Rose,False,2026-06-01
+2026-27,Chelsea,Calum McFarlane,End of interim spell,2026-05-24,Pre-season,Xabi Alonso,False,2026-07-01
+2026-27,Man City,Pep Guardiola,Resigned,2026-05-24,Pre-season,Enzo Maresca,False,2026-06-29
+2026-27,Crystal Palace,Oliver Glasner,End of contract,2026-05-27,Pre-season,Pierre Sage,False,2026-06-15
+2026-27,Liverpool,Arne Slot,Sacked,2026-05-30,Pre-season,Andoni Iraola,False,2026-06-04
+2026-27,Fulham,Marco Silva,End of contract,2026-06-02,Pre-season,Álvaro Arbeloa,False,2026-07-07
+2026-27,Ipswich,Kieran McKenna,Resigned,2026-06-10,Pre-season,Gary O'Neil,False,2026-06-23
+2026-27,Nott'm Forest,Vítor Pereira,Sacked,2026-07-02,Pre-season,Oliver Glasner,False,2026-07-06
+2026-27,Newcastle,Eddie Howe,Resigned,2026-07-30,Pre-season,Matthias Jaissle,False,2026-08-05

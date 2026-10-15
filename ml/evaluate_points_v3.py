@@ -9,8 +9,9 @@ Regenerates everything in docs/ml_evaluation/: metrics.json, the PNG figures and
 
 Protocol (identical to ml/train_points_v3.py):
   train 2020-21 .. 2023-24, early stopping on 2024-25, test on 2025-26 and the current
-  season so far. The test seasons are never used to choose anything; ablations and seed
-  repeats are retrained under the same protocol.
+  season so far. Ablations and seed repeats are retrained under the same protocol. The
+  2026-10 features (last match, 20-match team strength) were chosen with a rolling-origin
+  backtest (scripts/analysis/ml_backtest.py) whose folds include the test seasons.
 
 Conventions:
   - Regression metrics are per player per fixture (one row each).
@@ -66,7 +67,7 @@ SCOPE_COLORS = {"2025-26": "#2a78d6", "2026-27": "#eb6834", "all": "#0b0b0b"}
 POS_COLORS = {"GK": "#e87ba4", "DEF": "#008300", "MID": "#4a3aa7", "FWD": "#e34948"}
 
 GROUP_LABELS = {
-    "form": "Form (rolling 3/6 matches)", "season_to_date": "Season to date",
+    "form": "Form (last match, rolling 3/6)", "season_to_date": "Season to date",
     "team_opponent_strength": "Team / opponent strength", "context": "Fixture context",
     "price_ownership": "Price & ownership", "position": "Position",
 }
@@ -248,7 +249,7 @@ def paired(a: pd.DataFrame, b: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
 
 def feature_groups(cols: List[str]) -> Dict[str, List[str]]:
     groups = {
-        "form": [c for c in cols if c.endswith(("_r3", "_r6"))],
+        "form": [c for c in cols if c.endswith(("_r1", "_r3", "_r6"))],
         "season_to_date": [c for c in cols if c in ("season_matches_before", "season_ppg",
                                                      "season_minutes_share", "career_matches_before")],
         "team_opponent_strength": [c for c in cols if c.startswith(("team_", "opp_"))],
@@ -979,7 +980,7 @@ def build_readme(m: dict) -> str:
     w("")
     w("## Summary")
     w("")
-    w(f"- **Top-20 picks:** on the unseen test seasons ({' + '.join(seasons)}, {v3a['ranking']['gameweeks']} gameweeks) "
+    w(f"- **Top-20 picks:** on the held-out test seasons ({' + '.join(seasons)}, {v3a['ranking']['gameweeks']} gameweeks) "
       f"the 20 players v3 rates highest each gameweek score **{_ci(sig['v3']['all']['top20'])}** points each (95% CI), "
       f"versus {bba['ranking']['top20']:.2f} for the best simple baseline ({LABELS[best].lower()}) and "
       f"{rnd['ranking']['top20']:.2f} for a random pick. Difference **{_sd(d20)}**, {sigword(d20)}; v3 wins "
@@ -1043,8 +1044,9 @@ def build_readme(m: dict) -> str:
     w(f"- **Temporal split, as in `ml/train_points_v3.py`:** train {', '.join(m['protocol']['train_seasons'])}; early "
       f"stopping on {', '.join(m['protocol']['valid_seasons'])} (best iteration {m['protocol']['best_trees']} trees); test "
       f"{' and '.join(seasons)}. Hyperparameters are `ml.points_model.XGB_PARAMS`, chosen on the validation season. "
-      "The test seasons were never used to choose anything, including in this evaluation (ablations and seed repeats "
-      "use the same split).")
+      "Ablations and seed repeats use the same split. The last-match and 20-match team-strength features were added "
+      "in October 2026 after a rolling-origin backtest (`scripts/analysis/ml_backtest.py`) whose folds include the test "
+      "seasons; they also win on the 2023-24 and 2024-25 folds alone, but the test numbers are no longer fully untouched.")
     w("- **No-leakage design:** one row per player per fixture; player features use only earlier gameweeks (a double "
       "gameweek's two fixtures share the pre-deadline values); team strength comes from a separate team-per-match table, "
       "also rolled over earlier gameweeks; FPL's historical xP is not a feature (it was recorded inside the gameweek).")
@@ -1504,8 +1506,10 @@ def main() -> int:
         "no_context": ("Without fixture context", [c for c in cols if c not in groups["context"]]),
         "no_season": ("Without season-to-date", [c for c in cols if c not in groups["season_to_date"]]),
         "form_only": ("Form only (+ position)", groups["form"] + groups["position"]),
-        "r3_only": ("Rolling window 3 only", [c for c in cols if not c.endswith("_r6")]),
-        "r6_only": ("Rolling window 6 only", [c for c in cols if not c.endswith("_r3")]),
+        "no_last_match": ("Without last-match features", [c for c in cols if not c.endswith("_r1")]),
+        "no_team20": ("Without 20-match team strength", [c for c in cols if not c.endswith(("gf20", "ga20"))]),
+        "r3_only": ("Rolling window 3 only", [c for c in cols if not c.endswith(("_r1", "_r6"))]),
+        "r6_only": ("Rolling window 6 only", [c for c in cols if not c.endswith(("_r1", "_r3"))]),
     }
     vranker = Ranker(valid)
 

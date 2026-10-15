@@ -83,6 +83,48 @@ def test_upcoming_rows_see_full_history_but_not_themselves(history):
     assert up["team_gf"] == pytest.approx((2 + 1 + 3 + 1) / 4)  # all of Arsenal's matches so far
 
 
+def test_last_match_features_see_only_the_previous_gameweek(history):
+    f = pm.build_features(history).set_index(["name", "fixture"])
+    assert np.isnan(f.loc[("Alice", 1), "total_points_r1"])
+    assert f.loc[("Alice", 2), "total_points_r1"] == 2
+    assert f.loc[("Alice", 2), "minutes_r1"] == 90 and f.loc[("Alice", 2), "started_r1"] == 1
+    assert f.loc[("Alice", 3), "total_points_r1"] == 4
+    # Double gameweek: the second fixture still sees GW2, not the first fixture's 12 points
+    assert f.loc[("Alice", 4), "total_points_r1"] == 4
+
+
+def test_upcoming_rows_get_last_match_and_20_match_team_form(history):
+    upcoming = pd.DataFrame([{
+        "season": "2026-27", "name": "Alice", "position": "MID", "team": "Arsenal", "opponent": "Chelsea",
+        "fixture": 99, "kickoff_time": "2026-09-15T14:00:00Z", "GW": 4, "was_home": True, "value": 61,
+    }])
+    up = pm.build_features(history, upcoming).query("is_upcoming").iloc[0]
+    assert up["total_points_r1"] == 8 and up["minutes_r1"] == 90   # GW3's second fixture
+    assert up["team_gf20"] == pytest.approx((2 + 1 + 3 + 1) / 4)  # fewer than 20 matches: all of them
+    assert up["opp_ga20"] == pytest.approx((2 + 1 + 3) / 3)       # Chelsea conceded 2, 1, 3
+
+
+def test_team_strength_windows_of_6_and_20_matches():
+    a, b = ("Ann", "Arsenal", "FWD"), ("Ben", "Brentford", "DEF")
+    rows = []
+    for gw in range(1, 26):
+        goals = 0 if gw <= 14 else 3  # Arsenal: 14 blanks, then 3 a game
+        home, away = ("Arsenal", "Brentford") if gw % 2 else ("Brentford", "Arsenal")
+        hg, ag = (goals, 1) if home == "Arsenal" else (1, goals)
+        kickoff = (pd.Timestamp("2026-08-01T14:00:00Z") + pd.Timedelta(days=7 * gw)).isoformat()
+        rows += _match_rows("2026-27", gw, gw, kickoff, home, away, hg, ag, {a: 2, b: 2})
+    df = pd.DataFrame(rows)
+    for col in pm.HISTORY_COLUMNS:
+        if col not in df.columns:
+            df[col] = np.nan
+    df["kickoff_time"] = pd.to_datetime(df["kickoff_time"], utc=True)
+    f = pm.build_features(df[pm.HISTORY_COLUMNS]).set_index(["name", "fixture"])
+    # Before GW25: the last 6 matches (19-24) all had 3 goals; the last 20 (5-24) had 10 x 0 and 10 x 3
+    assert f.loc[("Ann", 25), "team_gf"] == pytest.approx(3.0)
+    assert f.loc[("Ann", 25), "team_gf20"] == pytest.approx(1.5)
+    assert f.loc[("Ben", 25), "opp_gf20"] == pytest.approx(1.5)  # the same numbers from Brentford's side
+
+
 def test_evaluate_sums_double_gameweeks_per_player():
     df = pd.DataFrame({"season": "s", "GW": 1, "name": [f"p{i}" for i in range(40)] + ["p0"],
                        "pred": list(range(40)) + [100], "total_points": list(range(40)) + [5]})

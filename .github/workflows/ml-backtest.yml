@@ -1,0 +1,96 @@
+name: ML backtest
+
+# Rolling-origin backtest of points-model variants (scripts/analysis/ml_backtest.py): each
+# variant is trained on earlier seasons and scored on 2023-24 .. the current season. Run it from
+# the Actions tab before changing the model; it is too heavy for a laptop.
+on:
+  workflow_dispatch:
+    inputs:
+      variants:
+        description: 'Comma-separated variants (VARIANTS in scripts/analysis/ml_backtest.py)'
+        default: 'current,previous'
+      inseason:
+        description: 'Seasons to replay with weekly retraining (blank to skip)'
+        default: '2024-25,2025-26'
+      ref:
+        description: 'Variant the others are compared against'
+        default: 'current'
+
+env:
+  VARIANTS: ${{ inputs.variants }}
+  INSEASON: ${{ inputs.inseason }}
+  REF: ${{ inputs.ref }}
+
+jobs:
+  features:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install pandas numpy xgboost-cpu scikit-learn httpx
+      - id: matrix
+        run: python -c 'import json, os; print("matrix=" + json.dumps(os.environ["VARIANTS"].split(",")))' >> "$GITHUB_OUTPUT"
+      - name: Fetch the current season from the FPL API
+        run: python -m pipeline.current_season --out-dir data/live || echo "::warning::live fetch failed; current-season fold skipped"
+      - run: python -m scripts.analysis.ml_backtest features --out feats.pkl.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feats
+          path: feats.pkl.gz
+          retention-days: 3
+
+  run:
+    needs: features
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(needs.features.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install pandas numpy xgboost-cpu scikit-learn httpx
+      - uses: actions/download-artifact@v4
+        with:
+          name: feats
+      - run: python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.variant }}' --inseason "$INSEASON" --out 'res_${{ matrix.variant }}.json'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: res-${{ matrix.variant }}
+          path: res_${{ matrix.variant }}.json
+          retention-days: 14
+
+  report:
+    needs: run
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install pandas numpy xgboost-cpu scikit-learn
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: res-*
+          merge-multiple: true
+      - run: python -m scripts.analysis.ml_backtest report 'res_*.json' --ref "$REF" --out report.md
+      - run: cat report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: |
+            report.md
+            res_*.json
+          retention-days: 14
