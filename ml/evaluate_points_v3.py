@@ -980,7 +980,7 @@ def build_readme(m: dict) -> str:
     w("")
     w("## Summary")
     w("")
-    w(f"- **Top-20 picks:** on the unseen test seasons ({' + '.join(seasons)}, {v3a['ranking']['gameweeks']} gameweeks) "
+    w(f"- **Top-20 picks:** on the held-out test seasons ({' + '.join(seasons)}, {v3a['ranking']['gameweeks']} gameweeks) "
       f"the 20 players v3 rates highest each gameweek score **{_ci(sig['v3']['all']['top20'])}** points each (95% CI), "
       f"versus {bba['ranking']['top20']:.2f} for the best simple baseline ({LABELS[best].lower()}) and "
       f"{rnd['ranking']['top20']:.2f} for a random pick. Difference **{_sd(d20)}**, {sigword(d20)}; v3 wins "

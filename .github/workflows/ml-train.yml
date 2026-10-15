@@ -12,9 +12,6 @@ on:
         description: 'Also regenerate docs/ml_evaluation (a few minutes)'
         type: boolean
         default: true
-  push:
-    branches: [feat/ml-last-match-team20]
-    paths: ['.github/workflows/ml-train.yml']
 
 jobs:
   train:
@@ -32,7 +29,7 @@ jobs:
       - name: Train and save the bundled model
         run: python -m ml.train_points_v3
       - name: Regenerate the evaluation report
-        if: ${{ github.event_name == 'push' || inputs.evaluate }}
+        if: ${{ inputs.evaluate }}
         run: python -m ml.evaluate_points_v3
       - uses: actions/upload-artifact@v4
         with:
