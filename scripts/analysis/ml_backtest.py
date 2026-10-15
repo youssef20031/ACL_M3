@@ -42,6 +42,7 @@ P90_STATS = ["total_points", "expected_goals", "expected_assists", "expected_goa
              "threat", "creativity", "bps", "bonus", "defensive_contribution", "saves",
              "expected_goals_conceded", "goals_scored", "assists"]
 P90_WINDOWS = (10, 30)
+DC_THRESHOLD = {"DEF": 10, "MID": 12, "FWD": 12}
 
 
 def _rolling_sum_before_gameweek(frame, key, cols, windows):
@@ -82,6 +83,14 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     r10 = pm._rolling_before_gameweek(df, "name", ["minutes", "started", "total_points", "bps", "ict_index"], (10,))
     df = df.join(r1).join(r10)
 
+    # FPL's defensive-contribution points (2025-26 rule): 2 points for 10+ CBIT (DEF) or 12+ CBIRT
+    # (MID/FWD); GKs are not eligible. NaN where the action count isn't recorded (before 2025-26).
+    dc = df["defensive_contribution"]
+    thr = df["position"].map(DC_THRESHOLD)
+    dcp = (2.0 * (dc >= thr)).where(dc.notna())
+    df["dc_points"] = dcp.where(df["position"] != "GK", 0.0).where(dc.notna())
+    df = df.join(pm._rolling_before_gameweek(df, "name", ["dc_points"], (3, 6, 10)))
+
     # Team / opponent strength over 20 matches
     cols = ["gf", "ga", "xgf", "xga"]
     tm = pm._team_match_table(df[~df["is_upcoming"]])
@@ -103,6 +112,7 @@ G_P90 = [f"{s}_p90_w{w}" for w in P90_WINDOWS for s in P90_STATS] + [f"minutes_s
 G_R1 = ["minutes_r1", "started_r1", "total_points_r1"]
 G_R10 = ["minutes_r10", "started_r10", "total_points_r10", "bps_r10", "ict_index_r10"]
 G_TEAM20 = [f"{p}_{c}20" for p in ("team", "opp") for c in ("gf", "ga", "xgf", "xga")]
+G_DC = ["dc_points_r3", "dc_points_r6", "dc_points_r10"]
 KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP"]
 
 
@@ -118,7 +128,7 @@ def cmd_features(args) -> None:
     print(f"base features: {len(feats)} rows in {time.time() - t0:.0f}s", flush=True)
     feats = add_extra_features(feats)
     feats = feats[feats["total_points"].notna()]
-    cols = list(dict.fromkeys(KEEP + BASE + G_P90 + G_R1 + G_R10 + G_TEAM20))
+    cols = list(dict.fromkeys(KEEP + BASE + G_P90 + G_R1 + G_R10 + G_TEAM20 + G_DC))
     feats = feats[cols].copy()
     for c in feats.columns:
         if feats[c].dtype == "float64":
@@ -131,6 +141,7 @@ def cmd_features(args) -> None:
 # ----------------------------------------------------------------------------- variants
 
 P = dict(pm.XGB_PARAMS)
+NOCAREER = [c for c in BASE if c != "career_matches_before"]
 VARIANTS = {
     "base": {},
     "d6": {"params": {**P, "max_depth": 6}},
@@ -143,8 +154,15 @@ VARIANTS = {
     "r1": {"features": BASE + G_R1},
     "r10": {"features": BASE + G_R10},
     "team20": {"features": BASE + G_TEAM20},
-    "nocareer": {"features": [c for c in BASE if c != "career_matches_before"]},
+    "nocareer": {"features": NOCAREER},
     "all": {"features": BASE + G_P90 + G_R1 + G_R10 + G_TEAM20},
+    # round 2: combinations of the round-1 winners
+    "r1t20": {"features": BASE + G_R1 + G_TEAM20},
+    "r1t20nc": {"features": NOCAREER + G_R1 + G_TEAM20},
+    "r1t20r10": {"features": BASE + G_R1 + G_TEAM20 + G_R10},
+    "r1t20dc": {"features": BASE + G_R1 + G_TEAM20 + G_DC},
+    "r1t20_d6": {"features": BASE + G_R1 + G_TEAM20, "params": {**P, "max_depth": 6}},
+    "r1t20_mcw200": {"features": BASE + G_R1 + G_TEAM20, "params": {**P, "min_child_weight": 200}},
 }
 
 
@@ -256,11 +274,63 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict) -> dict:
             fold[proto] = {"summary": summarize(t), "per_gw": t.to_dict(orient="list"),
                            "position_bias": position_bias(te, ens)}
         res["folds"][test_season] = fold
+    for season in INSEASON:
+        if season in present:
+            res.setdefault("inseason", {})[season] = run_inseason(feats, spec, season, cols, params, present)
     return res
 
 
+INSEASON: tuple = ()
+INSEASON_EVERY = 5
+
+
+def run_inseason(feats, spec, season, cols, params, present) -> dict:
+    """Replays the weekly retrain through `season`: every INSEASON_EVERY gameweeks the model is
+    refit on all earlier seasons plus this season's finished gameweeks and predicts the next block.
+    The tree count comes from early stopping on the previous season, as in train_points_v3."""
+    import xgboost as xgb
+
+    pool = [s for s in present if s < season]
+    if spec.get("max_seasons"):
+        pool = pool[-spec["max_seasons"]:]
+    valid_s, train_s = pool[-1], pool[:-1]
+    tr = feats[feats["season"].isin(train_s)]
+    va = feats[feats["season"] == valid_s]
+    cur = feats[feats["season"] == season]
+    gws = sorted(cur["GW"].unique())
+    preds = []
+    for seed in SEEDS:
+        p = {**params, "random_state": seed}
+        m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
+        m.fit(tr[cols], tr["total_points"], sample_weight=_weights(tr, spec.get("halflife")),
+              eval_set=[(va[cols], va["total_points"])], verbose=False)
+        best = int(m.best_iteration) + 1
+        out = pd.Series(np.nan, index=cur.index)
+        for start in range(int(gws[0]), int(gws[-1]) + 1, INSEASON_EVERY):
+            seen = feats[feats["season"].isin(pool) | ((feats["season"] == season) & (feats["GW"] < start))]
+            block = cur[(cur["GW"] >= start) & (cur["GW"] < start + INSEASON_EVERY)]
+            if block.empty:
+                continue
+            n = min(int(best * len(seen) / len(tr)), 4000)
+            m2 = xgb.XGBRegressor(n_estimators=n, **p)
+            m2.fit(seen[cols], seen["total_points"], sample_weight=_weights(seen, spec.get("halflife")), verbose=False)
+            out.loc[block.index] = m2.predict(block[cols])
+        preds.append(out.to_numpy())
+        print(f"  inseason {season} seed {seed}: best {best}", flush=True)
+    ens = np.mean(preds, axis=0)
+    t = gw_table(cur, ens)
+    per_seed = [summarize(gw_table(cur, p_)) for p_ in preds]
+    return {"summary": summarize(t), "per_gw": t.to_dict(orient="list"),
+            "position_bias": position_bias(cur, ens), "seeds": per_seed}
+
+
 def cmd_run(args) -> None:
+    global INSEASON, TEST_SEASONS
     feats = pd.read_pickle(args.feats)
+    if args.inseason:
+        INSEASON = tuple(args.inseason.split(","))
+    if args.folds is not None:
+        TEST_SEASONS = [s for s in args.folds.split(",") if s]
     out = []
     for name in args.variants.split(","):
         t0 = time.time()
@@ -300,51 +370,60 @@ def cmd_report(args) -> None:
             for r in json.load(open(pattern, encoding="utf-8")):
                 results[r["variant"]] = r
     lines = []
-    base = results["base"]
-    for proto in ("refit", "es"):
+    base = results[args.ref]
+
+    def units(r, proto):
+        if proto == "inseason":
+            return r.get("inseason", {})
+        return {s: f[proto] for s, f in r.get("folds", {}).items()}
+
+    for proto in ("refit", "es", "inseason"):
+        if not units(base, proto):
+            continue
         lines.append(f"\n## Protocol: {proto}\n")
-        lines.append("### base (current v3), seed-averaged\n")
-        lines.append("| fold | rmse | mae | top20 | top50 | capt | spear | best_iter (seeds) | bias GK/DEF/MID/FWD |")
-        lines.append("|---|---|---|---|---|---|---|---|---|")
-        for s, f in base["folds"].items():
-            sm = f[proto]["summary"]
-            bi = ",".join(str(v["best_iter"]) for v in f["seeds"].values())
-            pb = f[proto]["position_bias"]
+        lines.append(f"### {args.ref}, seed-averaged\n")
+        lines.append("| fold | rmse | mae | top20 | top50 | capt | spear | bias GK/DEF/MID/FWD |")
+        lines.append("|---|---|---|---|---|---|---|---|")
+        for s, u in units(base, proto).items():
+            sm, pb = u["summary"], u["position_bias"]
             lines.append(f"| {s} | {sm['rmse']:.4f} | {sm['mae']:.4f} | {sm['top20']:.3f} | {sm['top50']:.3f} | "
-                         f"{sm['capt']:.2f} | {sm['spear']:.4f} | {bi} | "
-                         f"{'/'.join(f'{pb.get(p, 0):+.3f}' for p in pm.POSITIONS)} |")
-        lines.append("\n### Variant minus base (pooled over folds: mean [95% CI]; per fold: Δtop20 / Δrmse)\n")
-        lines.append("| variant | Δrmse pooled | Δtop20 pooled | Δtop50 pooled | Δcapt pooled | per fold Δtop20/Δrmse(×1000) |")
+                         f"{sm['capt']:.2f} | {sm['spear']:.4f} | "
+                         f"{'/'.join(f'{pb.get(p_, 0):+.3f}' for p_ in pm.POSITIONS)} |")
+        lines.append("\n### Variant minus reference (pooled: mean [95% CI]; per fold: Δtop20 / Δrmse×1000)\n")
+        lines.append("| variant | Δrmse pooled | Δtop20 pooled | Δtop50 pooled | Δcapt pooled | per fold |")
         lines.append("|---|---|---|---|---|---|")
         for name, r in results.items():
-            if name == "base":
+            ru, bu = units(r, proto), units(base, proto)
+            common = [s_ for s_ in ru if s_ in bu]
+            if name == args.ref or not common:
                 continue
-            bt = pd.concat([pd.DataFrame(base["folds"][s][proto]["per_gw"]) for s in r["folds"]])
-            vt = pd.concat([pd.DataFrame(r["folds"][s][proto]["per_gw"]) for s in r["folds"]])
-            b = _boot(bt, vt)
+            b = _boot(pd.concat([pd.DataFrame(bu[s_]["per_gw"]) for s_ in common]),
+                      pd.concat([pd.DataFrame(ru[s_]["per_gw"]) for s_ in common]))
             per = []
-            for s in r["folds"]:
-                bs, vs = base["folds"][s][proto]["summary"], r["folds"][s][proto]["summary"]
-                per.append(f"{s[2:]}: {vs['top20'] - bs['top20']:+.3f}/{1000 * (vs['rmse'] - bs['rmse']):+.1f}")
+            for s_ in common:
+                bs, vs = bu[s_]["summary"], ru[s_]["summary"]
+                per.append(f"{s_[2:]}: {vs['top20'] - bs['top20']:+.3f}/{1000 * (vs['rmse'] - bs['rmse']):+.1f}")
             lines.append(f"| {name} | {_fmt(b['rmse'], 4)} | {_fmt(b['top20'])} | {_fmt(b['top50'])} | "
                          f"{_fmt(b['capt'], 2)} | {'; '.join(per)} |")
     # Seed noise and curves for the base model
     lines.append("\n## Seed spread (refit top20 / rmse per seed)\n")
     for name, r in results.items():
         cells = []
-        for s, f in r["folds"].items():
+        for s, f in r.get("folds", {}).items():
             cells.append(f"{s[2:]}: " + ", ".join(f"{v['refit']['top20']:.3f}/{v['refit']['rmse']:.4f}"
                                                 for v in f["seeds"].values()))
         lines.append(f"- **{name}**: " + "; ".join(cells))
     lines.append("\n## Test curve of the early-stopping fit (seed 0): trees -> valid rmse | test top20 | test rmse\n")
     for name, r in results.items():
-        for s, f in r["folds"].items():
+        for s, f in r.get("folds", {}).items():
             seed0 = next(iter(f["seeds"].values()))
             pts = seed0.get("test_curve", {})
             cell = "; ".join(f"{k}: {v['valid_rmse']:.4f}|{v['top20']:.3f}|{v['rmse']:.4f}" for k, v in pts.items())
             lines.append(f"- {name} {s} (best {seed0['best_iter']}, argmin {seed0['argmin_valid']}): {cell}")
     lines.append("\n## Top gain features (refit, seed 0, last fold)\n")
     for name, r in results.items():
+        if not r.get("folds"):
+            continue
         last = list(r["folds"].values())[-1]
         seed0 = next(iter(last["seeds"].values()))
         lines.append(f"- **{name}**: " + ", ".join(k for k, _ in seed0.get("top_gain", [])[:20]))
@@ -365,9 +444,12 @@ def main() -> int:
     r.add_argument("--feats", required=True)
     r.add_argument("--variants", required=True)
     r.add_argument("--out", required=True)
+    r.add_argument("--inseason", default="", help="seasons to replay with in-season retraining, e.g. 2025-26")
+    r.add_argument("--folds", default=None, help="test seasons for the es/refit folds (default: all)")
     rep = sub.add_parser("report")
     rep.add_argument("paths", nargs="+")
     rep.add_argument("--out")
+    rep.add_argument("--ref", default="base", help="variant the others are compared against")
     args = parser.parse_args()
     {"features": cmd_features, "run": cmd_run, "report": cmd_report}[args.cmd](args)
     return 0

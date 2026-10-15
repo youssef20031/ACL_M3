@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: ['base', 'd6,d4', 'mcw200,hl1', 'hl2,last3', 'p90', 'r1,r10', 'team20,nocareer', 'all']
+        group: ['base', 'r1t20', 'r1t20nc', 'all', 'r1t20r10', 'r1t20dc', 'r1t20_d6', 'r1t20_mcw200']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -51,7 +51,7 @@ jobs:
       - name: Run variants
         run: |
           OUT="res_$(echo '${{ matrix.group }}' | tr ',' '_').json"
-          python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.group }}' --out "$OUT"
+          python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.group }}' --inseason 2024-25,2025-26 --out "$OUT"
           echo "OUT=$OUT" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
