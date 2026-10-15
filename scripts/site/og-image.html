@@ -1,0 +1,161 @@
+<!doctype html>
+<!--
+  Template for public/og-image.png (the 1200x630 link-preview image).
+  Regenerate with: node scripts/site/render.mjs
+  You can also open this file in a browser to preview it; fonts load from node_modules.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pitch Me OG image</title>
+    <style>
+      @font-face {
+        font-family: 'Outfit';
+        src: url('../../node_modules/@fontsource-variable/outfit/files/outfit-latin-wght-normal.woff2') format('woff2');
+        font-weight: 100 900;
+      }
+      @font-face {
+        font-family: 'Inter';
+        src: url('../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');
+        font-weight: 100 900;
+      }
+
+      :root {
+        --bg: #1e0123;
+        --surface: #2a0631;
+        --brand: #37003c;
+        --mint: #00ff85;
+        --cyan: #04f5ff;
+        --muted: #d3c4d8;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+
+      body {
+        position: relative;
+        font-family: 'Inter', sans-serif;
+        color: #fff;
+        background:
+          radial-gradient(560px 420px at 92% 108%, rgba(0, 255, 133, 0.14), transparent 70%),
+          radial-gradient(560px 380px at 102% -8%, rgba(110, 30, 118, 0.55), transparent 70%),
+          linear-gradient(120deg, var(--bg) 0%, var(--surface) 46%, var(--brand) 100%);
+      }
+
+      /* Pitch markings in perspective, bleeding off the right edge and fading out towards the text */
+      .pitch-layer {
+        position: absolute;
+        inset: 0;
+        -webkit-mask-image: linear-gradient(90deg, transparent 48%, #000 70%);
+        mask-image: linear-gradient(90deg, transparent 48%, #000 70%);
+      }
+      .pitch {
+        position: absolute;
+        left: 680px;
+        top: 50px;
+        width: 780px;
+        transform: perspective(1100px) rotateX(52deg) rotateZ(-24deg);
+        transform-origin: 50% 50%;
+      }
+      .pitch svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+      .content {
+        position: absolute;
+        inset: 0;
+        padding: 68px 88px 80px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .lockup { display: flex; align-items: center; gap: 18px; }
+      .lockup svg { width: 84px; height: 60px; flex: none; }
+      .wordmark {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        font-size: 50px;
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+      .wordmark .pitch-word { color: var(--mint); }
+
+      h1 {
+        margin: 0;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        font-size: 68px;
+        line-height: 1.04;
+        letter-spacing: -0.025em;
+      }
+      h1 .hl { color: var(--mint); }
+
+      .chips { display: flex; gap: 12px; }
+      .chip {
+        padding: 10px 20px;
+        border-radius: 999px;
+        border: 2px solid rgba(0, 255, 133, 0.32);
+        background: rgba(42, 6, 49, 0.9);
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 22px;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      .bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 8px;
+        background: linear-gradient(90deg, var(--mint), var(--cyan));
+      }
+    </style>
+  </head>
+  <body>
+    <div class="pitch-layer" aria-hidden="true">
+      <div class="pitch">
+        <!-- Full-size pitch, 105 x 68 m at 10 px per metre -->
+        <svg viewBox="0 0 1050 680" fill="none" stroke="#00FF85" stroke-width="4" stroke-opacity="0.3">
+          <rect x="2" y="2" width="1046" height="676" rx="6" />
+          <line x1="525" y1="2" x2="525" y2="678" />
+          <circle cx="525" cy="340" r="91.5" />
+          <circle cx="525" cy="340" r="7" fill="#04F5FF" stroke="none" fill-opacity="0.8" />
+          <rect x="2" y="138.5" width="163" height="403" />
+          <rect x="885" y="138.5" width="163" height="403" />
+          <rect x="2" y="248.5" width="53" height="183" />
+          <rect x="995" y="248.5" width="53" height="183" />
+          <circle cx="110" cy="340" r="4" fill="#00FF85" fill-opacity="0.3" stroke="none" />
+          <circle cx="940" cy="340" r="4" fill="#00FF85" fill-opacity="0.3" stroke="none" />
+          <path d="M165 266.9 A91.5 91.5 0 0 1 165 413.1" />
+          <path d="M885 266.9 A91.5 91.5 0 0 0 885 413.1" />
+        </svg>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="lockup">
+        <!-- Same mark as src/components/ui/Logo.tsx -->
+        <svg viewBox="0 0 42 30" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="39" height="27" rx="4" fill="none" stroke="#00FF85" stroke-width="2.5" />
+          <line x1="21" y1="1.5" x2="21" y2="28.5" stroke="#00FF85" stroke-width="2.5" />
+          <circle cx="21" cy="15" r="5.5" fill="none" stroke="#00FF85" stroke-width="2.5" />
+          <circle cx="21" cy="15" r="1.6" fill="#04F5FF" />
+        </svg>
+        <div class="wordmark"><span class="pitch-word">Pitch</span>Me</div>
+      </div>
+
+      <h1>Fantasy Premier League<br />stats, predictions<br /><span class="hl">&amp; an AI assistant</span></h1>
+
+      <div class="chips">
+        <span class="chip">Fixtures</span>
+        <span class="chip">Table</span>
+        <span class="chip">Points predictions</span>
+        <span class="chip">Team of the week</span>
+        <span class="chip">Player stats</span>
+      </div>
+    </div>
+
+    <div class="bar"></div>
+  </body>
+</html>
