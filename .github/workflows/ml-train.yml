@@ -1,0 +1,45 @@
+name: ML train
+
+# Retrains the bundled v3 points model (ml/models/points_v3*.json) and regenerates its evaluation
+# report (docs/ml_evaluation/) on GitHub's runners, with the current season fetched from the FPL
+# API; download the "model" artifact and commit its files. Use it when a code change needs a new
+# bundled model: training is too heavy for a laptop, and the VM's weekly retrain
+# (pipeline/retrain.py) only updates the copy on the VM.
+on:
+  workflow_dispatch:
+    inputs:
+      evaluate:
+        description: 'Also regenerate docs/ml_evaluation (a few minutes)'
+        type: boolean
+        default: true
+  push:
+    branches: [feat/ml-last-match-team20]
+    paths: ['.github/workflows/ml-train.yml']
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install pandas numpy xgboost-cpu scikit-learn scipy matplotlib httpx
+      - name: Fetch the current season from the FPL API
+        run: python -m pipeline.current_season --out-dir data/live
+      - name: Train and save the bundled model
+        run: python -m ml.train_points_v3
+      - name: Regenerate the evaluation report
+        if: ${{ github.event_name == 'push' || inputs.evaluate }}
+        run: python -m ml.evaluate_points_v3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: model
+          path: |
+            ml/models/points_v3.json
+            ml/models/points_v3_meta.json
+            ml/models/points_v3_report.json
+            docs/ml_evaluation/
+          retention-days: 14

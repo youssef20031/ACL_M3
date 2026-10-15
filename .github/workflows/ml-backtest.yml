@@ -15,14 +15,11 @@ on:
       ref:
         description: 'Variant the others are compared against'
         default: 'current'
-  push:
-    branches: [feat/ml-last-match-team20]
-    paths: ['scripts/analysis/ml_backtest.py', '.github/workflows/ml-backtest.yml']
 
 env:
-  VARIANTS: ${{ inputs.variants || 'current,previous,mgr,rot,mgr_rot,efl_team,efl_player,efl' }}
-  INSEASON: ${{ inputs.inseason || '2024-25,2025-26' }}
-  REF: ${{ inputs.ref || 'current' }}
+  VARIANTS: ${{ inputs.variants }}
+  INSEASON: ${{ inputs.inseason }}
+  REF: ${{ inputs.ref }}
 
 jobs:
   features:
