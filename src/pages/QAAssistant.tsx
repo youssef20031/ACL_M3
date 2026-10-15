@@ -10,6 +10,7 @@ import { ChatMessage, ThinkingMessage } from '../components/assistant/ChatMessag
 import { Composer } from '../components/assistant/Composer';
 import { QueryDetails } from '../components/assistant/QueryDetails';
 import { cn } from '../utils/cn';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const EXAMPLES = [
   'Who scored the most goals in 2022-23?',
@@ -21,6 +22,7 @@ const EXAMPLES = [
 const DETAILS_ID = 'assistant-query-details';
 
 export function QAAssistant() {
+  usePageMeta({ title: "Assistant", description: "Ask questions about FPL players, teams and seasons. Answers come from a knowledge graph of every season since 2020-21." });
   const [input, setInput] = useState('');
   const [showDetails, setShowDetails] = useState(false);
   const [lastQueryInfo, setLastQueryInfo] = useState<QueryResponse | null>(null);

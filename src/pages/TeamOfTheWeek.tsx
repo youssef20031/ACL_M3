@@ -26,6 +26,7 @@ import {
   TabPanel,
   Tabs,
 } from '../components/ui';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const LINES: { position: PositionCode; label: string }[] = [
   { position: 'GK', label: 'Goalkeeper' },
@@ -71,6 +72,7 @@ function PitchSkeleton() {
 }
 
 export function TeamOfTheWeek() {
+  usePageMeta({ title: "Team of the Week", description: "The highest-scoring FPL squad our model predicts for the next gameweek (£100m, 3 per club), plus each week's dream team." });
   const [params, setParams] = useSearchParams();
   const mode: TeamOfWeekMode = params.get('mode') === 'actual' ? 'actual' : 'predicted';
   const requestedGw = Number(params.get('gw')) || undefined;

@@ -6,6 +6,7 @@ import { apiService, handleApiError } from '../services/api';
 import { Button, Card, Container, ErrorState, PageHeader, SectionHeading, SkeletonRows } from '../components/ui';
 import { OptionGroup } from '../components/settings/OptionGroup';
 import { cn } from '../utils/cn';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 // Keep in sync with RETIRED_MODELS / FALLBACK_ORDER in llm/llm_manager.py and the store migration.
 const MODELS = [
@@ -145,6 +146,7 @@ function SystemStatus() {
 }
 
 export function Settings() {
+  usePageMeta({ title: "Settings", description: "Choose the assistant's language model and retrieval method, and check the system status." });
   const {
     selectedModel,
     retrievalMethod,

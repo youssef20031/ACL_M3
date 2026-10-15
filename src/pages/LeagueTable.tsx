@@ -3,6 +3,7 @@ import { apiService, handleApiError, type TableRow } from '../services/api';
 import { Card, ClubCrest, Container, DataTable, ErrorState, PageHeader, type Column } from '../components/ui';
 import { getClubAbbreviation } from '../utils/clubLogos';
 import { cn } from '../utils/cn';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 // Season-end zones. Shown as a coloured bar beside the position, always with a legend.
 function zone(position: number, total: number): 'ucl' | 'europe' | 'relegation' | null {
@@ -51,6 +52,7 @@ function Form({ results }: { results: TableRow['form'] }) {
 }
 
 export function LeagueTable() {
+  usePageMeta({ title: "Premier League table", description: "The 2026-27 Premier League table calculated from every finished match: points, goal difference, form and next fixture." });
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['league-table'],
     queryFn: () => apiService.getLeagueTable(),

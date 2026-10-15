@@ -2,11 +2,19 @@ import { Link } from 'react-router-dom';
 import { Logo } from '../ui';
 import { MORE_NAV, PRIMARY_NAV } from './SiteHeader';
 import { RepoLink } from './RepoLink';
+import { setConsent } from '../../lib/consent';
+
+const LEGAL_NAV = [
+  { to: '/contact', label: 'Contact' },
+  { to: '/privacy', label: 'Privacy policy' },
+  { to: '/terms', label: 'Terms of use' },
+];
 
 export function SiteFooter() {
   return (
-    <footer className="mt-12 border-t border-line bg-surface">
-      <div className="mx-auto grid w-full max-w-page gap-8 px-4 py-8 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr]">
+    // pb-20 on phones/tablets keeps the floating "Ask AI" button off the last line
+    <footer className="mt-12 border-t border-line bg-surface pb-20 lg:pb-0">
+      <div className="mx-auto grid w-full max-w-page gap-8 px-4 py-8 sm:px-6 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
         <div>
           <Logo size={24} />
           <p className="mt-3 max-w-sm text-data text-fg-subtle">
@@ -35,6 +43,23 @@ export function SiteFooter() {
                 </Link>
               </li>
             ))}
+          </ul>
+        </nav>
+        <nav aria-label="Footer: about">
+          <ul className="space-y-1.5 text-data">
+            {LEGAL_NAV.map((item) => (
+              <li key={item.to}>
+                <Link to={item.to} className="text-fg-muted hover:text-fg">
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+            <li>
+              {/* Reopens the consent banner so the choice can be changed at any time */}
+              <button type="button" onClick={() => setConsent(null)} className="text-fg-muted hover:text-fg">
+                Privacy choices
+              </button>
+            </li>
           </ul>
         </nav>
       </div>

@@ -23,6 +23,8 @@ interface PlayerComboboxProps {
   onChange: (value: string) => void;
   onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   onPick: (suggestion: PlayerSuggestion) => void;
+  /** Validation message shown under the input (the input is marked invalid). */
+  error?: string | null;
 }
 
 /**
@@ -45,8 +47,10 @@ export function PlayerCombobox({
   onChange,
   onKeyDown,
   onPick,
+  error,
 }: PlayerComboboxProps) {
   const inputId = `${id}-input`;
+  const errorId = `${id}-error`;
   const open = suggestions.length > 0;
 
   return (
@@ -73,13 +77,21 @@ export function PlayerCombobox({
           aria-activedescendant={activeIndex >= 0 ? `${id}-suggestion-${activeIndex}` : undefined}
           role="combobox"
           autoComplete="off"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           className={cn(
             'h-11 w-full rounded-md border border-line-strong bg-surface-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-subtle',
             'transition-colors hover:border-fg-subtle disabled:cursor-not-allowed disabled:opacity-50',
             side === 1 ? 'focus:border-accent' : 'focus:border-accent-2',
+            error && 'border-danger hover:border-danger',
           )}
         />
       </div>
+      {error && (
+        <p id={errorId} role="alert" className="text-micro font-semibold text-danger">
+          {error}
+        </p>
+      )}
       {open && (
         <ul
           id={listId}

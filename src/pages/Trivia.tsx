@@ -18,6 +18,7 @@ import {
 } from "../components/ui";
 import { SegmentedControl } from "../components/trivia/DifficultyPicker";
 import { cn } from "../utils/cn";
+import { usePageMeta } from '../hooks/usePageMeta';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -495,6 +496,7 @@ function ResultsScreen({
 // ─── Main Trivia Page ─────────────────────────────────────────────────────────
 
 export function Trivia() {
+  usePageMeta({ title: "Trivia", description: "Test your Fantasy Premier League knowledge with quiz questions built from real FPL data." });
   const { neo4jConnected, triviaScore, triviaTotal, incrementScore, incrementTotal, resetTriviaScore } = useAppStore();
 
   const [view, setView] = useState<View>("select");

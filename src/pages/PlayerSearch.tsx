@@ -28,6 +28,7 @@ import {
   type Column,
 } from '../components/ui';
 import { StatBarChart } from '../components/players/StatBarChart';
+import { usePageMeta } from '../hooks/usePageMeta';
 
 const EXAMPLE_SEARCHES = ['Salah', 'Haaland', 'De Bruyne', 'Trent', 'Saka'];
 
@@ -64,6 +65,7 @@ function leaderToPlayer(leader: PlayerLeader): PlayerResult {
 }
 
 export function PlayerSearch() {
+  usePageMeta({ title: "Players", description: "Season leaders and stats for every FPL player since 2020-21: points, goals, assists, clean sheets and per-game rates." });
   const { neo4jConnected } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();

@@ -2,29 +2,52 @@ import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type Selec
 import { ChevronDown, Search, X } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-const CONTROL =
+// Any control with aria-invalid="true" gets the error border (see Field's `error`).
+export const CONTROL =
   'h-10 w-full rounded-md border border-line-strong bg-surface-2 text-sm text-fg placeholder:text-fg-subtle ' +
-  'transition-colors hover:border-fg-subtle disabled:cursor-not-allowed disabled:opacity-50';
+  'transition-colors hover:border-fg-subtle disabled:cursor-not-allowed disabled:opacity-50 ' +
+  'aria-[invalid=true]:border-danger aria-[invalid=true]:hover:border-danger';
+
+/** Props a control needs to announce Field's hint/error to assistive tech. */
+export interface FieldA11y {
+  'aria-invalid'?: true;
+  'aria-describedby'?: string;
+}
 
 interface FieldProps {
   label: ReactNode;
   /** Visually hide the label but keep it for screen readers. */
   hideLabel?: boolean;
   hint?: ReactNode;
-  children: (id: string) => ReactNode;
+  /** Validation message: shown in red under the control, which is marked invalid. */
+  error?: ReactNode;
+  /** Render the control; spread `a11y` onto it so the hint/error are announced. */
+  children: (id: string, a11y: FieldA11y) => ReactNode;
   className?: string;
 }
 
-/** Label + control + hint wiring with a generated id. */
-export function Field({ label, hideLabel, hint, children, className }: FieldProps) {
+/** Label + control + hint/error wiring with a generated id. */
+export function Field({ label, hideLabel, hint, error, children, className }: FieldProps) {
   const id = useId();
+  const hintId = hint ? `${id}-hint` : undefined;
+  const errorId = error ? `${id}-error` : undefined;
+  const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
       <label htmlFor={id} className={cn('text-micro font-semibold uppercase text-fg-muted', hideLabel && 'sr-only')}>
         {label}
       </label>
-      {children(id)}
-      {hint && <p className="text-micro text-fg-subtle">{hint}</p>}
+      {children(id, { 'aria-invalid': error ? true : undefined, 'aria-describedby': describedBy })}
+      {error && (
+        <p id={errorId} role="alert" className="text-micro font-semibold text-danger">
+          {error}
+        </p>
+      )}
+      {hint && (
+        <p id={hintId} className="text-micro text-fg-subtle">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

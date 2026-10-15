@@ -16,6 +16,9 @@ interface ComposerProps {
 }
 
 const MAX_HEIGHT = 168;
+/** Matches the API's QueryRequest limit, so a long question is stopped here, not rejected after sending. */
+export const MAX_QUESTION_CHARS = 1000;
+const COUNTER_FROM = 850;
 
 export function Composer({ value, onChange, onSubmit, disabled, busy, placeholder, footer }: ComposerProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -59,6 +62,7 @@ export function Composer({ value, onChange, onSubmit, disabled, busy, placeholde
           onKeyDown={onKeyDown}
           placeholder={placeholder}
           disabled={disabled}
+          maxLength={MAX_QUESTION_CHARS}
           aria-describedby={footer ? 'assistant-input-hint' : undefined}
           className={cn(
             'min-h-[2.25rem] flex-1 resize-none bg-transparent py-1.5 text-body text-fg placeholder:text-fg-subtle',
@@ -77,6 +81,16 @@ export function Composer({ value, onChange, onSubmit, disabled, busy, placeholde
           <ArrowUp className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
+      {value.length >= COUNTER_FROM && (
+        <p
+          aria-live="polite"
+          className={cn('mt-1 px-1 text-right text-micro', value.length >= MAX_QUESTION_CHARS ? 'font-semibold text-danger' : 'text-warning')}
+        >
+          {value.length >= MAX_QUESTION_CHARS
+            ? `That's the limit: ${MAX_QUESTION_CHARS} characters. Try a shorter question.`
+            : `${MAX_QUESTION_CHARS - value.length} characters left`}
+        </p>
+      )}
       {footer && (
         <div id="assistant-input-hint" className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-1 text-micro text-fg-subtle">
           {footer}
