@@ -3,9 +3,12 @@ Player avatar lookup.
 
 Resolution order, cheapest first:
   1. Official FPL headshot: built from the player's `code` in the FPL bootstrap
-     feed (fetched once per process) — no per-player network call. The CDN allows
-     hotlinking, so the browser loads it directly.
-  2. Wikipedia page image via a single search request.
+     feed (fetched once per process). The CDN allows hotlinking, so the browser
+     loads it directly. Not every code has a photo (new signings often don't: the
+     CDN answers 403), so after loading the feed every code is checked once with a
+     HEAD request in the background, and codes without a photo fall through.
+  2. Wikipedia page image via a single search request, kept only when the page's
+     title matches the player's name.
   3. Google Custom Search, only if GOOGLE_CUSTOM_SEARCH_* is configured.
 
 Results (including misses, which expire) are kept in memory and persisted to a
@@ -15,8 +18,9 @@ import asyncio
 import json
 import logging
 import os
+import re
 import time
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import quote_plus, urlparse
 
 import httpx
@@ -27,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 FPL_BOOTSTRAP_URL = "https://fantasy.premierleague.com/api/bootstrap-static/"
 FPL_PHOTO_URL = "https://resources.premierleague.com/premierleague25/photos/players/110x140/{code}.png"
+_FPL_PHOTO_CODE = re.compile(re.escape(FPL_PHOTO_URL).replace(re.escape("{code}"), r"(\d+)") + "$")
 WIKIPEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
 GOOGLE_CSE_URL = "https://www.googleapis.com/customsearch/v1"
 USER_AGENT = "FPL-FantasyTrivia/1.0 (https://github.com/youssef20031/ACL_M3)"
@@ -69,6 +74,24 @@ def _looks_generic(url: str) -> bool:
     return any(marker in lowered for marker in _GENERIC_IMAGE_MARKERS)
 
 
+def _fpl_code_of(url: Optional[str]) -> Optional[int]:
+    match = _FPL_PHOTO_CODE.match(url or "")
+    return int(match.group(1)) if match else None
+
+
+def _title_matches(title: str, name: str) -> bool:
+    """A Wikipedia result is about this player: one of the title (minus a "(footballer)"
+    qualifier) and the name contains every word of the other, and at least two words match
+    unless the player goes by a single name. "Ezri Konsa" matches "Ezri Konsa Ngoyo";
+    the disambiguation page "Sidiki" doesn't match "Sidiki Cherif"."""
+    title_words = normalize_name(re.sub(r"\(.*?\)", " ", title)).split()
+    name_words = normalize_name(name).split()
+    if not title_words or not name_words:
+        return False
+    shorter, longer = sorted((title_words, name_words), key=len)
+    return set(shorter) <= set(longer) and (len(shorter) >= 2 or len(name_words) == 1)
+
+
 class AvatarService:
     def __init__(
         self,
@@ -92,6 +115,10 @@ class AvatarService:
         self._fpl_by_name: Dict[str, int] = {}
         self._fpl_by_surname_team: Dict[Tuple[str, str], int] = {}
         self._fpl_ready = asyncio.Event()
+        # FPL codes whose photo was checked on the CDN, and those that turned out to have none
+        self._fpl_checked: Set[int] = set()
+        self._fpl_missing: Set[int] = set()
+        self._check_semaphore = asyncio.Semaphore(4)  # background checks; lookups keep _semaphore
         self._save_pending = False
 
     # ------------------------------------------------------------ lifecycle
@@ -167,33 +194,70 @@ class AvatarService:
                 if surname and team:
                     self._fpl_by_surname_team.setdefault((surname[-1], team), code)
             logger.info("FPL photo codes loaded for %d players", len(data.get("elements", [])))
+            codes = {el["code"] for el in data.get("elements", []) if el.get("code")}
+            asyncio.create_task(self._check_fpl_photos(codes))
         except Exception as exc:
             logger.warning("FPL bootstrap unavailable, falling back to other avatar sources: %s", exc)
         finally:
             self._fpl_ready.set()
 
+    async def _check_fpl_photos(self, codes: Iterable[int]) -> None:
+        """Find the codes the CDN has no photo for, so lookups and peek() skip them."""
+        todo = [c for c in codes if c not in self._fpl_checked]
+        await asyncio.gather(*(self._fpl_photo_exists(c) for c in todo))
+        logger.info("FPL photos checked: %d codes, %d without a photo", len(todo), len(self._fpl_missing))
+
+    async def _fpl_photo_exists(self, code: int) -> bool:
+        """HEAD the CDN once per code. A 403/404 means no photo; on other errors assume there
+        is one (and check again next time) rather than hide photos while the CDN is flaky."""
+        if code in self._fpl_checked:
+            return code not in self._fpl_missing
+        async with self._check_semaphore:
+            try:
+                resp = await self.client.head(FPL_PHOTO_URL.format(code=code))
+            except Exception as exc:
+                logger.debug("FPL photo check failed for %s: %s", code, exc)
+                return True
+        if resp.status_code in (403, 404):
+            self._fpl_missing.add(code)
+        elif resp.status_code != 200:
+            return True
+        self._fpl_checked.add(code)
+        return code not in self._fpl_missing
+
     # --------------------------------------------------------------- lookups
 
-    def _fpl_photo(self, name: str, team: Optional[str]) -> Optional[str]:
+    def _fpl_code(self, name: str, team: Optional[str]) -> Optional[int]:
         key = normalize_name(name)
         code = self._fpl_by_name.get(key)
         if code is None and team:
             tokens = key.split()
             if tokens:
                 code = self._fpl_by_surname_team.get((tokens[-1], team))
-        return FPL_PHOTO_URL.format(code=code) if code else None
+        return code
+
+    def _fpl_photo(self, name: str, team: Optional[str]) -> Optional[str]:
+        """FPL photo URL from the feed, unless the CDN is known to have no photo for the code."""
+        code = self._fpl_code(name, team)
+        return FPL_PHOTO_URL.format(code=code) if code and code not in self._fpl_missing else None
+
+    def _known_missing(self, url: Optional[str]) -> bool:
+        """An FPL photo URL (e.g. cached before the photo checks existed) that has no photo."""
+        code = _fpl_code_of(url)
+        return code is not None and code in self._fpl_missing
 
     async def _wikipedia(self, name: str) -> Optional[str]:
         params = {
             "action": "query", "format": "json", "formatversion": 2,
-            "generator": "search", "gsrsearch": f"{name} footballer", "gsrlimit": 1,
+            "generator": "search", "gsrsearch": f"{name} footballer", "gsrlimit": 3,
             "prop": "pageimages", "piprop": "thumbnail", "pithumbsize": 250,
         }
         resp = await self.client.get(WIKIPEDIA_API_URL, params=params)
         resp.raise_for_status()
-        for page in resp.json().get("query", {}).get("pages", []):
+        pages = sorted(resp.json().get("query", {}).get("pages", []), key=lambda p: p.get("index", 99))
+        for page in pages:
             url = page.get("thumbnail", {}).get("source")
-            if url and not _looks_generic(url):
+            if url and not _looks_generic(url) and _title_matches(page.get("title", ""), name):
                 return url
         return None
 
@@ -219,9 +283,9 @@ class AvatarService:
             await asyncio.wait_for(self._fpl_ready.wait(), timeout=5)
         except asyncio.TimeoutError:
             pass
-        url = self._fpl_photo(name, team)
-        if url:
-            return url
+        code = self._fpl_code(name, team)
+        if code and await self._fpl_photo_exists(code):
+            return FPL_PHOTO_URL.format(code=code)
         async with self._semaphore:
             for source in (lambda: self._wikipedia(name), lambda: self._google(name, team)):
                 try:
@@ -240,6 +304,8 @@ class AvatarService:
             return None
 
         cached = self._cache.get(key)
+        if cached and self._known_missing(cached[0]):
+            cached = None  # an FPL photo that turned out not to exist: look again
         if cached and (cached[0] or time.time() - cached[1] < MISS_TTL_SECONDS):
             # FPL codes can appear after a miss was cached (bootstrap was down)
             if cached[0] or not self._fpl_photo(name, team):
@@ -255,15 +321,19 @@ class AvatarService:
         self._schedule_save()
         return _public_url(url)
 
-    def peek(self, name: str, team: Optional[str] = None) -> Optional[str]:
-        """Avatar URL only if it's known without a network call (cache hit or FPL code)."""
+    def peek(self, name: str, team: Optional[str] = None, fpl_code: Optional[int] = None) -> Optional[str]:
+        """Avatar URL only if it's known without a network call: a cache hit, else the FPL
+        photo for the feed's code (or `fpl_code`, e.g. from the graph) unless it has none."""
         key = normalize_name(name)
         if not key:
             return None
         cached = self._cache.get(key)
-        if cached and cached[0]:
+        if cached and cached[0] and not self._known_missing(cached[0]):
             return _public_url(cached[0])
-        return _public_url(self._fpl_photo(name, team))
+        url = self._fpl_photo(name, team)
+        if url is None and fpl_code and not self._fpl_code(name, team) and fpl_code not in self._fpl_missing:
+            url = FPL_PHOTO_URL.format(code=fpl_code)
+        return _public_url(url)
 
     async def enrich(self, rows: Iterable[Dict[str, Any]], team_of=None) -> List[Dict[str, Any]]:
         """Return copies of rows with an `avatar` field, looked up concurrently."""

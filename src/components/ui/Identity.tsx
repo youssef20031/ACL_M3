@@ -50,11 +50,14 @@ export function ClubCrest({ team, size = 20, label = 'none', className }: ClubCr
   );
 }
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+/** Blank head-and-shoulders silhouette for players without a photo. */
+function BlankAvatar() {
+  return (
+    <svg viewBox="0 0 40 40" aria-hidden="true" fill="currentColor" className="h-[88%] w-[88%] text-fg-muted/40">
+      <circle cx="20" cy="14.5" r="7.5" />
+      <path d="M4.5 40c0-9.2 6.9-15.5 15.5-15.5S35.5 30.8 35.5 40z" />
+    </svg>
+  );
 }
 
 interface PlayerAvatarProps {
@@ -65,7 +68,7 @@ interface PlayerAvatarProps {
   loading?: 'lazy' | 'eager';
 }
 
-/** Player photo in a rounded tile; falls back to initials while missing or broken. */
+/** Player photo in a rounded tile; falls back to a blank silhouette while missing or broken. */
 export function PlayerAvatar({ name, src, size = 40, className, loading }: PlayerAvatarProps) {
   return (
     <span
@@ -78,15 +81,7 @@ export function PlayerAvatar({ name, src, size = 40, className, loading }: Playe
         size={size}
         loading={loading}
         className="h-full w-full object-cover object-top"
-        fallback={
-          <span
-            aria-hidden="true"
-            className="flex h-full w-full items-center justify-center font-display font-bold text-fg-muted"
-            style={{ fontSize: Math.max(10, size * 0.36) }}
-          >
-            {initials(name)}
-          </span>
-        }
+        fallback={<BlankAvatar />}
       />
     </span>
   );
