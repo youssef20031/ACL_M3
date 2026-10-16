@@ -6,9 +6,12 @@ import {
   ArrowRight,
   CalendarDays,
   Clock,
+  Download,
   Flame,
   Home,
+  Loader2,
   Medal,
+  Share2,
   Shield,
   Star,
   Target,
@@ -28,7 +31,7 @@ import type {
   CardTone,
   CardValueFormat,
 } from '../../../services/api';
-import { Card, Chip, ClubCrest, FdrBadge, PositionBadge, StatusBadge } from '../../ui';
+import { Card, Chip, ClubCrest, FdrBadge, Logo, PositionBadge, StatusBadge } from '../../ui';
 import { usePlayerAvatars } from '../../../hooks/usePlayerAvatars';
 import { getClubAbbreviation } from '../../../utils/clubLogos';
 import { cn } from '../../../utils/cn';
@@ -106,15 +109,54 @@ export function PhotoLookupProvider({ enabled, children }: { enabled: boolean; c
   return <PhotoLookupContext.Provider value={enabled}>{children}</PhotoLookupContext.Provider>;
 }
 
+// --- Sharing a card as an image ------------------------------------------------------------
+
+export type ShareState = 'idle' | 'working' | 'ready' | 'failed';
+
+interface ExportContextValue {
+  /** This copy of the card is being drawn into an image: photos load through our proxy,
+      links and buttons give way to the Pitch Me mark. */
+  exporting: boolean;
+  share?: () => void;
+  shareState?: ShareState;
+  /** 'share' opens the device's share sheet (phones); 'save' downloads a PNG. */
+  shareMode?: 'share' | 'save';
+}
+
+const ExportContext = createContext<ExportContextValue>({ exporting: false });
+
+export function ExportProvider({ value, children }: { value: ExportContextValue; children: ReactNode }) {
+  return <ExportContext.Provider value={value}>{children}</ExportContext.Provider>;
+}
+
+export function useExport(): ExportContextValue {
+  return useContext(ExportContext);
+}
+
+/** Other hosts' photos via our image proxy, so the image's canvas isn't tainted by them. */
+function sameOrigin(url: string | null | undefined): string | null | undefined {
+  if (!url || url.startsWith('/') || url.startsWith('data:')) return url;
+  try {
+    if (new URL(url).origin === window.location.origin) return url;
+  } catch {
+    return url;
+  }
+  return `/api/images/proxy?url=${encodeURIComponent(url)}`;
+}
+
 /**
  * Photo for each card player: the one the backend sent (cache or FPL code, no network
  * call there), else a lookup shared with the rest of the app (`['player-avatar', name]`).
  */
 export function useCardPhotos(players: CardPlayer[]): (player: CardPlayer) => string | null | undefined {
   const enabled = useContext(PhotoLookupContext);
+  const { exporting } = useContext(ExportContext);
   const missing = enabled ? players.filter((p) => !p.photo).map((p) => p.name) : [];
   const looked = usePlayerAvatars(missing);
-  return (player) => player.photo ?? looked[player.name];
+  return (player) => {
+    const url = player.photo ?? looked[player.name];
+    return exporting ? sameOrigin(url) : url;
+  };
 }
 
 // --- Asking about a player --------------------------------------------------------------
@@ -210,6 +252,7 @@ export function PlayerAction({ player, season, question, layout = 'row', iconSid
       <Link
         to="/players"
         state={profile}
+        data-export-hide
         aria-label={`Open ${player.name}'s profile`}
         title="Open profile"
         className={cn(
@@ -289,9 +332,52 @@ export function CardFrame({ icon, eyebrow, title, aside, identity, children, foo
           {aside && <div className="shrink-0 text-right">{aside}</div>}
         </header>
         {children}
-        {footer && <footer className="flex flex-wrap gap-x-1 border-t border-line px-2 py-1 sm:px-3">{footer}</footer>}
+        <CardFooter>{footer}</CardFooter>
       </article>
     </Card>
+  );
+}
+
+/** Links and the share button; in the image, the Pitch Me mark and the site's address instead. */
+function CardFooter({ children }: { children?: ReactNode }) {
+  const { exporting, share, shareState = 'idle', shareMode = 'save' } = useExport();
+  if (exporting) {
+    return (
+      <footer className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5 sm:px-5">
+        <Logo size={16} />
+        <span className="truncate text-micro text-fg-subtle">{window.location.host} · not affiliated with the Premier League</span>
+      </footer>
+    );
+  }
+  if (!children && !share) return null;
+  const ShareIcon = shareState === 'working' ? Loader2 : shareMode === 'share' ? Share2 : Download;
+  const label = {
+    idle: shareMode === 'share' ? 'Share as image' : 'Save as image',
+    working: 'Creating image…',
+    ready: 'Image ready: tap to share',
+    failed: "Couldn't create the image",
+  }[shareState];
+  return (
+    <footer className="flex flex-wrap items-center gap-x-1 border-t border-line px-2 py-1 sm:px-3">
+      {children}
+      {share && (
+        <button
+          type="button"
+          onClick={share}
+          disabled={shareState === 'working'}
+          className={cn(
+            'ml-auto inline-flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-data font-semibold transition-colors hover:bg-surface-2 hover:text-fg disabled:cursor-wait',
+            shareState === 'ready' ? 'text-accent' : 'text-fg-muted',
+          )}
+        >
+          <ShareIcon className={cn('h-3.5 w-3.5', shareState === 'working' && 'animate-spin')} aria-hidden="true" />
+          {label}
+        </button>
+      )}
+      <span className="sr-only" role="status">
+        {shareState === 'ready' || shareState === 'failed' ? label : ''}
+      </span>
+    </footer>
   );
 }
 
@@ -510,7 +596,8 @@ interface MiniBarsProps {
  * so the hover title only adds detail.
  */
 export function MiniBars({ bars, caption, tone = 'accent', height = 64, floor = 10, className }: MiniBarsProps) {
-  const reduceMotion = useReducedMotion();
+  const { exporting } = useExport();
+  const reduceMotion = useReducedMotion() || exporting; // an image needs the bars drawn in full
   const top = Math.max(floor, ...bars.map((b) => b.value));
   const anyFocus = bars.some((b) => b.focus);
   const fill = tone === 'accent' ? 'bg-accent' : 'bg-accent-2';

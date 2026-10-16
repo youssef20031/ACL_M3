@@ -1,10 +1,11 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { CornerDownRight } from 'lucide-react';
 import type { AnswerCard } from '../../../services/api';
 import { Skeleton } from '../../ui';
 import { cn } from '../../../utils/cn';
-import { AskProvider, PhotoLookupProvider } from './shared';
+import { AskProvider, ExportProvider, PhotoLookupProvider, type ShareState } from './shared';
 import { PlayerAnswerCard } from './PlayerAnswerCard';
 import { ComparisonAnswerCard } from './ComparisonAnswerCard';
 import { LeaderboardAnswerCard } from './LeaderboardAnswerCard';
@@ -78,6 +79,171 @@ export function cardLabel(card: AnswerCard): string {
   }
 }
 
+// --- Sharing a card as an image ------------------------------------------------------------
+
+/** After the next paint; a background tab doesn't paint, so give up waiting after 100 ms. */
+const nextFrame = () =>
+  new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+    setTimeout(resolve, 100);
+  });
+
+/** Waits until every photo in `node` has loaded or failed (a failed one shows its fallback). */
+async function imagesSettled(node: HTMLElement, timeoutMs = 6000) {
+  const pending = Array.from(node.querySelectorAll('img'))
+    .filter((img) => {
+      img.loading = 'eager'; // the copy is off-screen, where lazy images never load
+      return !img.complete;
+    })
+    .map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          img.addEventListener('load', () => resolve(), { once: true });
+          img.addEventListener('error', () => resolve(), { once: true });
+        }),
+    );
+  await Promise.race([Promise.all(pending), new Promise((resolve) => setTimeout(resolve, timeoutMs))]);
+  await nextFrame();
+  await nextFrame();
+}
+
+/** Phones get the share sheet; elsewhere the image is downloaded. */
+function preferredShareMode(): 'share' | 'save' {
+  try {
+    const probe = new File([new Blob()], 'card.png', { type: 'image/png' });
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+    return coarse && navigator.canShare?.({ files: [probe] }) ? 'share' : 'save';
+  } catch {
+    return 'save';
+  }
+}
+
+function fileName(card: AnswerCard): string {
+  const slug = cardLabel(card)
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `pitch-me-${slug || 'card'}.png`;
+}
+
+function download(file: File) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = file.name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/**
+ * A card with a "Share/Save as image" button. The image is drawn from a second copy of the card,
+ * rendered off-screen at the same width, so the card on screen doesn't change while it's made:
+ * the copy loads photos through our image proxy (other hosts' images would block the export)
+ * and ends with the Pitch Me mark instead of links.
+ */
+function ShareableCard({ card, children }: { card: AnswerCard; children: ReactNode }) {
+  const onPage = useRef<HTMLDivElement>(null);
+  const copy = useRef<HTMLDivElement | null>(null);
+  const prepared = useRef<File | null>(null);
+  const working = useRef(false);
+  const [copyWidth, setCopyWidth] = useState<number | null>(null);
+  const [state, setState] = useState<ShareState>('idle');
+  const [mode] = useState(preferredShareMode);
+
+  useEffect(() => {
+    if (state !== 'failed') return;
+    const timer = setTimeout(() => setState('idle'), 4000);
+    return () => clearTimeout(timer);
+  }, [state]);
+
+  const deliver = useCallback(
+    async (file: File) => {
+      if (mode === 'save') {
+        download(file);
+        return;
+      }
+      try {
+        await navigator.share({ files: [file], title: cardLabel(card) });
+      } catch (err) {
+        const name = (err as DOMException)?.name;
+        if (name === 'AbortError') return; // closed the share sheet
+        if (name === 'NotAllowedError') {
+          // Making the image took too long for the browser to count this as the user's tap:
+          // keep the image for the next one
+          prepared.current = file;
+          setState('ready');
+          return;
+        }
+        throw err;
+      }
+    },
+    [card, mode],
+  );
+
+  const share = useCallback(async () => {
+    if (working.current) return;
+    if (prepared.current) {
+      const file = prepared.current;
+      prepared.current = null;
+      setState('idle');
+      await deliver(file).catch(() => setState('failed'));
+      return;
+    }
+    const width = onPage.current?.getBoundingClientRect().width;
+    if (!width) return;
+    working.current = true;
+    setState('working');
+    try {
+      setCopyWidth(Math.round(width));
+      await nextFrame();
+      await nextFrame();
+      const node = copy.current;
+      if (!node) throw new Error('Card copy not rendered');
+      await Promise.all([document.fonts?.ready, imagesSettled(node)]);
+      const { toBlob } = await import('html-to-image');
+      const blob = await toBlob(node, {
+        pixelRatio: 2,
+        style: { position: 'static', left: 'auto', top: 'auto' }, // the copy sits off-screen
+        filter: (el) => !(el instanceof HTMLElement && 'exportHide' in el.dataset),
+      });
+      if (!blob) throw new Error('No image');
+      setState('idle');
+      await deliver(new File([blob], fileName(card), { type: 'image/png' }));
+    } catch (err) {
+      console.error('Sharing the card failed', err);
+      setState('failed');
+    } finally {
+      working.current = false;
+      setCopyWidth(null);
+    }
+  }, [card, deliver]);
+
+  return (
+    <div ref={onPage}>
+      <ExportProvider value={{ exporting: false, share, shareState: state, shareMode: mode }}>{children}</ExportProvider>
+      {copyWidth != null &&
+        createPortal(
+          <div
+            ref={(el) => {
+              copy.current = el;
+              el?.setAttribute('inert', '');
+            }}
+            aria-hidden="true"
+            className="pointer-events-none fixed left-[-10000px] top-0 bg-bg p-4"
+            style={{ width: copyWidth + 32 }}
+          >
+            <ExportProvider value={{ exporting: true }}>
+              <CardView card={card} />
+            </ExportProvider>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
 interface AnswerCardsProps {
   cards: AnswerCard[];
   /** Look up photos the backend didn't send (off for /design's made-up players). */
@@ -104,7 +270,9 @@ export function AnswerCards({ cards, lookupPhotos = true, onAsk, askDisabled, cl
               transition={{ duration: 0.25, delay: reduceMotion ? 0 : 0.1 + i * 0.08, ease: 'easeOut' }}
             >
               <CardBoundary>
-                <CardView card={card} />
+                <ShareableCard card={card}>
+                  <CardView card={card} />
+                </ShareableCard>
               </CardBoundary>
             </motion.div>
           ))}

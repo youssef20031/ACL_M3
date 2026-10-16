@@ -40,7 +40,7 @@ export function Privacy() {
       eyebrow="Legal"
       title="Privacy policy"
       description="Pitch Me is a fan-made Fantasy Premier League project. It has no accounts and sets no cookies. Here is everything it does with data."
-      updated="16 October 2026"
+      updated="17 October 2026"
     >
       <ProseSection title="Your choices">
         <p>
@@ -87,6 +87,11 @@ export function Privacy() {
           <li>
             <strong>Player photos</strong> load straight from the Premier League's image server, which, like any
             website, can see your IP address when your browser fetches them.
+          </li>
+          <li>
+            <strong>Saving or sharing an answer card as an image:</strong> the picture is made in your browser and
+            isn't uploaded anywhere; it only goes where you share it. To include player photos, your browser fetches
+            them through our server.
           </li>
           <li>
             <strong>Links to GitHub</strong> take you to GitHub, which has its own privacy policy.
