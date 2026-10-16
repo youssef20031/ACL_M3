@@ -612,25 +612,126 @@ def test_unknown_intent_without_entities_has_no_cards():
     assert build(context("unknown", None)) == ([], [])
 
 
+# ------------------------------------------------------------------ best XI (team of the week)
+
+def sample_team(mode="predicted"):
+    predicted = mode == "predicted"
+
+    def p(name, pos, team, pts, cost, captain=False, vice=False, status="a", news=None):
+        return {"name": name, "team": team, "position": pos, "points": pts, "cost": cost if predicted else None,
+                "captain": captain, "vice_captain": vice, "opponents": [{"team": "Ipswich", "home": True}],
+                "status": status, "chance_of_playing_next_round": 75 if status == "d" else None, "news": news,
+                "photo": None}
+
+    starters = [p("Keeper A", "GK", "Arsenal", 4.1, 5.5), p("Def B", "DEF", "Arsenal", 4.5, 6.0),
+                p("Def C", "DEF", "Arsenal", 4.0, 5.0), p("Def D", "DEF", "Chelsea", 3.9, 4.5),
+                p("Mid E", "MID", "Liverpool", 6.0, 12.5, vice=True), p("Mid F", "MID", "Man Utd", 5.5, 9.0),
+                p("Mid G", "MID", "Brighton", 5.0, 6.5, status="d", news="Knock - 75% chance of playing"),
+                p("Mid H", "MID", "Spurs", 4.8, 7.0), p("Erling Haaland", "FWD", "Man City", 8.6, 15.5, captain=True),
+                p("Fwd J", "FWD", "Newcastle", 5.2, 8.0), p("Fwd K", "FWD", "Leeds", 4.9, 6.0)]
+    bench = [p("Keeper L", "GK", "Everton", 3.0, 4.0), p("Def M", "DEF", "Fulham", 2.5, 4.0),
+             p("Mid N", "MID", "Wolves", 2.0, 4.5), p("Fwd O", "FWD", "Burnley", 1.9, 4.5)]
+    return {"mode": mode, "gameweek": 7 if predicted else 5, "formation": "3-4-3", "total_points": 65.1,
+            "total_cost": 99.5 if predicted else None, "budget": 100.0 if predicted else None,
+            "starters": starters, "bench": bench if predicted else []}
+
+
+@pytest.mark.parametrize("question", [
+    "Team of the week", "Best XI for next gameweek", "Best team for next gameweek", "Pick me a team for gameweek 7",
+    "Build me the best squad", "Dream team for gameweek 5", "What was the dream team last gameweek?",
+])
+def test_best_xi_questions_get_their_own_intent(question):
+    assert ac._intent_of(question) == "team_of_the_week"
+
+
+@pytest.mark.parametrize("question", [
+    "Who should I captain this gameweek?", "Best midfielders for next gameweek", "Which is the best team in the league?",
+    "Who should I pick for my team?", "How is Arsenal doing this season?",
+])
+def test_other_questions_keep_their_intent(question):
+    assert ac._intent_of(question) != "team_of_the_week"
+
+
+@pytest.mark.parametrize("question,gameweek,expected", [
+    ("Best team for next gameweek", None, ("predicted", None)),
+    ("Team of the week for gameweek 5", 5, ("actual", 5)),        # a finished gameweek
+    ("Team of the week for gameweek 9", 9, ("predicted", None)),   # not played yet
+    ("Dream team", None, ("actual", 6)),                           # the latest finished one
+    ("What was the team of the week last gameweek?", None, ("actual", 6)),
+])
+def test_team_of_week_target(question, gameweek, expected):
+    assert ss.team_of_week_target(question, gameweek, [1, 2, 3, 4, 5, 6]) == expected
+
+
+def test_no_finished_gameweek_means_the_predicted_team():
+    assert ss.team_of_week_target("Dream team", None, []) == ("predicted", None)
+
+
+def test_team_of_week_context_for_the_prompt():
+    text = ss.team_of_week_context(sample_team())
+    assert text.startswith("Predicted best FPL squad for gameweek 7")
+    assert "- Erling Haaland (FWD, Man City, £15.5m) (captain): 8.6 predicted pts vs Ipswich (H)" in text
+    assert "[FPL availability: d: Knock - 75% chance of playing]" in text
+    assert "Bench:" in text and text.endswith("Total predicted points: 65.1 (captain counted twice); squad cost £99.5m.")
+    dream = ss.team_of_week_context(sample_team("actual"))
+    assert dream.startswith("Dream team for gameweek 5") and "(captain)" in dream and "Bench:" not in dream
+
+
+def test_pitch_card_from_a_predicted_squad():
+    card = ac.pitch_card(sample_team(), finished_gameweeks=[1, 2, 3, 4, 5, 6])
+    assert card["type"] == "pitch" and card["mode"] == "predicted" and card["formation"] == "3-4-3"
+    assert len(card["starters"]) == 11 and len(card["bench"]) == 4
+    captain = next(s for s in card["starters"] if s["captain"])
+    assert captain["player"]["name"] == "Erling Haaland" and captain["cost"] == 15.5
+    labels = [h["label"] for h in card["highlights"]]
+    assert labels == ["Captain", "Fitness doubt", "Most picked club", "In the bank"]
+    assert card["highlights"][2]["value"] == "Arsenal" and card["highlights"][3]["value"] == "£0.5m"
+    assert ("Dream team for gameweek 6", "team_of_the_week") in card["_follow_ups"]
+
+
+def test_pitch_card_for_a_dream_team_has_no_armbands_or_availability():
+    card = ac.pitch_card(sample_team("actual"), finished_gameweeks=[1, 2, 3, 4, 5, 6])
+    assert not any(s["captain"] or s["vice_captain"] for s in card["starters"])
+    assert all(s["player"]["status"] is None for s in card["starters"]) and card["bench"] == []
+    assert card["highlights"][0]["label"] == "Star of the week" and card["highlights"][0]["value"] == "Haaland"
+    assert ("Dream team for gameweek 4", "team_of_the_week") in card["_follow_ups"]
+
+
+def test_build_pitch_card_reads_the_team_of_the_week():
+    with patch.object(ss, "get_team_of_the_week", return_value=sample_team()) as totw:
+        cards, follow_ups = build(context("team_of_the_week", None, {"team_mode": "predicted", "gameweek": 7}))
+    assert totw.call_args.args[1:3] == ("predicted", None)
+    assert [c["type"] for c in cards] == ["pitch"]
+    assert "Who should I captain this gameweek?" in follow_ups
+
+
 # ------------------------------------------------------------------ POST /api/query
 
-def test_query_endpoint_returns_cards_and_follow_ups():
+def _app_state(conn):
     import api_main
     from preprocessing.intent_classifier import IntentClassifier
     from preprocessing.entity_extractor import EntityExtractor
     from services.player_index import PlayerIndex
 
-    conn = FakeConn()
     index = PlayerIndex([{"player_name": n, "position": i["position"], "element_id": 1, "team_name": i["current_team"],
                           "is_current": True, "career_points": 100} for n, i in PLAYER_INFO.items() if i["current_team"]])
     extractor = EntityExtractor()
     extractor.player_index = index
-    state = dict(api_main.app_state, neo4j_conn=conn, llm_manager=None, intent_classifier=IntentClassifier(),
-                 entity_extractor=extractor, player_index=index, latest_season=CURRENT, avatar_service=None,
-                 ml_integration=None)
-    inputs = {"predictions": predictions_df(), "photo_codes": {}, "web_names": {}, "meta": {}}
+    return dict(api_main.app_state, neo4j_conn=conn, llm_manager=None, intent_classifier=IntentClassifier(),
+                entity_extractor=extractor, player_index=index, latest_season=CURRENT, avatar_service=None,
+                ml_integration=None)
+
+
+CARD_INPUTS = {"predictions": None, "photo_codes": {}, "web_names": {}, "meta": {}}
+
+
+def test_query_endpoint_returns_cards_and_follow_ups():
+    import api_main
+
+    conn = FakeConn()
+    inputs = dict(CARD_INPUTS, predictions=predictions_df())
     request = api_main.QueryRequest(question="Erling Haaland stats this season", retrieval_method="Baseline")
-    with patch.dict(api_main.app_state, state, clear=True), \
+    with patch.dict(api_main.app_state, _app_state(conn), clear=True), \
             patch.object(api_main, "_answer_card_inputs", return_value=inputs):
         response = asyncio.run(api_main.query_fpl(request, conn=conn))
     body = json.loads(response.model_dump_json())
@@ -638,6 +739,21 @@ def test_query_endpoint_returns_cards_and_follow_ups():
     assert [c["type"] for c in body["cards"]] == ["player"]
     assert body["cards"][0]["player"]["photo"] == "https://resources.premierleague.com/premierleague25/photos/players/110x140/223094.png"
     assert body["follow_ups"] and all(isinstance(q, str) for q in body["follow_ups"])
+
+
+def test_best_xi_question_answers_from_the_team_of_the_week():
+    import api_main
+
+    conn = FakeConn()
+    request = api_main.QueryRequest(question="Best team for next gameweek", retrieval_method="Baseline")
+    with patch.dict(api_main.app_state, _app_state(conn), clear=True), \
+            patch.object(api_main, "_answer_card_inputs", return_value=CARD_INPUTS), \
+            patch.object(ss, "get_team_of_the_week", return_value=sample_team()):
+        response = asyncio.run(api_main.query_fpl(request, conn=conn))
+    assert response.intent == "team_of_the_week"
+    assert response.ml_context.startswith("Predicted best FPL squad for gameweek 7")
+    assert [r["player_name"] for r in response.results][:2] == ["Keeper A", "Def B"] and len(response.results) == 15
+    assert [c["type"] for c in response.cards] == ["pitch"]
 
 
 def test_query_endpoint_survives_card_failures():

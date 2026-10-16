@@ -320,6 +320,32 @@ export interface SeasonAnswerCard {
   highlights: CardHighlight[];
 }
 
+export interface PitchSlot {
+  player: CardPlayer;
+  points: number | null;
+  cost: number | null;
+  captain: boolean;
+  vice_captain: boolean;
+  opponents: Array<{ team: string; home: boolean }>;
+}
+
+/** Best XI: the optimiser's predicted squad, or a finished gameweek's dream team. */
+export interface PitchAnswerCard {
+  type: 'pitch';
+  id: string;
+  mode: TeamOfWeekMode;
+  gameweek: number;
+  formation: string;
+  /** Predicted mode counts the captain twice. */
+  total_points: number;
+  total_cost: number | null;
+  budget: number | null;
+  starters: PitchSlot[];
+  /** Predicted mode only. */
+  bench: PitchSlot[];
+  highlights: CardHighlight[];
+}
+
 export type AnswerCard =
   | PlayerAnswerCard
   | ComparisonAnswerCard
@@ -327,7 +353,8 @@ export type AnswerCard =
   | PredictionAnswerCard
   | TeamAnswerCard
   | FixturesAnswerCard
-  | SeasonAnswerCard;
+  | SeasonAnswerCard
+  | PitchAnswerCard;
 
 export interface TriviaQuestion {
   question: string;

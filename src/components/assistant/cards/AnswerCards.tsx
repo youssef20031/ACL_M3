@@ -12,6 +12,7 @@ import { PredictionAnswerCard } from './PredictionAnswerCard';
 import { TeamAnswerCard } from './TeamAnswerCard';
 import { FixturesAnswerCard } from './FixturesAnswerCard';
 import { SeasonAnswerCard } from './SeasonAnswerCard';
+import { PitchAnswerCard } from './PitchAnswerCard';
 
 /** A card that fails to render is left out; the answer text and other cards stay. */
 class CardBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -46,6 +47,8 @@ function CardView({ card }: { card: AnswerCard }) {
       return <FixturesAnswerCard card={card} />;
     case 'season':
       return <SeasonAnswerCard card={card} />;
+    case 'pitch':
+      return <PitchAnswerCard card={card} />;
     default:
       return null; // a card type this build doesn't know yet
   }

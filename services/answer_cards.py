@@ -15,7 +15,8 @@ Layout, as in services/season_service.py:
 A card that fails to build is logged and skipped; it never breaks the answer.
 
 Every card is a dict with a `type` ("player", "comparison", "leaderboard", "prediction",
-"team", "fixtures" or "season") and an `id`; src/services/api.ts has the TypeScript shapes.
+"team", "fixtures", "season" or "pitch") and an `id`; src/services/api.ts has the TypeScript
+shapes.
 """
 import asyncio
 import logging
@@ -1523,6 +1524,98 @@ async def build_season_card(ctx: CardContext) -> Optional[Dict[str, Any]]:
     return season_card(row, top, scorers, ctx.current_season, ctx.short)
 
 
+# ------------------------------------------------------------------ pitch card (best XI)
+
+def pitch_highlights(team: Dict[str, Any], short: Callable[[str], str] = short_name) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    starters = team["starters"]
+    predicted = team["mode"] == "predicted"
+    if predicted:
+        captain = next((p for p in starters if p.get("captain")), None)
+        if captain:
+            out.append(highlight("Captain", short(captain["name"]),
+                                 f"{captain['points']:.1f} pts, doubled to {2 * captain['points']:.1f}", "accent", "star"))
+    else:
+        star = max(starters, key=lambda p: p["points"])
+        out.append(highlight("Star of the week", short(star["name"]), f"{star['points']:g} pts", "accent", "trophy"))
+    doubts = [p for p in starters if predicted and p.get("status") in ("d", "i", "s", "u", "n")]
+    if doubts:
+        p = doubts[0]
+        out.append(highlight("Fitness doubt", short(p["name"]), p.get("news") or "Flagged by FPL", "warning", "alert"))
+    clubs = Counter(p["team"] for p in starters if p.get("team")).most_common(1)
+    if clubs and clubs[0][1] >= 2:
+        out.append(highlight("Most picked club", clubs[0][0], _plural(clubs[0][1], "starter"), "info", "shield"))
+    if predicted and team.get("budget") is not None and team.get("total_cost") is not None:
+        left = round(team["budget"] - team["total_cost"], 1)
+        out.append(highlight("In the bank", f"£{left:.1f}m", f"Squad cost £{team['total_cost']:.1f}m of £{team['budget']:.1f}m",
+                             "neutral", "zap"))
+        priced = [p for p in starters if p.get("cost")]
+        if priced:
+            value = max(priced, key=lambda p: p["points"] / p["cost"])
+            out.append(highlight("Value pick", short(value["name"]), f"{value['points']:.1f} pts for £{value['cost']:.1f}m",
+                                 "info", "target"))
+    return out[:MAX_HIGHLIGHTS]
+
+
+def pitch_card(team: Dict[str, Any], finished_gameweeks: Sequence[int] = (),
+               short: Callable[[str], str] = short_name) -> Optional[Dict[str, Any]]:
+    """A Team of the Week payload (season_service.get_team_of_the_week, with photos) as a card."""
+    predicted = team["mode"] == "predicted"
+
+    def entry(p: Dict[str, Any]) -> Dict[str, Any]:
+        availability = (p.get("status"), p.get("chance_of_playing_next_round"), p.get("news")) if predicted else ()
+        return {
+            "player": player_ref(p["name"], p.get("team"), p.get("position"), p.get("photo"), *availability),
+            "points": _num(p.get("points"), 1),
+            "cost": _num(p.get("cost"), 1),
+            "captain": bool(p.get("captain")) and predicted,
+            "vice_captain": bool(p.get("vice_captain")) and predicted,
+            "opponents": [{"team": o["team"], "home": bool(o["home"])} for o in p.get("opponents") or []],
+        }
+
+    if not team.get("starters"):
+        return None
+    follow_ups = []
+    if predicted:
+        follow_ups.append(_follow("Who should I captain this gameweek?", "prediction"))
+        if finished_gameweeks:
+            follow_ups.append(_follow(f"Dream team for gameweek {max(finished_gameweeks)}", "team_of_the_week"))
+    else:
+        follow_ups.append(_follow("Best team for next gameweek", "team_of_the_week"))
+        earlier = [gw for gw in finished_gameweeks if gw < team["gameweek"]]
+        if earlier:
+            follow_ups.append(_follow(f"Dream team for gameweek {earlier[-1]}", "team_of_the_week"))
+    top = max(team["starters"], key=lambda p: p["points"])
+    follow_ups.append(_follow(f"{top['name']} stats this season", "player_stats"))
+    return {
+        "type": "pitch",
+        "id": f"pitch:{team['mode']}:{team['gameweek']}",
+        "mode": team["mode"],
+        "gameweek": team["gameweek"],
+        "formation": team["formation"],
+        "total_points": _num(team["total_points"], 1),
+        "total_cost": _num(team.get("total_cost"), 1),
+        "budget": _num(team.get("budget"), 1),
+        "starters": [entry(p) for p in team["starters"]],
+        "bench": [entry(p) for p in team.get("bench") or []],
+        "highlights": pitch_highlights(team, short),
+        "_follow_ups": follow_ups,
+    }
+
+
+async def build_pitch_card(ctx: CardContext) -> Optional[Dict[str, Any]]:
+    mode = ctx.params.get("team_mode")
+    if mode not in ("predicted", "actual"):
+        return None
+    gameweek = ctx.params.get("gameweek") if mode == "actual" else None
+    team, fixtures = await asyncio.gather(
+        asyncio.to_thread(ss.get_team_of_the_week, ctx.conn, mode, gameweek, ctx.photo_for, ctx.current_season),
+        ctx.fixtures(),
+    )
+    finished = ss.summarize_season(fixtures, {}, ctx.current_season)["finished_gameweeks"]
+    return pitch_card(team, finished, ctx.short)
+
+
 # ------------------------------------------------------------------ follow-up questions
 
 _classifier = None
@@ -1589,6 +1682,8 @@ def plan(ctx: CardContext) -> List[Awaitable[Any]]:
     players = [p for p in (ctx.entities.get("players") or []) if p]
     season = params.get("season")
 
+    if intent == "team_of_the_week":
+        return [build_pitch_card(ctx)]
     if intent == "prediction":
         if len(players) >= 2:
             return [build_comparison_card(ctx, players[:2], season or ctx.current_season, emphasis="prediction")]

@@ -1,4 +1,4 @@
-import type { AnswerCard, CardMatch, CardPlayer } from '../../../services/api';
+import type { AnswerCard, CardMatch, CardPlayer, PitchSlot } from '../../../services/api';
 
 /*
  * SAMPLE DATA for the hidden /design page only: made-up players and numbers that show
@@ -27,6 +27,25 @@ const match = (gameweek: number, opponent: string, home: boolean, points: number
   home,
   score: minutes ? '2-1' : null,
   result: minutes ? 'W' : null,
+});
+
+const slot = (
+  name: string,
+  team: string,
+  position: CardPlayer['position'],
+  points: number,
+  cost: number,
+  opponent: string,
+  home: boolean,
+  extra: Partial<PitchSlot> = {},
+): PitchSlot => ({
+  player: player(name, team, position),
+  points,
+  cost,
+  captain: false,
+  vice_captain: false,
+  opponents: [{ team: opponent, home }],
+  ...extra,
 });
 
 const striker = player('Sample Striker', 'Arsenal', 'FWD');
@@ -270,6 +289,40 @@ export const SAMPLE_CARDS: AnswerCard[] = [
       { player: midfielder, points: 198, goals: 11, assists: 9 },
     ],
     highlights: [{ label: 'Top scorer', value: 'Striker', detail: '25 goals for Arsenal', tone: 'accent', icon: 'target' }],
+  },
+  {
+    type: 'pitch',
+    id: 'sample-pitch',
+    mode: 'predicted',
+    gameweek: 7,
+    formation: '3-5-2',
+    total_points: 63.4,
+    total_cost: 99.6,
+    budget: 100,
+    starters: [
+      slot('Placeholder Keeper', 'Brighton', 'GK', 4.1, 4.9, 'Everton', true),
+      slot('Demo Defender', 'Chelsea', 'DEF', 4.6, 5.6, 'Fulham', false),
+      slot('Another Defender', 'Arsenal', 'DEF', 4.4, 6.0, 'Sunderland', true),
+      slot('Third Defender', 'Liverpool', 'DEF', 4.2, 7.1, 'Ipswich', true),
+      slot('Example Winger', 'Liverpool', 'MID', 6.2, 12.8, 'Ipswich', true, { vice_captain: true }),
+      slot('Mock Midfielder', 'Newcastle', 'MID', 5.9, 7.1, 'Leeds', false),
+      slot('Sample Playmaker', 'Aston Villa', 'MID', 5.1, 8.0, 'Bournemouth', true),
+      slot('Test Midfielder', 'Brighton', 'MID', 4.8, 6.4, 'Everton', true),
+      slot('Fifth Midfielder', 'Fulham', 'MID', 4.5, 5.5, 'Chelsea', true),
+      slot('Sample Striker', 'Arsenal', 'FWD', 7.9, 9.5, 'Sunderland', true, { captain: true }),
+      slot('Second Striker', 'Man City', 'FWD', 5.8, 14.5, 'Spurs', false),
+    ],
+    bench: [
+      slot('Bench Keeper', 'Everton', 'GK', 3.0, 4.0, 'Brighton', false),
+      slot('Bench Defender', 'Fulham', 'DEF', 2.6, 4.0, 'Chelsea', true),
+      slot('Bench Midfielder', 'Leeds', 'MID', 2.2, 4.5, 'Newcastle', true),
+      slot('Bench Forward', 'Burnley', 'FWD', 1.9, 4.5, 'Wolves', false),
+    ],
+    highlights: [
+      { label: 'Captain', value: 'Striker', detail: '7.9 pts, doubled to 15.8', tone: 'accent', icon: 'star' },
+      { label: 'Most picked club', value: 'Liverpool', detail: '2 starters', tone: 'info', icon: 'shield' },
+      { label: 'In the bank', value: '£0.4m', detail: 'Squad cost £99.6m of £100.0m', tone: 'neutral', icon: 'zap' },
+    ],
   },
 ];
 

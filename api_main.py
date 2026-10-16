@@ -826,6 +826,17 @@ async def build_answer_cards(**context: Any) -> Tuple[List[Dict[str, Any]], List
         return [], []
 
 
+def _team_of_week_for_question(conn, question: str, gameweek: Optional[int]) -> Optional[Dict[str, Any]]:
+    """The squad a "best XI" question asks for (with photos), or None when there is none."""
+    try:
+        finished = season_service.get_season_current(conn)["finished_gameweeks"]
+        mode, target = season_service.team_of_week_target(question, gameweek, finished)
+        return season_service.get_team_of_the_week(conn, mode, target, photo_for=_photo_for)
+    except season_service.NotFoundError as exc:
+        logger.info("No team of the week for %r: %s", question, exc)
+        return None
+
+
 async def avatar_for(player_name: str, team_name: Optional[str] = None) -> Optional[str]:
     service: Optional[AvatarService] = app_state["avatar_service"]
     if service is None or not player_name:
@@ -1543,6 +1554,18 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
             executed_query = query
 
+        ml_context = None
+        # Best XI: the optimiser's predicted squad (or a finished gameweek's dream team) is the context
+        if intent_result.intent == Intent.TEAM_OF_THE_WEEK:
+            team = await asyncio.to_thread(_team_of_week_for_question, conn, request.question, params.get("gameweek"))
+            if team is not None:
+                params.update(season=CURRENT_SEASON, gameweek=team["gameweek"], team_mode=team["mode"])
+                results = season_service.team_of_week_rows(team)
+                if team["mode"] == "predicted":
+                    ml_context = season_service.team_of_week_context(team)
+                else:
+                    cypher_context = season_service.team_of_week_context(team)
+
         # Cards (photos, stats, predictions) come from structured data, not the answer text,
         # so they are built while the rest of the pipeline and the LLM run
         cards_task = asyncio.create_task(build_answer_cards(
@@ -1551,7 +1574,6 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         ))
 
         # Step 5: ML Predictions
-        ml_context = None
         if intent_result.intent == Intent.PREDICTION:
             ml_integration = app_state.get("ml_integration")
             if ml_integration and ml_integration.predictor_loaded:
