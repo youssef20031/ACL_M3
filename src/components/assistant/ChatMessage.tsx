@@ -1,7 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion';
-import { AlertTriangle, Loader2, Sparkles } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import type { Message } from '../../store/appStore';
 import { Markdown } from './Markdown';
+import { Logo } from '../ui';
 import { cn } from '../../utils/cn';
 
 function AssistantMark({ tone = 'accent' }: { tone?: 'accent' | 'danger' }) {
@@ -10,10 +11,10 @@ function AssistantMark({ tone = 'accent' }: { tone?: 'accent' | 'danger' }) {
       aria-hidden="true"
       className={cn(
         'mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-        tone === 'danger' ? 'bg-danger/15 text-danger' : 'bg-accent text-accent-on',
+        tone === 'danger' ? 'bg-danger/15 text-danger' : 'bg-brand ring-1 ring-accent/40',
       )}
     >
-      {tone === 'danger' ? <AlertTriangle className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+      {tone === 'danger' ? <AlertTriangle className="h-3.5 w-3.5" /> : <Logo iconOnly size={12} />}
     </span>
   );
 }
