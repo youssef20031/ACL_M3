@@ -2206,8 +2206,9 @@ def get_next_fixtures(team: Optional[str] = None, conn=Depends(get_neo4j_conn)):
 def _photo_for(name: str, team: Optional[str], fpl_code: Optional[int]) -> Optional[str]:
     """Photo URL without a network call: the avatar cache/FPL feed, else the graph's FPL code."""
     service: Optional[AvatarService] = app_state["avatar_service"]
-    url = service.peek(name, team) if service else None
-    return url or (FPL_PHOTO_URL.format(code=fpl_code) if fpl_code else None)
+    if service:
+        return service.peek(name, team, fpl_code)
+    return FPL_PHOTO_URL.format(code=fpl_code) if fpl_code else None
 
 
 def _season_call(fn, *args, **kwargs):
