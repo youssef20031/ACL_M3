@@ -52,6 +52,27 @@ export interface QueryResponse {
   follow_ups?: string[];
 }
 
+export interface QueryRequestBody {
+  question: string;
+  model: string;
+  retrieval_method: string;
+  embedding_model: string;
+  is_first_message: boolean;
+  chat_history: Array<{ role: string; content: string }>;
+}
+
+/** Events of POST /api/query/stream, in order: cards (as soon as they're built), the answer
+ * in delta pieces, the final answer text, then the full response. */
+export type AnswerStreamEvent =
+  | { event: 'cards'; data: { cards: AnswerCard[]; follow_ups: string[] } }
+  | { event: 'delta'; data: { text: string } }
+  | { event: 'answer'; data: { text: string } }
+  | { event: 'done'; data: QueryResponse }
+  | { event: 'error'; data: { detail: string } };
+
+/** The backend has no stream endpoint (an older deploy): use queryFPL instead. */
+export class StreamUnavailableError extends Error {}
+
 // --- Assistant answer cards -------------------------------------------------
 // Built from structured data (query rows, the graph, predictions), never from the
 // answer text. The backend may add card types later: unknown ones are skipped.
@@ -668,6 +689,54 @@ export const apiService = {
       chat_history: chatHistory,
     });
     return data;
+  },
+
+  /**
+   * Streams an answer from POST /api/query/stream, calling onEvent for each server-sent
+   * event. Uses fetch, since axios can't read a response body as it arrives. Throws
+   * StreamUnavailableError when the endpoint is missing, and an Error with the server's
+   * detail for other HTTP errors (e.g. the rate limit).
+   */
+  async streamQuery(body: QueryRequestBody, onEvent: (event: AnswerStreamEvent) => void, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/query/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (response.status === 404 || response.status === 405) throw new StreamUnavailableError();
+    if (!response.ok) {
+      let detail = `Request failed with status ${response.status}`;
+      try {
+        const json = await response.json();
+        if (typeof json?.detail === 'string') detail = json.detail;
+      } catch {
+        // not JSON: keep the status message
+      }
+      throw new Error(detail);
+    }
+    if (!response.body) throw new StreamUnavailableError();
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end: number;
+      while ((end = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        let event = 'message';
+        const data: string[] = [];
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+        }
+        if (data.length) onEvent({ event, data: JSON.parse(data.join('\n')) } as AnswerStreamEvent);
+      }
+    }
   },
 
   // Embeddings

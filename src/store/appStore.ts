@@ -3,12 +3,16 @@ import { persist } from 'zustand/middleware';
 import type { AnswerCard } from '../services/api';
 
 export interface Message {
+  /** Set on answers that are updated while they stream in. */
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   /** Visual blocks returned with an assistant answer (not sent back as chat history). */
   cards?: AnswerCard[];
   followUps?: string[];
+  /** The answer is still arriving. */
+  streaming?: boolean;
 }
 
 export type ThemeMode = 'light' | 'dark';
@@ -38,6 +42,7 @@ export interface AppState {
   // Chat
   chatHistory: Message[];
   addMessage: (message: Message) => void;
+  updateMessage: (id: string, patch: Partial<Message>) => void;
   clearChat: () => void;
 
   // Settings
@@ -87,6 +92,10 @@ export const useAppStore = create<AppState>()(
       addMessage: (message) =>
         set((state) => ({
           chatHistory: [...state.chatHistory, message],
+        })),
+      updateMessage: (id, patch) =>
+        set((state) => ({
+          chatHistory: state.chatHistory.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         })),
       clearChat: () => set({ chatHistory: [] }),
 

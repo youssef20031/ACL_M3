@@ -8,6 +8,7 @@ import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pandas as pd
@@ -754,6 +755,163 @@ def test_best_xi_question_answers_from_the_team_of_the_week():
     assert response.ml_context.startswith("Predicted best FPL squad for gameweek 7")
     assert [r["player_name"] for r in response.results][:2] == ["Keeper A", "Def B"] and len(response.results) == 15
     assert [c["type"] for c in response.cards] == ["pitch"]
+
+
+# ------------------------------------------------------------------ streamed answers
+
+class FakeChunk:
+    def __init__(self, text):
+        self.choices = [SimpleNamespace(delta=SimpleNamespace(content=text))]
+
+
+class FakeStream:
+    def __init__(self, texts, fail_at=None):
+        self.texts, self.fail_at, self.closed = texts, fail_at, False
+
+    def __iter__(self):
+        for i, text in enumerate(self.texts):
+            if i == self.fail_at:
+                raise RuntimeError("connection reset")
+            yield FakeChunk(text)
+
+    def close(self):
+        self.closed = True
+
+
+def fake_llm_manager(behaviours):
+    """An LLMManager whose Groq client answers each model name with a FakeStream or raises."""
+    from llm.llm_manager import LLMManager
+
+    calls = []
+
+    def create(model, **kwargs):
+        calls.append((model, kwargs.get("stream")))
+        outcome = behaviours[model]
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    llm = LLMManager.__new__(LLMManager)
+    llm.client, llm.default_model, llm.response_history = None, "gpt-oss-120b", []
+    llm.groq_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    return llm, calls
+
+
+def test_generate_stream_yields_the_pieces():
+    llm, calls = fake_llm_manager({"openai/gpt-oss-120b": FakeStream(["Haaland ", None, "scored."])})
+    assert list(llm.generate_stream("prompt")) == ["Haaland ", "scored."]   # empty deltas skipped
+    assert calls == [("openai/gpt-oss-120b", True)]
+
+
+def test_generate_stream_falls_back_on_quota_errors_before_the_first_piece():
+    llm, calls = fake_llm_manager({
+        "openai/gpt-oss-120b": RuntimeError("Error code: 429 - rate limit reached"),
+        "openai/gpt-oss-20b": FakeStream(["From the smaller model."]),
+    })
+    assert list(llm.generate_stream("prompt")) == ["From the smaller model."]
+    assert [model for model, _ in calls] == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+
+
+def test_generate_stream_errors():
+    from llm.llm_manager import LLMStreamError
+
+    llm, calls = fake_llm_manager({"openai/gpt-oss-120b": RuntimeError("invalid request")})
+    with pytest.raises(LLMStreamError, match="invalid request"):
+        list(llm.generate_stream("prompt"))
+    assert len(calls) == 1                                    # not a quota error: no fallback
+    llm, _ = fake_llm_manager({"openai/gpt-oss-120b": FakeStream(["Half an ", "answer"], fail_at=1)})
+    pieces = llm.generate_stream("prompt")
+    assert next(pieces) == "Half an "
+    with pytest.raises(RuntimeError, match="connection reset"):   # text already sent: no fallback
+        next(pieces)
+
+
+def test_generate_stream_stops_early_and_closes_the_stream():
+    stream = FakeStream(["one ", "two ", "three"])
+    llm, _ = fake_llm_manager({"openai/gpt-oss-120b": stream})
+    seen = []
+    for piece in llm.generate_stream("prompt", should_stop=lambda: len(seen) >= 2):
+        seen.append(piece)
+    assert seen == ["one ", "two "] and stream.closed
+
+
+class FakeLLM:
+    """The LLM manager seen by the handler: streams fixed pieces, or fails."""
+    available = True
+
+    def __init__(self, pieces=("Haaland has ", "5 goals."), error=None):
+        self.pieces, self.error = pieces, error
+
+    def generate_stream(self, prompt, model_key=None, should_stop=None):
+        yield from self.pieces
+        if self.error:
+            raise RuntimeError(self.error)
+
+
+def stream_events(question, llm, **request):
+    """Run _answer_events for a question and return [(event, data), ...]."""
+    import api_main
+
+    conn = FakeConn()
+    body = api_main.QueryRequest(question=question, retrieval_method="Baseline", **request)
+
+    async def collect():
+        return [chunk async for chunk in api_main._answer_events(body, conn)]
+
+    with patch.dict(api_main.app_state, dict(_app_state(conn), llm_manager=llm), clear=True), \
+            patch.object(api_main, "_answer_card_inputs", return_value=dict(CARD_INPUTS, predictions=predictions_df())):
+        chunks = asyncio.run(collect())
+    events = []
+    for chunk in chunks:
+        assert chunk.endswith("\n\n")
+        name, data = chunk.strip().split("\n")
+        events.append((name.removeprefix("event: "), json.loads(data.removeprefix("data: "))))
+    return events
+
+
+def test_stream_sends_cards_pieces_answer_and_done():
+    events = stream_events("Erling Haaland stats this season", FakeLLM())
+    names = [name for name, _ in events]
+    assert names[-2:] == ["answer", "done"] and names.count("cards") == 1
+    assert [data["text"] for name, data in events if name == "delta"] == ["Haaland has ", "5 goals."]
+    cards = next(data for name, data in events if name == "cards")
+    assert [c["type"] for c in cards["cards"]] == ["player"] and cards["follow_ups"]
+    answer, done = events[-2][1], events[-1][1]
+    assert answer["text"] == "Haaland has 5 goals." == done["answer"]
+    assert done["intent"] == "player_stats" and done["cards"] == cards["cards"]
+
+
+def test_stream_reports_a_failed_model():
+    events = stream_events("Erling Haaland stats this season", FakeLLM(pieces=(), error="quota exhausted"))
+    answer = dict(events)["answer"]["text"]
+    assert answer == "Error generating response: quota exhausted"
+    cut = stream_events("Erling Haaland stats this season", FakeLLM(pieces=("Haaland has",), error="reset"))
+    assert dict(cut)["answer"]["text"] == "Haaland has\n\n_(The answer was cut short.)_"
+
+
+def test_stream_greeting():
+    events = stream_events("hello", FakeLLM(), is_first_message=True)
+    assert [name for name, _ in events] == ["cards", "answer", "done"]
+    assert events[0][1]["follow_ups"] == list(ac.STARTER_QUESTIONS)
+
+
+def test_stream_endpoint_speaks_server_sent_events():
+    import api_main
+    from fastapi.testclient import TestClient
+
+    conn = FakeConn()
+    api_main.app.dependency_overrides[api_main.get_neo4j_conn] = lambda: conn
+    try:
+        with patch.dict(api_main.app_state, dict(_app_state(conn), llm_manager=FakeLLM()), clear=True), \
+                patch.object(api_main, "_answer_card_inputs", return_value=CARD_INPUTS):
+            response = TestClient(api_main.app).post("/api/query/stream", json={
+                "question": "Erling Haaland stats this season", "retrieval_method": "Baseline"})
+    finally:
+        api_main.app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.text.count("event: done\n") == 1 and "event: delta\n" in response.text
 
 
 def test_query_endpoint_survives_card_failures():

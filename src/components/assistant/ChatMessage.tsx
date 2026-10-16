@@ -24,19 +24,32 @@ function timeLabel(ts: number) {
   return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-interface ChatMessageProps {
-  message: Message;
-  /** Sends a suggested follow-up question; follow-ups show only when set. */
-  onAsk?: (question: string) => void;
-  /** Disables the follow-up buttons (a question is in flight or the graph is offline). */
-  askDisabled?: boolean;
+function Working({ label }: { label: string }) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-lg rounded-tl-sm border border-line bg-surface px-4 py-3 text-data text-fg-muted">
+      <Loader2 className="h-4 w-4 animate-spin text-accent" aria-hidden="true" />
+      {label}
+    </div>
+  );
 }
 
-export function ChatMessage({ message, onAsk, askDisabled }: ChatMessageProps) {
+interface ChatMessageProps {
+  message: Message;
+  /** Asks a question: follow-up chips and the players on the cards use it. */
+  onAsk?: (question: string) => void;
+  /** Disables asking (a question is in flight or the graph is offline). */
+  askDisabled?: boolean;
+  /** Show the follow-up chips (the latest answer only). */
+  showFollowUps?: boolean;
+}
+
+export function ChatMessage({ message, onAsk, askDisabled, showFollowUps = false }: ChatMessageProps) {
   const reduceMotion = useReducedMotion();
   const isUser = message.role === 'user';
   // The page stores failed requests as assistant messages prefixed with "Error:".
   const isError = !isUser && message.content.startsWith('Error:');
+  const cards = (!isError && message.cards) || [];
+  const streaming = !!message.streaming;
 
   return (
     <motion.li
@@ -56,36 +69,42 @@ export function ChatMessage({ message, onAsk, askDisabled }: ChatMessageProps) {
           </div>
         ) : (
           <>
-            <div
-              className={cn(
-                'rounded-lg rounded-tl-sm border px-4 py-3',
-                isError ? 'border-danger/40 bg-danger/10' : 'border-line bg-surface',
-              )}
-            >
-              <Markdown>{message.content}</Markdown>
-            </div>
-            {!isError && message.cards && message.cards.length > 0 && <AnswerCards cards={message.cards} />}
-            {!isError && onAsk && message.followUps && message.followUps.length > 0 && (
+            {/* Cards come first: they usually arrive before the text, which then streams in
+                below them without pushing them around */}
+            {streaming && !message.content && cards.length === 0 ? (
+              <>
+                <Working label="Searching the knowledge graph…" />
+                <AnswerCardSkeleton className="mt-3 max-w-xl" />
+              </>
+            ) : (
+              <>
+                {cards.length > 0 && (
+                  <AnswerCards cards={cards} onAsk={onAsk} askDisabled={askDisabled} className="mb-3 mt-0" />
+                )}
+                {message.content ? (
+                  <div
+                    className={cn(
+                      'rounded-lg rounded-tl-sm border px-4 py-3',
+                      isError ? 'border-danger/40 bg-danger/10' : 'border-line bg-surface',
+                    )}
+                    aria-busy={streaming}
+                  >
+                    <Markdown>{message.content}</Markdown>
+                    {streaming && (
+                      <span aria-hidden="true" className="ml-0.5 inline-block h-4 w-1.5 translate-y-0.5 animate-pulse rounded-sm bg-accent" />
+                    )}
+                  </div>
+                ) : (
+                  streaming && <Working label="Writing the answer…" />
+                )}
+              </>
+            )}
+            {!isError && !streaming && showFollowUps && onAsk && message.followUps && message.followUps.length > 0 && (
               <FollowUps questions={message.followUps} onAsk={onAsk} disabled={askDisabled} />
             )}
           </>
         )}
       </div>
     </motion.li>
-  );
-}
-
-export function ThinkingMessage() {
-  return (
-    <li className="flex gap-3" role="status">
-      <AssistantMark />
-      <div className="min-w-0 flex-1">
-        <div className="inline-flex items-center gap-2 rounded-lg rounded-tl-sm border border-line bg-surface px-4 py-3 text-data text-fg-muted">
-          <Loader2 className="h-4 w-4 animate-spin text-accent" aria-hidden="true" />
-          Searching the knowledge graph…
-        </div>
-        <AnswerCardSkeleton className="mt-3 max-w-xl" />
-      </div>
-    </li>
   );
 }

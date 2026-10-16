@@ -116,6 +116,24 @@ export function useCardPhotos(players: CardPlayer[]): (player: CardPlayer) => st
   return (player) => player.photo ?? looked[player.name];
 }
 
+// --- Asking about a player --------------------------------------------------------------
+
+interface AskContextValue {
+  ask?: (question: string) => void;
+  disabled?: boolean;
+}
+
+/** Set by AnswerCards in the chat; on /design there is no one to ask. */
+const AskContext = createContext<AskContextValue>({});
+
+export function AskProvider({ ask, disabled, children }: AskContextValue & { children: ReactNode }) {
+  return <AskContext.Provider value={{ ask, disabled }}>{children}</AskContext.Provider>;
+}
+
+export function useAsk(): AskContextValue {
+  return useContext(AskContext);
+}
+
 // --- Links ------------------------------------------------------------------------------
 
 /** Router state that opens a player's profile on /players (Back returns here). */

@@ -12,10 +12,10 @@ ensure_utf8_stdio()  # before any startup print/log (emoji crash cp1252 on Windo
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from dataclasses import asdict
-from typing import List, Literal, Optional, Dict, Any, Tuple
+from dataclasses import asdict, dataclass
+from typing import AsyncIterator, List, Literal, Optional, Dict, Any, Tuple
 from datetime import datetime, timezone
 import asyncio
 import json
@@ -26,7 +26,7 @@ import re
 import unicodedata
 import logging
 import io
-from threading import Lock, Thread
+from threading import Event as ThreadEvent, Lock, Thread
 from contextlib import asynccontextmanager
 from urllib.parse import quote_plus, urlparse
 
@@ -1446,26 +1446,71 @@ async def disconnect_neo4j():
 query_limiter = RateLimiter(limits_from_env("QUERY_RATE_LIMITS", "10/60,120/3600"))
 
 
-@app.post("/api/query", response_model=QueryResponse, dependencies=[Depends(query_limiter.dependency)])
-async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
-    """Process FPL query and return answer."""
+def greeting_response() -> QueryResponse:
+    """The reply to a first message that is only small talk ("hi", "thanks")."""
+    return QueryResponse(
+        answer="Hi! 👋 I'm your FPL assistant — ask about players, teams, stats, or say 'compare' to pit two players against each other. What would you like to know?",
+        intent=Intent.GENERAL_QUESTION.value,
+        entities={"players": [], "teams": [], "seasons": [], "stats": [], "positions": []},
+        cypher_query="",
+        kg_context="",
+        embedding_context=None,
+        embedding_used=False,
+        results=[],
+        graph_data=None,
+        follow_ups=list(answer_cards.STARTER_QUESTIONS),
+    )
+
+
+@dataclass
+class PreparedAnswer:
+    """A question with everything gathered except the LLM's text (see _prepare_answer)."""
+    intent: Intent
+    query_method: Optional[str]
+    params: Dict[str, Any]
+    entities: Any
+    results: List[Dict[str, Any]]
+    executed_query: str
+    cypher_context: str
+    ml_context: Optional[str]
+    embedding_context: str
+    embedding_used: bool
+    prompt: Optional[str]          # None when no LLM is configured
+    cards_task: asyncio.Task
+
+    def finish(self, text: str) -> str:
+        """The final answer from the LLM's text (tied top scorers enforced), or the raw graph
+        data when there is no LLM."""
+        if self.prompt is None:
+            return f"**Knowledge Graph data:**\n\n{self.cypher_context}"
+        return enforce_tied_top_scorers_in_answer(
+            answer=text, intent=self.intent, query_method=self.query_method, params=self.params, results=self.results,
+        )
+
+    async def response(self, answer: str) -> QueryResponse:
+        cards, follow_ups = await self.cards_task
+        return QueryResponse(
+            answer=answer,
+            intent=self.intent.value,
+            entities=self.entities.to_dict(),
+            cypher_query=self.executed_query,
+            kg_context=self.cypher_context,
+            embedding_context=self.embedding_context,
+            ml_context=self.ml_context,
+            embedding_used=self.embedding_used,
+            results=self.results[:50],  # Limit results sent to frontend
+            graph_data=build_graph_data(self.results),
+            model_type=_ml_model_label(),
+            cards=cards,
+            follow_ups=follow_ups,
+        )
+
+
+async def _prepare_answer(request: QueryRequest, conn) -> PreparedAnswer:
+    """Steps 1-6 of the Q&A pipeline: intent, entities, the Cypher query, ML and embedding
+    context, and the prompt. The answer cards start building here, in the background."""
     cards_task: Optional[asyncio.Task] = None
     try:
-        # Only return the initial greeting when this is the user's first message in the session
-        if request.is_first_message and looks_like_small_talk(request.question):
-            return QueryResponse(
-                answer="Hi! 👋 I'm your FPL assistant — ask about players, teams, stats, or say 'compare' to pit two players against each other. What would you like to know?",
-                intent=Intent.GENERAL_QUESTION.value,
-                entities={"players": [], "teams": [], "seasons": [], "stats": [], "positions": []},
-                cypher_query="",
-                kg_context="",
-                embedding_context=None,
-                embedding_used=False,
-                results=[],
-                graph_data=None,
-                follow_ups=list(answer_cards.STARTER_QUESTIONS),
-            )
-
         # Step 1: Intent Classification (lazy load)
         intent_classifier = await asyncio.to_thread(get_intent_classifier)
         intent_result = intent_classifier.classify(request.question, chat_history=request.chat_history)
@@ -1705,12 +1750,11 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                     embedding_used = True
                 except Exception as e:
                     print(f"Embedding search failed: {e}")
-        
-        # Step 7: Generate LLM response
-        answer = ""
+
+        prompt = None
         if app_state["llm_manager"] and app_state["llm_manager"].available:
             data_scope = f"the {params['season']} season" if "season" in params else f"all seasons ({', '.join(SEASONS)})"
-            full_prompt = PromptTemplates.qa_template(
+            prompt = PromptTemplates.qa_template(
                 question=request.question,
                 kg_context=cypher_context,
                 embedding_context=embedding_context if embedding_context else None,
@@ -1720,50 +1764,40 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 chat_history=request.chat_history,
                 model_key=request.model  # Pass model key for model-specific prompting
             )
-            
+
+        return PreparedAnswer(
+            intent=intent_result.intent, query_method=query_method, params=params, entities=entities,
+            results=results, executed_query=executed_query, cypher_context=cypher_context,
+            ml_context=ml_context, embedding_context=embedding_context, embedding_used=embedding_used,
+            prompt=prompt, cards_task=cards_task,
+        )
+    except BaseException:
+        if cards_task is not None:
+            cards_task.cancel()
+        raise
+
+
+@app.post("/api/query", response_model=QueryResponse, dependencies=[Depends(query_limiter.dependency)])
+async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
+    """Process FPL query and return answer."""
+    # Only return the initial greeting when this is the user's first message in the session
+    if request.is_first_message and looks_like_small_talk(request.question):
+        return greeting_response()
+    prepared: Optional[PreparedAnswer] = None
+    try:
+        prepared = await _prepare_answer(request, conn)
+
+        # Step 7: Generate LLM response
+        text = ""
+        if prepared.prompt is not None:
             response = await asyncio.to_thread(
                 app_state["llm_manager"].generate,
-                full_prompt,
+                prepared.prompt,
                 model_key=request.model,
                 timeout=60
             )
-            
-            if response.success:
-                answer = response.text
-            else:
-                answer = f"Error generating response: {response.error}"
-
-            answer = enforce_tied_top_scorers_in_answer(
-                answer=answer,
-                intent=intent_result.intent,
-                query_method=query_method,
-                params=params,
-                results=results,
-            )
-        else:
-            answer = f"**Knowledge Graph data:**\n\n{cypher_context}"
-        
-        # Build graph visualization data
-        graph_data = build_graph_data(results)
-
-        ml_model_type = _ml_model_label()
-        cards, follow_ups = await cards_task
-
-        return QueryResponse(
-            answer=answer,
-            intent=intent_result.intent.value,
-            entities=entities.to_dict(),
-            cypher_query=executed_query,
-            kg_context=cypher_context,
-            embedding_context=embedding_context,
-            ml_context=ml_context,
-            embedding_used=embedding_used,
-            results=results[:50],  # Limit results sent to frontend
-            graph_data=graph_data,
-            model_type=ml_model_type,
-            cards=cards,
-            follow_ups=follow_ups,
-        )
+            text = response.text if response.success else f"Error generating response: {response.error}"
+        return await prepared.response(prepared.finish(text))
 
     except HTTPException:
         raise
@@ -1771,8 +1805,107 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         logger.exception("Query failed")
         raise HTTPException(status_code=500, detail="The assistant couldn't answer that right now. Please try again.")
     finally:
-        if cards_task is not None and not cards_task.done():
-            cards_task.cancel()
+        if prepared is not None and not prepared.cards_task.done():
+            prepared.cards_task.cancel()
+
+
+ANSWER_STREAM_IDLE_SECONDS = 90
+SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+
+
+def _sse(event: str, data: Any) -> str:
+    """One server-sent event; `data` is JSON (already encoded when it is a str)."""
+    payload = data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
+    return f"event: {event}\ndata: {payload}\n\n"
+
+
+def _stream_llm(llm: LLMManager, prompt: str, model_key: str, loop: asyncio.AbstractEventLoop,
+                events: "asyncio.Queue", stop: ThreadEvent) -> None:
+    """Thread body: feeds the LLM's streamed pieces into the event loop's queue."""
+    def put(item) -> None:
+        try:
+            loop.call_soon_threadsafe(events.put_nowait, item)
+        except RuntimeError:
+            pass  # the loop has closed (server shutting down)
+
+    try:
+        for piece in llm.generate_stream(prompt, model_key=model_key, should_stop=stop.is_set):
+            if stop.is_set():
+                return
+            put(("delta", piece))
+        put(("end", None))
+    except Exception as exc:
+        put(("error", str(exc)))
+
+
+async def _answer_events(request: QueryRequest, conn) -> AsyncIterator[str]:
+    """The streamed answer: `cards` (with follow-ups) as soon as they are built, the answer
+    in `delta` pieces as the LLM writes it, then `answer` (the final text, which can differ
+    from the pieces after post-processing) and `done` (the full QueryResponse)."""
+    if request.is_first_message and looks_like_small_talk(request.question):
+        response = greeting_response()
+        yield _sse("cards", {"cards": [], "follow_ups": response.follow_ups})
+        yield _sse("answer", {"text": response.answer})
+        yield _sse("done", response.model_dump_json())
+        return
+
+    prepared: Optional[PreparedAnswer] = None
+    stop = ThreadEvent()
+    try:
+        prepared = await _prepare_answer(request, conn)
+        events: asyncio.Queue = asyncio.Queue()
+        prepared.cards_task.add_done_callback(lambda _task: events.put_nowait(("cards", None)))
+        writing = prepared.prompt is not None
+        if writing:
+            Thread(
+                target=_stream_llm,
+                args=(app_state["llm_manager"], prepared.prompt, request.model, asyncio.get_running_loop(), events, stop),
+                daemon=True,
+            ).start()
+
+        pieces: List[str] = []
+        error: Optional[str] = None
+        cards_sent = False
+        while writing or not cards_sent:
+            try:
+                kind, value = await asyncio.wait_for(events.get(), timeout=ANSWER_STREAM_IDLE_SECONDS)
+            except asyncio.TimeoutError:
+                kind, value = "error", "the model stopped responding"
+            if kind == "cards" and not cards_sent:
+                cards_sent = True
+                cards, follow_ups = prepared.cards_task.result()  # build_answer_cards never raises
+                yield _sse("cards", {"cards": cards, "follow_ups": follow_ups})
+            elif kind == "delta":
+                pieces.append(value)
+                yield _sse("delta", {"text": value})
+            elif kind in ("end", "error"):
+                # On an error the cards are still worth waiting for: they show the data anyway
+                writing = False
+                error = value if kind == "error" else None
+
+        text = "".join(pieces).strip()
+        if error:
+            logger.error("Streamed answer failed: %s", error)
+            text = f"{text}\n\n_(The answer was cut short.)_" if text else f"Error generating response: {error}"
+        answer = prepared.finish(text)
+        yield _sse("answer", {"text": answer})
+        yield _sse("done", (await prepared.response(answer)).model_dump_json())
+    except HTTPException as exc:
+        yield _sse("error", {"detail": exc.detail})
+    except Exception:
+        logger.exception("Streamed query failed")
+        yield _sse("error", {"detail": "The assistant couldn't answer that right now. Please try again."})
+    finally:
+        stop.set()
+        if prepared is not None and not prepared.cards_task.done():
+            prepared.cards_task.cancel()
+
+
+@app.post("/api/query/stream", dependencies=[Depends(query_limiter.dependency)])
+async def query_fpl_stream(request: QueryRequest, conn=Depends(get_neo4j_conn)):
+    """POST /api/query as server-sent events (see _answer_events). Same request body and rate
+    limit; a failure after the stream has started arrives as an `error` event."""
+    return StreamingResponse(_answer_events(request, conn), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 @app.post("/api/embeddings/build", response_model=EmbeddingBuildResponse, dependencies=[Depends(require_admin)])

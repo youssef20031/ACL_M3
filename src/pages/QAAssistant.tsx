@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Loader2, MessageCircle, PanelRightClose, PanelRightOpen, Trash2 } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { apiService, handleApiError } from '../services/api';
+import { apiService } from '../services/api';
 import type { QueryResponse } from '../services/api';
 import { Button } from '../components/ui';
-import { ChatMessage, ThinkingMessage } from '../components/assistant/ChatMessage';
+import { ChatMessage } from '../components/assistant/ChatMessage';
 import { Composer } from '../components/assistant/Composer';
 import { QueryDetails } from '../components/assistant/QueryDetails';
+import { cardLabel } from '../components/assistant/cards/AnswerCards';
+import { abortAnswer, useAssistantAsk } from '../hooks/useAssistantAsk';
 import { cn } from '../utils/cn';
 import { usePageMeta } from '../hooks/usePageMeta';
 
@@ -20,23 +22,43 @@ const EXAMPLES = [
 ];
 
 const DETAILS_ID = 'assistant-query-details';
+// Keep following a streaming answer only while the reader is this close to the bottom
+const STICK_TO_BOTTOM_PX = 160;
+
+/** Markdown answer as plain text for the screen-reader announcement. */
+function plainText(markdown: string) {
+  return markdown
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[*_`#>|]+/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function announcementFor(response: QueryResponse) {
+  const cards = response.cards ?? [];
+  const summary = cards.length
+    ? ` ${cards.length === 1 ? 'One card' : `${cards.length} cards`} below the answer: ${cards.map(cardLabel).join('; ')}.`
+    : '';
+  return `Answer: ${plainText(response.answer)}${summary}`;
+}
 
 export function QAAssistant() {
   usePageMeta({ title: "Assistant", description: "Ask questions about FPL players, teams and seasons. Answers come from a knowledge graph of every season since 2020-21." });
   const [input, setInput] = useState('');
   const [showDetails, setShowDetails] = useState(false);
   const [lastQueryInfo, setLastQueryInfo] = useState<QueryResponse | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // The conversation isn't a live region (cards would be read out in full); this is
+  const [announcement, setAnnouncement] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
 
-  const {
-    chatHistory,
-    addMessage,
-    clearChat,
-    neo4jConnected,
-    selectedModel,
-    retrievalMethod,
-    embeddingModel,
-  } = useAppStore();
+  const chatHistory = useAppStore((s) => s.chatHistory);
+  const clearChat = useAppStore((s) => s.clearChat);
+  const neo4jConnected = useAppStore((s) => s.neo4jConnected);
+  const selectedModel = useAppStore((s) => s.selectedModel);
+  const retrievalMethod = useAppStore((s) => s.retrievalMethod);
+  const pending = chatHistory.some((m) => m.streaming);
 
   // Shared health query (polled by the app shell): tells "still connecting" apart from "offline".
   const { data: health } = useQuery({
@@ -45,76 +67,43 @@ export function QAAssistant() {
     staleTime: 30_000,
   });
 
-  const scrollToBottom = () => {
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    messagesEndRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'end' });
-  };
-
-  const queryMutation = useMutation({
-    mutationFn: (question: string) => {
-      // Convert chat history to API format (exclude the current question)
-      const historyForAPI = chatHistory.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-
-      return apiService.queryFPL(
-        question,
-        selectedModel,
-        retrievalMethod,
-        embeddingModel,
-        chatHistory.length === 0, // is_first_message
-        historyForAPI
-      );
-    },
-    onSuccess: (data) => {
-      addMessage({
-        role: 'assistant',
-        content: data.answer,
-        timestamp: Date.now(),
-        cards: data.cards ?? [],
-        followUps: data.follow_ups ?? [],
-      });
-      setLastQueryInfo(data);
-    },
-    onError: (error) => {
-      const errorMessage = handleApiError(error);
-      addMessage({
-        role: 'assistant',
-        content: `Error: ${errorMessage}`,
-        timestamp: Date.now(),
-      });
-    },
+  const ask = useAssistantAsk({
+    onDone: useCallback((response: QueryResponse) => {
+      setLastQueryInfo(response);
+      setAnnouncement(announcementFor(response));
+    }, []),
+    onError: useCallback((message: string) => setAnnouncement(`The assistant couldn't answer: ${message}`), []),
   });
 
+  // Follow the conversation while the reader is at the bottom; scrolling up stops it
+  const onScroll = () => {
+    const box = scrollRef.current;
+    if (box) stickRef.current = box.scrollHeight - box.scrollTop - box.clientHeight < STICK_TO_BOTTOM_PX;
+  };
   useEffect(() => {
-    scrollToBottom();
-  }, [chatHistory, queryMutation.isPending]);
+    const box = scrollRef.current;
+    if (box && stickRef.current) box.scrollTop = box.scrollHeight;
+  }, [chatHistory]);
+
+  const send = (question: string) => {
+    if (!question.trim() || !neo4jConnected || pending) return;
+    stickRef.current = true;
+    setAnnouncement('Looking that up…');
+    void ask(question.trim());
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !neo4jConnected || queryMutation.isPending) return;
-
-    addMessage({
-      role: 'user',
-      content: input,
-      timestamp: Date.now(),
-    });
-
-    queryMutation.mutate(input);
+    if (!input.trim() || !neo4jConnected || pending) return;
+    send(input);
     setInput('');
   };
 
-  const handleSendQuestion = (question: string) => {
-    if (!neo4jConnected || queryMutation.isPending) return;
-
-    addMessage({
-      role: 'user',
-      content: question,
-      timestamp: Date.now(),
-    });
-
-    queryMutation.mutate(question);
+  const handleClear = () => {
+    abortAnswer();
+    clearChat();
+    setLastQueryInfo(null);
+    setAnnouncement('Conversation cleared.');
   };
 
   // Other pages can open the assistant with a question ready to send: navigate('/assistant', { state: { question } }).
@@ -125,18 +114,22 @@ export function QAAssistant() {
   useEffect(() => {
     if (!pendingQuestion || !neo4jConnected || sentRef.current === pendingQuestion) return;
     sentRef.current = pendingQuestion;
-    handleSendQuestion(pendingQuestion);
+    send(pendingQuestion);
     navigate(location.pathname, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingQuestion, neo4jConnected]);
 
   const connecting = !neo4jConnected && !health;
-  const isEmpty = chatHistory.length === 0 && !queryMutation.isPending;
+  const isEmpty = chatHistory.length === 0;
   // Follow-up suggestions belong to the latest answer only; older ones would be stale.
   const lastIndex = chatHistory.length - 1;
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
+
       {/* Page header */}
       <div className="shrink-0 border-b border-line bg-bg">
         <div className="mx-auto flex w-full max-w-page items-center justify-between gap-3 px-4 py-3 sm:px-6">
@@ -166,7 +159,7 @@ export function QAAssistant() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => clearChat()}
+              onClick={handleClear}
               disabled={chatHistory.length === 0}
               icon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
             >
@@ -186,7 +179,7 @@ export function QAAssistant() {
         )}
       >
         {/* Messages */}
-        <div className="row-start-1 min-h-0 overflow-y-auto lg:col-start-1">
+        <div ref={scrollRef} onScroll={onScroll} className="row-start-1 min-h-0 overflow-y-auto lg:col-start-1">
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-6 sm:px-6">
             {isEmpty ? (
               <div className="my-auto flex flex-col items-center py-8 text-center">
@@ -202,8 +195,8 @@ export function QAAssistant() {
                     <li key={example}>
                       <button
                         type="button"
-                        onClick={() => handleSendQuestion(example)}
-                        disabled={!neo4jConnected || queryMutation.isPending}
+                        onClick={() => send(example)}
+                        disabled={!neo4jConnected || pending}
                         className={cn(
                           'rounded-full border border-line-strong bg-surface px-3.5 py-1.5 text-data text-fg-muted transition-colors',
                           'hover:border-accent hover:text-fg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line-strong disabled:hover:text-fg-muted',
@@ -216,19 +209,18 @@ export function QAAssistant() {
                 </ul>
               </div>
             ) : (
-              <ol className="mt-auto flex flex-col gap-5" role="log" aria-live="polite" aria-label="Conversation">
+              <ol className="mt-auto flex flex-col gap-5" aria-label="Conversation">
                 {chatHistory.map((message, index) => (
                   <ChatMessage
-                    key={index}
+                    key={message.id ?? index}
                     message={message}
-                    onAsk={index === lastIndex && !queryMutation.isPending ? handleSendQuestion : undefined}
-                    askDisabled={!neo4jConnected}
+                    onAsk={send}
+                    askDisabled={!neo4jConnected || pending}
+                    showFollowUps={index === lastIndex}
                   />
                 ))}
-                {queryMutation.isPending && <ThinkingMessage />}
               </ol>
             )}
-            <div ref={messagesEndRef} />
           </div>
         </div>
 
@@ -265,7 +257,7 @@ export function QAAssistant() {
               onChange={setInput}
               onSubmit={handleSubmit}
               disabled={!neo4jConnected}
-              busy={queryMutation.isPending}
+              busy={pending}
               placeholder={neo4jConnected ? 'Ask a question about FPL…' : 'Waiting for the knowledge graph…'}
               footer={
                 <>

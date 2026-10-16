@@ -4,7 +4,7 @@ import { CornerDownRight } from 'lucide-react';
 import type { AnswerCard } from '../../../services/api';
 import { Skeleton } from '../../ui';
 import { cn } from '../../../utils/cn';
-import { PhotoLookupProvider } from './shared';
+import { AskProvider, PhotoLookupProvider } from './shared';
 import { PlayerAnswerCard } from './PlayerAnswerCard';
 import { ComparisonAnswerCard } from './ComparisonAnswerCard';
 import { LeaderboardAnswerCard } from './LeaderboardAnswerCard';
@@ -54,33 +54,62 @@ function CardView({ card }: { card: AnswerCard }) {
   }
 }
 
+/** A short name for a card, for screen-reader summaries ("Player: Erling Haaland"). */
+export function cardLabel(card: AnswerCard): string {
+  switch (card.type) {
+    case 'player':
+      return `Player: ${card.player.name}`;
+    case 'comparison':
+      return `Comparison: ${card.players[0].name} and ${card.players[1].name}`;
+    case 'leaderboard':
+      return `${card.title}, ${card.subtitle}`;
+    case 'prediction':
+      return `${card.title}, gameweek ${card.gameweek}`;
+    case 'team':
+      return `Team: ${card.team}`;
+    case 'fixtures':
+      return card.title;
+    case 'season':
+      return `Season ${card.season}`;
+    case 'pitch':
+      return `${card.mode === 'predicted' ? 'Best squad' : 'Dream team'}, gameweek ${card.gameweek}`;
+    default:
+      return 'Card';
+  }
+}
+
 interface AnswerCardsProps {
   cards: AnswerCard[];
   /** Look up photos the backend didn't send (off for /design's made-up players). */
   lookupPhotos?: boolean;
+  /** Asks the assistant about a player tapped on a card; without it players link to their profile. */
+  onAsk?: (question: string) => void;
+  askDisabled?: boolean;
   className?: string;
 }
 
-/** The visual blocks under an assistant answer, revealed one after another. */
-export function AnswerCards({ cards, lookupPhotos = true, className }: AnswerCardsProps) {
+/** The visual blocks of an assistant answer, revealed one after another. */
+export function AnswerCards({ cards, lookupPhotos = true, onAsk, askDisabled, className }: AnswerCardsProps) {
   const reduceMotion = useReducedMotion();
   if (!cards.length) return null;
   return (
     <PhotoLookupProvider enabled={lookupPhotos}>
-      <div className={cn('mt-3 space-y-3', className)}>
-        {cards.map((card, i) => (
-          <motion.div
-            key={card.id ?? i}
-            initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25, delay: reduceMotion ? 0 : 0.1 + i * 0.08, ease: 'easeOut' }}
-          >
-            <CardBoundary>
-              <CardView card={card} />
-            </CardBoundary>
-          </motion.div>
-        ))}
-      </div>
+      <AskProvider ask={onAsk} disabled={askDisabled}>
+        <div className={cn('mt-3 space-y-3', className)}>
+          {cards.map((card, i) => (
+            <motion.div
+              key={card.id ?? i}
+              initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: reduceMotion ? 0 : 0.1 + i * 0.08, ease: 'easeOut' }}
+            >
+              <CardBoundary>
+                <CardView card={card} />
+              </CardBoundary>
+            </motion.div>
+          ))}
+        </div>
+      </AskProvider>
     </PhotoLookupProvider>
   );
 }

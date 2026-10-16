@@ -5,11 +5,15 @@ Handles integration with multiple LLMs via HuggingFace and Groq
 import os
 import time
 import logging
-from typing import Dict, List, Any, Optional
+from typing import Callable, Dict, Iterator, List, Any, Optional
 from dataclasses import dataclass
 from huggingface_hub import InferenceClient
 
 logger = logging.getLogger(__name__)
+
+
+class LLMStreamError(RuntimeError):
+    """No model could start a streamed answer (the message is the last model's error)."""
 
 
 @dataclass
@@ -235,6 +239,89 @@ class LLMManager:
             success=False, error="All models exhausted."
         )
     
+    def generate_stream(
+        self,
+        prompt: str,
+        model_key: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+        should_stop: Optional[Callable[[], bool]] = None,
+    ) -> Iterator[str]:
+        """Yield the answer in pieces as the model writes it.
+
+        Groq models stream; other providers yield their whole answer once. Falls through
+        FALLBACK_ORDER on quota errors like generate(), but only before the first piece: text
+        already sent can't be taken back, so a later failure is raised. Raises
+        LLMStreamError when no model produced anything. `should_stop` (checked between
+        pieces) ends the stream early, e.g. when the client went away.
+        """
+        model_key = self.RETIRED_MODELS.get(model_key or self.default_model, model_key or self.default_model)
+        if model_key not in self.MODELS:
+            raise LLMStreamError(f"Unknown model: {model_key}")
+        candidates = [model_key] + [m for m in self.FALLBACK_ORDER if m != model_key]
+
+        last_error = "All models exhausted."
+        for candidate in candidates:
+            config = self.MODELS.get(candidate)
+            if config is None:
+                continue
+            if config.get("provider") != "groq":
+                result = self._generate_with_huggingface(prompt, candidate, config, max_tokens, temperature)
+                if result.success:
+                    yield result.text
+                    return
+                last_error = result.error or last_error
+            elif not self.groq_client:
+                last_error = "Groq client not initialized. Please provide GROQ_API_KEY."
+            else:
+                started = False
+                start_time = time.time()
+                try:
+                    stream = self.groq_client.chat.completions.create(
+                        model=config["name"],
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=max_tokens or config.get("max_tokens", 2048),
+                        temperature=temperature or config.get("temperature", 0.7),
+                        stream=True,
+                        **config.get("extra", {}),
+                    )
+                    pieces: List[str] = []
+                    try:
+                        for chunk in stream:
+                            if should_stop and should_stop():
+                                return
+                            choices = getattr(chunk, "choices", None) or []
+                            text = getattr(choices[0].delta, "content", None) if choices else None
+                            if text:
+                                started = True
+                                pieces.append(text)
+                                yield text
+                    finally:
+                        close = getattr(stream, "close", None)  # frees the HTTP connection if we stop early
+                        if callable(close):
+                            try:
+                                close()
+                            except Exception:
+                                pass
+                    self.response_history.append(LLMResponse(
+                        text="".join(pieces), model=candidate, tokens_used=0,
+                        response_time=time.time() - start_time, success=True,
+                    ))
+                    if candidate != model_key:
+                        logger.info("Fell back to '%s' after '%s' failed.", candidate, model_key)
+                    return
+                except Exception as exc:
+                    if started:
+                        raise
+                    last_error = str(exc)
+                    logger.error("Groq streaming failed on '%s': %s", candidate, exc)
+
+            if not self._is_quota_error(last_error):
+                raise LLMStreamError(last_error)
+            logger.warning("Quota error on '%s', trying next fallback. Error: %s", candidate, last_error)
+
+        raise LLMStreamError(last_error)
+
     def _generate_with_groq(
         self,
         prompt: str,
