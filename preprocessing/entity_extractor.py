@@ -5,12 +5,34 @@ from config.settings import SEASONS
 import spacy
 from spacy.matcher import Matcher
 from spacy.tokens import Doc
-from typing import Dict, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set
 from dataclasses import dataclass, field
 import re
 
 # A season written as "2022-23", "2022/23", "2022-2023" or "22/23".
 SEASON_TEXT_RE = re.compile(r"\b(?:19|20)?\d{2}\s*[-/–]\s*(?:19|20)?\d{2}\b")
+
+
+def _keyword_regex(keys: Iterable[str]) -> "re.Pattern[str]":
+    """Match any of the (lowercase) keys as whole words.
+
+    Longer keys are tried first, so the longest key at a position wins and the words it
+    covers can't match again: "coventry city" beats "city", "bonus points" beats "points".
+    Whole words keep "goal" out of "goalkeepers" and "cs" out of "statistics".
+    """
+    alternatives = sorted(keys, key=len, reverse=True)
+    body = "|".join(r"\s+".join(re.escape(word) for word in key.split()) for key in alternatives)
+    return re.compile(rf"\b(?:{body})\b")
+
+
+def _find_keywords(regex: "re.Pattern[str]", table: Dict[str, str], text: str) -> List[str]:
+    """The table's values for the keys found in the text, in order of appearance, no repeats."""
+    found: List[str] = []
+    for match in regex.finditer(text.lower()):
+        value = table.get(" ".join(match.group().split()))
+        if value and value not in found:
+            found.append(value)
+    return found
 
 
 @dataclass
@@ -50,7 +72,10 @@ class EntityExtractor:
     Uses pattern matching and known entity lists.
     """
     
-    # Known teams in Premier League (2021-2023)
+    # Every club in the graph (2020-21 onwards, including the 2026-27 promoted clubs), keyed
+    # by lowercase name or nickname and mapped to the graph's Team name (FPL short names:
+    # "Ipswich", "Man Utd"). Matched as whole words, longest key first (find_teams), so a
+    # full name like "Coventry City" or "Leeds United" wins over the nicknames "city"/"united".
     TEAMS = {
         # Full names and common variations
         "arsenal": "Arsenal",
@@ -62,15 +87,23 @@ class EntityExtractor:
         "brighton & hove albion": "Brighton",
         "burnley": "Burnley",
         "chelsea": "Chelsea",
+        "coventry": "Coventry City",
+        "coventry city": "Coventry City",
         "crystal palace": "Crystal Palace",
         "palace": "Crystal Palace",
         "everton": "Everton",
         "fulham": "Fulham",
+        "hull": "Hull City",
+        "hull city": "Hull City",
+        "ipswich": "Ipswich",
+        "ipswich town": "Ipswich",
         "leeds": "Leeds",
         "leeds united": "Leeds",
         "leicester": "Leicester",
         "leicester city": "Leicester",
         "liverpool": "Liverpool",
+        "luton": "Luton",
+        "luton town": "Luton",
         "manchester city": "Man City",
         "man city": "Man City",
         "city": "Man City",
@@ -81,20 +114,28 @@ class EntityExtractor:
         "newcastle": "Newcastle",
         "newcastle united": "Newcastle",
         "nottingham forest": "Nott'm Forest",
+        "nott'm forest": "Nott'm Forest",
         "forest": "Nott'm Forest",
         "norwich": "Norwich",
         "norwich city": "Norwich",
+        "sheffield united": "Sheffield Utd",
+        "sheffield utd": "Sheffield Utd",
         "southampton": "Southampton",
         "spurs": "Spurs",
+        "sunderland": "Sunderland",
         "tottenham": "Spurs",
         "tottenham hotspur": "Spurs",
         "watford": "Watford",
+        "west brom": "West Brom",
+        "west bromwich": "West Brom",
+        "west bromwich albion": "West Brom",
         "west ham": "West Ham",
         "west ham united": "West Ham",
         "wolves": "Wolves",
         "wolverhampton": "Wolves",
         "wolverhampton wanderers": "Wolves",
     }
+    _TEAM_RE = _keyword_regex(TEAMS)
     
     # Position variations
     POSITIONS = {
@@ -134,13 +175,20 @@ class EntityExtractor:
         "st": "FWD",
     }
     
-    # Stats variations
+    # Stats variations, matched as whole words like TEAMS (a key doesn't match inside a
+    # longer word, so word forms worth catching are listed: "goalscorers", "assisters")
     STATS = {
         "goals": "goals_scored",
         "goal": "goals_scored",
         "scored": "goals_scored",
+        "goalscorer": "goals_scored",
+        "goalscorers": "goals_scored",
+        "goalscoring": "goals_scored",
         "assists": "assists",
         "assist": "assists",
+        "assisted": "assists",
+        "assister": "assists",
+        "assisters": "assists",
         "points": "total_points",
         "total points": "total_points",
         "fpl points": "total_points",
@@ -176,6 +224,7 @@ class EntityExtractor:
         "ownership": "selected",
         "owned": "selected",
     }
+    _STAT_RE = _keyword_regex(STATS)
     
     # Season patterns
     SEASON_PATTERNS = [
@@ -344,25 +393,20 @@ class EntityExtractor:
         
         return players[:1]  # Return most recent player mentioned
     
+    @classmethod
+    def find_teams(cls, text: str) -> List[str]:
+        """Graph team names mentioned in the text, in order ("Hull City vs Man City" ->
+        ["Hull City", "Man City"]; "Leeds United" -> ["Leeds"], not Man Utd as well)."""
+        return _find_keywords(cls._TEAM_RE, cls.TEAMS, text)
+
     def _extract_teams(self, doc: Doc) -> List[str]:
-        """Extract team names from query using spaCy."""
-        teams = []
-        text_lower = doc.text.lower()
-        
-        # Check for team names using spaCy's ORG entities
-        for ent in doc.ents:
-            if ent.label_ == "ORG":
-                normalized = self.TEAMS.get(ent.text.lower())
-                if normalized and normalized not in teams:
-                    teams.append(normalized)
-        
-        # Also check token sequences for team names
-        for team_key, team_name in self.TEAMS.items():
-            if team_key in text_lower:
-                if team_name not in teams:
-                    teams.append(team_name)
-        
-        return teams
+        """Extract team names from the query, in the order they're mentioned.
+
+        Substring matching used to read "Coventry City" as Man City ("city") and "Leeds
+        United" as Leeds and Man Utd ("united"). spaCy's ORG entities added nothing the
+        whole-word match doesn't find, so they're no longer consulted.
+        """
+        return self.find_teams(doc.text)
     
     def _extract_positions(self, doc: Doc) -> List[str]:
         """Extract positions from query using spaCy tokens."""
@@ -451,17 +495,13 @@ class EntityExtractor:
         return gameweeks
     
     def _extract_stats(self, doc: Doc) -> List[str]:
-        """Extract stat names from query using spaCy tokens."""
-        stats = []
-        text_lower = doc.text.lower()
-        
-        # Check for stats in tokens and multi-word phrases
-        for stat_key, stat_name in self.STATS.items():
-            if stat_key in text_lower:
-                if stat_name not in stats:
-                    stats.append(stat_name)
-        
-        return stats
+        """Extract stat names from the query, in the order they're mentioned.
+
+        Whole words only: substring matching found "goal" in "goalkeepers", so "top 3
+        goalkeepers by points" ranked keepers by goals. A multi-word key covers its words,
+        so "bonus points" is bonus alone, not total points too.
+        """
+        return _find_keywords(self._STAT_RE, self.STATS, doc.text)
     
     def _extract_numbers(self, doc: Doc, exclude_gws: List[int]) -> List[int]:
         """Extract numbers from query using spaCy (excluding gameweeks)."""
@@ -570,6 +610,9 @@ class EntityExtractor:
         params = {}
         
         if entities.players:
+            # What a player search (search_players_by_name) looks for. Without it "Who is
+            # Bukayo Saka?" missed a required param and got the top-players fallback.
+            params["name_pattern"] = entities.players[0]
             if len(entities.players) >= 2:
                 params["player1"] = entities.players[0]
                 params["player2"] = entities.players[1]

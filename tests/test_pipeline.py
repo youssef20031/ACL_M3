@@ -1,11 +1,13 @@
 import unittest
 import sys
 import os
+import csv
 import inspect
 
 # Add parent directory to path to import modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from config.settings import FIXTURES_FALLBACK_CSV
 from preprocessing.intent_classifier import IntentClassifier, Intent
 from preprocessing.entity_extractor import EntityExtractor
 from graph.queries import CypherQueries
@@ -53,16 +55,16 @@ class TestAppPipeline(unittest.TestCase):
             if mapped_method_name == "get_player_season_stats" and "season" not in params:
                  mapped_method_name = "get_player_all_seasons_stats"
                  print(f"  [Info] Switching to fallback method: {mapped_method_name}")
-            
-            # Special mapping for search
-            if mapped_method_name == "search_players_by_name" and "name_pattern" not in params:
-                 if "player_name" in params:
-                     params["name_pattern"] = params["player_name"]
 
             method = getattr(CypherQueries, mapped_method_name)
-            
+
             # Filter params to only those accepted by the function
             sig = inspect.signature(method)
+            # The handler runs get_top_players_all_positions instead when a required param is
+            # missing, so the extracted params alone must cover the mapped query
+            missing = [p.name for p in sig.parameters.values()
+                       if p.default is inspect.Parameter.empty and p.name not in params]
+            self.assertEqual(missing, [], f"{mapped_method_name} lacks {missing}; the handler would fall back")
             valid_params = {k: v for k, v in params.items() if k in sig.parameters}
             
             try:
@@ -313,6 +315,158 @@ class TestAppPipeline(unittest.TestCase):
     def test_recommendations_without_captain_unchanged(self):
         for prompt in ("recommend a cheap defender", "suggest some midfielders"):
             self.assertEqual(self.classifier.classify(prompt).intent, Intent.RECOMMENDATION, prompt)
+
+    # ----- Regression: stats were matched as substrings, so "goalkeepers" contained "goal"
+    # and "Top 3 goalkeepers by points" ranked keepers by goals (all 0).
+
+    def stats_of(self, prompt):
+        return self.extractor.extract(prompt).stats
+
+    def sort_of(self, prompt):
+        return self.extractor.get_query_parameters(self.extractor.extract(prompt)).get("sort_by")
+
+    def test_goalkeepers_by_points_rank_by_points(self):
+        self.verify_pipeline(
+            prompt="Top 3 goalkeepers by points in 2023-24",
+            expected_intent=Intent.TOP_POINTS,
+            expected_method="get_top_points_by_position",
+            expected_params_subset={"position": "GK", "season": "2023-24", "limit": 3, "sort_by": "total_points"},
+            expected_cypher_strings=["WHERE st.position = $position", "ORDER BY total_points DESC"],
+        )
+
+    def test_stats_match_whole_words_only(self):
+        # "goal" in goalkeepers, "cs" in statistics, "ict" in predict, "form" in perform,
+        # "assist" in assistant
+        for prompt in ("top 5 goalkeepers in 2024-25", "Show me statistics for Mohamed Salah",
+                       "predict the best defenders", "how did Mohamed Salah perform",
+                       "ask the assistant about Arsenal"):
+            self.assertEqual(self.stats_of(prompt), [], prompt)
+
+    def test_multi_word_stats_cover_their_words(self):
+        cases = {
+            "top midfielders by bonus points in 2023-24": ["bonus"],
+            "most clean sheets 2022-23": ["clean_sheets"],
+            "most red cards 2022-23": ["red_cards"],
+            "List the top 5 midfielders by total points": ["total_points"],
+            "highest ict index 2022-23": ["ict_index"],
+        }
+        for prompt, stats in cases.items():
+            self.assertEqual(self.stats_of(prompt), stats, prompt)
+        self.assertEqual(self.sort_of("top midfielders by bonus points in 2023-24"), "bonus")
+
+    def test_stat_word_forms_set_the_sort(self):
+        cases = {
+            "top 5 goalscorers 2023-24": "goals",
+            "most goal-scoring defenders": "goals",
+            "top assisters in 2023-24": "assists",
+            # the first stat mentioned decides
+            "top midfielders by points and goals": "total_points",
+            "top midfielders by goals and points": "goals",
+        }
+        for prompt, sort_by in cases.items():
+            self.assertEqual(self.sort_of(prompt), sort_by, prompt)
+
+    # ----- Regression: teams were matched as substrings ("city" in "Coventry City" -> Man
+    # City, "united" in "Leeds United" -> Man Utd), and the promoted clubs were missing.
+
+    def teams_of(self, prompt):
+        return self.extractor.extract(prompt).teams
+
+    def test_promoted_club_fixture_results(self):
+        self.verify_pipeline(
+            prompt="Coventry City fixture results",
+            expected_intent=Intent.FIXTURE_RESULTS,
+            expected_method="get_fixture_results",
+            expected_params_subset={"team_name": "Coventry City"},
+            expected_cypher_strings=["MATCH (:Team {name: $team_name})<-[:HOME_TEAM|AWAY_TEAM]-(f:Fixture)"],
+        )
+
+    def test_united_in_a_club_name_is_not_man_utd(self):
+        params = self.verify_pipeline(
+            prompt="Leeds United team analysis 2025-26",
+            expected_intent=Intent.TEAM_ANALYSIS,
+            expected_method="get_team_top_performers",
+            expected_params_subset={"team_name": "Leeds", "season": "2025-26"},
+            expected_cypher_strings=["WHERE st.team = $team_name"],
+        )
+        self.assertNotIn("team2", params)
+
+    def test_head_to_head_between_two_city_clubs(self):
+        self.verify_pipeline(
+            prompt="Hull City vs Man City head to head",
+            expected_intent=Intent.HEAD_TO_HEAD,
+            expected_method="get_head_to_head",
+            expected_params_subset={"team1": "Hull City", "team2": "Man City"},
+        )
+
+    def test_teams_match_whole_words_longest_first(self):
+        cases = {
+            "Ipswich Town team analysis": ["Ipswich"],
+            "Sunderland fixture results": ["Sunderland"],
+            "Newcastle United vs Manchester United": ["Newcastle", "Man Utd"],
+            "Leicester City results in 2022-23": ["Leicester"],
+            "Sheffield United players in 2023-24": ["Sheffield Utd"],
+            "players from Nott'm Forest": ["Nott'm Forest"],
+            "Arsenal's top scorer": ["Arsenal"],
+            # nicknames still work on their own
+            "How did City do in 2023-24?": ["Man City"],
+            "how many points did United get": ["Man Utd"],
+            "Who plays for Villa?": ["Aston Villa"],
+            # and never inside another word
+            "Who is Marc Albrighton?": [],
+            "Villarreal results": [],
+        }
+        for prompt, teams in cases.items():
+            self.assertEqual(self.teams_of(prompt), teams, prompt)
+
+    def test_official_club_names(self):
+        cases = {
+            "AFC Bournemouth": "Bournemouth", "Brighton & Hove Albion": "Brighton",
+            "Brighton and Hove Albion": "Brighton", "Coventry City": "Coventry City",
+            "Hull City": "Hull City", "Ipswich Town": "Ipswich", "Leeds United": "Leeds",
+            "Leicester City": "Leicester", "Luton Town": "Luton", "Manchester City": "Man City",
+            "Manchester United": "Man Utd", "Newcastle United": "Newcastle",
+            "Norwich City": "Norwich", "Nottingham Forest": "Nott'm Forest",
+            "Sheffield United": "Sheffield Utd", "Tottenham Hotspur": "Spurs",
+            "West Bromwich Albion": "West Brom", "West Ham United": "West Ham",
+            "Wolverhampton Wanderers": "Wolves",
+        }
+        for name, team in cases.items():
+            self.assertEqual(EntityExtractor.find_teams(name), [team], name)
+
+    def test_every_club_name_resolves_to_itself(self):
+        # So a question written with a graph Team name (a card's follow-up, say) is about
+        # that club alone
+        for team in sorted(set(EntityExtractor.TEAMS.values())):
+            self.assertEqual(EntityExtractor.find_teams(team), [team], team)
+
+    def test_current_season_clubs_are_known(self):
+        # The 2026-27 fixture list uses the graph's club names, promoted clubs included
+        with open(FIXTURES_FALLBACK_CSV, encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+        clubs = {row["Home Team"] for row in rows} | {row["Away Team"] for row in rows}
+        self.assertEqual(len(clubs), 20)
+        for club in sorted(clubs):
+            self.assertEqual(EntityExtractor.find_teams(club), [club], club)
+
+    # ----- Regression: PLAYER_SEARCH maps to search_players_by_name(name_pattern), but the
+    # extracted player was never passed as name_pattern, so "Who is Bukayo Saka?" got the
+    # top-players fallback.
+
+    def test_who_is_player_runs_the_player_search(self):
+        params = self.verify_pipeline(
+            prompt="Who is Bukayo Saka?",
+            expected_intent=Intent.PLAYER_SEARCH,
+            expected_method="search_players_by_name",
+            expected_params_subset={"name_pattern": "Saka"},
+            expected_cypher_strings=["WHERE p.name_normalized CONTAINS $name_pattern"],
+        )
+        _, q_params = CypherQueries.search_players_by_name(params["name_pattern"])
+        self.assertEqual(q_params["name_pattern"], "saka")
+
+    def test_no_player_no_name_pattern(self):
+        params = self.extractor.get_query_parameters(self.extractor.extract("Who is the top scorer in 2023-24?"))
+        self.assertNotIn("name_pattern", params)
 
 
 class TestDefaultRequiredSeason(unittest.TestCase):
