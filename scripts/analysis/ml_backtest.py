@@ -17,8 +17,8 @@ variant is compared with a reference variant using paired bootstrap CIs over gam
 Variants (VARIANTS): "current" is what ml.points_model trains, "previous" is v3 before the
 2026-10 features; the others add candidate features computed only here (add_extra_features) or
 change training settings. Subset metrics (promoted teams in their first 6 gameweeks, players new
-from the Championship in their first 6, teams within 60 days of a manager change) show effects
-too local to move the overall numbers.
+from the Championship in their first 6, teams within 60 days of a manager change, players with 4+
+earlier appearances against the opponent) show effects too local to move the overall numbers.
 """
 import argparse
 import glob
@@ -56,17 +56,21 @@ MGR_CAP_DAYS = 365
 EFL_DIR = os.path.join(ROOT, "EFL_Data_All_Seasons")
 EFL_TO_FPL = {"Hull": "Hull City", "Coventry": "Coventry City"}   # graph names since 2026-27
 EFL_TEAM_MINUTES = 46 * 90
+OPPOS_WINDOWS = (6, 20)
+H2H_LEVEL_APPS = 10   # the player's level for h2h: points per appearance over their previous 10 appearances
+H2H_PRIOR = 5.0       # h2h mean shrunk toward 0 as if there were 5 more meetings at the player's level
 
 
 def _rolling_sum_before_gameweek(frame, key, cols, windows):
-    """Like pm._rolling_before_gameweek, but rolling sums."""
+    """Like pm._rolling_before_gameweek, but rolling sums; a window of None sums all earlier rows."""
     frame = frame.sort_values([key, "kickoff_time"])
     out = pd.DataFrame(index=frame.index)
     shifted = frame.groupby(key, sort=False)[cols].shift(1)
     for w in windows:
-        rolled = shifted.groupby(frame[key], sort=False).rolling(w, min_periods=1).sum()
+        g = shifted.groupby(frame[key], sort=False)
+        rolled = (g.expanding() if w is None else g.rolling(w, min_periods=1)).sum()
         rolled = rolled.reset_index(level=0, drop=True).reindex(frame.index)
-        out[[f"{c}_s{w}" for c in cols]] = rolled[cols].to_numpy()
+        out[[f"{c}_s{'all' if w is None else w}" for c in cols]] = rolled[cols].to_numpy()
     first_in_gw = frame.groupby([key, "season", "GW"], sort=False).cumcount() == 0
     out = out.where(first_in_gw)
     out[["_k", "_s", "_g"]] = frame[[key, "season", "GW"]].to_numpy()
@@ -158,6 +162,59 @@ def _efl_player_table() -> pd.DataFrame:
     return out.reset_index()
 
 
+def _opp_position_concession(df: pd.DataFrame) -> pd.DataFrame:
+    """Points and xGI per appearance the opponent conceded to the player's position over its last
+    6 / 20 matches (G_OPPOS), pooled over the opposing players who played (minutes > 0). Summed over
+    the opponent's earlier gameweeks like the team features, so a double gameweek's second fixture
+    doesn't see the first. NaN until the opponent has a match in the data (promoted clubs), when
+    nobody in the position played in the window, and for xGI before 2023-24. History rows only:
+    upcoming fixtures get NaN."""
+    played = df[df["team_h_score"].notna()]
+    apps = played[played["minutes"] > 0]
+    xgi = apps["expected_goal_involvements"]
+    stats = pd.DataFrame({"pts": apps["total_points"], "n": apps["total_points"].notna().astype(float),
+                          "xgi": xgi, "xgi_n": xgi.notna().astype(float)})
+    # What each team conceded per match and position: its opponents' points, keyed by the team
+    conceded = (stats.groupby([apps["season"], apps["fixture"], apps["opponent"], apps["position"]]).sum()
+                .rename_axis(["season", "fixture", "team", "position"]).reset_index())
+    # Every match of every team for all four positions, so a position nobody played counts as 0 / 0
+    matches = played.drop_duplicates(["season", "fixture", "team"])
+    grid = matches[["season", "fixture", "team", "kickoff_time", "GW"]].merge(
+        pd.DataFrame({"position": pm.POSITIONS}), how="cross")
+    grid = grid.merge(conceded, on=["season", "fixture", "team", "position"], how="left")
+    grid = grid.fillna({c: 0.0 for c in stats})
+    grid["key"] = grid["team"] + "|" + grid["position"]
+    grid = grid.join(_rolling_sum_before_gameweek(grid, "key", list(stats), OPPOS_WINDOWS))
+    for w in OPPOS_WINDOWS:
+        for stat, n in (("pts", "n"), ("xgi", "xgi_n")):
+            den = grid[f"{n}_s{w}"]
+            grid[pm._team_feature("opp_pos", stat, w)] = grid[f"{stat}_s{w}"] / den.where(den > 0)
+    keyed = grid.set_index(["season", "fixture", "team", "position"])[G_OPPOS]
+    idx = pd.MultiIndex.from_frame(df[["season", "fixture", "opponent", "position"]])
+    return pd.DataFrame(keyed.reindex(idx).to_numpy(), index=df.index, columns=G_OPPOS)
+
+
+def _head_to_head(df: pd.DataFrame) -> pd.DataFrame:
+    """The player's record against this opponent over their earlier appearances against it:
+    h2h_resid is the mean of (points - the player's level), shrunk toward 0 as if there were
+    H2H_PRIOR more meetings, and h2h_meetings counts the appearances. The level is the player's
+    points per appearance over their previous H2H_LEVEL_APPS appearances, so the very first one
+    doesn't count. Summed over earlier gameweeks only and frozen at the gameweek like
+    pm._rolling_before_gameweek, so neither depends on whether the player plays in the fixture
+    itself. 0 with no earlier meeting, NaN without an opponent."""
+    apps = df[df["minutes"] > 0]
+    level = pm._rolling_before_gameweek(apps, "name", ["total_points"], (H2H_LEVEL_APPS,))
+    resid = (apps["total_points"] - level[f"total_points_r{H2H_LEVEL_APPS}"]).reindex(df.index)
+    rows = df[df["opponent"].notna()]
+    r = resid.loc[rows.index]
+    frame = rows[["season", "GW", "kickoff_time"]].assign(key=rows["name"] + "|" + rows["opponent"],
+                                                          r=r.fillna(0.0), n=r.notna().astype(float))
+    sums = _rolling_sum_before_gameweek(frame, "key", ["r", "n"], (None,)).reindex(df.index)
+    meetings = sums["n_sall"].fillna(0.0).where(df["opponent"].notna())
+    return pd.DataFrame({"h2h_resid": sums["r_sall"].fillna(0.0) / (meetings + H2H_PRIOR),
+                         "h2h_meetings": meetings}, index=df.index)
+
+
 def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.reset_index(drop=True).copy()
     known = df["minutes"].notna()
@@ -191,6 +248,9 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
         df[col] = vals
     df["team_rotation_r6"] = _team_rotation(df)
 
+    # What the opponent concedes to the player's position, and the player's record against it
+    df = df.join(_opp_position_concession(df)).join(_head_to_head(df))
+
     # Previous Championship season: promoted clubs (and their opponents), players new from it
     efl = _efl_team_table()
     stats = [c for c in efl.columns if c.startswith("efl_")]
@@ -203,6 +263,7 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     df["sub_promoted_early"] = (df["efl_team_gf_pg"].notna() & (df["GW"] <= 6)).astype(float)
     df["sub_efl_player_early"] = (df["efl_g90"].notna() & (df["GW"] <= 6)).astype(float)
     df["sub_new_manager"] = (df["team_mgr_days"] < 60).astype(float)
+    df["sub_h2h_4plus"] = (df["h2h_meetings"] >= 4).astype(float)
     return df
 
 
@@ -216,8 +277,10 @@ G_MGR = ["team_mgr_days", "opp_mgr_days"]
 G_ROT = ["team_rotation_r6"]
 G_EFL_TEAM = ["efl_team_gf_pg", "efl_team_ga_pg", "efl_team_ppg", "opp_efl_gf_pg", "opp_efl_ga_pg", "opp_efl_ppg"]
 G_EFL_PLAYER = ["efl_min_share", "efl_g90", "efl_a90", "efl_sh90", "efl_ppm", "efl_onga90"]
-SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"]
-EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER
+G_OPPOS = [pm._team_feature("opp_pos", s, w) for w in OPPOS_WINDOWS for s in ("pts", "xgi")]
+G_H2H = ["h2h_resid", "h2h_meetings"]
+SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager", "sub_h2h_4plus"]
+EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OPPOS + G_H2H
 KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP"]
 
 
@@ -240,7 +303,9 @@ def cmd_features(args) -> None:
         if feats[c].dtype == "float64":
             feats[c] = feats[c].astype("float32")
     feats.to_pickle(args.out)
-    cover = {c: round(float(feats[c].notna().mean()), 3) for c in G_MGR + G_ROT + G_EFL_TEAM[:1] + G_EFL_PLAYER[:1]}
+    cover = {c: round(float(feats[c].notna().mean()), 3)
+             for c in G_MGR + G_ROT + G_EFL_TEAM[:1] + G_EFL_PLAYER[:1] + G_OPPOS}
+    cover["h2h_meetings>0"] = round(float((feats["h2h_meetings"] > 0).mean()), 3)
     print(f"saved {args.out}: {feats.shape}, seasons {feats.groupby('season').size().to_dict()}, "
           f"subset rows {feats[SUBSETS].sum().astype(int).to_dict()}, coverage {cover} "
           f"in {time.time() - t0:.0f}s", flush=True)
@@ -266,6 +331,9 @@ VARIANTS = {
     "efl_team": {"features": CURRENT + G_EFL_TEAM},
     "efl_player": {"features": CURRENT + G_EFL_PLAYER},
     "efl": {"features": CURRENT + G_EFL_TEAM + G_EFL_PLAYER},
+    "oppos": {"features": CURRENT + G_OPPOS},
+    "h2h": {"features": CURRENT + G_H2H},
+    "oppos_h2h": {"features": CURRENT + G_OPPOS + G_H2H},
 }
 
 
