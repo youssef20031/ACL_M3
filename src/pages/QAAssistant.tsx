@@ -38,7 +38,7 @@ function plainText(markdown: string) {
 function announcementFor(response: QueryResponse) {
   const cards = response.cards ?? [];
   const summary = cards.length
-    ? ` ${cards.length === 1 ? 'One card' : `${cards.length} cards`} below the answer: ${cards.map(cardLabel).join('; ')}.`
+    ? ` ${cards.length === 1 ? 'One card' : `${cards.length} cards`} with the answer: ${cards.map(cardLabel).join('; ')}.`
     : '';
   return `Answer: ${plainText(response.answer)}${summary}`;
 }
