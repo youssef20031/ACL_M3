@@ -72,6 +72,8 @@ export function QAAssistant() {
         role: 'assistant',
         content: data.answer,
         timestamp: Date.now(),
+        cards: data.cards ?? [],
+        followUps: data.follow_ups ?? [],
       });
       setLastQueryInfo(data);
     },
@@ -130,6 +132,8 @@ export function QAAssistant() {
 
   const connecting = !neo4jConnected && !health;
   const isEmpty = chatHistory.length === 0 && !queryMutation.isPending;
+  // Follow-up suggestions belong to the latest answer only; older ones would be stale.
+  const lastIndex = chatHistory.length - 1;
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
@@ -214,7 +218,12 @@ export function QAAssistant() {
             ) : (
               <ol className="mt-auto flex flex-col gap-5" role="log" aria-live="polite" aria-label="Conversation">
                 {chatHistory.map((message, index) => (
-                  <ChatMessage key={index} message={message} />
+                  <ChatMessage
+                    key={index}
+                    message={message}
+                    onAsk={index === lastIndex && !queryMutation.isPending ? handleSendQuestion : undefined}
+                    askDisabled={!neo4jConnected}
+                  />
                 ))}
                 {queryMutation.isPending && <ThinkingMessage />}
               </ol>

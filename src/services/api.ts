@@ -46,7 +46,256 @@ export interface QueryResponse {
       label: string;
     }>;
   };
+  /** Visual blocks drawn with the answer (services/answer_cards.py). Absent from older backends. */
+  cards?: AnswerCard[];
+  /** Suggested next questions, each routed by the backend's intent classifier. */
+  follow_ups?: string[];
 }
+
+// --- Assistant answer cards -------------------------------------------------
+// Built from structured data (query rows, the graph, predictions), never from the
+// answer text. The backend may add card types later: unknown ones are skipped.
+
+export type CardTone = 'accent' | 'info' | 'warning' | 'danger' | 'neutral';
+export type CardIcon =
+  | 'trophy'
+  | 'flame'
+  | 'medal'
+  | 'star'
+  | 'zap'
+  | 'clock'
+  | 'home'
+  | 'trend-up'
+  | 'trend-down'
+  | 'shield'
+  | 'target'
+  | 'calendar'
+  | 'alert';
+/** int, dec1/dec2 (decimals), money (£m), compact (1.2M). */
+export type CardValueFormat = 'int' | 'dec1' | 'dec2' | 'money' | 'compact';
+export type MatchResult = 'W' | 'D' | 'L';
+
+/** A "notable stat" computed from the data (streaks, ranks, records). */
+export interface CardHighlight {
+  label: string;
+  value: string;
+  detail: string | null;
+  tone: CardTone;
+  icon: CardIcon;
+}
+
+export interface CardPlayer {
+  /** Exact player name in the graph (used for links). */
+  name: string;
+  team: string | null;
+  position: PositionCode | null;
+  photo: string | null;
+  /** FPL availability (a/d/i/s/u/n); null where it doesn't apply (past seasons). */
+  status: string | null;
+  chance: number | null;
+  news: string | null;
+}
+
+export interface CardStat {
+  key: string;
+  label: string;
+  value: number | null;
+  format: CardValueFormat;
+}
+
+export interface CardOpponent {
+  team: string;
+  home: boolean;
+  /** FPL fixture difficulty 1–5 for the player's/team's side, when known. */
+  difficulty: number | null;
+  kickoff_time: string | null;
+  gameweek: number | null;
+}
+
+export interface CardPrediction {
+  gameweek: number;
+  points: number;
+  /** Several for a double gameweek, none for a blank one. */
+  opponents: CardOpponent[];
+  rank: number;
+  pool: number;
+  position_rank: number;
+  position_pool: number;
+}
+
+export interface CardMatch {
+  season: string;
+  gameweek: number | null;
+  points: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  opponent: string | null;
+  home: boolean | null;
+  /** From the player's side, e.g. "4-1". */
+  score: string | null;
+  result: MatchResult | null;
+}
+
+export interface PlayerAnswerCard {
+  type: 'player';
+  id: string;
+  emphasis: 'stats' | 'prediction';
+  player: CardPlayer;
+  /** null = all seasons. */
+  season: string | null;
+  season_label: string;
+  stats: CardStat[];
+  /** Points per season, oldest first (all-seasons cards only). */
+  seasons: Array<{ season: string; team: string | null; points: number; goals: number; assists: number; games: number }>;
+  /** Most recent matches in scope, oldest first. */
+  form: CardMatch[];
+  /** The gameweek the question asked about. */
+  match: CardMatch | null;
+  prediction: CardPrediction | null;
+  highlights: CardHighlight[];
+}
+
+export interface ComparisonMetric {
+  key: string;
+  label: string;
+  format: CardValueFormat;
+  values: [number | null, number | null];
+  /** Index of the higher value; null for ties, missing values and unscored rows. */
+  better: 0 | 1 | null;
+  scored: boolean;
+}
+
+export interface ComparisonAnswerCard {
+  type: 'comparison';
+  id: string;
+  emphasis: 'stats' | 'prediction';
+  season: string | null;
+  season_label: string;
+  players: [CardPlayer, CardPlayer];
+  metrics: ComparisonMetric[];
+  /** How many scored metrics each player leads. */
+  leads: [number, number];
+  predictions: [CardPrediction | null, CardPrediction | null];
+  form: [CardMatch[], CardMatch[]];
+  highlights: CardHighlight[];
+}
+
+export interface LeaderboardRow {
+  /** Shared by ties; null in grouped (per-position) lists. */
+  rank: number | null;
+  player: CardPlayer;
+  value: number | null;
+  values: Record<string, number | null>;
+  detail: string | null;
+  group: PositionCode | null;
+}
+
+export interface LeaderboardAnswerCard {
+  type: 'leaderboard';
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: CardIcon;
+  metric: { key: string; label: string; format: CardValueFormat; unit: string };
+  columns: Array<{ key: string; label: string; format: CardValueFormat }>;
+  /** Rows grouped by position (the top players of each). */
+  grouped: boolean;
+  season: string | null;
+  rows: LeaderboardRow[];
+  highlights: CardHighlight[];
+}
+
+export interface PredictionRow {
+  rank: number;
+  player: CardPlayer;
+  points: number;
+  opponents: CardOpponent[];
+  price: number | null;
+}
+
+export interface PredictionAnswerCard {
+  type: 'prediction';
+  id: string;
+  title: string;
+  gameweek: number;
+  deadline: string | null;
+  position: PositionCode | null;
+  captain: boolean;
+  model: string | null;
+  rows: PredictionRow[];
+  highlights: CardHighlight[];
+}
+
+export interface TeamAnswerCard {
+  type: 'team';
+  id: string;
+  team: string;
+  season: string;
+  standing: {
+    position: number;
+    played: number;
+    won: number;
+    drawn: number;
+    lost: number;
+    goals_for: number;
+    goals_against: number;
+    goal_difference: number;
+    points: number;
+  } | null;
+  teams_in_table: number;
+  /** Last five results, oldest first. */
+  form: Array<{ opponent: string; home: boolean; score: string; result: MatchResult; gameweek: number | null }>;
+  next_fixtures: CardOpponent[];
+  top_players: Array<{ player: CardPlayer; points: number; goals: number; assists: number; games: number }>;
+  /** Injured, doubtful and suspended players (first four). */
+  flagged: CardPlayer[];
+  flagged_total: number;
+  highlights: CardHighlight[];
+}
+
+export interface FixturesAnswerCard {
+  type: 'fixtures';
+  id: string;
+  title: string;
+  subtitle: string;
+  /** One team (its results) or two (head to head); results are from teams[0]'s side. */
+  teams: string[];
+  record: { team: string; played: number; won: number; drawn: number; lost: number; goals_for: number; goals_against: number };
+  /** Newest first. */
+  matches: Array<{
+    season: string | null;
+    gameweek: number | null;
+    home_team: string;
+    away_team: string;
+    home_score: number;
+    away_score: number;
+    kickoff_time: string | null;
+    result: MatchResult | null;
+  }>;
+  total: number;
+  highlights: CardHighlight[];
+}
+
+export interface SeasonAnswerCard {
+  type: 'season';
+  id: string;
+  season: string;
+  season_label: string;
+  in_progress: boolean;
+  stats: CardStat[];
+  leaders: Array<{ player: CardPlayer; points: number; goals: number; assists: number }>;
+  highlights: CardHighlight[];
+}
+
+export type AnswerCard =
+  | PlayerAnswerCard
+  | ComparisonAnswerCard
+  | LeaderboardAnswerCard
+  | PredictionAnswerCard
+  | TeamAnswerCard
+  | FixturesAnswerCard
+  | SeasonAnswerCard;
 
 export interface TriviaQuestion {
   question: string;

@@ -1,10 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { AnswerCard } from '../services/api';
 
 export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** Visual blocks returned with an assistant answer (not sent back as chat history). */
+  cards?: AnswerCard[];
+  followUps?: string[];
 }
 
 export type ThemeMode = 'light' | 'dark';

@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from dataclasses import asdict
-from typing import List, Literal, Optional, Dict, Any
+from typing import List, Literal, Optional, Dict, Any, Tuple
 from datetime import datetime, timezone
 import asyncio
 import json
@@ -55,6 +55,7 @@ from services.player_index import PlayerIndex
 from services.avatars import AvatarService, ImageProxy, is_proxy_allowed, FPL_PHOTO_URL
 from services.predictions import get_predictions_df
 from services import season_service
+from services import answer_cards
 from services import analytics
 from services.security import RateLimiter, limits_from_env, require_admin
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
@@ -657,6 +658,10 @@ class QueryResponse(BaseModel):
     results: List[Dict[str, Any]]
     graph_data: Optional[Dict[str, Any]] = None
     model_type: Optional[str] = None
+    # Visual blocks shown with the answer (player, comparison, leaderboard, prediction, team,
+    # fixtures, season) and suggested next questions; see services/answer_cards.py
+    cards: List[Dict[str, Any]] = Field(default_factory=list)
+    follow_ups: List[str] = Field(default_factory=list)
 
 
 class ImageSearchResponse(BaseModel):
@@ -787,6 +792,38 @@ def reset_graph_caches() -> None:
     app_state["player_index"] = None
     app_state["latest_season"] = None
     season_service.clear_cache()
+
+
+ANSWER_CARDS_TIMEOUT_SECONDS = 10
+
+
+def _answer_card_inputs() -> Dict[str, Any]:
+    """File-backed inputs of the answer cards, each cached by mtime: the predictions, FPL
+    photo codes and web names from the status file, and the live season's meta.json."""
+    inputs: Dict[str, Any] = {"predictions": None, "photo_codes": {}, "web_names": {}, "meta": {}}
+    try:
+        inputs["predictions"] = get_predictions_df()
+    except Exception as exc:
+        logger.warning("Predictions unavailable for answer cards: %s", exc)
+    try:
+        lookup = season_service.status_lookup()
+        inputs["photo_codes"], inputs["web_names"] = lookup["code"], lookup["web_name"]
+        inputs["meta"] = season_service.read_meta()
+    except Exception as exc:
+        logger.warning("Live season files unavailable for answer cards: %s", exc)
+    return inputs
+
+
+async def build_answer_cards(**context: Any) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """Cards and follow-up questions for an answer (services/answer_cards.py). Never raises:
+    the answer goes out without them if they fail or take too long."""
+    try:
+        inputs = await asyncio.to_thread(_answer_card_inputs)
+        ctx = answer_cards.CardContext(photo_for=_photo_for, **inputs, **context)
+        return await asyncio.wait_for(answer_cards.build_cards(ctx), timeout=ANSWER_CARDS_TIMEOUT_SECONDS)
+    except Exception:
+        logger.warning("Answer cards failed", exc_info=True)
+        return [], []
 
 
 async def avatar_for(player_name: str, team_name: Optional[str] = None) -> Optional[str]:
@@ -1401,6 +1438,7 @@ query_limiter = RateLimiter(limits_from_env("QUERY_RATE_LIMITS", "10/60,120/3600
 @app.post("/api/query", response_model=QueryResponse, dependencies=[Depends(query_limiter.dependency)])
 async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
     """Process FPL query and return answer."""
+    cards_task: Optional[asyncio.Task] = None
     try:
         # Only return the initial greeting when this is the user's first message in the session
         if request.is_first_message and looks_like_small_talk(request.question):
@@ -1414,6 +1452,7 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                 embedding_used=False,
                 results=[],
                 graph_data=None,
+                follow_ups=list(answer_cards.STARTER_QUESTIONS),
             )
 
         # Step 1: Intent Classification (lazy load)
@@ -1439,17 +1478,18 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         query_executor = QueryExecutor(conn)
         cypher_context = ""
         executed_query = ""
+        executed_method = None  # the CypherQueries method that ran, after any fallback
         results = []
-        
+
         query_method = intent_classifier.get_query_type_for_intent(intent_result.intent)
-        
+
         if query_method:
             # Ensure required parameters
             if "limit" not in params:
                 params["limit"] = 10
             if "limit_per_position" not in params:
                 params["limit_per_position"] = 5
-            
+
             # Special handling for different query types
             latest_season = await asyncio.to_thread(get_latest_season, conn)
             if query_method == "get_player_season_stats" and "gameweek" in params:
@@ -1492,15 +1532,24 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
                     gameweek=params.get("gameweek"),
                     limit_per_position=5
                 )
+                executed_method = "get_top_players_all_positions"
             else:
                 valid_params = {k: v for k, v in params.items() if k in sig.parameters}
                 query, query_params = method(**valid_params)
-            
+                executed_method = query_method
+
             results = await run_db(conn, query, query_params)
             cypher_context = PromptBuilder.format_kg_context(results)
             cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
             executed_query = query
-        
+
+        # Cards (photos, stats, predictions) come from structured data, not the answer text,
+        # so they are built while the rest of the pipeline and the LLM run
+        cards_task = asyncio.create_task(build_answer_cards(
+            question=request.question, intent=intent_result.intent.value, method=executed_method,
+            params=dict(params), entities=entities.to_dict(), results=list(results), conn=conn,
+        ))
+
         # Step 5: ML Predictions
         ml_context = None
         if intent_result.intent == Intent.PREDICTION:
@@ -1674,8 +1723,9 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         
         # Build graph visualization data
         graph_data = build_graph_data(results)
-        
+
         ml_model_type = _ml_model_label()
+        cards, follow_ups = await cards_task
 
         return QueryResponse(
             answer=answer,
@@ -1688,7 +1738,9 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
             embedding_used=embedding_used,
             results=results[:50],  # Limit results sent to frontend
             graph_data=graph_data,
-            model_type=ml_model_type
+            model_type=ml_model_type,
+            cards=cards,
+            follow_ups=follow_ups,
         )
 
     except HTTPException:
@@ -1696,6 +1748,9 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
     except Exception:
         logger.exception("Query failed")
         raise HTTPException(status_code=500, detail="The assistant couldn't answer that right now. Please try again.")
+    finally:
+        if cards_task is not None and not cards_task.done():
+            cards_task.cancel()
 
 
 @app.post("/api/embeddings/build", response_model=EmbeddingBuildResponse, dependencies=[Depends(require_admin)])
