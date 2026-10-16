@@ -78,7 +78,10 @@ def match_rows_for(name):
                      "points": pts, "minutes": 90, "goals": goals, "assists": assists,
                      "clean_sheets": 1 if ga == 0 else 0, "bonus": 0, "team": team, "was_home": home,
                      "home_team": team if home else opponent, "away_team": opponent if home else team,
-                     "home_score": gf if home else ga, "away_score": ga if home else gf})
+                     "home_score": gf if home else ga, "away_score": ga if home else gf,
+                     # price rises 0.1 a week, ownership 100k; xG 0.5 a match, xA 0.25
+                     "value": 150 + gw, "selected": 6_000_000 + gw * 100_000, "xg": 0.5, "xa": 0.25,
+                     "xgi": 0.75, "xgc": 1.0, "goals_conceded": ga})
     # one big haul last season
     rows.append({"name": name, "season": PREVIOUS, "gameweek": 30, "kickoff_time": datetime(2026, 3, 1, tzinfo=timezone.utc),
                  "points": 21, "minutes": 90, "goals": 3, "assists": 1, "clean_sheets": 0, "bonus": 3, "team": team,
@@ -226,6 +229,41 @@ def test_match_rows_take_the_players_side():
     assert rows[1]["home"] is False and rows[1]["opponent"] == "Crystal Palace"
     assert (rows[1]["team_score"], rows[1]["opponent_score"], rows[1]["result"]) == (4, 1, "W")
     assert ac.form_point(rows[1])["score"] == "4-1"
+
+
+def test_price_trend_counts_a_double_gameweek_once():
+    rows = [{"season": CURRENT, "gameweek": gw, "kickoff_time": _ko(i), "value": value, "selected": sel}
+            for i, (gw, value, sel) in enumerate([(1, 150, 6_000_000), (2, 151, 6_200_000), (2, 151, 6_250_000),
+                                                  (3, 153, 6_500_000)])]
+    rows.append({"season": PREVIOUS, "gameweek": 38, "kickoff_time": _ko(-30), "value": 140, "selected": 1})
+    trend = ac.price_trend(ac.match_rows(rows), CURRENT)
+    assert [p["gameweek"] for p in trend["points"]] == [1, 2, 3]
+    assert trend["points"][1] == {"gameweek": 2, "price": 15.1, "selected": 6_250_000}   # last match of the GW
+    assert trend["price_change"] == 0.3 and trend["selected_change"] == 500_000
+    assert ac.price_trend(ac.match_rows(rows[:1]), CURRENT) is None                       # one gameweek
+    assert ac.price_trend(ac.match_rows(rows), None) is None
+
+
+def test_underlying_stats_sums_expected_goals_per_90():
+    matches = ac.match_rows(match_rows_for("Erling Haaland"))
+    xs = ac.underlying_stats(matches, CURRENT)
+    assert (xs["xg"], xs["xa"], xs["xgi"], xs["goals"], xs["assists"], xs["minutes"]) == (2.5, 1.25, 3.75, 5, 0, 450)
+    assert xs["xg_per90"] == 0.5 and xs["xgi_per90"] == 0.75
+    # the previous season's row has no expected stats
+    assert ac.underlying_stats(matches, PREVIOUS) is None
+
+
+def test_finishing_highlight_compares_goals_with_xg():
+    matches = ac.match_rows(match_rows_for("Erling Haaland"))
+    xs = dict(ac.underlying_stats(matches, CURRENT), goals=5, xg=2.5)
+    out = ac.player_highlights(name="Erling Haaland", position="FWD", seasons=[], matches=[], scope=CURRENT,
+                               rank=None, rank_season=None, totals=ac.season_totals([]), current=CURRENT,
+                               underlying=xs)
+    assert out[0]["label"] == "Finishing" and out[0]["value"] == "+2.5 v xG" and out[0]["tone"] == "accent"
+    under = ac.player_highlights(name="X", position="FWD", seasons=[], matches=[], scope=CURRENT, rank=None,
+                                 rank_season=None, totals=ac.season_totals([]), current=CURRENT,
+                                 underlying=dict(xs, goals=1, xg=3.0))
+    assert under[0]["value"] == "-2.0 v xG" and under[0]["tone"] == "warning"
 
 
 def test_position_rank_and_benchmark_rival():
@@ -410,6 +448,9 @@ def test_player_stats_card():
     assert stats["total_points"] == 39 and stats["goals"] == 5 and stats["points_per_game"] == 7.8
     assert [f["points"] for f in card["form"]] == [2, 13, 9, 9, 6]       # this season only, oldest first
     assert card["prediction"]["points"] == 8.6 and card["prediction"]["opponents"][0]["difficulty"] == 2
+    assert [(f["team"], f["home"], f["difficulty"]) for f in card["next_fixtures"]] == [("Ipswich", True, 2)]
+    assert card["trend"]["price_change"] == 0.4 and len(card["trend"]["points"]) == 5
+    assert card["underlying"]["xg"] == 2.5
     assert card["highlights"][0]["label"] == "Scoring streak"
     assert "_follow_ups" not in card
     assert "Compare Erling Haaland and Alexander Isak this season" in follow_ups
@@ -444,6 +485,9 @@ def test_comparison_card():
     assert card["leads"][0] > card["leads"][1]
     assert [p["points"] for p in card["predictions"]] == [8.6, 4.6]
     assert [len(f) for f in card["form"]] == [5, 5]
+    keys = [m["key"] for m in card["metrics"]]
+    assert keys.index("xg") == keys.index("assists") + 1 and "xa" in keys      # one season: expected stats
+    assert [[f["team"] for f in side] for side in card["next_fixtures"]] == [["Ipswich"], ["Nott'm Forest", "Everton", "Leeds"]]
     assert any(h["label"] == "Next GW" for h in card["highlights"])
     assert "Compare Erling Haaland and Bukayo Saka in 2025-26" in follow_ups
 

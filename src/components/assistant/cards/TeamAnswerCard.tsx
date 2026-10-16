@@ -4,11 +4,10 @@ import { ClubCrest, PlayerAvatar, StatusBadge } from '../../ui';
 import {
   CardFrame,
   CardLink,
+  FixtureStrip,
   Highlights,
-  OpponentChip,
   ResultPill,
   Section,
-  formatKickoff,
   ordinal,
   playerProfileState,
   teamCode,
@@ -105,14 +104,7 @@ export function TeamAnswerCard({ card }: { card: TeamCardData }) {
           title="Next fixtures"
           aside={card.next_fixtures.some((f) => f.difficulty != null) ? 'Colour = FPL difficulty' : undefined}
         >
-          <ol className="flex flex-wrap gap-2">
-            {card.next_fixtures.map((f, i) => (
-              <li key={`${f.team}-${i}`} className="flex flex-col items-start gap-0.5">
-                <span className="text-micro text-fg-subtle">{f.gameweek ? `GW ${f.gameweek}` : formatKickoff(f.kickoff_time)}</span>
-                <OpponentChip opponent={f} />
-              </li>
-            ))}
-          </ol>
+          <FixtureStrip fixtures={card.next_fixtures} />
         </Section>
       )}
 

@@ -71,6 +71,40 @@ export const SAMPLE_CARDS: AnswerCard[] = [
       position_rank: 1,
       position_pool: 79,
     },
+    next_fixtures: [
+      { team: 'Sunderland', home: true, difficulty: 2, kickoff_time: null, gameweek: 7 },
+      { team: 'Liverpool', home: false, difficulty: 4, kickoff_time: null, gameweek: 8 },
+      { team: 'Newcastle', home: true, difficulty: 3, kickoff_time: null, gameweek: 9 },
+      { team: 'Man City', home: false, difficulty: 5, kickoff_time: null, gameweek: 10 },
+      { team: 'Fulham', home: true, difficulty: 2, kickoff_time: null, gameweek: 11 },
+    ],
+    trend: {
+      season: '2026-27',
+      points: [
+        { gameweek: 1, price: 9.0, selected: 1_200_000 },
+        { gameweek: 2, price: 9.0, selected: 1_450_000 },
+        { gameweek: 3, price: 9.1, selected: 1_900_000 },
+        { gameweek: 4, price: 9.2, selected: 2_300_000 },
+        { gameweek: 5, price: 9.3, selected: 2_250_000 },
+        { gameweek: 6, price: 9.5, selected: 2_800_000 },
+      ],
+      price_change: 0.5,
+      selected_change: 1_600_000,
+    },
+    underlying: {
+      season: '2026-27',
+      minutes: 450,
+      xg: 3.8,
+      xa: 0.9,
+      xgi: 4.7,
+      goals: 6,
+      assists: 1,
+      xg_per90: 0.76,
+      xa_per90: 0.18,
+      xgi_per90: 0.94,
+      xgc: 6.1,
+      goals_conceded: 5,
+    },
     highlights: [
       { label: 'Scoring streak', value: '3 games', detail: 'Scored in each of the last 3 appearances', tone: 'accent', icon: 'flame' },
       { label: 'FWD rank', value: '#1', detail: 'By points among 50 forwards, 2026-27 so far', tone: 'accent', icon: 'medal' },
@@ -97,6 +131,18 @@ export const SAMPLE_CARDS: AnswerCard[] = [
     predictions: [
       { gameweek: 7, points: 7.9, opponents: [{ team: 'Sunderland', home: true, difficulty: 2, kickoff_time: null, gameweek: 7 }], rank: 2, pool: 667, position_rank: 1, position_pool: 79 },
       { gameweek: 7, points: 5.2, opponents: [{ team: 'Man City', home: false, difficulty: 5, kickoff_time: null, gameweek: 7 }], rank: 9, pool: 667, position_rank: 4, position_pool: 298 },
+    ],
+    next_fixtures: [
+      [
+        { team: 'Sunderland', home: true, difficulty: 2, kickoff_time: null, gameweek: 7 },
+        { team: 'Liverpool', home: false, difficulty: 4, kickoff_time: null, gameweek: 8 },
+        { team: 'Newcastle', home: true, difficulty: 3, kickoff_time: null, gameweek: 9 },
+      ],
+      [
+        { team: 'Man City', home: false, difficulty: 5, kickoff_time: null, gameweek: 7 },
+        { team: 'Arsenal', home: true, difficulty: 4, kickoff_time: null, gameweek: 8 },
+        { team: 'Everton', home: false, difficulty: 2, kickoff_time: null, gameweek: 9 },
+      ],
     ],
     form: [strikerForm.slice(-5), [match(2, 'Leeds', true, 6, 0, 1), match(3, 'Spurs', false, 3), match(4, 'Fulham', true, 10, 1, 1), match(5, 'Everton', false, 2), match(6, 'Brentford', true, 8, 1)]],
     highlights: [

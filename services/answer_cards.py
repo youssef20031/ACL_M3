@@ -42,6 +42,8 @@ GROUP_ROWS = 5           # per position when the ranking is grouped by position
 PREDICTION_ROWS = 5
 TEAM_PLAYERS = 3
 TEAM_FIXTURES = 5
+NEXT_FIXTURES = 5        # a player card's fixture-difficulty strip
+COMPARE_FIXTURES = 3
 TEAM_FORM = 5
 MATCH_ROWS = 8
 HAUL_POINTS = 10         # a "double-digit haul"
@@ -225,15 +227,72 @@ def match_rows(raw: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "assists": _int(r.get("assists")) or 0,
             "clean_sheets": _int(r.get("clean_sheets")) or 0,
             "bonus": _int(r.get("bonus")) or 0,
+            "goals_conceded": _int(r.get("goals_conceded")) or 0,
             "opponent": opponent,
             "home": home,
             "team_score": team_score,
             "opponent_score": opponent_score,
             "result": result,
+            # Price in tenths of £m and ownership (managers) at the time; expected stats exist
+            # only in newer seasons (None before)
+            "value": _float(r.get("value")),
+            "selected": _int(r.get("selected")),
+            "xg": _float(r.get("xg")),
+            "xa": _float(r.get("xa")),
+            "xgi": _float(r.get("xgi")),
+            "xgc": _float(r.get("xgc")),
         })
     out.sort(key=lambda m: (m["season"] or "", m["gameweek"] or 0,
                             m["kickoff"].timestamp() if m["kickoff"] else 0))
     return out
+
+
+def price_trend(matches: Iterable[Dict[str, Any]], season: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Price (£m) and ownership per gameweek of one season, from the player's match rows
+    (a double gameweek counts once, at its last match). None with fewer than 2 gameweeks."""
+    by_gameweek: Dict[int, Dict[str, Any]] = {}
+    for m in matches:
+        if m["season"] == season and m["gameweek"] is not None and m["value"] is not None:
+            by_gameweek[m["gameweek"]] = m
+    if not season or len(by_gameweek) < 2:
+        return None
+    points = [{"gameweek": gw, "price": round(m["value"] / 10.0, 1), "selected": m["selected"]}
+              for gw, m in sorted(by_gameweek.items())]
+    first, last = points[0], points[-1]
+    owned = first["selected"] is not None and last["selected"] is not None
+    return {
+        "season": season,
+        "points": points,
+        "price_change": round(last["price"] - first["price"], 1),
+        "selected_change": last["selected"] - first["selected"] if owned else None,
+    }
+
+
+def underlying_stats(matches: Iterable[Dict[str, Any]], season: Optional[str]) -> Optional[Dict[str, Any]]:
+    """Expected goals (xG), assists (xA) and involvements (xGI) over one season, next to the
+    real goals and assists, with per-90 rates. None when that season has no expected stats
+    (FPL publishes them for recent seasons only)."""
+    rows = [m for m in matches if m["season"] == season]
+    if not season or not any(m["xg"] is not None or m["xa"] is not None for m in rows):
+        return None
+    minutes = sum(m["minutes"] for m in rows)
+    xg = sum(m["xg"] or 0.0 for m in rows)
+    xa = sum(m["xa"] or 0.0 for m in rows)
+    xgi = sum(m["xgi"] if m["xgi"] is not None else (m["xg"] or 0.0) + (m["xa"] or 0.0) for m in rows)
+    played = [m for m in rows if m["minutes"] > 0]
+
+    def per90(total: float) -> Optional[float]:
+        return round(total * 90 / minutes, 2) if minutes >= 90 else None
+
+    return {
+        "season": season,
+        "minutes": minutes,
+        "xg": round(xg, 2), "xa": round(xa, 2), "xgi": round(xgi, 2),
+        "goals": sum(m["goals"] for m in rows), "assists": sum(m["assists"] for m in rows),
+        "xg_per90": per90(xg), "xa_per90": per90(xa), "xgi_per90": per90(xgi),
+        "xgc": round(sum(m["xgc"] or 0.0 for m in played), 2),
+        "goals_conceded": sum(m["goals_conceded"] for m in played),
+    }
 
 
 def form_point(match: Dict[str, Any]) -> Dict[str, Any]:
@@ -416,9 +475,11 @@ def prediction_for(df: Any, name: str, fixtures: List[Dict[str, Any]]) -> Option
 def player_highlights(*, name: str, position: Optional[str], seasons: List[Dict[str, Any]],
                       matches: List[Dict[str, Any]], scope: Optional[str],
                       rank: Optional[Tuple[int, int]], rank_season: Optional[str],
-                      totals: Dict[str, float], current: str = CURRENT_SEASON) -> List[Dict[str, Any]]:
+                      totals: Dict[str, float], current: str = CURRENT_SEASON,
+                      underlying: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Notable stats for a player card, most interesting first: streaks, position rank,
-    biggest haul, best season, recent form, double-digit hauls, minutes share."""
+    biggest haul, finishing against xG, best season, recent form, double-digit hauls,
+    minutes share."""
     out: List[Dict[str, Any]] = []
     scope_matches = [m for m in matches if scope is None or m["season"] == scope]
     apps = [m for m in scope_matches if m["minutes"] > 0]
@@ -456,6 +517,15 @@ def player_highlights(*, name: str, position: Optional[str], seasons: List[Dict[
             out.append(highlight("Biggest haul", f"{best['points']} pts",
                                  f"{opponent}GW {best['gameweek']} {best['season']}",
                                  "accent" if best["points"] >= 15 else "info", "trophy"))
+
+    if underlying and underlying["minutes"] >= 270:
+        diff = underlying["goals"] - underlying["xg"]
+        if abs(diff) >= 1.5:
+            above = diff > 0
+            out.append(highlight("Finishing", f"{'+' if above else '-'}{abs(diff):.1f} v xG",
+                                 f"{_plural(underlying['goals'], 'goal')} from {underlying['xg']:.1f} expected, "
+                                 f"{season_label(underlying['season'], current)}",
+                                 "accent" if above else "warning", "target"))
 
     if scope is None and len(seasons) >= 2:
         top = max(seasons, key=lambda r: _float(r.get("total_points")) or 0.0)
@@ -801,8 +871,10 @@ OPTIONAL MATCH (f)-[:AWAY_TEAM]->(a:Team)
 RETURN p.name AS name, coalesce(r.season, f.season_id) AS season, coalesce(r.gameweek, f.gameweek) AS gameweek,
        f.kickoff_time AS kickoff_time, r.total_points AS points, r.minutes AS minutes,
        r.goals_scored AS goals, r.assists AS assists, r.clean_sheets AS clean_sheets, r.bonus AS bonus,
-       r.team AS team, r.was_home AS was_home, h.name AS home_team, a.name AS away_team,
-       f.home_score AS home_score, f.away_score AS away_score
+       r.goals_conceded AS goals_conceded, r.team AS team, r.was_home AS was_home,
+       h.name AS home_team, a.name AS away_team, f.home_score AS home_score, f.away_score AS away_score,
+       r.value AS value, r.selected AS selected, r.expected_goals AS xg, r.expected_assists AS xa,
+       r.expected_goal_involvements AS xgi, r.expected_goals_conceded AS xgc
 """
 
 # Everyone who played in the player's position that season (the position they had then)
@@ -922,7 +994,8 @@ def _follow(question: str, intent: str) -> Tuple[str, str]:
 def player_card(data: PlayerData, *, season: Optional[str], gameweek: Optional[int],
                 pool: List[Dict[str, Any]], pool_season: Optional[str],
                 prediction: Optional[Dict[str, Any]], photo: Optional[str], emphasis: str,
-                current: str = CURRENT_SEASON, short: Callable[[str], str] = short_name) -> Dict[str, Any]:
+                current: str = CURRENT_SEASON, short: Callable[[str], str] = short_name,
+                fixtures: Sequence[Dict[str, Any]] = ()) -> Dict[str, Any]:
     rows = data.scope_rows(season)
     totals = season_totals(rows)
     position = data.position or (ss.normalize_position(_clean(rows[-1].get("position"))) if rows else None)
@@ -931,6 +1004,10 @@ def player_card(data: PlayerData, *, season: Optional[str], gameweek: Optional[i
     match = next((m for m in scope_matches if m["gameweek"] == gameweek), None) if gameweek else None
     rank = position_rank(pool, data.name)
     info = data.info
+    # Price, ownership and expected stats are per season: the one asked about, else the latest
+    focus = season or (data.seasons[-1]["season"] if data.seasons else None)
+    underlying = underlying_stats(data.matches, focus)
+    current_team = _clean(info.get("current_team"))
 
     follow_ups = []
     if prediction and emphasis != "prediction":
@@ -965,9 +1042,14 @@ def player_card(data: PlayerData, *, season: Optional[str], gameweek: Optional[i
         "form": [form_point(m) for m in scope_matches[-FORM_LENGTH:]],
         "match": form_point(match) if match else None,
         "prediction": prediction,
+        # The club's next five matches, with FPL difficulty (current players only)
+        "next_fixtures": upcoming_fixtures(fixtures, current_team, NEXT_FIXTURES) if current_team else [],
+        "trend": price_trend(data.matches, focus),
+        "underlying": underlying,
         "highlights": player_highlights(name=data.name, position=position, seasons=data.seasons,
                                         matches=data.matches, scope=season, rank=rank,
-                                        rank_season=pool_season, totals=totals, current=current),
+                                        rank_season=pool_season, totals=totals, current=current,
+                                        underlying=underlying),
         "_follow_ups": follow_ups,
     }
 
@@ -988,15 +1070,11 @@ async def build_player_card(ctx: CardContext, name: str, season: Optional[str] =
             return []
         return await ctx.query(POSITION_POOL_QUERY, {"name": name, "season": pool_season})
 
-    pool_rows, fixtures = await asyncio.gather(pool(), ctx.fixtures() if ctx.predictions is not None else _none())
+    pool_rows, fixtures = await asyncio.gather(pool(), ctx.fixtures())
     return player_card(data, season=season, gameweek=gameweek, pool=pool_rows, pool_season=pool_season,
-                       prediction=prediction_for(ctx.predictions, name, fixtures or []),
+                       prediction=prediction_for(ctx.predictions, name, fixtures),
                        photo=ctx.photo(name, data.team, _int(data.info.get("fpl_code"))),
-                       emphasis=emphasis, current=ctx.current_season, short=ctx.short)
-
-
-async def _none() -> List[Dict[str, Any]]:
-    return []
+                       emphasis=emphasis, current=ctx.current_season, short=ctx.short, fixtures=fixtures)
 
 
 # ------------------------------------------------------------------ comparison card
@@ -1024,26 +1102,37 @@ def _metric_value(totals: Optional[Dict[str, float]], key: str) -> Optional[floa
     return _num(totals.get(key))
 
 
-def comparison_metrics(totals: Sequence[Optional[Dict[str, float]]], positions: Sequence[Optional[str]]) -> List[Dict[str, Any]]:
+EXPECTED_METRICS = (("xg", "xG"), ("xa", "xA"))
+
+
+def _metric_row(key: str, label: str, fmt: str, values: List[Optional[float]], scored: bool) -> Dict[str, Any]:
+    better = None
+    if scored and None not in values and values[0] != values[1]:
+        better = 0 if values[0] > values[1] else 1
+    return {"key": key, "label": label, "format": fmt, "values": values, "better": better, "scored": scored}
+
+
+def comparison_metrics(totals: Sequence[Optional[Dict[str, float]]], positions: Sequence[Optional[str]],
+                       underlying: Sequence[Optional[Dict[str, Any]]] = ()) -> List[Dict[str, Any]]:
+    """Stat rows for two players. xG and xA follow assists when both players have expected
+    stats for the season compared (single-season comparisons only)."""
     rows = []
     for key, label, fmt, scored in COMPARE_METRICS:
-        if key == "clean_sheets" and not {"GK", "DEF", "MID"} & set(p for p in positions if p):
-            continue
         values = [_metric_value(t, key) for t in totals]
-        if all(v is None for v in values):
-            continue
-        better = None
-        if scored and None not in values and values[0] != values[1]:
-            better = 0 if values[0] > values[1] else 1
-        rows.append({"key": key, "label": label, "format": fmt, "values": values, "better": better, "scored": scored})
+        skip = key == "clean_sheets" and not {"GK", "DEF", "MID"} & set(p for p in positions if p)
+        if not skip and any(v is not None for v in values):
+            rows.append(_metric_row(key, label, fmt, values, scored))
+        if key == "assists" and len(underlying) == 2 and all(underlying):
+            rows += [_metric_row(k, lab, "dec1", [u[k] for u in underlying], True) for k, lab in EXPECTED_METRICS]
     return rows
 
 
 def comparison_card(players: Sequence[PlayerData], *, season: Optional[str],
                     predictions: Sequence[Optional[Dict[str, Any]]], photos: Sequence[Optional[str]],
                     emphasis: str, current: str = CURRENT_SEASON,
-                    short: Callable[[str], str] = short_name) -> Dict[str, Any]:
-    totals, refs, forms = [], [], []
+                    short: Callable[[str], str] = short_name,
+                    fixtures: Sequence[Dict[str, Any]] = ()) -> Dict[str, Any]:
+    totals, refs, forms, underlying, upcoming = [], [], [], [], []
     for data, photo in zip(players, photos):
         rows = data.scope_rows(season)
         totals.append(season_totals(rows) if rows else None)
@@ -1053,12 +1142,15 @@ def comparison_card(players: Sequence[PlayerData], *, season: Optional[str],
                                data.info.get("chance"), data.info.get("news")))
         scope_matches = [m for m in data.matches if season is None or m["season"] == season]
         forms.append(scope_matches[-COMPARE_FORM_LENGTH:])
-    metrics = comparison_metrics(totals, [r["position"] for r in refs])
+        underlying.append(underlying_stats(data.matches, season) if season else None)
+        current_team = _clean(data.info.get("current_team"))
+        upcoming.append(upcoming_fixtures(fixtures, current_team, COMPARE_FIXTURES) if current_team else [])
+    metrics = comparison_metrics(totals, [r["position"] for r in refs], underlying)
     names = [d.name for d in players]
     phrase = season_phrase(season, current)
     follow_ups = [_follow(f"{name} stats {phrase}".strip(), "player_stats") for name in names]
-    earlier = sorted({r["season"] for d in players for r in d.seasons} - {season or current})
-    if earlier and season:
+    earlier = sorted({r["season"] for d in players for r in d.seasons if season and r["season"] < season})
+    if earlier:
         follow_ups.append(_follow(f"Compare {names[0]} and {names[1]} in {earlier[-1]}", "player_comparison"))
     return {
         "type": "comparison",
@@ -1070,6 +1162,7 @@ def comparison_card(players: Sequence[PlayerData], *, season: Optional[str],
         "metrics": metrics,
         "leads": [sum(1 for m in metrics if m["better"] == side) for side in (0, 1)],
         "predictions": list(predictions),
+        "next_fixtures": upcoming,
         "form": [[form_point(m) for m in form] for form in forms],
         "highlights": comparison_highlights(names, metrics, predictions, forms, short),
         "_follow_ups": follow_ups,
@@ -1086,11 +1179,12 @@ async def build_comparison_card(ctx: CardContext, names: List[str], season: Opti
         return None
     if season and not any(d.scope_rows(season) for d in found):
         season = None
-    fixtures = await ctx.fixtures() if ctx.predictions is not None else []
+    fixtures = await ctx.fixtures()
     return comparison_card(
         found, season=season, emphasis=emphasis, current=ctx.current_season, short=ctx.short,
         predictions=[prediction_for(ctx.predictions, d.name, fixtures) for d in found],
         photos=[ctx.photo(d.name, d.team, _int(d.info.get("fpl_code"))) for d in found],
+        fixtures=fixtures,
     )
 
 

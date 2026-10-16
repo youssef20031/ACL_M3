@@ -7,7 +7,18 @@ import type {
 } from '../../../services/api';
 import { Chip, PlayerAvatar } from '../../ui';
 import { cn } from '../../../utils/cn';
-import { CardFrame, CardLink, FormBars, Highlights, OpponentChip, PlayerMeta, Section, formatValue, useCardPhotos } from './shared';
+import {
+  CardFrame,
+  CardLink,
+  FixtureStrip,
+  FormBars,
+  Highlights,
+  OpponentChip,
+  PlayerMeta,
+  Section,
+  formatValue,
+  useCardPhotos,
+} from './shared';
 
 type Side = 0 | 1;
 
@@ -101,6 +112,7 @@ export function ComparisonAnswerCard({ card }: { card: ComparisonCardData }) {
   const names: [string, string] = [a.name, b.name];
   const [pa, pb] = card.predictions;
   const predictionLead = pa && pb && pa.points !== pb.points ? (pa.points > pb.points ? 0 : 1) : null;
+  const nextFixtures = card.next_fixtures ?? [[], []];
   const scored = card.metrics.filter((m) => m.scored).length;
   const predictionsSection = (pa || pb) && (
     <Section
@@ -155,6 +167,25 @@ export function ComparisonAnswerCard({ card }: { card: ComparisonCardData }) {
       </Section>
 
       {card.emphasis !== 'prediction' && predictionsSection}
+
+      {nextFixtures.some((side) => side.length > 0) && (
+        <Section
+          title="Next fixtures"
+          aside={nextFixtures.some((side) => side.some((f) => f.difficulty != null)) ? 'Colour = FPL difficulty' : undefined}
+        >
+          <div className="grid grid-cols-2 gap-3">
+            {nextFixtures.map((fixtures, side) => (
+              <div key={side} className={cn('min-w-0', side === 1 && 'flex justify-end')}>
+                {fixtures.length ? (
+                  <FixtureStrip fixtures={fixtures} className={cn(side === 1 && 'justify-end')} />
+                ) : (
+                  <p className="text-data text-fg-subtle">No fixtures</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {(card.form[0].length > 0 || card.form[1].length > 0) && (
         <Section title="Recent form" aside="Points per match">

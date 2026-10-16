@@ -274,6 +274,76 @@ export function OpponentChip({ opponent, className }: { opponent: CardOpponent; 
   );
 }
 
+/** Upcoming matches as difficulty chips, each labelled with its gameweek. */
+export function FixtureStrip({ fixtures, className }: { fixtures: CardOpponent[]; className?: string }) {
+  if (!fixtures.length) return null;
+  return (
+    <ol className={cn('flex flex-wrap gap-2', className)}>
+      {fixtures.map((f, i) => (
+        <li key={`${f.team}-${f.gameweek}-${i}`} className="flex flex-col items-start gap-0.5">
+          <span className="text-micro text-fg-subtle">{f.gameweek ? `GW ${f.gameweek}` : formatKickoff(f.kickoff_time) ?? 'TBC'}</span>
+          <OpponentChip opponent={f} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+interface TrendLineProps {
+  values: number[];
+  /** One description per value: hover title and screen-reader text. */
+  labels: string[];
+  caption: string;
+  height?: number;
+  className?: string;
+}
+
+/**
+ * Single-series sparkline: a 2px line over a 10% wash with an end dot (drawn as HTML so it
+ * stays round when the SVG stretches). Each point has a hover title; the caption lists all.
+ */
+export function TrendLine({ values, labels, caption, height = 40, className }: TrendLineProps) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  const x = (i: number) => (i / (values.length - 1)) * 100;
+  // 10% headroom top and bottom; a flat series sits in the middle
+  const y = (v: number) => (span === 0 ? 50 : 90 - ((v - min) / span) * 80);
+  const line = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+  const last = values.length - 1;
+  return (
+    <figure className={cn('min-w-0', className)}>
+      <figcaption className="sr-only">
+        {caption}: {labels.join('; ')}.
+      </figcaption>
+      <div aria-hidden="true" className="relative" style={{ height }}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
+          <polygon points={`0,100 ${line} 100,100`} fill="rgb(var(--accent) / 0.1)" />
+          <polyline
+            points={line}
+            fill="none"
+            stroke="rgb(var(--accent))"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <span
+          className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent ring-2 ring-surface"
+          style={{ left: `${x(last)}%`, top: `${y(values[last])}%` }}
+        />
+        <div className="absolute inset-0 flex">
+          {labels.map((label, i) => (
+            <span key={i} title={label} className="h-full flex-1" />
+          ))}
+        </div>
+      </div>
+    </figure>
+  );
+}
+
 /** Crest, club, position and availability under a player's name. */
 export function PlayerMeta({ player, showTeamName = false, className }: { player: CardPlayer; showTeamName?: boolean; className?: string }) {
   return (

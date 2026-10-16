@@ -137,6 +137,31 @@ export interface CardMatch {
   result: MatchResult | null;
 }
 
+/** Price (£m) and ownership (managers) by gameweek over one season. */
+export interface CardTrend {
+  season: string;
+  points: Array<{ gameweek: number; price: number; selected: number | null }>;
+  price_change: number;
+  selected_change: number | null;
+}
+
+/** Expected goals/assists over one season (FPL publishes them for recent seasons only). */
+export interface CardUnderlying {
+  season: string;
+  minutes: number;
+  xg: number;
+  xa: number;
+  xgi: number;
+  goals: number;
+  assists: number;
+  xg_per90: number | null;
+  xa_per90: number | null;
+  xgi_per90: number | null;
+  /** Expected goals conceded while on the pitch, next to the goals actually conceded. */
+  xgc: number;
+  goals_conceded: number;
+}
+
 export interface PlayerAnswerCard {
   type: 'player';
   id: string;
@@ -153,6 +178,11 @@ export interface PlayerAnswerCard {
   /** The gameweek the question asked about. */
   match: CardMatch | null;
   prediction: CardPrediction | null;
+  /** The club's next matches with FPL difficulty (current players). */
+  next_fixtures?: CardOpponent[];
+  /** For the season asked about, else the player's latest season. */
+  trend?: CardTrend | null;
+  underlying?: CardUnderlying | null;
   highlights: CardHighlight[];
 }
 
@@ -177,6 +207,8 @@ export interface ComparisonAnswerCard {
   /** How many scored metrics each player leads. */
   leads: [number, number];
   predictions: [CardPrediction | null, CardPrediction | null];
+  /** Each player's next three matches (current players). */
+  next_fixtures?: [CardOpponent[], CardOpponent[]];
   form: [CardMatch[], CardMatch[]];
   highlights: CardHighlight[];
 }
