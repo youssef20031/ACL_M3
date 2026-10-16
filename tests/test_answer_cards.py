@@ -431,10 +431,24 @@ def test_follow_ups_drop_misrouted_repeated_and_asked_questions():
     assert out == ["Erling Haaland stats"]
 
 
-def test_only_teams_the_extractor_knows_get_follow_ups():
+def test_only_teams_the_extractor_knows_get_follow_ups(monkeypatch):
+    from preprocessing.entity_extractor import EntityExtractor
+    monkeypatch.delattr(EntityExtractor, "find_teams", raising=False)  # the substring scan
+    monkeypatch.setattr(EntityExtractor, "TEAMS", {
+        "arsenal": "Arsenal", "man city": "Man City", "city": "Man City",
+        "nott'm forest": "Nott'm Forest", "forest": "Nott'm Forest",
+    })
     assert ac.askable_team("Arsenal") and ac.askable_team("Man City") and ac.askable_team("Nott'm Forest")
     assert not ac.askable_team("Ipswich")          # not in the extractor's list
     assert not ac.askable_team("Coventry City")    # "city" would be read as Man City
+
+
+def test_askable_team_uses_whole_word_matching_when_the_extractor_has_it(monkeypatch):
+    from preprocessing.entity_extractor import EntityExtractor
+    found = {"Coventry City": ["Coventry City"], "Leeds": ["Leeds"], "Ipswich": []}
+    monkeypatch.setattr(EntityExtractor, "find_teams", classmethod(lambda cls, text: found[text]), raising=False)
+    assert ac.askable_team("Coventry City") and ac.askable_team("Leeds")
+    assert not ac.askable_team("Ipswich")
 
 
 # ------------------------------------------------------------------ build_cards (fake Neo4j)

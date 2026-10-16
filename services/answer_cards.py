@@ -1634,9 +1634,14 @@ def _intent_of(question: str) -> Optional[str]:
 
 
 def askable_team(team: str) -> bool:
-    """The entity extractor finds exactly this team in its name (promoted clubs aren't in
-    its list yet, and "Coventry City" would read as Man City), so a follow-up resolves to it."""
+    """The entity extractor finds exactly this team in its name, so a follow-up resolves to it.
+
+    Uses the extractor's whole-word matching (`find_teams`) where it has it; the older substring
+    scan can't tell "Coventry City" from Man City, so such teams get no follow-ups there."""
     from preprocessing.entity_extractor import EntityExtractor
+    find_teams = getattr(EntityExtractor, "find_teams", None)
+    if find_teams is not None:
+        return find_teams(team) == [team]
     lowered = team.lower()
     return {name for key, name in EntityExtractor.TEAMS.items() if key in lowered} == {team}
 
