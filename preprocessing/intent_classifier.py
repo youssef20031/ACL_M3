@@ -34,7 +34,10 @@ class Intent(Enum):
     
     # ML Predictions
     PREDICTION = "prediction"
-    
+
+    # Best XI: the predicted squad for the next gameweek, or a finished gameweek's dream team
+    TEAM_OF_THE_WEEK = "team_of_the_week"
+
     # Trivia
     TRIVIA = "trivia"
     
@@ -69,6 +72,20 @@ class IntentClassifier:
     def _build_patterns(self) -> Dict[Intent, List[str]]:
         """Build regex patterns for each intent."""
         return {
+            # First, so it wins ties: "best team for next gameweek" also matches PREDICTION's
+            # "next gameweek", and "what was the dream team" GENERAL_QUESTION
+            Intent.TEAM_OF_THE_WEEK: [
+                r"team of the (?:week|gameweek|gw)",
+                r"\btotw\b",
+                r"dream ?team",
+                r"best (?:starting )?(?:xi|11|eleven|line-?up)\b",
+                r"best (?:possible |fpl )?squad\b",
+                r"best (?:possible |fpl )?team (?:for |this |in )?(?:the )?(?:next |this |coming )?(?:gw|gameweek|week)",
+                r"(?:optimal|ideal|perfect) (?:fpl )?(?:team|squad|xi|line-?up)\b",
+                r"\b(?:pick|build|choose|make|give)(?: me)? (?:a |an |my |the )?(?:best )?(?:fpl )?(?:team|squad|xi|line-?up)\b",
+                r"wildcard (?:team|squad|draft)",
+            ],
+
             Intent.PLAYER_STATS: [
                 r"(?:stats?|statistics?|performance|how did|how was)\s+(?:for\s+)?(\w+(?:\s+\w+)?)",
                 r"(\w+(?:\s+\w+)?)\s+(?:stats?|statistics?|performance)",
@@ -380,6 +397,7 @@ class IntentClassifier:
             Intent.RECOMMENDATION: "get_best_value_players",  # Default recommendation strategy
             Intent.TRIVIA: "get_highest_single_gameweek_score", # Default trivia
             Intent.PREDICTION: None,  # ML predictions handled separately in api_main.py, not via Cypher
+            Intent.TEAM_OF_THE_WEEK: None,  # services/season_service.get_team_of_the_week, in api_main.py
         }
         
         return intent_to_query.get(intent, "")
@@ -403,6 +421,7 @@ class IntentClassifier:
             Intent.TRANSFERS: "Find most transferred players",
             Intent.MOST_SELECTED: "Find most selected players",
             Intent.PREDICTION: "Get ML model predictions for future gameweeks",
+            Intent.TEAM_OF_THE_WEEK: "Pick the best XI: predicted for the next gameweek, or a past gameweek's dream team",
             Intent.TRIVIA: "Play FPL trivia",
             Intent.RECOMMENDATION: "Get player recommendations",
             Intent.SEASON_SUMMARY: "Get season overview and statistics",

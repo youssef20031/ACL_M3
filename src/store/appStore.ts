@@ -1,13 +1,58 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { AnswerCard } from '../services/api';
 
 export interface Message {
+  /** Set on answers that are updated while they stream in. */
+  id?: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** Visual blocks returned with an assistant answer (not sent back as chat history). */
+  cards?: AnswerCard[];
+  followUps?: string[];
+  /** The answer is still arriving. */
+  streaming?: boolean;
 }
 
 export type ThemeMode = 'light' | 'dark';
+
+// The conversation (with its cards) survives a reload of the tab: it's kept in session storage,
+// which the browser clears when the tab closes. Settings below persist in local storage instead.
+const CHAT_KEY = 'pm-chat';
+const CHAT_VERSION = 1;
+const CHAT_LIMIT = 40; // messages kept
+
+function isMessage(value: unknown): value is Message {
+  const m = value as Message | null;
+  return (
+    !!m &&
+    (m.role === 'user' || m.role === 'assistant') &&
+    typeof m.content === 'string' &&
+    typeof m.timestamp === 'number' &&
+    !m.streaming
+  );
+}
+
+function loadChat(): Message[] {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(CHAT_KEY) ?? 'null');
+    return saved?.version === CHAT_VERSION && Array.isArray(saved.messages) ? saved.messages.filter(isMessage) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveChat(messages: Message[]) {
+  // Finished exchanges only: a question still waiting for its answer would come back unanswered
+  let end = messages.length;
+  while (end > 0 && (messages[end - 1].streaming || messages[end - 1].role === 'user')) end -= 1;
+  try {
+    sessionStorage.setItem(CHAT_KEY, JSON.stringify({ version: CHAT_VERSION, messages: messages.slice(0, end).slice(-CHAT_LIMIT) }));
+  } catch {
+    // Storage full or blocked: the chat just won't survive a reload
+  }
+}
 
 export interface AppState {
   // Connection
@@ -34,6 +79,7 @@ export interface AppState {
   // Chat
   chatHistory: Message[];
   addMessage: (message: Message) => void;
+  updateMessage: (id: string, patch: Partial<Message>) => void;
   clearChat: () => void;
 
   // Settings
@@ -78,11 +124,15 @@ export const useAppStore = create<AppState>()(
       setMlAvailable: (available) => set({ mlAvailable: available }),
       setMlModelType: (modelType) => set({ mlModelType: modelType }),
 
-      // Chat
-      chatHistory: [],
+      // Chat (session storage, see saveChat; not part of the persisted settings)
+      chatHistory: loadChat(),
       addMessage: (message) =>
         set((state) => ({
           chatHistory: [...state.chatHistory, message],
+        })),
+      updateMessage: (id, patch) =>
+        set((state) => ({
+          chatHistory: state.chatHistory.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         })),
       clearChat: () => set({ chatHistory: [] }),
 
@@ -148,3 +198,10 @@ export const useAppStore = create<AppState>()(
     }
   )
 );
+// Save the conversation whenever it changes, except while an answer streams in (the unfinished
+// exchange isn't saved anyway, and this would otherwise serialise the chat on every frame).
+useAppStore.subscribe((state, previous) => {
+  if (state.chatHistory !== previous.chatHistory && !state.chatHistory.some((m) => m.streaming)) {
+    saveChat(state.chatHistory);
+  }
+});
