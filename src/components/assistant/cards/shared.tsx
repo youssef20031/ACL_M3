@@ -15,6 +15,7 @@ import {
   TrendingDown,
   TrendingUp,
   Trophy,
+  UserRound,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -151,6 +152,75 @@ export function playerProfileState(player: CardPlayer, season: string | null) {
     season: season ?? 'All seasons',
     returnTo: 'history' as const,
   };
+}
+
+/** The question a tapped player sends: their stats in the card's season (all seasons when null). */
+export function playerQuestion(name: string, season: string | null): string {
+  return season ? `${name} stats in ${season}` : `${name} stats`;
+}
+
+/** The question a tapped player on a prediction card sends. */
+export function predictionQuestion(name: string): string {
+  return `Predicted points for ${name} next gameweek`;
+}
+
+interface PlayerActionProps {
+  player: CardPlayer;
+  /** Season of the profile link and of the default question; null = all seasons. */
+  season: string | null;
+  /** The question to ask instead of the player's stats. */
+  question?: string;
+  /** 'row': the profile icon sits after the content; 'stack': in a top corner, for narrow columns. */
+  layout?: 'row' | 'stack';
+  /** Corner of the profile icon in the stack layout. */
+  iconSide?: 'left' | 'right';
+  /** Classes for the tappable area (its layout). */
+  className?: string;
+  children: ReactNode;
+}
+
+/**
+ * A player on a card. In the chat, tapping asks the assistant about them and a small icon opens
+ * their profile; where there is no one to ask (/design) the whole thing links to the profile.
+ */
+export function PlayerAction({ player, season, question, layout = 'row', iconSide = 'right', className, children }: PlayerActionProps) {
+  const { ask, disabled } = useAsk();
+  const profile = playerProfileState(player, season);
+  if (!ask) {
+    return (
+      <Link to="/players" state={profile} className={cn('group', className)}>
+        {children}
+      </Link>
+    );
+  }
+  const q = question ?? playerQuestion(player.name, season);
+  const stack = layout === 'stack';
+  return (
+    <div className={cn('min-w-0', stack ? 'relative' : 'flex items-center gap-1')}>
+      <button
+        type="button"
+        onClick={() => ask(q)}
+        disabled={disabled}
+        title={`Ask: ${q}`}
+        className={cn('group min-w-0 text-left disabled:cursor-not-allowed', stack ? 'w-full' : 'flex-1', className)}
+      >
+        <span className="sr-only">Ask about </span>
+        {children}
+      </button>
+      <Link
+        to="/players"
+        state={profile}
+        aria-label={`Open ${player.name}'s profile`}
+        title="Open profile"
+        className={cn(
+          'inline-flex shrink-0 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-surface-2 hover:text-accent',
+          stack ? cn('absolute top-0 h-6 w-6', iconSide === 'right' ? 'right-0' : 'left-0') : 'h-8 w-8',
+        )}
+      >
+        <UserRound className={stack ? 'h-3.5 w-3.5' : 'h-4 w-4'} aria-hidden="true" />
+      </Link>
+    </div>
+  );
 }
 
 export function CardLink({ to, state, children, label }: { to: string; state?: unknown; children: ReactNode; label?: string }) {

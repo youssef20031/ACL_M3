@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import type { CardPlayer, PredictionAnswerCard as PredictionCardData, PredictionRow } from '../../../services/api';
 import { Chip, ClubCrest, PlayerAvatar } from '../../ui';
 import { cn } from '../../../utils/cn';
@@ -7,10 +6,11 @@ import {
   CardLink,
   Highlights,
   OpponentChip,
+  PlayerAction,
   PlayerMeta,
   Section,
   ValueBar,
-  playerProfileState,
+  predictionQuestion,
   useCardPhotos,
 } from './shared';
 
@@ -64,13 +64,11 @@ function TopPick({ card, row, photo }: { card: PredictionCardData; row: Predicti
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-micro font-semibold uppercase text-accent">{card.captain ? 'Captain pick' : 'Top pick'}</p>
-          <Link
-            to="/players"
-            state={playerProfileState(row.player, null)}
-            className="block break-words font-display text-h3 font-bold leading-tight text-fg hover:underline sm:text-h2"
-          >
-            {row.player.name}
-          </Link>
+          <PlayerAction player={row.player} season={null} question={predictionQuestion(row.player.name)}>
+            <span className="block break-words font-display text-h3 font-bold leading-tight text-fg group-hover:underline sm:text-h2">
+              {row.player.name}
+            </span>
+          </PlayerAction>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <PlayerMeta player={row.player} />
             <Opponents row={row} />
@@ -88,10 +86,11 @@ function TopPick({ card, row, photo }: { card: PredictionCardData; row: Predicti
 function RowItem({ row, photo, max }: { row: PredictionRow; photo: string | null | undefined; max: number }) {
   return (
     <li>
-      <Link
-        to="/players"
-        state={playerProfileState(row.player, null)}
-        className="group grid grid-cols-[1.5rem_2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1.5 transition-colors hover:bg-surface-2 sm:gap-3"
+      <PlayerAction
+        player={row.player}
+        season={null}
+        question={predictionQuestion(row.player.name)}
+        className="grid grid-cols-[1.5rem_2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1.5 transition-colors hover:bg-surface-2 sm:gap-3"
       >
         <span className="text-center text-data font-semibold tabular-nums text-fg-subtle">
           <span className="sr-only">Rank </span>
@@ -113,7 +112,7 @@ function RowItem({ row, photo, max }: { row: PredictionRow; photo: string | null
           {row.price != null && <span className="text-micro text-fg-subtle">£{row.price.toFixed(1)}m</span>}
           <ValueBar value={row.points} max={max} className="mt-1" />
         </span>
-      </Link>
+      </PlayerAction>
     </li>
   );
 }

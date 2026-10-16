@@ -14,6 +14,7 @@ import {
   FormBars,
   Highlights,
   OpponentChip,
+  PlayerAction,
   PlayerMeta,
   Section,
   formatValue,
@@ -27,12 +28,22 @@ type Side = 0 | 1;
 const BAR = ['bg-accent', 'bg-accent-2'] as const;
 const BAR_DIM = ['bg-accent/40', 'bg-accent-2/40'] as const;
 
-function PlayerSide({ player, photo, side }: { player: CardPlayer; photo: string | null | undefined; side: Side }) {
+function PlayerSide({ player, photo, side, season }: { player: CardPlayer; photo: string | null | undefined; side: Side; season: string | null }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', side === 1 ? 'items-end text-right' : 'items-start')}>
       <span aria-hidden="true" className={cn('h-1 w-10 rounded-full', BAR[side])} />
-      <PlayerAvatar name={player.name} src={photo} size={56} loading="eager" className="ring-1 ring-line" />
-      <p className="w-full break-words font-display text-body font-bold leading-tight text-fg sm:text-h3">{player.name}</p>
+      <PlayerAction
+        player={player}
+        season={season}
+        layout="stack"
+        iconSide={side === 1 ? 'left' : 'right'}
+        className={cn('flex flex-col gap-1.5', side === 1 ? 'items-end text-right' : 'items-start')}
+      >
+        <PlayerAvatar name={player.name} src={photo} size={56} loading="eager" className="ring-1 ring-line" />
+        <span className="block w-full break-words font-display text-body font-bold leading-tight text-fg group-hover:underline sm:text-h3">
+          {player.name}
+        </span>
+      </PlayerAction>
       <PlayerMeta player={player} className={cn(side === 1 && 'justify-end')} />
     </div>
   );
@@ -136,11 +147,11 @@ export function ComparisonAnswerCard({ card }: { card: ComparisonCardData }) {
             {a.name} compared with {b.name}
           </h3>
           <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2">
-            <PlayerSide player={a} photo={photoOf(a)} side={0} />
+            <PlayerSide player={a} photo={photoOf(a)} side={0} season={card.season} />
             <span className="mt-8 rounded-full bg-brand px-2 py-1 text-micro font-bold text-fg-muted ring-1 ring-brand-2" aria-hidden="true">
               VS
             </span>
-            <PlayerSide player={b} photo={photoOf(b)} side={1} />
+            <PlayerSide player={b} photo={photoOf(b)} side={1} season={card.season} />
           </div>
           {scored > 0 && (
             <p className="mt-3 text-data text-fg-muted">

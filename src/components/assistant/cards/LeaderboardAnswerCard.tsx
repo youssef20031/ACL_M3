@@ -1,8 +1,7 @@
-import { Link } from 'react-router-dom';
 import type { CardPlayer, LeaderboardAnswerCard as LeaderboardCardData, LeaderboardRow } from '../../../services/api';
 import { Chip, PlayerAvatar, PositionBadge } from '../../ui';
 import { cn } from '../../../utils/cn';
-import { CardFrame, CardLink, Highlights, PlayerMeta, Section, ValueBar, formatValue, playerProfileState, useCardPhotos } from './shared';
+import { CardFrame, CardLink, Highlights, PlayerAction, PlayerMeta, Section, ValueBar, formatValue, useCardPhotos } from './shared';
 
 const GROUP_NAMES: Record<string, string> = { GK: 'Goalkeepers', DEF: 'Defenders', MID: 'Midfielders', FWD: 'Forwards' };
 
@@ -24,10 +23,11 @@ function Podium({ card, rows, photoOf, max }: { card: LeaderboardCardData; rows:
         const share = max > 0 && row.value != null ? Math.abs(row.value) / max : 0;
         return (
           <li key={row.player.name} className={cn('flex min-w-0 flex-1 flex-col items-center text-center', order[i])}>
-            <Link
-              to="/players"
-              state={playerProfileState(row.player, card.season)}
-              className="group flex w-full min-w-0 flex-col items-center rounded-md pb-2"
+            <PlayerAction
+              player={row.player}
+              season={card.season}
+              layout="stack"
+              className="flex w-full min-w-0 flex-col items-center rounded-md pb-2"
             >
               <span className="relative">
                 <PlayerAvatar
@@ -50,7 +50,7 @@ function Podium({ card, rows, photoOf, max }: { card: LeaderboardCardData; rows:
                 {row.player.name}
               </span>
               <PlayerMeta player={row.player} className="mt-1 justify-center" />
-            </Link>
+            </PlayerAction>
             <div
               className={cn(
                 'flex w-full flex-col items-center justify-start rounded-t-md pt-2 ring-1',
@@ -71,10 +71,10 @@ function Podium({ card, rows, photoOf, max }: { card: LeaderboardCardData; rows:
 function RowItem({ card, row, photoOf, max }: { card: LeaderboardCardData; row: LeaderboardRow; photoOf: PhotoOf; max: number }) {
   return (
     <li>
-      <Link
-        to="/players"
-        state={playerProfileState(row.player, card.season)}
-        className="group grid grid-cols-[1.5rem_2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1.5 transition-colors hover:bg-surface-2 sm:gap-3"
+      <PlayerAction
+        player={row.player}
+        season={card.season}
+        className="grid grid-cols-[1.5rem_2rem_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-1.5 transition-colors hover:bg-surface-2 sm:gap-3"
       >
         <span className="text-center text-data font-semibold tabular-nums text-fg-subtle">
           {row.rank != null && (
@@ -94,7 +94,7 @@ function RowItem({ card, row, photoOf, max }: { card: LeaderboardCardData; row: 
           <span className="font-display text-body font-bold tabular-nums text-fg">{formatValue(row.value, card.metric.format)}</span>
           <ValueBar value={row.value} max={max} className="mt-1" />
         </span>
-      </Link>
+      </PlayerAction>
     </li>
   );
 }

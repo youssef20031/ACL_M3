@@ -403,6 +403,9 @@ def test_head_to_head_card_record_and_unbeaten_run():
 @pytest.mark.parametrize("question,intent", [
     ("Erling Haaland stats this season", "player_stats"),
     ("Erling Haaland stats in 2025-26", "player_stats"),
+    # what tapping a player on a card sends (src/components/assistant/cards/shared.tsx)
+    ("Erling Haaland stats in 2026-27", "player_stats"),
+    ("Erling Haaland stats", "player_stats"),
     ("Predicted points for Erling Haaland next gameweek", "prediction"),
     ("Compare Erling Haaland and Bukayo Saka this season", "player_comparison"),
     ("Top 5 midfielders by points this season", "top_points"),

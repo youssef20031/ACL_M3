@@ -1,7 +1,6 @@
-import { Link } from 'react-router-dom';
 import type { SeasonAnswerCard as SeasonCardData } from '../../../services/api';
 import { Chip, PlayerAvatar } from '../../ui';
-import { CardFrame, CardLink, Highlights, PlayerMeta, Section, formatValue, playerProfileState, useCardPhotos } from './shared';
+import { CardFrame, CardLink, Highlights, PlayerAction, PlayerMeta, Section, formatValue, useCardPhotos } from './shared';
 
 /** A season in numbers, with its points leaders. */
 export function SeasonAnswerCard({ card }: { card: SeasonCardData }) {
@@ -28,10 +27,10 @@ export function SeasonAnswerCard({ card }: { card: SeasonCardData }) {
           <ol className="grid gap-2 [@container(min-width:36rem)]:grid-cols-3">
             {card.leaders.map(({ player, points, goals, assists }, i) => (
               <li key={player.name}>
-                <Link
-                  to="/players"
-                  state={playerProfileState(player, card.season)}
-                  className="group flex min-w-0 items-center gap-2 rounded-md border border-line bg-bg/40 p-2 hover:border-line-strong"
+                <PlayerAction
+                  player={player}
+                  season={card.season}
+                  className="flex min-w-0 items-center gap-2 rounded-md border border-line bg-bg/40 p-2 hover:border-line-strong"
                 >
                   <span className="w-4 shrink-0 text-center text-data font-bold text-fg-subtle">{i + 1}</span>
                   <PlayerAvatar name={player.name} src={photoOf(player)} size={40} />
@@ -42,7 +41,7 @@ export function SeasonAnswerCard({ card }: { card: SeasonCardData }) {
                       {points} pts · {goals} G · {assists} A
                     </span>
                   </span>
-                </Link>
+                </PlayerAction>
               </li>
             ))}
           </ol>

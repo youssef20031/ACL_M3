@@ -1,6 +1,6 @@
 import type { PitchAnswerCard as PitchCardData, PitchSlot } from '../../../services/api';
 import { Pitch, PitchPlayer, PitchRow, PlayerAvatar, PositionBadge } from '../../ui';
-import { CardFrame, CardLink, Highlights, Section, useCardPhotos } from './shared';
+import { CardFrame, CardLink, Highlights, Section, predictionQuestion, useAsk, useCardPhotos } from './shared';
 
 const LINES = [
   { position: 'GK', label: 'Goalkeeper' },
@@ -12,7 +12,11 @@ const LINES = [
 /** Best XI on a compact pitch, with the bench and the squad's totals. */
 export function PitchAnswerCard({ card }: { card: PitchCardData }) {
   const photoOf = useCardPhotos([...card.starters, ...card.bench].map((s) => s.player));
+  const { ask, disabled } = useAsk();
   const predicted = card.mode === 'predicted';
+  // Tapping a player asks about them: their prediction for a predicted squad, else their season
+  const askAbout = (name: string) =>
+    ask && !disabled ? () => ask(predicted ? predictionQuestion(name) : `${name} stats this season`) : undefined;
   const pts = (v: number | null) => (v == null ? '–' : predicted ? v.toFixed(1) : String(Math.round(v)));
   const label = (s: PitchSlot) => `${pts(s.points)}${predicted ? '' : ' pts'}`;
 
@@ -58,6 +62,8 @@ export function PitchAnswerCard({ card }: { card: PitchCardData }) {
                     status={s.player.status}
                     statusNote={s.player.news}
                     value={label(s)}
+                    onClick={askAbout(s.player.name)}
+                    actionLabel={`Ask about ${s.player.name}`}
                   />
                 ))}
             </PitchRow>

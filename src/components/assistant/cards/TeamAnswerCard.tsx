@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import type { TeamAnswerCard as TeamCardData } from '../../../services/api';
 import { ClubCrest, PlayerAvatar, StatusBadge } from '../../ui';
 import {
@@ -6,10 +5,10 @@ import {
   CardLink,
   FixtureStrip,
   Highlights,
+  PlayerAction,
   ResultPill,
   Section,
   ordinal,
-  playerProfileState,
   teamCode,
   useCardPhotos,
 } from './shared';
@@ -113,10 +112,10 @@ export function TeamAnswerCard({ card }: { card: TeamCardData }) {
           <ol className="grid gap-2 [@container(min-width:36rem)]:grid-cols-3">
             {card.top_players.map(({ player, points, goals, assists }) => (
               <li key={player.name}>
-                <Link
-                  to="/players"
-                  state={playerProfileState(player, card.season)}
-                  className="group flex min-w-0 items-center gap-2 rounded-md border border-line bg-bg/40 p-2 hover:border-line-strong"
+                <PlayerAction
+                  player={player}
+                  season={card.season}
+                  className="flex min-w-0 items-center gap-2 rounded-md border border-line bg-bg/40 p-2 hover:border-line-strong"
                 >
                   <PlayerAvatar name={player.name} src={photoOf(player)} size={40} />
                   <span className="min-w-0">
@@ -125,7 +124,7 @@ export function TeamAnswerCard({ card }: { card: TeamCardData }) {
                       {points} pts · {goals} G · {assists} A
                     </span>
                   </span>
-                </Link>
+                </PlayerAction>
               </li>
             ))}
           </ol>
