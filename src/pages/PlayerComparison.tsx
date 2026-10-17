@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowLeftRight, Search, UserX } from 'lucide-react';
@@ -104,6 +104,8 @@ export function PlayerComparison() {
       setComparisonData(data.comparison);
     },
   });
+  // TanStack Query keeps `mutate` stable across renders, so effects can depend on it.
+  const runCompare = compareMutation.mutate;
 
   const handleCompare = (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,7 +151,14 @@ export function PlayerComparison() {
     compareMutation.mutate({ p1, p2, s: season });
   };
 
-  const runSearch = async (q: string, setSuggestions: (s: Suggestion[]) => void, isCurrent: () => boolean) => {
+  const changeSeason = (s: string) => {
+    setSeason(s);
+    if (player1.trim() && player2.trim() && neo4jConnected) {
+      runCompare({ p1: player1.trim(), p2: player2.trim(), s });
+    }
+  };
+
+  const runSearch = useCallback(async (q: string, setSuggestions: (s: Suggestion[]) => void, isCurrent: () => boolean) => {
     if (!q || q.trim().length < 2) {
       setSuggestions([]);
       return;
@@ -165,7 +174,7 @@ export function PlayerComparison() {
       });
       if (!isCurrent()) return;
       const players = (res.players || [])
-        .map((p: any) => ({
+        .map((p) => ({
           name: p.player_name || p.name || '',
           position: p.position || p.pos || undefined,
           season: p.season || undefined,
@@ -176,7 +185,7 @@ export function PlayerComparison() {
     } catch {
       if (isCurrent()) setSuggestions([]);
     }
-  };
+  }, [queryClient]);
 
   // Avatars for suggestions that don't already carry one (cached per name, shared with Search)
   const avatarByName = usePlayerAvatars(
@@ -204,7 +213,7 @@ export function PlayerComparison() {
     return () => {
       if (p1Timer.current) window.clearTimeout(p1Timer.current);
     };
-  }, [player1]);
+  }, [player1, runSearch]);
 
   useEffect(() => {
     const seq = ++p2SearchSeq.current;
@@ -227,7 +236,7 @@ export function PlayerComparison() {
     return () => {
       if (p2Timer.current) window.clearTimeout(p2Timer.current);
     };
-  }, [player2]);
+  }, [player2, runSearch]);
 
   useEffect(() => {
     const q = player1.trim();
@@ -248,12 +257,6 @@ export function PlayerComparison() {
   }, [p2Suggestions, player2]);
 
   useEffect(() => {
-    if (player1.trim() && player2.trim() && neo4jConnected) {
-      compareMutation.mutate({ p1: player1.trim(), p2: player2.trim(), s: season });
-    }
-  }, [season]);
-
-  useEffect(() => {
     const state = location.state as CompareRouteState | null;
     if (!state?.player1 || !state?.player2) {
       return;
@@ -269,9 +272,9 @@ export function PlayerComparison() {
     setP2Suggestions([]);
 
     if (neo4jConnected) {
-      compareMutation.mutate({ p1: state.player1, p2: state.player2, s: state.season });
+      runCompare({ p1: state.player1, p2: state.player2, s: state.season });
     }
-  }, [location.state, neo4jConnected]);
+  }, [location.state, neo4jConnected, runCompare]);
 
   const onP1KeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (p1Suggestions.length === 0) return;
@@ -426,7 +429,7 @@ export function PlayerComparison() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <Field label="Season" className="sm:w-48">
                 {(id) => (
-                  <Select id={id} value={season} onChange={(e) => setSeason(e.target.value)} disabled={!neo4jConnected}>
+                  <Select id={id} value={season} onChange={(e) => changeSeason(e.target.value)} disabled={!neo4jConnected}>
                     {SEASONS.map((s) => (
                       <option key={s} value={s}>
                         {s || 'All seasons'}

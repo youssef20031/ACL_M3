@@ -39,7 +39,7 @@ Tests live in `tests/` (mix of `unittest` and pytest + hypothesis property tests
 ```bash
 .venv/Scripts/python.exe -m pytest tests/test_fixture_service.py::TestFixtureService::test_fixture_context_creation
 ```
-`ml/test_*.py` are ad-hoc scripts, not a suite. `npm run lint` is defined but there is no ESLint config file, so it does not currently work.
+`ml/test_*.py` are ad-hoc scripts, not a suite. `npm run lint` uses `.eslintrc.cjs` (ESLint 8) and fails on any warning. `.github/workflows/ci.yml` runs the pytest suite (Python 3.11), `npm run lint` and `npm run build` on every pull request and push to main; keep test dates relative to now, since a hardcoded kickoff that has passed changes what the cache and fixture code do.
 
 Environment caveat: `.venv` is Python 3.14, while Docker/Railway/CI use 3.11.
 

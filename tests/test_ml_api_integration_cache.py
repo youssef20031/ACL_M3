@@ -4,7 +4,7 @@ Unit tests for MLAPIIntegration caching functionality
 import unittest
 import sys
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from unittest.mock import Mock, MagicMock, AsyncMock, patch
 
 # Add parent directory to path
@@ -16,7 +16,7 @@ from services.cache import PredictionCache
 from ml.predictor import FPLPredictor, PlayerPrediction
 
 
-class TestMLAPIIntegrationCache(unittest.TestCase):
+class TestMLAPIIntegrationCache(unittest.IsolatedAsyncioTestCase):
     """Test cases for MLAPIIntegration caching integration."""
     
     def setUp(self):
@@ -59,10 +59,11 @@ class TestMLAPIIntegrationCache(unittest.TestCase):
     async def test_predict_checks_cache_before_prediction(self, mock_datetime):
         """Test that predict_player_next_gameweek checks cache before generating prediction."""
         # Setup
-        mock_datetime.now.return_value = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        mock_datetime.now.return_value = now
         
-        # Mock fixture context
-        match_date = datetime(2026, 8, 22, 15, 0, tzinfo=timezone.utc)
+        # Mock fixture context (relative to now: PredictionCache.calculate_cache_ttl uses the real clock)
+        match_date = now + timedelta(days=3)
         fixture_context = FixtureContext(
             opponent_team="Manchester United",
             home_away="away",
@@ -106,10 +107,11 @@ class TestMLAPIIntegrationCache(unittest.TestCase):
     async def test_predict_stores_in_cache_on_miss(self, mock_datetime):
         """Test that prediction is stored in cache on cache miss."""
         # Setup
-        mock_datetime.now.return_value = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        mock_datetime.now.return_value = now
         
-        # Mock fixture context
-        match_date = datetime(2026, 8, 22, 15, 0, tzinfo=timezone.utc)
+        # Mock fixture context (relative to now: PredictionCache.calculate_cache_ttl uses the real clock)
+        match_date = now + timedelta(days=3)
         fixture_context = FixtureContext(
             opponent_team="Manchester United",
             home_away="away",
@@ -164,7 +166,7 @@ class TestMLAPIIntegrationCache(unittest.TestCase):
         self.assertIn("Mohamed Salah", cache_key)
         self.assertIn("fixture-2026-27-md2-liv-mun", cache_key)
         
-        # Verify TTL is calculated (7 days away = 6 hours = 21600 seconds)
+        # Verify TTL is calculated (3 days away = 6 hours = 21600 seconds)
         self.assertEqual(ttl, 21600)
         
         # Verify cached value is the response
@@ -174,7 +176,7 @@ class TestMLAPIIntegrationCache(unittest.TestCase):
     async def test_predict_skips_cache_when_no_fixture_context(self, mock_datetime):
         """Test that caching is skipped when no fixture context is available."""
         # Setup
-        mock_datetime.now.return_value = datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+        mock_datetime.now.return_value = datetime.now(timezone.utc)
         
         # Mock no fixture context
         self.mock_fixture_service.get_next_match.return_value = None

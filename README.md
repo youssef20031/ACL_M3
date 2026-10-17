@@ -1,5 +1,7 @@
 # Pitch Me
 
+[![CI](https://github.com/youssef20031/ACL_M3/actions/workflows/ci.yml/badge.svg)](https://github.com/youssef20031/ACL_M3/actions/workflows/ci.yml)
+
 **A Fantasy Premier League assistant that answers questions from a knowledge graph, predicts next week's points with its own model, and picks the best squad for the budget.**
 
 **Live site: [pitchme.polandcentral.cloudapp.azure.com](https://pitchme.polandcentral.cloudapp.azure.com/)**
@@ -63,7 +65,7 @@ flowchart LR
 
 **Frontend.** React and TypeScript with a token-based design system (`/design` shows every component). Answer cards use CSS container queries so they adapt when the chat column narrows. Answers are announced to screen readers without reading out every card, and each route is code-split. Every page sets its own title and description, and the build generates the sitemap and social preview tags.
 
-**Tests.** More than 500 pytest tests, including Hypothesis property tests, tests that check the model features for leakage, and tests for the optimiser, the data pipeline and the Cypher that each query generates.
+**Tests.** More than 500 pytest tests, including Hypothesis property tests, tests that check the model features for leakage, and tests for the optimiser, the data pipeline and the Cypher that each query generates. CI runs them, along with ESLint and the frontend build, on every pull request.
 
 ## Tech stack
 
@@ -130,7 +132,7 @@ npm install
 npm run dev
 ```
 
-Run the tests with `pip install -r requirements-dev.txt`, then `python -m pytest tests`. To deploy on your own VM, see [deploy/README.md](deploy/README.md).
+Run the tests with `pip install -r requirements-dev.txt`, then `python -m pytest tests`, and lint the frontend with `npm run lint`. To deploy on your own VM, see [deploy/README.md](deploy/README.md).
 
 ## Project structure
 

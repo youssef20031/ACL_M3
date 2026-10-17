@@ -168,12 +168,14 @@ export const useAppStore = create<AppState>()(
         triviaScore: state.triviaScore,
         triviaTotal: state.triviaTotal,
       }),
-      migrate: (persistedState: any, version: number) => {
+      migrate: (persistedState: unknown, version: number) => {
+        // Every version persisted the partialized settings; only these fields change between them.
+        const state = persistedState as Partial<Pick<AppState, 'selectedModel' | 'theme'>> | undefined;
         // v1 → v2: migrate legacy HuggingFace models to llama-3.3-70b
         if (version < 2) {
           const legacyModels = ['qwen-2.5-coder', 'qwen-2.5-7b', 'llama-3.2-3b', 'phi-3-mini', 'gemma-2-2b'];
-          if (legacyModels.includes(persistedState?.selectedModel)) {
-            persistedState.selectedModel = 'llama-3.3-70b';
+          if (state?.selectedModel && legacyModels.includes(state.selectedModel)) {
+            state.selectedModel = 'llama-3.3-70b';
           }
         }
         // v2 → v3: Groq retired Llama 3.3 and the HuggingFace models are no longer served
@@ -184,16 +186,16 @@ export const useAppStore = create<AppState>()(
             'qwen-2.5-coder': 'qwen3-27b',
             'qwen-2.5-7b': 'qwen3-27b',
           };
-          const current = persistedState?.selectedModel;
-          if (current && retired[current]) {
-            persistedState.selectedModel = retired[current];
+          const current = state?.selectedModel;
+          if (state && current && retired[current]) {
+            state.selectedModel = retired[current];
           }
         }
         // v3 → v4: the Pitch Me redesign is dark-first; light mode returns later
-        if (version < 4 && persistedState) {
-          persistedState.theme = 'dark';
+        if (version < 4 && state) {
+          state.theme = 'dark';
         }
-        return persistedState;
+        return state as AppState;
       },
     }
   )

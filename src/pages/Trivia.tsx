@@ -58,7 +58,8 @@ const LETTERS = "ABCDEFGH";
 /** The API prefixes feedback with an emoji and "Correct!"/"Wrong!"; the UI shows its own verdict. */
 function feedbackDetail(feedback: string): string {
   return feedback
-    .replace(/^[\s✅❌✔✖️]+/u, "")
+    // ✖️ is ✖ plus the U+FE0F emoji variation selector, so the selector is matched after the class.
+    .replace(/^(?:\s|[✅❌✔✖]\uFE0F?)+/u, "")
     .replace(/^(correct|wrong)!?\s*/i, "")
     .trim();
 }
