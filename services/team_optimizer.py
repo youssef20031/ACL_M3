@@ -5,11 +5,11 @@ Team-of-the-week selection: pure functions, no Neo4j or file IO.
                       FPL's Dream Team. Exact greedy: take each position's minimum, then
                       fill the remaining slots with the best players left under the caps.
   best_squad(pool)    full 15-man FPL squad (2 GK, 5 DEF, 5 MID, 3 FWD) within a budget and
-                      a per-club limit that maximises the points of the XI picked from it.
-                      Exact, via scipy's MILP solver (HiGHS), in two stages:
-                        1. maximise the XI's points;
-                        2. keeping that XI total, make the 4 bench players as cheap as
-                           possible (ties: more bench points).
+                      a per-club limit. Exact, via scipy's MILP solver (HiGHS). It maximises
+                      the expected squad score: the XI's points, the captain's points again,
+                      and each bench player's points weighted by how often that bench slot
+                      comes on (BENCH_WEIGHTS). So spare cash buys a bench that plays, and
+                      a little XI value is traded for a much better first substitute.
 
 Costs are integers in FPL tenths (156 = 15.6m). Ties are deterministic: the pool is
 sorted before solving and every ordering ends on the candidate id.
@@ -24,6 +24,14 @@ XI_MAX: Dict[str, int] = {"GK": 1, "DEF": 5, "MID": 5, "FWD": 3}
 XI_SIZE = 11
 DEFAULT_BUDGET = 1000      # tenths: 100.0m
 DEFAULT_MAX_PER_CLUB = 3
+
+# Share of a bench player's predicted points expected to count, by bench slot. A player
+# who played 60+ minutes in each of his last two matches still gets no minutes in about
+# 7% of the next ones (2024-25 to 2026-27 FPL data), so with ten outfield starters the
+# first outfield substitute comes on about half the time, the second about one week in
+# seven and the third rarely; a goalkeeper is almost never replaced.
+BENCH_WEIGHTS: Tuple[float, float, float] = (0.5, 0.15, 0.05)   # outfield subs 1, 2, 3
+BENCH_GK_WEIGHT = 0.05
 
 
 class InfeasibleError(ValueError):
@@ -126,7 +134,8 @@ def best_xi(pool: Iterable[Candidate]) -> Selection:
 def best_squad(pool: Iterable[Candidate], budget: int = DEFAULT_BUDGET,
                max_per_club: int = DEFAULT_MAX_PER_CLUB,
                time_limit: float = 20.0) -> Selection:
-    """Best 15-man squad within budget/club limits, by the points of its starting XI.
+    """Best 15-man squad within budget/club limits, by expected points: XI + captain
+    + bench weighted by BENCH_WEIGHTS / BENCH_GK_WEIGHT.
 
     Raises InfeasibleError when no valid squad exists.
     """
@@ -146,56 +155,56 @@ def best_squad(pool: Iterable[Candidate], budget: int = DEFAULT_BUDGET,
     points = np.array([c.points for c in pool], dtype=float)
     cost = np.array([c.cost for c in pool], dtype=float)
     clubs = sorted({c.team for c in pool})
+    is_gk = np.array([c.position == "GK" for c in pool])
 
-    # Variables: x_0..x_{n-1} (in squad), s_0..s_{n-1} (starts). Rows built below.
+    # Variables, n each: x (in squad), s (starts), k (captain), f (first outfield sub),
+    # g (second outfield sub). The other bench players are covered by x - s.
+    X, S, K, F, G = (j * n for j in range(5))
     rows: List[Tuple[Dict[int, float], float, float]] = []
-    for i in range(n):                                    # s_i <= x_i
-        rows.append(({n + i: 1.0, i: -1.0}, -np.inf, 0.0))
+    for i in range(n):
+        rows.append(({S + i: 1.0, X + i: -1.0}, -np.inf, 0.0))                   # s <= x
+        rows.append(({K + i: 1.0, S + i: -1.0}, -np.inf, 0.0))                   # k <= s
+        rows.append(({F + i: 1.0, G + i: 1.0, X + i: -1.0, S + i: 1.0}, -np.inf, 0.0))  # f + g <= x - s
     for p in POSITIONS:
         idx = [i for i, c in enumerate(pool) if c.position == p]
-        rows.append(({i: 1.0 for i in idx}, SQUAD_SIZE[p], SQUAD_SIZE[p]))
-        rows.append(({n + i: 1.0 for i in idx}, XI_MIN[p], XI_MAX[p]))
-    rows.append(({n + i: 1.0 for i in range(n)}, XI_SIZE, XI_SIZE))
-    rows.append(({i: float(cost[i]) for i in range(n)}, -np.inf, float(budget)))
+        rows.append(({X + i: 1.0 for i in idx}, SQUAD_SIZE[p], SQUAD_SIZE[p]))
+        rows.append(({S + i: 1.0 for i in idx}, XI_MIN[p], XI_MAX[p]))
+    rows.append(({S + i: 1.0 for i in range(n)}, XI_SIZE, XI_SIZE))
+    for var in (K, F, G):
+        rows.append(({var + i: 1.0 for i in range(n)}, 1.0, 1.0))
+    rows.append(({X + i: float(cost[i]) for i in range(n)}, -np.inf, float(budget)))
     for club in clubs:
         idx = [i for i, c in enumerate(pool) if c.team == club]
         if len(idx) > max_per_club:
-            rows.append(({i: 1.0 for i in idx}, -np.inf, float(max_per_club)))
+            rows.append(({X + i: 1.0 for i in idx}, -np.inf, float(max_per_club)))
 
-    def build(extra: List[Tuple[Dict[int, float], float, float]]) -> LinearConstraint:
-        all_rows = rows + extra
-        a = lil_matrix((len(all_rows), 2 * n))
-        lb = np.empty(len(all_rows))
-        ub = np.empty(len(all_rows))
-        for r, (coefs, lo, hi) in enumerate(all_rows):
-            for j, v in coefs.items():
-                a[r, j] = v
-            lb[r], ub[r] = lo, hi
-        return LinearConstraint(a.tocsr(), lb, ub)
+    a = lil_matrix((len(rows), 5 * n))
+    lb = np.empty(len(rows))
+    ub = np.empty(len(rows))
+    for r, (coefs, lo, hi) in enumerate(rows):
+        for j, v in coefs.items():
+            a[r, j] = v
+        lb[r], ub[r] = lo, hi
 
-    integrality = np.ones(2 * n)
-    bounds = Bounds(0, 1)
-    options = {"mip_rel_gap": 0.0, "time_limit": time_limit, "presolve": True}
+    # Maximise sum(s*p) + sum(k*p) + w_rest*bench + (w1 - w_rest)*f*p + (w2 - w_rest)*g*p
+    w1, w2, w_rest = BENCH_WEIGHTS
+    w_bench = np.where(is_gk, BENCH_GK_WEIGHT, w_rest)
+    gain = np.concatenate([w_bench * points,               # x
+                           (1.0 - w_bench) * points,       # s: from bench weight to 1
+                           points,                         # captain counts twice
+                           (w1 - w_rest) * points,
+                           (w2 - w_rest) * points])
+    upper = np.ones(5 * n)
+    upper[F:F + n][is_gk] = 0                              # subs 1 and 2 are outfielders
+    upper[G:G + n][is_gk] = 0
+    res = milp(-gain, constraints=LinearConstraint(a.tocsr(), lb, ub),
+               integrality=np.ones(5 * n), bounds=Bounds(0, upper),
+               options={"mip_rel_gap": 0.0, "time_limit": time_limit, "presolve": True})
+    if res.x is None:
+        raise InfeasibleError(f"No valid squad: {res.message}")
 
-    # Stage 1: maximise the starting XI's points
-    c1 = np.concatenate([np.zeros(n), -points])
-    res1 = milp(c1, constraints=build([]), integrality=integrality, bounds=bounds, options=options)
-    if res1.x is None:
-        raise InfeasibleError(f"No valid squad: {res1.message}")
-    best_xi_points = float(points @ np.round(res1.x[n:]))
-
-    # Stage 2: same XI total, cheapest bench (then most bench points)
-    tol = 1e-6 * max(1.0, abs(best_xi_points))
-    keep_xi = ({n + i: float(points[i]) for i in range(n)}, best_xi_points - tol, np.inf)
-    delta = 0.5 / (4 * max(float(points.max(initial=0.0)), 1.0) + 1)
-    bench_cost = cost - delta * points                     # per bench player
-    c2 = np.concatenate([bench_cost, -bench_cost])         # sum over x - s
-    res2 = milp(c2, constraints=build([keep_xi]), integrality=integrality, bounds=bounds,
-                options=options)
-    sol = res2.x if res2.x is not None else res1.x
-
-    x = np.round(sol[:n]).astype(int)
-    s = np.round(sol[n:]).astype(int)
+    x = np.round(res.x[X:X + n]).astype(int)
+    s = np.round(res.x[S:S + n]).astype(int)
     starters = order_starters(pool[i] for i in range(n) if s[i])
     bench = order_bench(pool[i] for i in range(n) if x[i] and not s[i])
     captain, vice = pick_captains(starters)

@@ -180,7 +180,7 @@ export function TeamOfTheWeek() {
               {mode === 'predicted' && team && team.bench.length > 0 && (
                 <Card padded={false}>
                   <div className="px-4 pt-4">
-                    <SectionHeading as="h3" title="Bench" subtitle="Cheapest picks that complete the 15-man squad" />
+                    <SectionHeading as="h3" title="Bench" subtitle="Picked to come on when a starter doesn’t play" />
                   </div>
                   <ul>
                     {team.bench.map((p) => (

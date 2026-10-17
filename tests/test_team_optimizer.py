@@ -44,6 +44,30 @@ def obvious_pool():
     return pool
 
 
+def bench_pool():
+    """A strong 3-4-3 XI (85.5m, 75.0 pts) whose weakest starter (6.0) outscores any bench
+    option, plus fodder: 14.1m of the 14.5m left buys the cheapest possible bench."""
+    pool = [
+        Candidate("GK star", "GK", "A", 6.0, 55),
+        Candidate("DEF star 1", "DEF", "B", 6.0, 50),
+        Candidate("DEF star 2", "DEF", "C", 5.5, 50),
+        Candidate("DEF star 3", "DEF", "D", 5.0, 45),
+        Candidate("MID star 1", "MID", "E", 9.0, 110),
+        Candidate("MID star 2", "MID", "F", 8.0, 90),
+        Candidate("MID star 3", "MID", "G", 7.0, 90),
+        Candidate("MID star 4", "MID", "H", 6.5, 80),
+        Candidate("FWD star 1", "FWD", "I", 8.5, 120),
+        Candidate("FWD star 2", "FWD", "J", 7.5, 90),
+        Candidate("FWD star 3", "FWD", "K", 6.0, 75),
+    ]
+    i = 0
+    for pos, n in (("GK", 3), ("DEF", 4), ("MID", 3), ("FWD", 3)):
+        for k in range(n):
+            pool.append(Candidate(f"{pos} fodder {k}", pos, f"Z{i}", 0.5 + 0.1 * k, 35 + k))
+            i += 1
+    return pool
+
+
 class TestBestSquad(unittest.TestCase):
     def assertValid(self, sel, budget=opt.DEFAULT_BUDGET, max_per_club=opt.DEFAULT_MAX_PER_CLUB):
         self.assertEqual(opt.validate_squad(sel, budget, max_per_club), [])
@@ -79,17 +103,52 @@ class TestBestSquad(unittest.TestCase):
         self.assertEqual(sel.formation, "3-4-3")
         self.assertEqual(sel.captain.id, "MID star 1")
         self.assertEqual(sel.vice_captain.id, "FWD star 1")
-        # Bench is the cheapest fodder that completes the squad
+        # Nothing better than fodder fits the 16.0m left for the bench
         self.assertTrue(all("fodder" in c.id for c in sel.bench))
         self.assertEqual(sel.bench[0].position, "GK")
 
-    def test_bench_is_cheapest_possible(self):
-        pool = obvious_pool() + [Candidate("GK pricey backup", "GK", "Z5", 0.9, 50)]
+    def test_spare_cash_buys_a_bench_that_plays(self):
+        # Spending 0.4m of the spare cash on a regular starter (4.0 pts) beats fodder
+        pool = bench_pool() + [Candidate("DEF regular", "DEF", "Y1", 4.0, 39)]
         sel = opt.best_squad(pool)
-        bench_ids = {c.id for c in sel.bench}
-        self.assertNotIn("GK pricey backup", bench_ids)
-        self.assertIn("GK fodder 0", bench_ids)   # cost 35, cheapest goalkeeper
-        self.assertEqual(sum(c.cost for c in sel.bench), 35 + 35 + 36 + 35)
+        self.assertValid(sel)
+        self.assertTrue(all("star" in c.id for c in sel.starters))
+        self.assertEqual([c.id for c in sel.bench[:2]], ["GK fodder 0", "DEF regular"])
+
+    def test_trades_a_little_xi_value_for_a_first_sub(self):
+        # Alone, MID alt (6.3, 5.9m) would replace FWD star 3 for a 75.3 XI. With the
+        # regular (4.0, 6.0m) on offer, MID alt replaces MID star 4 instead (74.8) to free
+        # the cash: -0.5 in the XI, +3.4 * 0.5 on the first bench slot
+        alt = Candidate("MID alt", "MID", "Y2", 6.3, 59)
+        alone = opt.best_squad(bench_pool() + [alt])
+        self.assertAlmostEqual(sum(c.points for c in alone.starters), 75.3)
+        sel = opt.best_squad(bench_pool() + [alt, Candidate("DEF regular", "DEF", "Y1", 4.0, 60)])
+        self.assertValid(sel)
+        starters = {c.id for c in sel.starters}
+        self.assertIn("MID alt", starters)
+        self.assertNotIn("MID star 4", starters)
+        self.assertAlmostEqual(sum(c.points for c in sel.starters), 74.8)
+        self.assertEqual(sel.bench[1].id, "DEF regular")
+
+    def test_bench_slot_weights(self):
+        # Cash for one 1.5m upgrade: the first outfield sub gets it, the backup goalkeeper doesn't
+        pool = bench_pool() + [Candidate("GK backup", "GK", "Y1", 3.5, 50),
+                               Candidate("MID regular", "MID", "Y2", 3.5, 50)]
+        sel = opt.best_squad(pool, budget=1015)
+        self.assertValid(sel, budget=1015)
+        self.assertEqual([c.id for c in sel.bench[:2]], ["GK fodder 0", "MID regular"])
+        self.assertEqual(opt.BENCH_WEIGHTS, tuple(sorted(opt.BENCH_WEIGHTS, reverse=True)))
+        self.assertLess(opt.BENCH_GK_WEIGHT, opt.BENCH_WEIGHTS[0])
+
+    def test_captain_counts_double(self):
+        # FWD big (10.8, 15.1m) only fits if MID cheap (4.0, 4.9m) replaces MID star 4:
+        # the XI drops from 75.0 to 74.8, but the captain's points rise from 9.0 to 10.8
+        pool = bench_pool() + [Candidate("FWD big", "FWD", "Y1", 10.8, 151),
+                               Candidate("MID cheap", "MID", "Y2", 4.0, 49)]
+        sel = opt.best_squad(pool)
+        self.assertValid(sel)
+        self.assertEqual(sel.captain.id, "FWD big")
+        self.assertAlmostEqual(sum(c.points for c in sel.starters), 74.8)
 
     def test_budget_forces_cheaper_xi(self):
         unlimited = opt.best_squad(obvious_pool(), budget=10_000)
