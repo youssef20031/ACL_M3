@@ -1428,6 +1428,9 @@ async def query_fpl(request: QueryRequest, conn=Depends(get_neo4j_conn)):
         # Step 2: Entity Extraction (lazy load)
         entity_extractor = await asyncio.to_thread(get_entity_extractor)
         entities = entity_extractor.extract(request.question, chat_history=request.chat_history)
+        # A player question that names clubs but no player is about the clubs
+        intent_result.intent = intent_classifier.refine_with_entities(
+            intent_result.intent, entities.players, entities.teams)
         
         # Step 3: Get query parameters
         params = entity_extractor.get_query_parameters(entities)

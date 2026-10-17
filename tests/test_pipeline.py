@@ -602,6 +602,47 @@ class TestTeamQuestionIntents(unittest.TestCase):
         )
         self.assertEqual({params["player1"], params["player2"]}, {"Mohamed Salah", "Harry Kane"})
 
+    # ----- /api/query's refine_with_entities: a player intent that names clubs but no player
+    # ran the top-players fallback ("Arsenal stats 2023-24" outscores the team pattern)
+
+    def refined(self, prompt):
+        """The handler's intent, method and params for the prompt."""
+        entities = self.extractor.extract(prompt)
+        intent = self.classifier.refine_with_entities(
+            self.classifier.classify(prompt).intent, entities.players, entities.teams)
+        params = self.extractor.get_query_parameters(entities)
+        method = getattr(CypherQueries, self.classifier.get_query_type_for_intent(intent))
+        missing = [p.name for p in inspect.signature(method).parameters.values()
+                   if p.default is inspect.Parameter.empty and p.name not in params]
+        self.assertEqual(missing, [], f"{prompt!r}: {method.__name__} lacks {missing}")
+        return intent, params
+
+    def test_club_only_player_questions_become_team_questions(self):
+        cases = {
+            "Arsenal stats 2023-24": (Intent.TEAM_ANALYSIS, {"team_name": "Arsenal", "season": "2023-24"}),
+            "Aston Villa stats this season": (Intent.TEAM_ANALYSIS, {"team_name": "Aston Villa"}),
+            "Tell me about Arsenal": (Intent.TEAM_ANALYSIS, {"team_name": "Arsenal"}),
+            "Show me Coventry City": (Intent.TEAM_ANALYSIS, {"team_name": "Coventry City"}),
+            "Arsenal stats and Chelsea stats": (Intent.HEAD_TO_HEAD, {"team1": "Arsenal", "team2": "Chelsea"}),
+        }
+        for prompt, (intent, params) in cases.items():
+            got_intent, got_params = self.refined(prompt)
+            self.assertEqual(got_intent, intent, prompt)
+            self.assertEqual({k: got_params.get(k) for k in params}, params, prompt)
+
+    def test_refinement_needs_clubs_and_no_player(self):
+        refine = self.classifier.refine_with_entities
+        self.assertEqual(refine(Intent.PLAYER_STATS, ["Harry Kane"], ["Spurs"]), Intent.PLAYER_STATS)
+        self.assertEqual(refine(Intent.PLAYER_STATS, [], []), Intent.PLAYER_STATS)
+        self.assertEqual(refine(Intent.PLAYER_SEARCH, [], ["Coventry City"]), Intent.TEAM_ANALYSIS)
+        self.assertEqual(refine(Intent.PLAYER_COMPARISON, [], ["Arsenal", "Chelsea"]), Intent.HEAD_TO_HEAD)
+        # only player intents change
+        self.assertEqual(refine(Intent.TOP_SCORERS, [], ["Arsenal"]), Intent.TOP_SCORERS)
+        self.assertEqual(refine(Intent.FIXTURE_RESULTS, [], ["Arsenal"]), Intent.FIXTURE_RESULTS)
+        kane = self.extractor.extract("Kane stats for Spurs")
+        self.assertEqual(refine(self.classifier.classify("Kane stats for Spurs").intent, kane.players, kane.teams),
+                         Intent.PLAYER_STATS)
+
 
 if __name__ == "__main__":
     unittest.main()

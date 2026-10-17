@@ -351,6 +351,20 @@ class IntentClassifier:
         )
     
     @staticmethod
+    def refine_with_entities(intent: Intent, players: List[str], teams: List[str]) -> Intent:
+        """The intent once the extracted entities are known.
+
+        Every player query needs a player, so a player intent with clubs but no player
+        ("Arsenal stats 2023-24") would fall back to the league's top players. That case is
+        a team question: TEAM_ANALYSIS for one club, HEAD_TO_HEAD for two (the params
+        get_query_parameters builds: team_name, or team1/team2). Patterns can't make this
+        call: "Kane stats for Spurs" has the same shape.
+        """
+        if intent in PLAYER_INTENTS and teams and not players:
+            return Intent.HEAD_TO_HEAD if len(teams) >= 2 else Intent.TEAM_ANALYSIS
+        return intent
+
+    @staticmethod
     def _club_in_slot(patterns: List[str], query_lower: str) -> bool:
         """Whether a club fills a captured slot of these matching patterns: "city" in "how did
         city do" does, "23" in "conor coventry 2022-23 stats" doesn't."""
