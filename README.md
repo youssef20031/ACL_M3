@@ -2,7 +2,7 @@
 
 **A Fantasy Premier League assistant that answers questions from a knowledge graph, predicts next week's points with its own model, and picks the best squad for the budget.**
 
-**Live site: [20-215-33-13.sslip.io](https://20-215-33-13.sslip.io)**
+**Live site: [pitchme.polandcentral.cloudapp.azure.com](https://pitchme.polandcentral.cloudapp.azure.com/)**
 
 ![Pitch Me home page: the model's captain pick, the assistant, this gameweek's fixtures and the league table](docs/screenshots/home.webp)
 
