@@ -1,284 +1,164 @@
-# PitchMe - Graph-RAG & ML System
+# Pitch Me
 
-A **Graph-RAG** (Retrieval-Augmented Generation) powered Fantasy Premier League trivia and Q&A assistant using Neo4j, React, FastAPI, and multiple LLMs via HuggingFace.
+**A Fantasy Premier League assistant that answers questions from a knowledge graph, predicts next week's points with its own model, and picks the best squad for the budget.**
 
-## 🎯 Features
+**Live site: [20-215-33-13.sslip.io](https://20-215-33-13.sslip.io)**
 
-- **Q&A Assistant**: Ask questions about FPL players, teams, and statistics
-- **FantasyTrivia**: Test your FPL knowledge with dynamically generated questions
-- **Player Search**: Search and analyze player statistics (accent-insensitive)
-- **Player Comparison**: Compare two players head-to-head with radar and bar charts
-- **Hybrid Retrieval**: Combines Cypher queries and embedding-based semantic search
+![Pitch Me home page: the model's captain pick, the assistant, this gameweek's fixtures and the league table](docs/screenshots/home.webp)
 
-## 🏗️ Architecture
+Ask *"Who should I captain this gameweek?"* or *"Who scored the most goals in 2022-23?"*. The question is routed to a parameterized Cypher query over a Neo4j graph of every FPL season since 2020-21: about 2,300 players, 2,660 fixtures and 185,000 relationships. Embeddings handle the fuzzy cases. An LLM writes the answer, while the stat cards beside it come straight from the query results, so their numbers can't be hallucinated. The current season refreshes every day from the official FPL API, and a custom XGBoost model, checked for leakage, predicts every player's points for the next gameweek.
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    React Frontend (Vite)                     │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐            │
-│  │   Q&A   │ │ Trivia  │ │ Search  │ │ Compare │            │
-│  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘            │
-└───────┼──────────┼──────────┼──────────┼────────────────────┘
-        │          │          │          │
-        ▼          ▼          ▼          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  FastAPI Backend (:8000)                     │
-│  ┌──────────────────┐  ┌──────────────────┐                 │
-│  │ Intent Classifier │  │ Entity Extractor │                 │
-│  └──────────────────┘  └──────────────────┘                 │
-└─────────────────────────────────────────────────────────────┘
-                           │
-           ┌───────────────┼───────────────┐
-           ▼               ▼               ▼
-    ┌──────────┐    ┌──────────┐    ┌──────────┐
-    │  Neo4j   │    │Embeddings│    │   LLM    │
-    │  Cypher  │    │  Search  │    │ Manager  │
-    │ Queries  │    │ (2 models)│   │(HF API)  │
-    └──────────┘    └──────────┘    └──────────┘
-```
+## Features
 
-## 📊 Knowledge Graph Schema
+- **Assistant**: natural-language Q&A over seven seasons, streamed token by token, with visual answer cards (player, comparison, leaderboard, captain picks, fixtures, a pitch view) and suggested follow-ups. Each card can be saved or shared as an image.
+- **Predictions**: expected points for every player next gameweek, scaled by FPL's chance-of-playing flags, plus a best-value view.
+- **Team of the Week**: the highest-scoring legal FPL squad the model expects (£100m, at most 3 per club), or the actual dream team of a past gameweek.
+- **Players and Compare**: profiles with season totals, per-game and per-90 rates and next-gameweek predictions, plus head-to-head comparisons.
+- **Season dashboard**: fixtures, a league table computed from results, injuries and team news, and the next deadline.
+- **Trivia**: quiz questions generated from the graph.
 
-```
-(Player)-[:PLAYS_POSITION]->(Position)
-(Player)-[:PLAYS_FOR]->(Team)
-(Player)-[:PLAYED_IN {stats}]->(Fixture)
-(Fixture)-[:HOME_TEAM]->(Team)
-(Fixture)-[:AWAY_TEAM]->(Team)
-(Fixture)-[:PART_OF]->(Gameweek)
-(Gameweek)-[:IN_SEASON]->(Season)
+| Assistant | Team of the Week |
+| --- | --- |
+| ![The assistant answering "Who should I captain this gameweek?" with a captain-picks card](docs/screenshots/assistant.webp) | ![Predicted team of the week on a pitch, with squad cost, formation and bench](docs/screenshots/team-of-the-week.webp) |
+| **Predictions** | **Player profile** |
+| ![Next-gameweek predictions table](docs/screenshots/predictions.webp) | ![Erling Haaland's 2026-27 profile](docs/screenshots/player.webp) |
+
+## How it works
+
+```mermaid
+flowchart LR
+    browser([Browser]) --> caddy["Caddy<br/>HTTPS + React build"]
+    caddy -->|/api| api["FastAPI"]
+    api --> neo4j[("Neo4j<br/>knowledge graph")]
+    api --> llm["Groq LLMs<br/>gpt-oss-120b"]
+    api --> emb["Sentence embeddings<br/>MiniLM / MPNet"]
+    api --> preds["Next-gameweek predictions<br/>XGBoost v3"]
+    subgraph daily ["Daily job on the VM"]
+        fpl["FPL API"] --> live["data/live"]
+    end
+    live --> neo4j
+    live --> preds
 ```
 
----
+**The assistant's pipeline** (`POST /api/query/stream`):
 
-## 🚀 Running the Project
+1. **Understand the question.** A rule-based intent classifier and an entity extractor find the players, clubs, seasons, stats and positions. Player names resolve through an in-memory index that ignores accents and corrects typos word by word, so "haalnd" finds Haaland and "Odegaard" finds Ødegaard.
+2. **Retrieve.** The intent maps to one of 32 parameterized Cypher queries. In hybrid mode, a semantic search over prebuilt embeddings of player-season summaries adds context.
+3. **Answer.** The LLM gets the query results in its prompt and streams its answer as server-sent events. If a model runs out of quota or is retired, the request moves to the next one in a fallback chain.
+4. **Show the data.** While the LLM writes, answer cards are built from the query rows and a few small lookups, never from the LLM's text. They usually reach the browser before the first word of the answer.
 
-The app has three components that must all be running simultaneously: **Neo4j**, **FastAPI backend**, and the **React frontend**. Open a separate terminal for each.
+## Engineering highlights
 
-### Prerequisites
+**A points model that survived a leakage audit.** The first model scored well, but an audit showed why: its feature pipeline duplicated rows about 27 times, and FPL's historical "expected points" field had been recorded *during* each gameweek, once lineups were known. Version 3 was rebuilt with one row per player per fixture and features drawn only from earlier gameweeks, and tests enforce both. On held-out seasons, its top 20 picks per gameweek average **4.70 points [95% CI 4.40–5.02]**, versus 4.14 for the best simple baseline and 1.39 for a random pick. The captain pick averages 6.61 points against 5.59, though that gap isn't statistically significant. The [full evaluation](docs/ml_evaluation/README.md) covers the protocol, bootstrap confidence intervals, ablations and the leakage checks.
 
-- Python 3.9+ with a `.venv` virtual environment
-- Node.js 18+
-- Neo4j (Desktop or running via Docker)
-- HuggingFace API token in `.env`
+**Experiments run like experiments.** Each candidate feature goes through a backtest workflow: four held-out seasons, three seeds, paired bootstrap intervals, plus subsets such as newly promoted clubs. Most ideas didn't beat the current model and were left out, including per-90 rate features, recency weighting, manager-change features and head-to-head history. Training and backtests run in GitHub Actions. On the server, the model retrains every Monday, and a new candidate replaces the live one only if it beats every baseline on held-out data.
 
----
+**Squad selection as an optimisation problem.** Team of the Week solves a mixed-integer linear program with SciPy (`milp`): 15 players, £100m, at most three per club, a valid formation, and the captain's points counted twice. The bench is weighted by how often each substitute actually plays, so spare money buys substitutes who will play rather than the cheapest ones available.
 
-### Step 1 — Start Neo4j
+**A live season, refreshed daily.** A timer on the server fetches the FPL API, applies it to the graph idempotently (about 10 seconds), regenerates predictions and hot-reloads the API. Fixtures carry FPL's difficulty ratings, injured or suspended players are predicted 0, and doubtful ones are scaled by their chance of playing.
 
-**Option A: Neo4j Desktop**
-Open Neo4j Desktop and start your database. It runs on `bolt://localhost:7687` by default.
+**Self-hosted on one small VM.** Caddy (automatic HTTPS), FastAPI and Neo4j run under Docker Compose on a 4 GB Ubuntu VM. Every push to `main` deploys through GitHub Actions over SSH, and the images build on both x86_64 and arm64. If Neo4j isn't up yet after a reboot, the backend waits for it and connects when it's ready, instead of crashing.
 
-**Option B: Docker**
-First make sure Docker Desktop is open and running, then:
-```powershell
-docker compose up neo4j
+**Details that matter in production.** Admin endpoints stay hidden (404) unless an admin token is configured, and reject requests that don't send it. Query endpoints have a rate limit per client. The image proxy only fetches from allow-listed hosts and checks every redirect. Page-view counting is cookie-free, stores no personal data, only runs after consent, and respects Global Privacy Control.
+
+**Frontend.** React and TypeScript with a token-based design system (`/design` shows every component). Answer cards use CSS container queries so they adapt when the chat column narrows. Answers are announced to screen readers without reading out every card, and each route is code-split. Every page sets its own title and description, and the build generates the sitemap and social preview tags.
+
+**Tests.** More than 500 pytest tests, including Hypothesis property tests, tests that check the model features for leakage, and tests for the optimiser, the data pipeline and the Cypher that each query generates.
+
+## Tech stack
+
+| Area | Tools |
+| --- | --- |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, Zustand, Recharts |
+| Backend | Python 3.11, FastAPI, spaCy, rapidfuzz |
+| Data | Neo4j 5 (Cypher), the official FPL API, historical FPL data from 2020-21 |
+| AI / ML | Groq (gpt-oss-120b, gpt-oss-20b, Qwen 3), sentence-transformers, XGBoost, SciPy MILP |
+| Infrastructure | Docker Compose, Caddy, GitHub Actions, Ubuntu VM on Azure |
+
+## Run it locally
+
+### Frontend only (about a minute)
+
+Run the UI on your machine against the live API, with no backend or database:
+
+```bash
+npm install
+npm run dev:live
 ```
 
-Verify Neo4j is up before proceeding:
-```powershell
-netstat -ano | findstr ":7687"
-# Should show a LISTENING entry
+Then open http://localhost:3000.
+
+### Full stack
+
+You need Docker, Python 3.11+, Node 18+ and a free [Groq API key](https://console.groq.com).
+
+```bash
+# 1. Neo4j on bolt://localhost:7687 (user neo4j, password "password")
+docker compose up -d neo4j
+
+# 2. Python environment (on Windows, activate with .venv\Scripts\activate)
+python -m venv .venv
+source .venv/bin/activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu   # optional: skips the large CUDA build
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
 ```
 
----
-
-### Step 2 — Start the FastAPI Backend
-
-Open a new terminal and run using the project's virtual environment directly:
-
-```powershell
-C:\ACL2\FPL\ACL_M3\.venv\Scripts\uvicorn.exe api_main:app --reload --port 8000 --app-dir C:\ACL2\FPL\ACL_M3
-```
-
-Or activate the venv first, then use uvicorn normally:
-
-```powershell
-# Activate (run once per terminal session)
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
-C:\ACL2\FPL\ACL_M3\.venv\Scripts\Activate.ps1
-
-# Then start the server
-uvicorn api_main:app --reload --port 8000
-```
-
-You should see:
-```
-✅ API Ready!
-INFO: Application startup complete.
-```
-
-The Neo4j connection warning at startup is expected if Neo4j isn't up yet — you can connect manually from the Settings page.
-
----
-
-### Step 3 — Start the React Frontend
-
-Open another new terminal:
-
-```powershell
-cd C:\ACL2\FPL\ACL_M3
-npm install        # first time only
-npm run dev
-```
-
-The app will be available at **http://localhost:3000**
-
----
-
-### Step 4 — Load the data (first time only)
-
-```powershell
-.venv\Scripts\python.exe load_data.py
-```
-
-This wipes Neo4j and loads all six seasons plus the 2026-27 fixtures (about 30 seconds locally, about 3 minutes against a remote database). Then open **http://localhost:3000**.
-
----
-
-### Summary — Three terminals at once
-
-| Terminal | Command |
-|----------|---------|
-| Neo4j | `docker compose up neo4j` or Neo4j Desktop |
-| FastAPI | `C:\ACL2\FPL\ACL_M3\.venv\Scripts\uvicorn.exe api_main:app --reload --port 8000 --app-dir C:\ACL2\FPL\ACL_M3` |
-| React | `cd C:\ACL2\FPL\ACL_M3 && npm run dev` |
-
----
-
-## 📁 Project Structure
-
-```
-ACL_M3/
-├── api_main.py            # FastAPI backend (all routes)
-├── load_data.py           # Load or reload the Neo4j graph
-├── Dockerfile, docker-compose.yml, requirements*.txt
-├── package.json, vite.config.ts, tailwind.config.js, tsconfig*.json, index.html
-│
-├── src/                   # React frontend ("Pitch Me"): pages/, components/ui (design system),
-│                          # components/shell (header, footer, search), services/api.ts, store/
-├── public/                # Static assets (club crests in public/logos/)
-│
-├── config/                # settings.py: env vars, seasons, data paths
-├── graph/                 # Neo4j connection, schema, loader, Cypher query library
-├── preprocessing/         # Intent classifier and entity extractor (Q&A pipeline)
-├── embeddings/            # Sentence-transformer embeddings (+ prebuilt pickles)
-├── llm/                   # LLM manager (Groq) and prompt templates
-├── services/              # Player index, avatars, predictions, fixtures, season dashboard
-├── pipeline/              # Daily current-season job (FPL API -> data/live -> graph -> predictions)
-├── ml/                    # Points model (v3), training, evaluation, legacy v2 stack
-├── trivia/, utils/, migrations/
-├── tests/                 # pytest suite
-│
-├── data/                  # Committed datasets: historical per-match CSVs, fixture lists
-│   └── live/              # Pipeline output (gitignored; a Docker volume on the VM)
-├── EFL_Data_All_Seasons/  # Championship data for promoted teams
-├── scripts/               # One-off tools; run from the repo root: python -m scripts.<group>.<name>
-│   ├── checks/            #   database/API checks and ad-hoc test scripts
-│   ├── data/              #   fixture and season data preparation
-│   ├── efl/               #   EFL (Championship) data ingestion
-│   ├── embeddings/        #   rebuild embeddings from the CSV (used by CI)
-│   └── analysis/          #   LLM evaluation, prediction plots
-├── deploy/                # VM deployment: compose file, Caddy, deploy/setup scripts
-├── docs/                  # Design brief, ML evaluation, reports, notes; docs/archive = history
-└── legacy/                # Original Streamlit app and old API (not used)
-```
-
----
-
-## ☁️ Deployment
-
-Production runs on a single VM with Docker Compose: Caddy (HTTPS and the built frontend), the FastAPI backend, and Neo4j. Setup steps for Oracle Cloud's free tier, plus day-to-day commands, are in **[deploy/README.md](deploy/README.md)**.
-
----
-
-## 🔧 Environment Variables
-
-Create or edit `.env` in the project root (for the VM, see `deploy/.env.example`):
+Create `.env` in the repo root:
 
 ```env
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=password
 GROQ_API_KEY=gsk_your_key_here
-# Optional
-HUGGINGFACE_API_TOKEN=
-GOOGLE_CUSTOM_SEARCH_API_KEY=
-GOOGLE_CUSTOM_SEARCH_CX=
 ```
 
----
+```bash
+# 3. Build the graph from data/ (wipes the database first; about 30 s locally)
+python load_data.py
 
-## 📚 Cypher Query Library
+# Optional: pull the current season from the FPL API and predict the next gameweek
+python -m pipeline.current_season
+python -m pipeline.load_current
+python -m pipeline.predict_next_gw
 
-20+ parameterized queries covering:
+# 4. API on :8000
+uvicorn api_main:app --reload --port 8000
 
-| Query | Description |
-|-------|-------------|
-| `get_top_scorers_by_season` | Top goal scorers in a season |
-| `get_top_assisters_by_season` | Top assist providers |
-| `get_top_points_by_position` | Top FPL points by position |
-| `get_player_season_stats` | Comprehensive player stats |
-| `get_best_value_players` | Points per million analysis |
-| `get_bonus_point_leaders` | Bonus point magnets |
-| `get_clean_sheet_leaders` | Defenders/GKs with most clean sheets |
-| `get_ict_index_leaders` | Highest ICT index players |
-| `compare_players` | Head-to-head comparison |
-| `get_head_to_head` | Team vs team results |
+# 5. Frontend on :3000, in another terminal (proxies /api to :8000)
+npm install
+npm run dev
+```
 
----
+Run the tests with `pip install -r requirements-dev.txt`, then `python -m pytest tests`. To deploy on your own VM, see [deploy/README.md](deploy/README.md).
 
-## 🤖 LLM Models
+## Project structure
 
-All served by Groq:
+```
+api_main.py        FastAPI app: routes and startup
+load_data.py       builds or reloads the Neo4j graph
+src/               React frontend (pages/, components/ui design system, services/api.ts)
+graph/             Neo4j connection, schema, loader and the Cypher query library
+preprocessing/     intent classifier and entity extractor
+llm/               LLM manager (Groq, fallbacks, streaming) and prompt templates
+embeddings/        sentence-transformer retrieval and prebuilt embeddings
+services/          answer cards, player index, avatars, season dashboard, squad optimiser
+pipeline/          daily job: FPL API -> data/live -> graph -> predictions, weekly retrain
+ml/                points model v3: features, training, evaluation
+tests/             pytest suite
+deploy/            production Docker Compose, Caddy, VM setup and deploy scripts
+scripts/           one-off tools (data prep, analysis, backtests, site images)
+docs/              ML evaluation, design notes, reports
+```
 
-| Key | Model |
-|-----|-------|
-| `gpt-oss-120b` | OpenAI GPT-OSS 120B (default) |
-| `gpt-oss-20b` | OpenAI GPT-OSS 20B (fast) |
-| `qwen3-27b` | Qwen 3.8 27B |
+## Background
 
----
+Pitch Me began in December 2025 as a university team project: a Graph-RAG question-answering assistant over FPL data. Since then it has grown into a live product. The current season updates daily, the prediction model was rebuilt and evaluated, Team of the Week was added, the site was redesigned, and it moved to self-hosting.
 
-## 📈 Embedding Models
+The screenshots come from the live site and are regenerated with `node scripts/site/screenshots.mjs`.
 
-| Model | Dimensions | Speed | Quality |
-|-------|------------|-------|---------|
-| MiniLM | 384 | ⚡ Fast | Good |
-| MPNet | 768 | Normal | ⭐ Better |
+## Disclaimer and license
 
----
+Pitch Me is a fan-made project. It is not affiliated with, endorsed by or connected to the Premier League or Fantasy Premier League.
 
-## 🔍 Retrieval Methods
-
-| Method | Description |
-|--------|-------------|
-| Baseline (Cypher) | Direct graph queries only |
-| Embeddings | Semantic similarity search |
-| Hybrid | Cypher + embeddings (recommended) |
-
----
-
-## 🎮 Trivia Categories
-
-- **Top Scorers** — goal and point leaders
-- **Player Stats** — individual statistics
-- **Records** — FPL records and achievements
-- **True/False** — fact verification
-- **Multiple Choice** — classic quiz format
-- **Comparisons** — player vs player
-- **Team Facts** — fixture and team questions
-
----
-
-## 📄 License
-
-MIT License — free to use for educational purposes.
-
-## 🙏 Acknowledgments
-
-- Fantasy Premier League for the data
-- Neo4j for the graph database
-- HuggingFace for model hosting
-- React + Vite + Tailwind for the frontend
-- FastAPI for the backend
+MIT License.
