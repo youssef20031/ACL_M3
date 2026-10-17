@@ -80,7 +80,9 @@ class TestE2EFixtureAwarePredictionFlow(unittest.TestCase):
         self.test_player_name = "Mohamed Salah"
         self.test_team_name = "Liverpool"
         self.test_opponent = "Manchester United"
-        self.test_fixture_date = datetime(2026, 8, 22, 15, 0, tzinfo=timezone.utc)
+        # Relative to now so the fixture is always upcoming, whatever the date the suite runs on
+        self.current_date = datetime.now(timezone.utc).replace(microsecond=0)
+        self.test_fixture_date = (self.current_date + timedelta(days=7)).replace(hour=15, minute=0, second=0)
         self.test_matchday = 2
         self.test_fixture_id = "fixture-2026-27-md2-liv-mun"
     
@@ -107,8 +109,8 @@ class TestE2EFixtureAwarePredictionFlow(unittest.TestCase):
                 "Matchday": self.test_matchday,
                 "Home Team": self.test_team_name,
                 "Away Team": self.test_opponent,
-                "Date": "22/08/2026",
-                "Time": "15:00"
+                "Date": self.test_fixture_date.strftime("%d/%m/%Y"),
+                "Time": self.test_fixture_date.strftime("%H:%M")
             })
             csv_path = f.name
         
@@ -144,7 +146,7 @@ class TestE2EFixtureAwarePredictionFlow(unittest.TestCase):
             # Get next match
             next_match = self.fixture_service.get_next_match(
                 self.test_player_name,
-                current_date=datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+                current_date=self.current_date
             )
             
             # Verify fixture context is returned
@@ -218,7 +220,7 @@ class TestE2EFixtureAwarePredictionFlow(unittest.TestCase):
         # Get next match (should return None)
         next_match = self.fixture_service.get_next_match(
             self.test_player_name,
-            current_date=datetime(2026, 8, 15, 12, 0, tzinfo=timezone.utc)
+            current_date=self.current_date
         )
         
         self.assertIsNone(next_match)
@@ -295,7 +297,9 @@ class TestE2EPredictionCachingBehavior(unittest.TestCase):
         # Test data
         self.test_player_name = "Kevin De Bruyne"
         self.test_fixture_id = "fixture-2026-27-md5-mci-ars"
-        self.test_fixture_date = datetime(2026, 9, 15, 15, 0, tzinfo=timezone.utc)
+        # Must stay in the future: PredictionCache.calculate_cache_ttl returns 0 (no caching)
+        # for a kickoff that has passed. Three days ahead gives the 6-hour TTL.
+        self.test_fixture_date = datetime.now(timezone.utc) + timedelta(days=3)
     
     def test_e2e_prediction_caching_flow(self):
         """
