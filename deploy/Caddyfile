@@ -1,7 +1,10 @@
 # SITE_ADDRESS is a hostname (e.g. 1-2-3-4.sslip.io or fpl.example.com).
 # Caddy obtains and renews the HTTPS certificate automatically.
 {$SITE_ADDRESS} {
-	encode zstd gzip
+	# Not the assistant's answer stream: server-sent events must reach the browser as they are
+	# written, and a compressor can hold them back until its buffer fills
+	@compressible not path /api/query/stream
+	encode @compressible zstd gzip
 
 	@backend path /api/* /health /ws /docs /openapi.json
 	handle @backend {

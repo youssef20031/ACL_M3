@@ -9,8 +9,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from config.settings import FIXTURES_FALLBACK_CSV
 from preprocessing.intent_classifier import IntentClassifier, Intent
-from preprocessing.entity_extractor import EntityExtractor
+from preprocessing.entity_extractor import EntityExtractor, ExtractedEntities
 from graph.queries import CypherQueries
+from services.player_index import PlayerIndex
 
 class TestAppPipeline(unittest.TestCase):
     @classmethod
@@ -642,6 +643,115 @@ class TestTeamQuestionIntents(unittest.TestCase):
         kane = self.extractor.extract("Kane stats for Spurs")
         self.assertEqual(refine(self.classifier.classify("Kane stats for Spurs").intent, kane.players, kane.teams),
                          Intent.PLAYER_STATS)
+
+
+class TestClubNamesAreNotPlayers(unittest.TestCase):
+    """Regression: words of a club's name were read as player mentions. The player index
+    matched "Coventry" (Coventry City) to Conor Coventry, and fuzzily "Leeds" to Pierre
+    Lees-Melou, "Brighton" to Marc Albrighton, "Villa" to Pablo Marí Villar and "Aston" to
+    Auston Trusty. So "Who is the Coventry City goalkeeper?" searched for Conor Coventry.
+    When the index found nobody, spaCy's PERSON fallback returned clubs like "Leeds United"."""
+
+    ROWS = [
+        ("Conor Coventry", "MID", "West Ham", True, 40),
+        ("Pierre Lees-Melou", "MID", "Norwich", False, 50),
+        ("Marc Albrighton", "MID", "Leicester", False, 150),
+        ("Pablo Marí Villar", "DEF", "Arsenal", False, 60),
+        ("Auston Trusty", "DEF", "Sheffield Utd", False, 30),
+        ("Bukayo Saka", "MID", "Arsenal", True, 900),
+        ("Mohamed Salah", "MID", "Liverpool", True, 1500),
+        ("Ellis Simms", "FWD", "Coventry City", True, 20),
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.extractor = EntityExtractor()
+        cls.extractor.player_index = PlayerIndex([
+            {"player_name": name, "position": position, "team_name": team, "is_current": current,
+             "career_points": points}
+            for name, position, team, current, points in cls.ROWS
+        ])
+        # Without the index: known full names, then single name words, then spaCy PERSON
+        cls.without_index = EntityExtractor(known_players={row[0] for row in cls.ROWS})
+
+    def players_of(self, prompt, extractor=None, history=None):
+        return (extractor or self.extractor).extract(prompt, history).players
+
+    def test_club_questions_mention_no_player(self):
+        cases = {
+            "Coventry City fixture results": ["Coventry City"],
+            "Leeds United team analysis": ["Leeds"],
+            "Who is the Coventry City goalkeeper?": ["Coventry City"],
+            "How is Coventry City doing this season?": ["Coventry City"],
+            "Aston Villa vs Brighton head to head": ["Aston Villa", "Brighton"],
+            "Who plays for Villa?": ["Aston Villa"],
+            "Who is the best Leeds player?": ["Leeds"],
+            "Brighton and Hove Albion results": ["Brighton"],
+            "Predicted points for Leeds players next gameweek": ["Leeds"],
+        }
+        for prompt, teams in cases.items():
+            for extractor in (self.extractor, self.without_index):
+                entities = extractor.extract(prompt)
+                self.assertEqual(entities.players, [], prompt)
+                self.assertEqual(entities.teams, teams, prompt)
+
+    def test_club_goalkeeper_question_searches_no_player(self):
+        params = self.extractor.get_query_parameters(self.extractor.extract("Who is the Coventry City goalkeeper?"))
+        self.assertNotIn("name_pattern", params)
+        self.assertNotIn("player_name", params)
+        self.assertEqual((params.get("team_name"), params.get("position")), ("Coventry City", "GK"))
+
+    def test_a_player_named_in_full_still_counts(self):
+        cases = {
+            "How did Conor Coventry do?": ["Conor Coventry"],
+            "Is Conor Coventry better than the Coventry City keeper?": ["Conor Coventry"],
+            "Tell me about Marc Albrighton": ["Marc Albrighton"],
+            "Compare Pablo Marí Villar and Auston Trusty": ["Pablo Marí Villar", "Auston Trusty"],
+            # surnames still count away from a club's name
+            "Saka vs Salah at Villa Park": ["Bukayo Saka", "Mohamed Salah"],
+        }
+        for prompt, players in cases.items():
+            self.assertEqual(self.players_of(prompt), players, prompt)
+        self.assertEqual(self.players_of("How did Conor Coventry do?", self.without_index), ["Conor Coventry"])
+
+    def test_pronoun_skips_club_words_in_the_history(self):
+        history = [
+            {"role": "user", "content": "Who is Coventry City's top scorer?"},
+            {"role": "assistant", "content": "Coventry City's top scorer this season is Ellis Simms."},
+        ]
+        self.assertEqual(self.players_of("How many goals has he scored?", history=history), ["Ellis Simms"])
+
+    def person_fallback(self, text, *people):
+        """Players found when spaCy tags `people` as PERSON (the model's own tags vary)."""
+        doc = self.extractor.nlp(text)
+        doc.ents = [doc.char_span(text.index(p), text.index(p) + len(p), label="PERSON") for p in people]
+        return self.extractor._extract_players(doc, ExtractedEntities())
+
+    def test_person_fallback_skips_clubs(self):
+        cases = {
+            "Leeds United team analysis": "Leeds United",
+            "How is Tottenham doing this season?": "Tottenham",
+            "Is Tottenham Hotspur's defence any good?": "Tottenham Hotspur's",
+            "Wolverhampton Wanderers' form": "Wolverhampton Wanderers'",
+            "Aston Villa vs Arsenal head to head": "Aston Villa vs Arsenal",
+        }
+        for text, person in cases.items():
+            self.assertEqual(self.person_fallback(text, person), [], text)
+
+    def test_person_fallback_keeps_people(self):
+        # Neither name is in the index; a club word in a name doesn't make it a club
+        self.assertEqual(self.person_fallback("Who is Jamie Vardy?", "Jamie Vardy"), ["Jamie Vardy"])
+        self.assertEqual(self.person_fallback("Did Jack Hull ever play for Hull City?", "Jack Hull"), ["Jack Hull"])
+
+    def test_team_spans_index_the_question(self):
+        cases = {
+            "Who is the Coventry City goalkeeper?": ["Coventry City"],
+            # "İ" lowercases to two characters, which must not shift the spans after it
+            "Did İlkay Gündoğan play against Man City?": ["Man City"],
+            "Nott'm Forest vs Brighton & Hove Albion": ["Nott'm Forest", "Brighton & Hove Albion"],
+        }
+        for text, clubs in cases.items():
+            self.assertEqual([text[start:end] for start, end, _ in EntityExtractor.find_team_spans(text)], clubs, text)
 
 
 if __name__ == "__main__":

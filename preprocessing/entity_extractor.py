@@ -5,12 +5,17 @@ from config.settings import SEASONS
 import spacy
 from spacy.matcher import Matcher
 from spacy.tokens import Doc
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 import re
 
 # A season written as "2022-23", "2022/23", "2022-2023" or "22/23".
 SEASON_TEXT_RE = re.compile(r"\b(?:19|20)?\d{2}\s*[-/–]\s*(?:19|20)?\d{2}\b")
+
+# A possessive ending, which spaCy can keep inside an entity ("Leeds United's", "Wolves'").
+_POSSESSIVE_RE = re.compile(r"['’]s?$")
+# Words that join club names inside one spaCy entity ("Aston Villa vs Arsenal").
+_CLUB_JOINERS = {"vs", "v", "versus", "and", "or"}
 
 
 def _keyword_regex(keys: Iterable[str]) -> "re.Pattern[str]":
@@ -25,14 +30,41 @@ def _keyword_regex(keys: Iterable[str]) -> "re.Pattern[str]":
     return re.compile(rf"\b(?:{body})\b")
 
 
+def _keyword_spans(regex: "re.Pattern[str]", table: Dict[str, str], text: str) -> List[Tuple[int, int, str]]:
+    """(start, end, value) for each of the table's keys found in the text, in order."""
+    # Lowercased one character at a time so the offsets stay those of `text` ("İ" lowercases
+    # to two characters)
+    lowered = [c.lower() for c in text]
+    origin = [i for i, low in enumerate(lowered) for _ in low]
+    spans: List[Tuple[int, int, str]] = []
+    for match in regex.finditer("".join(lowered)):
+        value = table.get(" ".join(match.group().split()))
+        if value:
+            spans.append((origin[match.start()], origin[match.end() - 1] + 1, value))
+    return spans
+
+
 def _find_keywords(regex: "re.Pattern[str]", table: Dict[str, str], text: str) -> List[str]:
     """The table's values for the keys found in the text, in order of appearance, no repeats."""
     found: List[str] = []
-    for match in regex.finditer(text.lower()):
-        value = table.get(" ".join(match.group().split()))
-        if value and value not in found:
+    for _start, _end, value in _keyword_spans(regex, table, text):
+        if value not in found:
             found.append(value)
     return found
+
+
+def _names_clubs(text: str, start: int, end: int, clubs: List[Tuple[int, int, str]]) -> bool:
+    """Whether text[start:end] is only club names (the spans in `clubs`), allowing "vs"/"and"
+    between them and a possessive ending: "Leeds United", "Tottenham's", "Aston Villa vs
+    Arsenal". Not "Conor Coventry", though Coventry is a club."""
+    end = start + len(_POSSESSIVE_RE.sub("", text[start:end]))
+    for word in re.finditer(r"\w+", text[start:end]):
+        if word.group().lower() in _CLUB_JOINERS:
+            continue
+        w_start, w_end = start + word.start(), start + word.end()
+        if not any(c_start <= w_start and w_end <= c_end for c_start, c_end, _ in clubs):
+            return False
+    return True
 
 
 @dataclass
@@ -366,7 +398,7 @@ class EntityExtractor:
 
         if self.player_index is not None:
             for msg in reversed(recent_messages):  # most recent mention wins
-                found = self.player_index.mentions(msg.get('content', ''), limit=1)
+                found = self._player_mentions(msg.get('content', ''), limit=1)
                 if found:
                     return found
             return []
@@ -398,6 +430,30 @@ class EntityExtractor:
         """Graph team names mentioned in the text, in order ("Hull City vs Man City" ->
         ["Hull City", "Man City"]; "Leeds United" -> ["Leeds"], not Man Utd as well)."""
         return _find_keywords(cls._TEAM_RE, cls.TEAMS, text)
+
+    @classmethod
+    def find_team_spans(cls, text: str) -> List[Tuple[int, int, str]]:
+        """The matches behind find_teams, as (start, end, graph team name) indexing the text:
+        "Who is the Coventry City goalkeeper?" -> [(11, 24, "Coventry City")]."""
+        return _keyword_spans(cls._TEAM_RE, cls.TEAMS, text)
+
+    def _player_mentions(self, text: str, limit: int) -> List[str]:
+        """Players the index finds in the text, skipping words that belong to a club's name.
+
+        In "Who is the Coventry City goalkeeper?" Coventry is the club, not Conor Coventry,
+        and "Leeds" isn't a misspelt Lees-Melou. A player named in full still counts, even
+        when a club shares a word of the name ("How did Conor Coventry do?").
+        """
+        if not text:
+            return []
+        clubs = self.find_team_spans(text)
+        names: List[str] = []
+        for start, end, name, full_name in self.player_index.mention_spans(text):
+            if not full_name and any(start < c_end and c_start < end for c_start, c_end, _ in clubs):
+                continue
+            if name not in names:
+                names.append(name)
+        return names[:limit]
 
     def _extract_teams(self, doc: Doc) -> List[str]:
         """Extract team names from the query, in the order they're mentioned.
@@ -541,9 +597,10 @@ class EntityExtractor:
         """
         players = []
         text_lower = doc.text.lower()
+        clubs = self.find_team_spans(doc.text)
 
         if self.player_index is not None:
-            players = self.player_index.mentions(doc.text, limit=2)
+            players = self._player_mentions(doc.text, limit=2)
         
         # First, check against known players (exact full name match)
         elif self.known_players:
@@ -562,6 +619,8 @@ class EntityExtractor:
                 'stats', 'points', 'goals', 'assists', 'scored', 'performance'
             }
             query_words = query_words - common_words
+            # Nor the words of a club's name ("Coventry" in "Coventry City fixtures")
+            query_words -= {w for start, end, _ in clubs for w in doc.text[start:end].lower().split()}
             
             for player in self.known_players:
                 player_parts = player.lower().split()
@@ -589,8 +648,9 @@ class EntityExtractor:
             
             for ent in doc.ents:
                 if ent.label_ == "PERSON":
-                    # Check if not a team or common word
-                    if (ent.text not in entities.teams and 
+                    # Check if not a club (spaCy tags "Leeds United" and "Tottenham's" as
+                    # PERSON too) or common word
+                    if (not _names_clubs(doc.text, ent.start_char, ent.end_char, clubs) and
                         ent.text not in non_names and
                         len(ent.text) > 2):
                         players.append(ent.text)

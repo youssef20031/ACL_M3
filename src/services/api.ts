@@ -46,7 +46,336 @@ export interface QueryResponse {
       label: string;
     }>;
   };
+  /** Visual blocks drawn with the answer (services/answer_cards.py). Absent from older backends. */
+  cards?: AnswerCard[];
+  /** Suggested next questions, each routed by the backend's intent classifier. */
+  follow_ups?: string[];
 }
+
+export interface QueryRequestBody {
+  question: string;
+  model: string;
+  retrieval_method: string;
+  embedding_model: string;
+  is_first_message: boolean;
+  chat_history: Array<{ role: string; content: string }>;
+}
+
+/** Events of POST /api/query/stream, in order: cards (as soon as they're built), the answer
+ * in delta pieces, the final answer text, then the full response. */
+export type AnswerStreamEvent =
+  | { event: 'cards'; data: { cards: AnswerCard[]; follow_ups: string[] } }
+  | { event: 'delta'; data: { text: string } }
+  | { event: 'answer'; data: { text: string } }
+  | { event: 'done'; data: QueryResponse }
+  | { event: 'error'; data: { detail: string } };
+
+/** The backend has no stream endpoint (an older deploy): use queryFPL instead. */
+export class StreamUnavailableError extends Error {}
+
+// --- Assistant answer cards -------------------------------------------------
+// Built from structured data (query rows, the graph, predictions), never from the
+// answer text. The backend may add card types later: unknown ones are skipped.
+
+export type CardTone = 'accent' | 'info' | 'warning' | 'danger' | 'neutral';
+export type CardIcon =
+  | 'trophy'
+  | 'flame'
+  | 'medal'
+  | 'star'
+  | 'zap'
+  | 'clock'
+  | 'home'
+  | 'trend-up'
+  | 'trend-down'
+  | 'shield'
+  | 'target'
+  | 'calendar'
+  | 'alert';
+/** int, dec1/dec2 (decimals), money (£m), compact (1.2M). */
+export type CardValueFormat = 'int' | 'dec1' | 'dec2' | 'money' | 'compact';
+export type MatchResult = 'W' | 'D' | 'L';
+
+/** A "notable stat" computed from the data (streaks, ranks, records). */
+export interface CardHighlight {
+  label: string;
+  value: string;
+  detail: string | null;
+  tone: CardTone;
+  icon: CardIcon;
+}
+
+export interface CardPlayer {
+  /** Exact player name in the graph (used for links). */
+  name: string;
+  team: string | null;
+  position: PositionCode | null;
+  photo: string | null;
+  /** FPL availability (a/d/i/s/u/n); null where it doesn't apply (past seasons). */
+  status: string | null;
+  chance: number | null;
+  news: string | null;
+}
+
+export interface CardStat {
+  key: string;
+  label: string;
+  value: number | null;
+  format: CardValueFormat;
+}
+
+export interface CardOpponent {
+  team: string;
+  home: boolean;
+  /** FPL fixture difficulty 1–5 for the player's/team's side, when known. */
+  difficulty: number | null;
+  kickoff_time: string | null;
+  gameweek: number | null;
+}
+
+export interface CardPrediction {
+  gameweek: number;
+  points: number;
+  /** Several for a double gameweek, none for a blank one. */
+  opponents: CardOpponent[];
+  rank: number;
+  pool: number;
+  position_rank: number;
+  position_pool: number;
+}
+
+export interface CardMatch {
+  season: string;
+  gameweek: number | null;
+  points: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  opponent: string | null;
+  home: boolean | null;
+  /** From the player's side, e.g. "4-1". */
+  score: string | null;
+  result: MatchResult | null;
+}
+
+/** Price (£m) and ownership (managers) by gameweek over one season. */
+export interface CardTrend {
+  season: string;
+  points: Array<{ gameweek: number; price: number; selected: number | null }>;
+  price_change: number;
+  selected_change: number | null;
+}
+
+/** Expected goals/assists over one season (FPL publishes them for recent seasons only). */
+export interface CardUnderlying {
+  season: string;
+  minutes: number;
+  xg: number;
+  xa: number;
+  xgi: number;
+  goals: number;
+  assists: number;
+  xg_per90: number | null;
+  xa_per90: number | null;
+  xgi_per90: number | null;
+  /** Expected goals conceded while on the pitch, next to the goals actually conceded. */
+  xgc: number;
+  goals_conceded: number;
+}
+
+export interface PlayerAnswerCard {
+  type: 'player';
+  id: string;
+  emphasis: 'stats' | 'prediction';
+  player: CardPlayer;
+  /** null = all seasons. */
+  season: string | null;
+  season_label: string;
+  stats: CardStat[];
+  /** Points per season, oldest first (all-seasons cards only). */
+  seasons: Array<{ season: string; team: string | null; points: number; goals: number; assists: number; games: number }>;
+  /** Most recent matches in scope, oldest first. */
+  form: CardMatch[];
+  /** The gameweek the question asked about. */
+  match: CardMatch | null;
+  prediction: CardPrediction | null;
+  /** The club's next matches with FPL difficulty (current players). */
+  next_fixtures?: CardOpponent[];
+  /** For the season asked about, else the player's latest season. */
+  trend?: CardTrend | null;
+  underlying?: CardUnderlying | null;
+  highlights: CardHighlight[];
+}
+
+export interface ComparisonMetric {
+  key: string;
+  label: string;
+  format: CardValueFormat;
+  values: [number | null, number | null];
+  /** Index of the higher value; null for ties, missing values and unscored rows. */
+  better: 0 | 1 | null;
+  scored: boolean;
+}
+
+export interface ComparisonAnswerCard {
+  type: 'comparison';
+  id: string;
+  emphasis: 'stats' | 'prediction';
+  season: string | null;
+  season_label: string;
+  players: [CardPlayer, CardPlayer];
+  metrics: ComparisonMetric[];
+  /** How many scored metrics each player leads. */
+  leads: [number, number];
+  predictions: [CardPrediction | null, CardPrediction | null];
+  /** Each player's next three matches (current players). */
+  next_fixtures?: [CardOpponent[], CardOpponent[]];
+  form: [CardMatch[], CardMatch[]];
+  highlights: CardHighlight[];
+}
+
+export interface LeaderboardRow {
+  /** Shared by ties; null in grouped (per-position) lists. */
+  rank: number | null;
+  player: CardPlayer;
+  value: number | null;
+  values: Record<string, number | null>;
+  detail: string | null;
+  group: PositionCode | null;
+}
+
+export interface LeaderboardAnswerCard {
+  type: 'leaderboard';
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: CardIcon;
+  metric: { key: string; label: string; format: CardValueFormat; unit: string };
+  columns: Array<{ key: string; label: string; format: CardValueFormat }>;
+  /** Rows grouped by position (the top players of each). */
+  grouped: boolean;
+  season: string | null;
+  rows: LeaderboardRow[];
+  highlights: CardHighlight[];
+}
+
+export interface PredictionRow {
+  rank: number;
+  player: CardPlayer;
+  points: number;
+  opponents: CardOpponent[];
+  price: number | null;
+}
+
+export interface PredictionAnswerCard {
+  type: 'prediction';
+  id: string;
+  title: string;
+  gameweek: number;
+  deadline: string | null;
+  position: PositionCode | null;
+  captain: boolean;
+  model: string | null;
+  rows: PredictionRow[];
+  highlights: CardHighlight[];
+}
+
+export interface TeamAnswerCard {
+  type: 'team';
+  id: string;
+  team: string;
+  season: string;
+  standing: {
+    position: number;
+    played: number;
+    won: number;
+    drawn: number;
+    lost: number;
+    goals_for: number;
+    goals_against: number;
+    goal_difference: number;
+    points: number;
+  } | null;
+  teams_in_table: number;
+  /** Last five results, oldest first. */
+  form: Array<{ opponent: string; home: boolean; score: string; result: MatchResult; gameweek: number | null }>;
+  next_fixtures: CardOpponent[];
+  top_players: Array<{ player: CardPlayer; points: number; goals: number; assists: number; games: number }>;
+  /** Injured, doubtful and suspended players (first four). */
+  flagged: CardPlayer[];
+  flagged_total: number;
+  highlights: CardHighlight[];
+}
+
+export interface FixturesAnswerCard {
+  type: 'fixtures';
+  id: string;
+  title: string;
+  subtitle: string;
+  /** One team (its results) or two (head to head); results are from teams[0]'s side. */
+  teams: string[];
+  record: { team: string; played: number; won: number; drawn: number; lost: number; goals_for: number; goals_against: number };
+  /** Newest first. */
+  matches: Array<{
+    season: string | null;
+    gameweek: number | null;
+    home_team: string;
+    away_team: string;
+    home_score: number;
+    away_score: number;
+    kickoff_time: string | null;
+    result: MatchResult | null;
+  }>;
+  total: number;
+  highlights: CardHighlight[];
+}
+
+export interface SeasonAnswerCard {
+  type: 'season';
+  id: string;
+  season: string;
+  season_label: string;
+  in_progress: boolean;
+  stats: CardStat[];
+  leaders: Array<{ player: CardPlayer; points: number; goals: number; assists: number }>;
+  highlights: CardHighlight[];
+}
+
+export interface PitchSlot {
+  player: CardPlayer;
+  points: number | null;
+  cost: number | null;
+  captain: boolean;
+  vice_captain: boolean;
+  opponents: Array<{ team: string; home: boolean }>;
+}
+
+/** Best XI: the optimiser's predicted squad, or a finished gameweek's dream team. */
+export interface PitchAnswerCard {
+  type: 'pitch';
+  id: string;
+  mode: TeamOfWeekMode;
+  gameweek: number;
+  formation: string;
+  /** Predicted mode counts the captain twice. */
+  total_points: number;
+  total_cost: number | null;
+  budget: number | null;
+  starters: PitchSlot[];
+  /** Predicted mode only. */
+  bench: PitchSlot[];
+  highlights: CardHighlight[];
+}
+
+export type AnswerCard =
+  | PlayerAnswerCard
+  | ComparisonAnswerCard
+  | LeaderboardAnswerCard
+  | PredictionAnswerCard
+  | TeamAnswerCard
+  | FixturesAnswerCard
+  | SeasonAnswerCard
+  | PitchAnswerCard;
 
 export interface TriviaQuestion {
   question: string;
@@ -360,6 +689,54 @@ export const apiService = {
       chat_history: chatHistory,
     });
     return data;
+  },
+
+  /**
+   * Streams an answer from POST /api/query/stream, calling onEvent for each server-sent
+   * event. Uses fetch, since axios can't read a response body as it arrives. Throws
+   * StreamUnavailableError when the endpoint is missing, and an Error with the server's
+   * detail for other HTTP errors (e.g. the rate limit).
+   */
+  async streamQuery(body: QueryRequestBody, onEvent: (event: AnswerStreamEvent) => void, signal?: AbortSignal): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/query/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (response.status === 404 || response.status === 405) throw new StreamUnavailableError();
+    if (!response.ok) {
+      let detail = `Request failed with status ${response.status}`;
+      try {
+        const json = await response.json();
+        if (typeof json?.detail === 'string') detail = json.detail;
+      } catch {
+        // not JSON: keep the status message
+      }
+      throw new Error(detail);
+    }
+    if (!response.body) throw new StreamUnavailableError();
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end: number;
+      while ((end = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        let event = 'message';
+        const data: string[] = [];
+        for (const line of frame.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+        }
+        if (data.length) onEvent({ event, data: JSON.parse(data.join('\n')) } as AnswerStreamEvent);
+      }
+    }
   },
 
   // Embeddings

@@ -32,6 +32,8 @@ import {
   ClubCrest,
   PlayerAvatar,
 } from '../components/ui';
+import { AnswerCards, AnswerCardSkeleton, FollowUps } from '../components/assistant/cards/AnswerCards';
+import { SAMPLE_CARDS, SAMPLE_FOLLOW_UPS } from '../components/assistant/cards/samples';
 
 /*
  * Hidden /design route: a living reference for the Pitch Me design system.
@@ -303,6 +305,24 @@ export function DesignSystem() {
                 <PitchPlayer name="Second Striker" team="Chelsea" opponents={[{ team: 'Fulham', home: false }]} value="9 pts" />
               </PitchRow>
             </Pitch>
+          </div>
+        </Section>
+
+        <Section title="Assistant answer cards">
+          <p className="mb-4 max-w-3xl text-body text-fg-muted">
+            Shown under an assistant answer, one or more per answer, built from the query&rsquo;s structured data. Each
+            column is about as wide as the chat. Sample players have no photo, so they show the blank silhouette.
+          </p>
+          <div className="grid items-start gap-x-6 gap-y-3 lg:grid-cols-2">
+            <AnswerCards cards={SAMPLE_CARDS.filter((_, i) => i % 2 === 0)} lookupPhotos={false} className="mt-0" />
+            <AnswerCards cards={SAMPLE_CARDS.filter((_, i) => i % 2 === 1)} lookupPhotos={false} className="mt-0" />
+          </div>
+          <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">
+            <div>
+              <p className="mb-2 text-micro font-semibold uppercase text-fg-subtle">Loading (while the answer is on its way)</p>
+              <AnswerCardSkeleton />
+            </div>
+            <FollowUps questions={SAMPLE_FOLLOW_UPS} onAsk={() => undefined} className="mt-0" />
           </div>
         </Section>
 

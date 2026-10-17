@@ -19,6 +19,7 @@ import json
 import logging
 import math
 import os
+import re
 import time
 from datetime import datetime, timezone
 from threading import Lock
@@ -431,6 +432,59 @@ def build_team_of_the_week(selection: opt.Selection, details: Dict[str, Dict[str
         "starters": starters,
         "bench": bench,
     }
+
+
+def team_of_week_target(question: str, gameweek: Optional[int],
+                        finished_gameweeks: Iterable[int]) -> Tuple[str, Optional[int]]:
+    """(mode, gameweek) a "best XI" question asks for: a finished gameweek's dream team
+    ("actual") when it names one, says "dream team" or "last gameweek", or is in the past
+    tense; otherwise the predicted squad for the next gameweek (gameweek None)."""
+    text = question.lower()
+    finished = sorted(finished_gameweeks)
+    if gameweek is not None and gameweek in finished:
+        return "actual", gameweek
+    past = re.search(r"\bdream ?team\b|\blast (?:gameweek|gw|week)\b|\b(?:was|were)\b", text)
+    if past and finished:
+        return "actual", finished[-1]
+    return "predicted", None
+
+
+def team_of_week_context(team: Dict[str, Any]) -> str:
+    """The squad as plain text for the LLM prompt."""
+    predicted = team["mode"] == "predicted"
+
+    def line(p: Dict[str, Any]) -> str:
+        price = f", £{p['cost']:.1f}m" if p.get("cost") is not None else ""
+        versus = " & ".join(f"{o['team']} ({'H' if o['home'] else 'A'})" for o in p.get("opponents") or [])
+        role = " (captain)" if p.get("captain") else (" (vice-captain)" if p.get("vice_captain") else "")
+        status = p.get("status")
+        flag = f" [FPL availability: {status}{': ' + p['news'] if p.get('news') else ''}]" if predicted and status not in (None, "a") else ""
+        points = f"{p['points']:.1f} predicted pts" if predicted else f"{p['points']:g} pts"
+        return f"- {p['name']} ({p['position']}, {p['team']}{price}){role}: {points}{' vs ' + versus if versus else ''}{flag}"
+
+    head = (f"Predicted best FPL squad for gameweek {team['gameweek']} (picked by the optimiser from the "
+            f"points model: £{team['budget']:.1f}m budget, at most 3 players per club, captain's points count twice)"
+            if predicted else
+            f"Dream team for gameweek {team['gameweek']}: the best XI by actual FPL points (no budget or club limit)")
+    lines = [f"{head}. Formation {team['formation']}.", "Starting XI:"]
+    lines += [line(p) for p in team["starters"]]
+    if team.get("bench"):
+        lines.append("Bench:")
+        lines += [line(p) for p in team["bench"]]
+    total = f"Total {'predicted ' if predicted else ''}points: {team['total_points']:g}"
+    if predicted:
+        total += " (captain counted twice)"
+        if team.get("total_cost") is not None:
+            total += f"; squad cost £{team['total_cost']:.1f}m"
+    lines.append(total + ".")
+    return "\n".join(lines)
+
+
+def team_of_week_rows(team: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """One row per squad player, shaped like query results (player_name, position, points)."""
+    return [{"player_name": p["name"], "position": p["position"], "team": p["team"], "points": p["points"],
+             "cost": p.get("cost"), "captain": p.get("captain"), "starter": i < len(team["starters"])}
+            for i, p in enumerate(team["starters"] + team.get("bench", []))]
 
 
 # ------------------------------------------------------------------ pure: player leaders
