@@ -497,6 +497,74 @@ class TestDefaultRequiredSeason(unittest.TestCase):
         self.assertNotIn("season", params)
 
 
+class TestTeamSquadQuestions(unittest.TestCase):
+    """Club-plus-position and "who plays for" questions list the club's squad
+    (CypherQueries.get_team_squad) instead of the top-players fallback or no query."""
+
+    @classmethod
+    def setUpClass(cls):
+        from preprocessing.intent_classifier import is_team_squad_question
+        cls.is_squad = staticmethod(is_team_squad_question)
+        cls.classifier = IntentClassifier()
+        cls.extractor = EntityExtractor(known_players={"Mohamed Salah", "Harry Kane", "Haaland", "Saka", "Raya"})
+
+    def route(self, prompt):
+        intent = self.classifier.classify(prompt).intent
+        entities = self.extractor.extract(prompt)
+        params = self.extractor.get_query_parameters(entities)
+        squad = self.is_squad(prompt, intent, entities.players, entities.teams, entities.positions)
+        return squad, params
+
+    def test_squad_questions(self):
+        cases = {
+            "Who is the Coventry City goalkeeper?": {"team_name": "Coventry City", "position": "GK"},
+            "Arsenal defenders": {"team_name": "Arsenal", "position": "DEF"},
+            "Who plays for Villa?": {"team_name": "Aston Villa"},
+            "Liverpool squad": {"team_name": "Liverpool"},
+            "What players does Brentford have?": {"team_name": "Brentford"},
+            "Who are Chelsea's midfielders in 2022-23?": {"team_name": "Chelsea", "position": "MID", "season": "2022-23"},
+        }
+        for prompt, expected in cases.items():
+            with self.subTest(prompt=prompt):
+                squad, params = self.route(prompt)
+                self.assertTrue(squad)
+                self.assertEqual({k: params.get(k) for k in expected}, expected)
+                self.assertNotIn("name_pattern", params)
+
+    def test_other_questions_keep_their_routing(self):
+        for prompt in ("Best players at Arsenal", "How is Arsenal doing?", "Saka Arsenal stats",
+                       "Arsenal vs Chelsea", "Top 5 defenders by points", "Who is Bukayo Saka?"):
+            with self.subTest(prompt=prompt):
+                self.assertFalse(self.route(prompt)[0])
+
+    def test_needs_one_club_and_no_player(self):
+        self.assertFalse(self.is_squad("Arsenal and Chelsea defenders", Intent.UNKNOWN, [], ["Arsenal", "Chelsea"], ["DEF"]))
+        self.assertFalse(self.is_squad("Saka and the Arsenal defenders", Intent.UNKNOWN, ["Saka"], ["Arsenal"], ["DEF"]))
+        # a ranking intent keeps its own query
+        self.assertFalse(self.is_squad("Arsenal defender clean sheets", Intent.CLEAN_SHEETS, [], ["Arsenal"], ["DEF"]))
+
+    def test_current_squad_cypher(self):
+        from config.settings import CURRENT_SEASON
+        query, params = CypherQueries.get_team_squad("Coventry City", position="GK")
+        for fragment in ("(p:Player)-[:PLAYS_FOR]->(:Team {name: $team_name})",
+                         "(p)-[:PLAYS_POSITION]->(pos:Position)", "WHERE pos.code = $position",
+                         "OPTIONAL MATCH (p)-[st:SEASON_STATS]->(:Season {id: $season})",
+                         "coalesce(st.minutes, 0) AS minutes", "coalesce(st.total_points, 0) AS total_points",
+                         "LIMIT $limit"):
+            self.assertIn(fragment, query)
+        self.assertEqual(params, {"team_name": "Coventry City", "season": CURRENT_SEASON, "limit": 40, "position": "GK"})
+        # the whole squad: no position filter or param
+        query, params = CypherQueries.get_team_squad("Aston Villa", season=CURRENT_SEASON)
+        self.assertNotIn("$position", query)
+        self.assertNotIn("position", params)
+
+    def test_past_season_squad_cypher(self):
+        query, params = CypherQueries.get_team_squad("Chelsea", season="2022-23", position="MID")
+        self.assertIn("MATCH (p:Player)-[st:SEASON_STATS]->(:Season {id: $season})", query)
+        self.assertIn("WHERE st.team = $team_name AND st.position = $position", query)
+        self.assertNotIn("PLAYS_FOR", query)
+        self.assertEqual(params["season"], "2022-23")
+
 class TestTeamQuestionIntents(unittest.TestCase):
     """Player and team questions share shapes ("How did X do?", "X vs Y"). The team patterns
     used to take one word, and on a tie the player intent won by coming first, so team

@@ -774,6 +774,61 @@ def test_best_xi_question_answers_from_the_team_of_the_week():
     assert [c["type"] for c in response.cards] == ["pitch"]
 
 
+# ------------------------------------------------------------------ club squads (get_team_squad)
+
+SQUAD_ROWS = [
+    {"player_name": "David Raya Martín", "position": "GK", "team": "Arsenal", "total_points": 30, "minutes": 450,
+     "games": 5, "goals": 0, "assists": 0, "status": "a", "news": None},
+    {"player_name": "Backup Keeper", "position": "GK", "team": "Arsenal", "total_points": 0, "minutes": 0,
+     "games": 0, "goals": 0, "assists": 0, "status": "a", "news": None},
+]
+
+
+class SquadConn(FakeConn):
+    def execute_query(self, query, params=None):
+        if "PLAYS_FOR]->(:Team {name: $team_name})" in query:
+            self.calls.append((query, params or {}))
+            rows = [r for r in SQUAD_ROWS if r["position"] == (params or {}).get("position", r["position"])]
+            return rows[:(params or {}).get("limit", 40)]
+        return super().execute_query(query, params)
+
+
+def test_squad_leaderboard_spec():
+    spec = ac.leaderboard_spec("get_team_squad", {"team_name": "Coventry City", "position": "GK"})
+    assert spec["title"] == "Coventry City goalkeepers" and not spec["grouped"]
+    assert [c["key"] for c in spec["columns"]] == ["games", "minutes"]
+    whole = ac.leaderboard_spec("get_team_squad", {"team_name": "Aston Villa"})
+    assert whole["title"] == "Aston Villa squad" and whole["grouped"]
+    # the title names the position, so the subtitle doesn't repeat it
+    assert ac.leaderboard_subtitle("get_team_squad", {"position": "GK", "season": CURRENT}) == ac.season_label(CURRENT, CURRENT)
+
+
+def test_squad_question_gives_squad_then_team_cards():
+    ctx = context("team_analysis", "get_team_squad", {"team_name": "Arsenal", "position": "GK", "season": CURRENT},
+                  {"teams": ["Arsenal"], "positions": ["GK"]}, SQUAD_ROWS, question="Who is the Arsenal goalkeeper?")
+    cards, _ = build(ctx)
+    assert [c["type"] for c in cards] == ["leaderboard", "team"]
+    board = cards[0]
+    assert board["title"] == "Arsenal goalkeepers"
+    assert [r["player"]["name"] for r in board["rows"]] == ["David Raya Martín", "Backup Keeper"]
+    assert all(h["label"] != "Club cluster" for h in board["highlights"])
+
+
+def test_squad_question_through_the_query_endpoint():
+    import api_main
+
+    conn = SquadConn()
+    request = api_main.QueryRequest(question="Who is the Arsenal goalkeeper?", retrieval_method="Baseline")
+    with patch.dict(api_main.app_state, _app_state(conn), clear=True),             patch.object(api_main, "_answer_card_inputs", return_value=CARD_INPUTS):
+        response = asyncio.run(api_main.query_fpl(request, conn=conn))
+    assert response.intent == "team_analysis"
+    assert "PLAYS_FOR]->(:Team {name: $team_name})" in response.cypher_query
+    squad_params = next(p for q, p in conn.calls if "PLAYS_FOR]->(:Team {name: $team_name})" in q)
+    assert squad_params == {"team_name": "Arsenal", "season": CURRENT, "limit": 40, "position": "GK"}
+    assert [r["player_name"] for r in response.results] == ["David Raya Martín", "Backup Keeper"]
+    assert [c["type"] for c in response.cards][:1] == ["leaderboard"]
+
+
 # ------------------------------------------------------------------ streamed answers
 
 class FakeChunk:

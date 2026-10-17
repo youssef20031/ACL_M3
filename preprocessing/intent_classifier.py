@@ -487,3 +487,28 @@ class IntentClassifier:
             {"intent": intent.value, "description": desc}
             for intent, desc in descriptions.items()
         ]
+
+# "Who plays for Villa?", "Spurs squad": questions about who is at a club
+SQUAD_WORDS = re.compile(
+    r"\b(?:squad|roster|who\s+(?:plays|play|is\s+playing|are\s+playing)\s+(?:for|at)\b"
+    r"|(?:what|which)\s+players\s+(?:does|do|did|has|have)\b)"
+)
+
+# Intents whose query would answer a club-plus-position question badly: a player intent with
+# no player falls back to the top players, a general question runs no query, and
+# get_team_top_performers ignores the position
+SQUAD_INTENTS = {
+    Intent.PLAYER_STATS, Intent.PLAYER_COMPARISON, Intent.PLAYER_SEARCH,
+    Intent.TEAM_ANALYSIS, Intent.GENERAL_QUESTION, Intent.UNKNOWN,
+}
+
+
+def is_team_squad_question(question: str, intent: Intent, players: List[str], teams: List[str],
+                           positions: List[str]) -> bool:
+    """Whether a question asks who is in one club's squad, so it should run
+    CypherQueries.get_team_squad: "Who is the Coventry City goalkeeper?", "Arsenal
+    defenders", "Who plays for Villa?". It needs exactly one club, no player, and a position
+    or squad wording; "Best players at Arsenal" (no position) keeps its team intent."""
+    if players or len(teams) != 1 or intent not in SQUAD_INTENTS:
+        return False
+    return bool(positions) or bool(SQUAD_WORDS.search(question.lower()))
