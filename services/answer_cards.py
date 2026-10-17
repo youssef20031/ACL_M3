@@ -717,6 +717,7 @@ _OTHER_LEADERBOARDS = {
     "get_ict_index_leaders": (("avg_ict_index", "ICT/app", "dec1", "ICT per appearance"), [("total_points", "Pts", "int"), ("games", "Apps", "int")], "ICT index leaders", "zap"),
     "get_most_selected_players": (("selected", "Selected by", "compact", "managers"), [("value_millions", "Price", "money"), ("points", "GW pts", "int")], "Most selected", "shield"),
     "get_team_top_performers": (("total_points", "Points", "int", "points"), [("goals", "Gls", "int"), ("assists", "Ast", "int")], "Top performers", "trophy"),
+    "get_team_squad": (("total_points", "Points", "int", "points"), [("games", "Apps", "int"), ("minutes", "Mins", "int")], "Squad", "shield"),
     "get_highest_single_gameweek_score": (("points", "Points", "int", "points"), [("goals", "Gls", "int"), ("assists", "Ast", "int"), ("bonus", "Bonus", "int")], "Highest gameweek score", "trophy"),
     "get_top_scorers_by_season": (("total_goals", "Goals", "int", "goals"), [("total_points", "Pts", "int")], "Top scorers", "target"),
     "get_top_assisters_by_season": (("total_assists", "Assists", "int", "assists"), [("total_points", "Pts", "int")], "Top assisters", "zap"),
@@ -738,12 +739,17 @@ def leaderboard_spec(method: str, params: Dict[str, Any]) -> Optional[Dict[str, 
         metric, columns, title, icon = _OTHER_LEADERBOARDS[method]
         if method == "get_team_top_performers" and params.get("team_name"):
             title = f"{params['team_name']} top performers"
+        if method == "get_team_squad" and params.get("team_name"):
+            position = params.get("position")
+            title = f"{params['team_name']} {POSITION_WORDS[position][1] if position in POSITION_WORDS else 'squad'}"
     else:
         return None
     key, label, fmt, unit = metric
     return {"metric": {"key": key, "label": label, "format": fmt, "unit": unit},
             "columns": [{"key": k, "label": lab, "format": f} for k, lab, f in columns],
-            "title": title, "icon": icon, "grouped": method == "get_top_players_all_positions"}
+            "title": title, "icon": icon,
+            "grouped": method == "get_top_players_all_positions"
+            or (method == "get_team_squad" and params.get("position") not in POSITION_WORDS)}
 
 
 _SINGULAR_UNITS = {"goals": "goal", "assists": "assist", "points": "point", "bonus points": "bonus point",
@@ -769,8 +775,9 @@ def _format_value(value: float, fmt: str) -> str:
 def leaderboard_subtitle(method: str, params: Dict[str, Any], current: str = CURRENT_SEASON) -> str:
     parts = []
     position = params.get("position")
-    if position in POSITION_WORDS and not (method == "get_top_points_by_position"
-                                           and _SORTS.get(params.get("sort_by") or "", "total_points") == "total_points"):
+    if position in POSITION_WORDS and method != "get_team_squad" and not (
+            method == "get_top_points_by_position"
+            and _SORTS.get(params.get("sort_by") or "", "total_points") == "total_points"):
         parts.append(POSITION_WORDS[position][1].capitalize())
     if method == "get_top_points_by_position" and _SORTS.get(params.get("sort_by") or "", "total_points") == "total_points":
         parts.append("By points")
@@ -1261,7 +1268,7 @@ def leaderboard_card(method: str, params: Dict[str, Any], results: List[Dict[str
         "season": season,
         "rows": rows,
         "highlights": leaderboard_highlights(rows, metric, grouped, bool(position), short,
-                                             one_club=method == "get_team_top_performers"),
+                                             one_club=method in ("get_team_top_performers", "get_team_squad")),
         "_follow_ups": follow_ups,
     }
 
@@ -1699,6 +1706,8 @@ def plan(ctx: CardContext) -> List[Awaitable[Any]]:
         return [build_comparison_card(ctx, players[:2], season)]
     if intent in ("player_stats", "player_comparison", "player_search") and players:
         return [build_player_card(ctx, players[0], season, params.get("gameweek"))]
+    if ctx.method == "get_team_squad" and params.get("team_name"):
+        return [build_leaderboard_card(ctx), build_team_card(ctx, params["team_name"])]
     if intent == "team_analysis" and params.get("team_name") and ctx.method == "get_team_top_performers":
         return [build_team_card(ctx, params["team_name"]), build_leaderboard_card(ctx)]
     if intent == "fixture_results" and params.get("team_name") and ctx.method == "get_fixture_results":

@@ -14,6 +14,7 @@ times faster than a relationship-property index seek.
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 
+from config.settings import CURRENT_SEASON
 from utils.text import normalize_name
 
 
@@ -309,6 +310,53 @@ class CypherQueries:
         LIMIT $limit
         """
         return query, _with_season({"team_name": team_name, "limit": limit}, season)
+
+    @staticmethod
+    def get_team_squad(team_name: str, season: str = None, position: str = None, limit: int = 40) -> tuple:
+        """
+        A club's squad, optionally one position: "Who is the Coventry City goalkeeper?",
+        "Arsenal defenders", "Who plays for Villa?".
+
+        For the current season (or no season) it is today's squad, (Player)-[:PLAYS_FOR]->(Team)
+        with the player's current position, FPL status and news, plus his SEASON_STATS for this
+        season (zeros for someone yet to play). For a past season it is everyone with SEASON_STATS for the club
+        that season, in the position he had then.
+
+        Args:
+            team_name: Team name as in the graph
+            season: Season ID (e.g., '2022-23'); None means the current season
+            position: GK, DEF, MID or FWD; None for the whole squad
+            limit: Number of results to return
+        """
+        season = season or CURRENT_SEASON
+        if season == CURRENT_SEASON:
+            pos_filter = "WHERE pos.code = $position" if position else ""
+            query = f"""
+        MATCH (p:Player)-[:PLAYS_FOR]->(:Team {{name: $team_name}})
+        MATCH (p)-[:PLAYS_POSITION]->(pos:Position)
+        {pos_filter}
+        OPTIONAL MATCH (p)-[st:SEASON_STATS]->(:Season {{id: $season}})
+        WITH p, pos.code AS position, st, p.status AS status, p.news AS news
+        """
+        else:
+            pos_filter = "AND st.position = $position" if position else ""
+            query = f"""
+        MATCH (p:Player)-[st:SEASON_STATS]->(:Season {{id: $season}})
+        WHERE st.team = $team_name {pos_filter}
+        WITH p, st.position AS position, st, null AS status, null AS news
+        """
+        query += f"""
+        RETURN p.name AS player_name, position, $team_name AS team,
+               coalesce(st.total_points, 0) AS total_points, coalesce(st.minutes, 0) AS minutes,
+               coalesce(st.appearances, st.games, 0) AS games, coalesce(st.goals, 0) AS goals,
+               coalesce(st.assists, 0) AS assists, status, news
+        ORDER BY {POSITION_ORDER}, total_points DESC, minutes DESC, player_name
+        LIMIT $limit
+        """
+        params = {"team_name": team_name, "season": season, "limit": limit}
+        if position:
+            params["position"] = position
+        return query, params
 
     @staticmethod
     def get_fixture_results(team_name: str, season: str = None) -> tuple:

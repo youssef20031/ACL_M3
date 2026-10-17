@@ -42,7 +42,7 @@ from typing import Optional
 
 from graph.queries import CypherQueries, QueryExecutor
 from graph.data_loader import FPLDataLoader
-from preprocessing.intent_classifier import IntentClassifier, Intent
+from preprocessing.intent_classifier import IntentClassifier, Intent, is_team_squad_question
 from preprocessing.entity_extractor import EntityExtractor
 # LAZY IMPORT: EmbeddingManager only when needed to avoid transformer/Keras dependency
 # from embeddings.embedding_manager import EmbeddingManager
@@ -1529,7 +1529,17 @@ async def _prepare_answer(request: QueryRequest, conn) -> PreparedAnswer:
         # "Top scorers" means goals; without this the generic query ranks by FPL points
         if intent_result.intent == Intent.TOP_SCORERS and "sort_by" not in params:
             params["sort_by"] = "goals"
-        
+        # "Who is the Coventry City goalkeeper?", "Who plays for Villa?": the club's squad,
+        # not the top-players fallback (a player intent with no player) or no query at all
+        squad = is_team_squad_question(request.question, intent_result.intent, entities.players,
+                                       entities.teams, entities.positions)
+        if squad:
+            intent_result.intent = Intent.TEAM_ANALYSIS
+            if len(entities.positions) > 1:
+                params.pop("position", None)  # "defenders and midfielders": the whole squad
+            params.setdefault("season", CURRENT_SEASON)
+            params.setdefault("limit", 40)
+
         # Step 4: Execute Cypher query
         query_executor = QueryExecutor(conn)
         cypher_context = ""
@@ -1537,7 +1547,7 @@ async def _prepare_answer(request: QueryRequest, conn) -> PreparedAnswer:
         executed_method = None  # the CypherQueries method that ran, after any fallback
         results = []
 
-        query_method = intent_classifier.get_query_type_for_intent(intent_result.intent)
+        query_method = "get_team_squad" if squad else intent_classifier.get_query_type_for_intent(intent_result.intent)
 
         if query_method:
             # Ensure required parameters
@@ -1595,7 +1605,8 @@ async def _prepare_answer(request: QueryRequest, conn) -> PreparedAnswer:
                 executed_method = query_method
 
             results = await run_db(conn, query, query_params)
-            cypher_context = PromptBuilder.format_kg_context(results)
+            # The whole squad, not the first 25 (forwards are listed last)
+            cypher_context = PromptBuilder.format_kg_context(results, max_items=max(25, len(results)) if squad else 25)
             cypher_context = add_tie_note_if_needed(intent_result.intent, query_method, params, results, cypher_context)
             executed_query = query
 
