@@ -5,7 +5,7 @@ interface Node {
   id: string;
   label: string;
   type: string;
-  data?: Record<string, any>;
+  data?: Record<string, unknown>;
 }
 
 interface Edge {

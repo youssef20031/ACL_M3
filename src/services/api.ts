@@ -15,6 +15,14 @@ const api = axios.create({
 const EMBEDDINGS_BUILD_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 // Response types
+
+/**
+ * One row of player data from the search, stats and compare endpoints. Its keys depend on the
+ * Cypher query that produced it, so the pages read the fields they expect and fall back when absent.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- keys and value types vary by query
+export type PlayerRow = Record<string, any>;
+
 export interface ConnectionResponse {
   success: boolean;
   message: string;
@@ -27,18 +35,18 @@ export interface ConnectionResponse {
 export interface QueryResponse {
   answer: string;
   intent: string;
-  entities: Record<string, any>;
+  entities: Record<string, unknown>;
   cypher_query: string;
   kg_context: string;
   embedding_context?: string;
   embedding_used: boolean;
-  results: Array<Record<string, any>>;
+  results: Array<Record<string, unknown>>;
   graph_data?: {
     nodes: Array<{
       id: string;
       label: string;
       type: string;
-      data?: Record<string, any>;
+      data?: Record<string, unknown>;
     }>;
     edges: Array<{
       from: string;
@@ -411,7 +419,7 @@ export interface MLPrediction {
   player_name: string;
   predicted_points: number;
   confidence_interval?: [number, number];
-  features_used?: Record<string, any>;
+  features_used?: Record<string, unknown>;
   model_version: string;
   team_name?: string | null;
   fixture_context?: {
@@ -431,12 +439,12 @@ export interface MLPrediction {
 
 export interface TopPerformersResponse {
   predictions: MLPrediction[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 export interface BestValueResponse {
   predictions: (MLPrediction & { value: number; cost: number })[];
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 export interface EmbeddingBuildResponse {
@@ -666,7 +674,7 @@ export const apiService = {
     }
   },
 
-  async getMLStatus(): Promise<any> {
+  async getMLStatus(): Promise<unknown> {
     const { data } = await api.get('/api/ml/status');
     return data;
   },
@@ -768,7 +776,7 @@ export const apiService = {
   async searchPlayers(
     query: string,
     options?: { limit?: number; includeAvatars?: boolean; signal?: AbortSignal }
-  ): Promise<{ players: Array<Record<string, any>> }> {
+  ): Promise<{ players: PlayerRow[] }> {
     const { data } = await api.post(
       '/api/players/search',
       {
@@ -785,7 +793,7 @@ export const apiService = {
     playerName: string,
     season?: string,
     signal?: AbortSignal
-  ): Promise<{ stats: Record<string, any> }> {
+  ): Promise<{ stats: PlayerRow }> {
     const { data } = await api.post('/api/players/stats', { player_name: playerName, season }, { signal });
     return data;
   },
@@ -794,7 +802,7 @@ export const apiService = {
     player1: string,
     player2: string,
     season?: string
-  ): Promise<{ comparison: Array<Record<string, any>> }> {
+  ): Promise<{ comparison: PlayerRow[] }> {
     const { data } = await api.post('/api/players/compare', {
       player1,
       player2,
@@ -845,12 +853,12 @@ export const apiService = {
   },
 
   // Data Management
-  async loadFPLData(clearExisting: boolean = true): Promise<{ success: boolean; stats: any }> {
+  async loadFPLData(clearExisting: boolean = true): Promise<{ success: boolean; stats: unknown }> {
     const { data } = await api.post('/api/data/load', { clear_existing: clearExisting });
     return data;
   },
 
-  async getDatabaseStats(): Promise<Record<string, any>> {
+  async getDatabaseStats(): Promise<Record<string, unknown>> {
     const { data } = await api.get('/api/stats/database');
     return data;
   },

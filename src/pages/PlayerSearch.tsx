@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, ChevronRight, Loader2, Search, Sparkles, UserX } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '../store/appStore';
-import { apiService, handleApiError, type PlayerLeader } from '../services/api';
+import { apiService, handleApiError, type PlayerLeader, type PlayerRow } from '../services/api';
 import { PlayerWithClub } from '../components/PlayerWithClub';
 import { SeasonLeaders, type LeadersFilters } from '../components/players/SeasonLeaders';
 import { usePlayerAvatars } from '../hooks/usePlayerAvatars';
@@ -37,7 +37,7 @@ const PLAYER_SEASONS = ['2026-27', '2025-26', '2024-25', '2023-24', '2022-23', '
 
 const DEFAULT_LEADERS_FILTERS: LeadersFilters = { season: PLAYER_SEASONS[0], position: null, sort: 'total_points' };
 
-type PlayerResult = Record<string, any>;
+type PlayerResult = PlayerRow;
 type PlayerSearchRouteState = {
   player?: PlayerResult;
   season?: string;

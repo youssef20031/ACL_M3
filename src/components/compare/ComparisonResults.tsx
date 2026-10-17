@@ -16,8 +16,9 @@ import {
 } from 'recharts';
 import { Button, Card, Chip, ClubCrest, PlayerAvatar, PositionBadge, SectionHeading } from '../ui';
 import { cn } from '../../utils/cn';
+import type { PlayerRow } from '../../services/api';
 
-export type PlayerStats = Record<string, any>;
+export type PlayerStats = PlayerRow;
 
 // Chart colours follow the design tokens (player 1 mint, player 2 cyan).
 const P1_COLOR = 'rgb(var(--accent))';
