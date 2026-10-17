@@ -9,8 +9,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from config.settings import FIXTURES_FALLBACK_CSV
 from preprocessing.intent_classifier import IntentClassifier, Intent
-from preprocessing.entity_extractor import EntityExtractor
+from preprocessing.entity_extractor import EntityExtractor, ExtractedEntities
 from graph.queries import CypherQueries
+from services.player_index import PlayerIndex
 
 class TestAppPipeline(unittest.TestCase):
     @classmethod
@@ -563,6 +564,262 @@ class TestTeamSquadQuestions(unittest.TestCase):
         self.assertIn("WHERE st.team = $team_name AND st.position = $position", query)
         self.assertNotIn("PLAYS_FOR", query)
         self.assertEqual(params["season"], "2022-23")
+
+class TestTeamQuestionIntents(unittest.TestCase):
+    """Player and team questions share shapes ("How did X do?", "X vs Y"). The team patterns
+    used to take one word, and on a tie the player intent won by coming first, so team
+    questions ran no query or the top-players fallback."""
+
+    verify_pipeline = TestAppPipeline.verify_pipeline
+
+    @classmethod
+    def setUpClass(cls):
+        from config.settings import CURRENT_SEASON
+        cls.current_season = CURRENT_SEASON
+        cls.classifier = IntentClassifier()
+        cls.extractor = EntityExtractor(known_players={"Mohamed Salah", "Harry Kane", "Haaland", "Saka", "Palmer"})
+
+    def intent_of(self, prompt):
+        return self.classifier.classify(prompt).intent
+
+    def test_how_is_a_club_doing(self):
+        # The rich cards' team follow-up; "Coventry City" or "Aston Villa" didn't fit the
+        # one-word slot, so it was a general question
+        for club in sorted(set(EntityExtractor.TEAMS.values())):
+            with self.subTest(club=club):
+                self.verify_pipeline(
+                    prompt=f"How is {club} doing this season?",
+                    expected_intent=Intent.TEAM_ANALYSIS,
+                    expected_method="get_team_top_performers",
+                    expected_params_subset={"team_name": club, "season": self.current_season},
+                )
+
+    def test_how_did_a_club_nickname_do(self):
+        # Tied with PLAYER_STATS, which lacked a player and fell back to the top players
+        self.verify_pipeline(
+            prompt="How did City do in 2023-24?",
+            expected_intent=Intent.TEAM_ANALYSIS,
+            expected_method="get_team_top_performers",
+            expected_params_subset={"team_name": "Man City", "season": "2023-24"},
+            expected_cypher_strings=["WHERE st.team = $team_name"],
+        )
+
+    def test_club_vs_club_without_head_to_head_words(self):
+        # Was PLAYER_COMPARISON (compare_players without players)
+        self.verify_pipeline(
+            prompt="Newcastle United vs Manchester United",
+            expected_intent=Intent.HEAD_TO_HEAD,
+            expected_method="get_head_to_head",
+            expected_params_subset={"team1": "Newcastle", "team2": "Man Utd"},
+        )
+
+    def test_other_team_question_shapes(self):
+        cases = {
+            "How are Arsenal doing?": Intent.TEAM_ANALYSIS,
+            "How did Wolves get on last season?": Intent.TEAM_ANALYSIS,
+            "How are Arsenal players doing?": Intent.TEAM_ANALYSIS,
+            "Arsenal stats": Intent.TEAM_ANALYSIS,
+            "Who is Hull City's best player?": Intent.TEAM_ANALYSIS,
+            "find players from Aston Villa": Intent.TEAM_ANALYSIS,
+            "Best players at Coventry City this season": Intent.TEAM_ANALYSIS,
+            "Aston Villa versus Crystal Palace": Intent.HEAD_TO_HEAD,
+            "Man City v Man Utd": Intent.HEAD_TO_HEAD,
+            "Compare Aston Villa and Crystal Palace": Intent.HEAD_TO_HEAD,
+            "results between Coventry City and Hull City": Intent.HEAD_TO_HEAD,
+            "How did Arsenal do against Chelsea?": Intent.HEAD_TO_HEAD,
+            "Head to head Hull City vs Nott'm Forest": Intent.HEAD_TO_HEAD,
+        }
+        for prompt, intent in cases.items():
+            self.assertEqual(self.intent_of(prompt), intent, prompt)
+
+    def test_player_questions_keep_their_intents(self):
+        cases = {
+            "how did Mohamed Salah perform": Intent.PLAYER_STATS,
+            "How did Haaland do for City?": Intent.PLAYER_STATS,
+            "how did Salah perform against Arsenal": Intent.PLAYER_STATS,
+            "Haaland stats this season": Intent.PLAYER_STATS,
+            # a club word in a player's name, but not in the team pattern's slot
+            "Conor Coventry 2022-23 stats": Intent.PLAYER_STATS,
+            "Compare Mohamed Salah and Harry Kane": Intent.PLAYER_COMPARISON,
+            "who is better Saka or Palmer": Intent.PLAYER_COMPARISON,
+            "Salah vs Kane": Intent.PLAYER_COMPARISON,
+            "Who is Bukayo Saka?": Intent.PLAYER_SEARCH,
+        }
+        for prompt, intent in cases.items():
+            self.assertEqual(self.intent_of(prompt), intent, prompt)
+
+    def test_how_is_a_player_doing(self):
+        # A one-word name fit the old team slot (TEAM_ANALYSIS); a full name was a general
+        # question
+        for prompt in ("How is Salah doing this season?", "How is Kevin De Bruyne doing?",
+                       "How has Trent Alexander-Arnold done this season?"):
+            self.assertEqual(self.intent_of(prompt), Intent.PLAYER_STATS, prompt)
+        self.verify_pipeline(
+            prompt="How is Mohamed Salah doing in 2023-24?",
+            expected_intent=Intent.PLAYER_STATS,
+            expected_method="get_player_season_stats",
+            expected_params_subset={"player_name": "Mohamed Salah", "season": "2023-24"},
+        )
+        self.assertEqual(self.intent_of("How are you doing?"), Intent.GENERAL_QUESTION)
+
+    def test_head_to_head_words_dont_make_players_clubs(self):
+        # "head to head" plus "X vs Y" used to outscore the comparison, then lack team1/team2
+        params = self.verify_pipeline(
+            prompt="Mohamed Salah vs Harry Kane head to head",
+            expected_intent=Intent.PLAYER_COMPARISON,
+            expected_method="compare_players",
+        )
+        self.assertEqual({params["player1"], params["player2"]}, {"Mohamed Salah", "Harry Kane"})
+
+    # ----- /api/query's refine_with_entities: a player intent that names clubs but no player
+    # ran the top-players fallback ("Arsenal stats 2023-24" outscores the team pattern)
+
+    def refined(self, prompt):
+        """The handler's intent, method and params for the prompt."""
+        entities = self.extractor.extract(prompt)
+        intent = self.classifier.refine_with_entities(
+            self.classifier.classify(prompt).intent, entities.players, entities.teams)
+        params = self.extractor.get_query_parameters(entities)
+        method = getattr(CypherQueries, self.classifier.get_query_type_for_intent(intent))
+        missing = [p.name for p in inspect.signature(method).parameters.values()
+                   if p.default is inspect.Parameter.empty and p.name not in params]
+        self.assertEqual(missing, [], f"{prompt!r}: {method.__name__} lacks {missing}")
+        return intent, params
+
+    def test_club_only_player_questions_become_team_questions(self):
+        cases = {
+            "Arsenal stats 2023-24": (Intent.TEAM_ANALYSIS, {"team_name": "Arsenal", "season": "2023-24"}),
+            "Aston Villa stats this season": (Intent.TEAM_ANALYSIS, {"team_name": "Aston Villa"}),
+            "Tell me about Arsenal": (Intent.TEAM_ANALYSIS, {"team_name": "Arsenal"}),
+            "Show me Coventry City": (Intent.TEAM_ANALYSIS, {"team_name": "Coventry City"}),
+            "Arsenal stats and Chelsea stats": (Intent.HEAD_TO_HEAD, {"team1": "Arsenal", "team2": "Chelsea"}),
+        }
+        for prompt, (intent, params) in cases.items():
+            got_intent, got_params = self.refined(prompt)
+            self.assertEqual(got_intent, intent, prompt)
+            self.assertEqual({k: got_params.get(k) for k in params}, params, prompt)
+
+    def test_refinement_needs_clubs_and_no_player(self):
+        refine = self.classifier.refine_with_entities
+        self.assertEqual(refine(Intent.PLAYER_STATS, ["Harry Kane"], ["Spurs"]), Intent.PLAYER_STATS)
+        self.assertEqual(refine(Intent.PLAYER_STATS, [], []), Intent.PLAYER_STATS)
+        self.assertEqual(refine(Intent.PLAYER_SEARCH, [], ["Coventry City"]), Intent.TEAM_ANALYSIS)
+        self.assertEqual(refine(Intent.PLAYER_COMPARISON, [], ["Arsenal", "Chelsea"]), Intent.HEAD_TO_HEAD)
+        # only player intents change
+        self.assertEqual(refine(Intent.TOP_SCORERS, [], ["Arsenal"]), Intent.TOP_SCORERS)
+        self.assertEqual(refine(Intent.FIXTURE_RESULTS, [], ["Arsenal"]), Intent.FIXTURE_RESULTS)
+        kane = self.extractor.extract("Kane stats for Spurs")
+        self.assertEqual(refine(self.classifier.classify("Kane stats for Spurs").intent, kane.players, kane.teams),
+                         Intent.PLAYER_STATS)
+
+
+class TestClubNamesAreNotPlayers(unittest.TestCase):
+    """Regression: words of a club's name were read as player mentions. The player index
+    matched "Coventry" (Coventry City) to Conor Coventry, and fuzzily "Leeds" to Pierre
+    Lees-Melou, "Brighton" to Marc Albrighton, "Villa" to Pablo Marí Villar and "Aston" to
+    Auston Trusty. So "Who is the Coventry City goalkeeper?" searched for Conor Coventry.
+    When the index found nobody, spaCy's PERSON fallback returned clubs like "Leeds United"."""
+
+    ROWS = [
+        ("Conor Coventry", "MID", "West Ham", True, 40),
+        ("Pierre Lees-Melou", "MID", "Norwich", False, 50),
+        ("Marc Albrighton", "MID", "Leicester", False, 150),
+        ("Pablo Marí Villar", "DEF", "Arsenal", False, 60),
+        ("Auston Trusty", "DEF", "Sheffield Utd", False, 30),
+        ("Bukayo Saka", "MID", "Arsenal", True, 900),
+        ("Mohamed Salah", "MID", "Liverpool", True, 1500),
+        ("Ellis Simms", "FWD", "Coventry City", True, 20),
+    ]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.extractor = EntityExtractor()
+        cls.extractor.player_index = PlayerIndex([
+            {"player_name": name, "position": position, "team_name": team, "is_current": current,
+             "career_points": points}
+            for name, position, team, current, points in cls.ROWS
+        ])
+        # Without the index: known full names, then single name words, then spaCy PERSON
+        cls.without_index = EntityExtractor(known_players={row[0] for row in cls.ROWS})
+
+    def players_of(self, prompt, extractor=None, history=None):
+        return (extractor or self.extractor).extract(prompt, history).players
+
+    def test_club_questions_mention_no_player(self):
+        cases = {
+            "Coventry City fixture results": ["Coventry City"],
+            "Leeds United team analysis": ["Leeds"],
+            "Who is the Coventry City goalkeeper?": ["Coventry City"],
+            "How is Coventry City doing this season?": ["Coventry City"],
+            "Aston Villa vs Brighton head to head": ["Aston Villa", "Brighton"],
+            "Who plays for Villa?": ["Aston Villa"],
+            "Who is the best Leeds player?": ["Leeds"],
+            "Brighton and Hove Albion results": ["Brighton"],
+            "Predicted points for Leeds players next gameweek": ["Leeds"],
+        }
+        for prompt, teams in cases.items():
+            for extractor in (self.extractor, self.without_index):
+                entities = extractor.extract(prompt)
+                self.assertEqual(entities.players, [], prompt)
+                self.assertEqual(entities.teams, teams, prompt)
+
+    def test_club_goalkeeper_question_searches_no_player(self):
+        params = self.extractor.get_query_parameters(self.extractor.extract("Who is the Coventry City goalkeeper?"))
+        self.assertNotIn("name_pattern", params)
+        self.assertNotIn("player_name", params)
+        self.assertEqual((params.get("team_name"), params.get("position")), ("Coventry City", "GK"))
+
+    def test_a_player_named_in_full_still_counts(self):
+        cases = {
+            "How did Conor Coventry do?": ["Conor Coventry"],
+            "Is Conor Coventry better than the Coventry City keeper?": ["Conor Coventry"],
+            "Tell me about Marc Albrighton": ["Marc Albrighton"],
+            "Compare Pablo Marí Villar and Auston Trusty": ["Pablo Marí Villar", "Auston Trusty"],
+            # surnames still count away from a club's name
+            "Saka vs Salah at Villa Park": ["Bukayo Saka", "Mohamed Salah"],
+        }
+        for prompt, players in cases.items():
+            self.assertEqual(self.players_of(prompt), players, prompt)
+        self.assertEqual(self.players_of("How did Conor Coventry do?", self.without_index), ["Conor Coventry"])
+
+    def test_pronoun_skips_club_words_in_the_history(self):
+        history = [
+            {"role": "user", "content": "Who is Coventry City's top scorer?"},
+            {"role": "assistant", "content": "Coventry City's top scorer this season is Ellis Simms."},
+        ]
+        self.assertEqual(self.players_of("How many goals has he scored?", history=history), ["Ellis Simms"])
+
+    def person_fallback(self, text, *people):
+        """Players found when spaCy tags `people` as PERSON (the model's own tags vary)."""
+        doc = self.extractor.nlp(text)
+        doc.ents = [doc.char_span(text.index(p), text.index(p) + len(p), label="PERSON") for p in people]
+        return self.extractor._extract_players(doc, ExtractedEntities())
+
+    def test_person_fallback_skips_clubs(self):
+        cases = {
+            "Leeds United team analysis": "Leeds United",
+            "How is Tottenham doing this season?": "Tottenham",
+            "Is Tottenham Hotspur's defence any good?": "Tottenham Hotspur's",
+            "Wolverhampton Wanderers' form": "Wolverhampton Wanderers'",
+            "Aston Villa vs Arsenal head to head": "Aston Villa vs Arsenal",
+        }
+        for text, person in cases.items():
+            self.assertEqual(self.person_fallback(text, person), [], text)
+
+    def test_person_fallback_keeps_people(self):
+        # Neither name is in the index; a club word in a name doesn't make it a club
+        self.assertEqual(self.person_fallback("Who is Jamie Vardy?", "Jamie Vardy"), ["Jamie Vardy"])
+        self.assertEqual(self.person_fallback("Did Jack Hull ever play for Hull City?", "Jack Hull"), ["Jack Hull"])
+
+    def test_team_spans_index_the_question(self):
+        cases = {
+            "Who is the Coventry City goalkeeper?": ["Coventry City"],
+            # "İ" lowercases to two characters, which must not shift the spans after it
+            "Did İlkay Gündoğan play against Man City?": ["Man City"],
+            "Nott'm Forest vs Brighton & Hove Albion": ["Nott'm Forest", "Brighton & Hove Albion"],
+        }
+        for text, clubs in cases.items():
+            self.assertEqual([text[start:end] for start, end, _ in EntityExtractor.find_team_spans(text)], clubs, text)
 
 
 if __name__ == "__main__":

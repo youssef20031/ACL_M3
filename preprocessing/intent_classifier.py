@@ -6,6 +6,15 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
 
+from preprocessing.entity_extractor import EntityExtractor, _keyword_regex
+
+# Any club in the graph by name or nickname ("coventry city", "man utd", "spurs"), matched
+# like the entity extractor's teams: whole words, longest name first
+CLUB = _keyword_regex(EntityExtractor.TEAMS).pattern
+
+# "How is X doing", "How did X perform": the same words ask about a player or a club
+DOING = r"(?:been\s+)?(?:do|doing|done|perform(?:ing|ed)?|play(?:ing|ed)?|far(?:e|ing|ed)|get\s+on|getting\s+on|got\s+on)\b"
+
 
 class Intent(Enum):
     """Supported query intents."""
@@ -50,6 +59,9 @@ class Intent(Enum):
     UNKNOWN = "unknown"
 
 
+PLAYER_INTENTS = (Intent.PLAYER_STATS, Intent.PLAYER_COMPARISON, Intent.PLAYER_SEARCH)
+
+
 @dataclass
 class IntentResult:
     """Result of intent classification."""
@@ -92,6 +104,8 @@ class IntentClassifier:
                 r"tell me about\s+(\w+(?:\s+\w+)?)",
                 r"show me\s+(\w+(?:\s+\w+)?)",
                 r"what (?:are|were) (\w+(?:\s+\w+)?)'?s?\s+(?:stats?|numbers?)",
+                # "How is Salah doing" (the first pattern has "how did/was"), not "How are you doing?"
+                rf"how (?:is|are|has|have)\s+(?!(?:you|your|the)\b)([\w'-]+(?:\s+[\w'-]+){{0,2}}?)\s+{DOING}",
             ],
             
             Intent.PLAYER_COMPARISON: [
@@ -154,20 +168,25 @@ class IntentClassifier:
                 r"differential",
             ],
             
+            # Team slots take a club from the extractor's list. In a shape a player question
+            # shares ("How is X doing", "X vs Y") only a club fits; elsewhere any word does too,
+            # as before. classify() settles ties with the player intents.
             Intent.TEAM_ANALYSIS: [
                 r"(?:team|club)\s+(?:stats?|analysis|performance)",
-                r"how (?:did|is|was)\s+(arsenal|chelsea|liverpool|man\s*(?:city|utd|united)|spurs|tottenham|\w+)\s+(?:do|doing|perform)",
-                r"(arsenal|chelsea|liverpool|man\s*(?:city|utd|united)|spurs|tottenham|\w+)\s+(?:team\s+)?(?:stats?|analysis)",
-                r"players? (?:from|in|at)\s+(\w+)",
-                r"(arsenal|chelsea|liverpool|man\s*(?:city|utd|united)|spurs|tottenham|\w+)(?:'s)?\s+(?:best|top|leading|highest\s+scoring)\s+players?",
-                r"(?:best|top|leading)\s+players?\s+(?:for|in|from|at)\s+(arsenal|chelsea|liverpool|man\s*(?:city|utd|united)|spurs|tottenham|\w+)",
+                rf"how (?:did|do|does|is|are|was|were|has|have)\s+({CLUB})(?:'s)?(?:\s+(?:players|squad|defence|defense|attack))?\s+{DOING}",
+                rf"({CLUB}|\w+)\s+(?:team\s+)?(?:stats?|analysis)",
+                rf"players? (?:from|in|at)\s+({CLUB}|\w+)",
+                rf"({CLUB}|\w+)(?:'s)?\s+(?:best|top|leading|highest\s+scoring)\s+players?",
+                rf"(?:best|top|leading)\s+players?\s+(?:for|in|from|at)\s+({CLUB}|\w+)",
             ],
             
             Intent.HEAD_TO_HEAD: [
                 r"head[\s-]*to[\s-]*head",
                 r"h2h",
-                r"(\w+)\s+(?:vs?\.?|versus|against)\s+(\w+)",
-                r"(?:between|results?\s+(?:for|between))\s+(\w+)\s+(?:and|vs?\.?)\s+(\w+)",
+                rf"({CLUB})\s+(?:vs?\.?|versus|against)\s+({CLUB})",
+                rf"(?:between|results?\s+(?:for|between))\s+({CLUB})\s+(?:and|vs?\.?)\s+({CLUB})",
+                rf"compare\s+({CLUB})\s+(?:and|vs?\.?|with|to)\s+({CLUB})",
+                rf"how (?:did|do|does|is|are|was|were|has|have)\s+({CLUB})\s+{DOING}\s+(?:against|vs?\.?|versus)\s+({CLUB})",
             ],
             
             Intent.FIXTURE_RESULTS: [
@@ -300,6 +319,7 @@ class IntentClassifier:
         best_confidence = 0.0
         matched_patterns = []
         extracted_keywords = []
+        scores: Dict[Intent, Tuple[float, List[str]]] = {}
         
         for intent, patterns in self.intent_patterns.items():
             matches = 0
@@ -317,11 +337,23 @@ class IntentClassifier:
             if matches > 0:
                 # Calculate confidence based on number of matches and pattern specificity
                 confidence = min(matches * 0.3 + 0.5, 1.0)
+                scores[intent] = (confidence, intent_matched_patterns)
                 
                 if confidence > best_confidence:
                     best_confidence = confidence
                     best_intent = intent
                     matched_patterns = intent_matched_patterns
+        
+        # Player patterns take any word, so "How did City do?" and "Newcastle United vs
+        # Manchester United" tie a player intent with a team intent, and the player intent
+        # comes first. A team intent with a club in its slot wins the tie (head to head
+        # first: its slots take two clubs).
+        if best_intent in PLAYER_INTENTS:
+            for team_intent in (Intent.HEAD_TO_HEAD, Intent.TEAM_ANALYSIS):
+                confidence, team_patterns = scores.get(team_intent, (0.0, []))
+                if confidence == best_confidence and self._club_in_slot(team_patterns, query_lower):
+                    best_intent, matched_patterns = team_intent, team_patterns
+                    break
         
         # Default to general question if nothing matched but it starts with question word
         if best_intent == Intent.UNKNOWN and re.match(r'^(?:what|who|when|where|why|how|which)', query_lower):
@@ -335,6 +367,30 @@ class IntentClassifier:
             extracted_keywords=list(set(extracted_keywords))
         )
     
+    @staticmethod
+    def refine_with_entities(intent: Intent, players: List[str], teams: List[str]) -> Intent:
+        """The intent once the extracted entities are known.
+
+        Every player query needs a player, so a player intent with clubs but no player
+        ("Arsenal stats 2023-24") would fall back to the league's top players. That case is
+        a team question: TEAM_ANALYSIS for one club, HEAD_TO_HEAD for two (the params
+        get_query_parameters builds: team_name, or team1/team2). Patterns can't make this
+        call: "Kane stats for Spurs" has the same shape.
+        """
+        if intent in PLAYER_INTENTS and teams and not players:
+            return Intent.HEAD_TO_HEAD if len(teams) >= 2 else Intent.TEAM_ANALYSIS
+        return intent
+
+    @staticmethod
+    def _club_in_slot(patterns: List[str], query_lower: str) -> bool:
+        """Whether a club fills a captured slot of these matching patterns: "city" in "how did
+        city do" does, "23" in "conor coventry 2022-23 stats" doesn't."""
+        return any(
+            slot and EntityExtractor.find_teams(slot)
+            for pattern in patterns
+            for slot in re.search(pattern, query_lower).groups()
+        )
+
     def _extract_players_from_history(self, chat_history: List[Dict[str, str]]) -> List[str]:
         """
         Extract player names from recent chat history.

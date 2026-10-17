@@ -10,11 +10,11 @@ first, then career FPL points.
 import logging
 import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 from rapidfuzz import fuzz, process
 
-from utils.text import normalize_name
+from utils.text import normalize_name, normalize_name_with_offsets
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,14 @@ class PlayerEntry:
             "element_id": self.element_id,
             "team_name": self.team_name,
         }
+
+
+class Mention(NamedTuple):
+    """A player mentioned in free text: text[start:end] is what named them."""
+    start: int
+    end: int
+    player_name: str
+    full_name: bool  # named in full, not by a single (possibly misspelt) word of the name
 
 
 class PlayerIndex:
@@ -214,30 +222,41 @@ class PlayerIndex:
     # ---------------------------------------------------------------- mentions
 
     def mentions(self, text: str, limit: int = 2) -> List[str]:
-        """Player names mentioned in free text, in the order they appear.
+        """Player names mentioned in free text, in the order they appear (see mention_spans)."""
+        names: List[str] = []
+        for mention in self.mention_spans(text):
+            if mention.player_name not in names:
+                names.append(mention.player_name)
+        return names[:limit]
+
+    def mention_spans(self, text: str) -> List[Mention]:
+        """Every player mention in free text, in order, with where it is in the text.
 
         Full names win over single words ("Mohamed Salah" is one mention, not two);
         a lone surname/first name maps to the most popular player with that word,
-        with a little typo tolerance for longer words.
+        with a little typo tolerance for longer words. A player named twice is listed
+        twice. The spans let a caller drop words that mean something else in context,
+        like the "Coventry" of Coventry City.
         """
-        normalized = normalize_name(text)
+        normalized, offsets = normalize_name_with_offsets(text)
         if not normalized:
             return []
         padded = f" {normalized} "
 
+        # Spans index `normalized` until `offsets` maps them back to `text` at the end
         spans: List[Tuple[int, int, PlayerEntry]] = []
         for name, entry in self._by_normalized.items():
             start = padded.find(f" {name} ")
             if start != -1:
-                spans.append((start + 1, start + 1 + len(name), entry))
+                spans.append((start, start + len(name), entry))
         spans.sort(key=lambda s: s[1] - s[0], reverse=True)
-        chosen: List[Tuple[int, int, PlayerEntry]] = []
-        for span in spans:
-            if not any(span[0] < c[1] and c[0] < span[1] for c in chosen):
-                chosen.append(span)
+        chosen: List[Tuple[int, int, PlayerEntry, bool]] = []
+        for start, end, entry in spans:
+            if not any(start < c[1] and c[0] < end for c in chosen):
+                chosen.append((start, end, entry, True))
 
         for match in _WORD.finditer(normalized):
-            start, end, word = match.start() + 1, match.end() + 1, match.group()
+            start, end, word = match.start(), match.end(), match.group()
             if len(word) < _MIN_TOKEN_LEN or word in _STOPWORDS:
                 continue
             if any(start < c[1] and c[0] < end for c in chosen):
@@ -248,13 +267,10 @@ class PlayerIndex:
                                          score_cutoff=_FUZZY_TOKEN_CUTOFF)
                 candidates = self._by_token.get(hit[0]) if hit else None
             if candidates:
-                chosen.append((start, end, candidates[0]))
+                chosen.append((start, end, candidates[0], False))
 
-        names: List[str] = []
-        for _start, _end, entry in sorted(chosen, key=lambda c: c[0]):
-            if entry.player_name not in names:
-                names.append(entry.player_name)
-        return names[:limit]
+        return [Mention(offsets[start], offsets[end - 1] + 1, entry.player_name, full_name)
+                for start, end, entry, full_name in sorted(chosen, key=lambda c: c[0])]
 
 
 def _in_order(query_tokens: List[str], candidate_tokens: Tuple[str, ...]) -> bool:
