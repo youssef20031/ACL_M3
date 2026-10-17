@@ -32,7 +32,7 @@ const STATUS: Record<SeasonFixture['status'], FixtureStatus> = {
 const SUGGESTIONS = [
   'Who should I captain this gameweek?',
   'Top 5 midfielders by points this season',
-  'Compare Haaland and Salah this season',
+  'Compare Haaland and João Pedro this season',
 ];
 
 function SeeAll({ to, children }: { to: string; children: ReactNode }) {
