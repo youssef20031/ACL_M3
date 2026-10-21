@@ -283,3 +283,135 @@ def test_absence_form_ignores_later_matches():
     base = bt.absence_form(_player_run([90, 90, 90, 0, 0, 90, 90, 90]))
     later = bt.absence_form(_player_run([90, 90, 90, 0, 0, 0, 0, 0]))   # the same up to GW5's outcome
     pd.testing.assert_frame_equal(base.iloc[:6], later.iloc[:6])
+
+
+# --------------------------------------------------------------------------- bookmaker odds (backtest candidate)
+
+from ml import odds as od  # noqa: E402
+
+
+def _fd_rows(rows):
+    """football-data.co.uk columns from (date, home, away, avg 1X2, avg over/under, closing 1X2)."""
+    out = []
+    for date, home, away, x12, ou, x12c in rows:
+        r = {"Div": "E0", "Date": date, "HomeTeam": home, "AwayTeam": away,
+             "AvgH": x12[0], "AvgD": x12[1], "AvgA": x12[2], "Avg>2.5": ou[0], "Avg<2.5": ou[1]}
+        if x12c:
+            r.update({"AvgCH": x12c[0], "AvgCD": x12c[1], "AvgCA": x12c[2], "AvgC>2.5": ou[0], "AvgC<2.5": ou[1]})
+        out.append(r)
+    return pd.DataFrame(out)
+
+
+@pytest.fixture
+def odds_history():
+    """Arsenal v Chelsea in GW1 (Sat), Chelsea v Arsenal in GW2, and a GW3 double gameweek for
+    Arsenal: at Leeds on Saturday and Leeds at home on the Tuesday after the deadline."""
+    a, b, c = ("Alice", "Arsenal", "MID"), ("Bob", "Chelsea", "FWD"), ("Lee", "Leeds", "DEF")
+    rows = []
+    rows += _match_rows("2026-27", 1, 1, "2026-08-22T14:00:00Z", "Arsenal", "Chelsea", 2, 0, {a: 2, b: 1})
+    rows += _match_rows("2026-27", 2, 2, "2026-08-29T14:00:00Z", "Chelsea", "Arsenal", 1, 1, {a: 4, b: 5})
+    rows += _match_rows("2026-27", 3, 3, "2026-09-05T14:00:00Z", "Leeds", "Arsenal", 1, 3, {a: 12, c: 2})
+    rows += _match_rows("2026-27", 3, 4, "2026-09-08T19:00:00Z", "Arsenal", "Leeds", 1, 0, {a: 8, c: 1})
+    df = pd.DataFrame(rows)
+    for col in pm.HISTORY_COLUMNS:
+        if col not in df.columns:
+            df[col] = np.nan
+    df["kickoff_time"] = pd.to_datetime(df["kickoff_time"], utc=True)
+    raw = _fd_rows([
+        ("22/08/2026", "Arsenal", "Chelsea", (2.0, 3.5, 4.0), (1.9, 1.9), (1.8, 3.6, 4.5)),
+        ("29/08/2026", "Chelsea", "Arsenal", (2.5, 3.4, 2.8), (2.0, 1.8), (2.5, 3.4, 2.8)),
+        ("05/09/2026", "Leeds", "Arsenal", (4.2, 3.6, 1.9), (1.8, 2.0), (4.2, 3.6, 1.9)),
+        ("08/09/2026", "Arsenal", "Leeds", (1.4, 4.8, 8.0), (1.6, 2.4), (1.3, 5.2, 10.0)),
+    ])
+    return df[pm.HISTORY_COLUMNS], od.parse_odds(raw, "2026-27")
+
+
+def test_odds_poisson_fit_recovers_the_goal_rates():
+    lam_h, lam_a = np.array([1.8, 0.6, 1.3, 3.0]), np.array([0.9, 2.4, 1.3, 0.4])
+    ph, pa = od._pmf(lam_h), od._pmf(lam_a)
+    grid = ph[:, :, None] * pa[:, None, :]                       # P(home = i, away = j)
+    i, j = np.meshgrid(od._K, od._K, indexing="ij")
+    p_home, p_away = (grid * (i > j)).sum((1, 2)), (grid * (i < j)).sum((1, 2))
+    p_over = (grid * (i + j > 2.5)).sum((1, 2))
+    got_h, got_a = od.fit_goals(p_home, p_away, p_over)
+    assert got_h == pytest.approx(lam_h, rel=1e-4) and got_a == pytest.approx(lam_a, rel=1e-4)
+    nan_h, _ = od.fit_goals([0.5], [0.3], [np.nan])
+    assert np.isnan(nan_h[0])
+
+
+def test_odds_parse_removes_the_margin_and_maps_club_names():
+    raw = _fd_rows([("21/08/2026", "Man United", "Tottenham", (2.0, 3.5, 4.0), (1.9, 1.9), None),
+                    ("22/08/2026", "Hull", "Coventry", (np.nan, np.nan, np.nan), (np.nan, np.nan), None)])
+    raw.loc[1, ["B365H", "B365D", "B365A", "B365>2.5", "B365<2.5"]] = [2.5, 3.2, 3.0, 2.1, 1.75]
+    o = od.parse_odds(raw, "2026-27").set_index(["home", "away"])
+    first = o.loc[("Man Utd", "Spurs")]
+    margin = 1 / 2.0 + 1 / 3.5 + 1 / 4.0
+    assert first["p_home"] == pytest.approx(0.5 / margin) and first["p_over"] == pytest.approx(0.5)
+    assert first[["p_home", "p_draw", "p_away"]].sum() == pytest.approx(1.0)
+    assert np.isnan(first["p_home_c"])                       # no closing prices in this file
+    # Bet365 fills in where the market average is missing
+    assert o.loc[("Hull City", "Coventry City"), "p_home"] == pytest.approx(0.4 / (0.4 + 1 / 3.2 + 1 / 3.0))
+
+
+def test_odds_collection_times():
+    kickoffs = pd.Series(pd.to_datetime([
+        "2026-08-21T19:00:00Z",   # Fri 20:00 BST -> Fri 17:00 BST
+        "2026-08-24T19:00:00Z",   # Mon -> the Friday before
+        "2027-01-13T20:00:00Z",   # Wed (GMT) -> Tue 13:00
+        "2026-12-26T12:30:00Z",   # Sat -> Fri 25 Dec 17:00
+    ], utc=True))
+    got = od.collected_at(kickoffs)
+    assert list(got) == list(pd.to_datetime(["2026-08-21T16:00:00Z", "2026-08-21T16:00:00Z",
+                                             "2027-01-12T13:00:00Z", "2026-12-25T17:00:00Z"], utc=True))
+
+
+def test_odds_features_from_each_teams_side_before_the_deadline(odds_history):
+    history, table = odds_history
+    f = pm.build_features(history)
+    f = f.join(od.odds_features(f, table)).set_index(["name", "fixture"])
+    o = table.set_index(["home", "away"])
+    alice, bob = f.loc[("Alice", 1)], f.loc[("Bob", 1)]
+    assert alice["odds_win"] == pytest.approx(o.loc[("Arsenal", "Chelsea"), "p_home"])
+    assert bob["odds_win"] == pytest.approx(o.loc[("Arsenal", "Chelsea"), "p_away"])
+    assert alice["odds_draw"] == bob["odds_draw"]
+    assert alice["odds_gf"] == bob["odds_ga"] and alice["odds_ga"] == bob["odds_gf"]
+    assert alice["odds_cs"] == pytest.approx(np.exp(-alice["odds_ga"]))
+    assert alice["odds_gf"] > alice["odds_ga"]                               # the favourite
+    assert f.loc[("Alice", 2), "odds_win"] == pytest.approx(o.loc[("Chelsea", "Arsenal"), "p_away"])
+    # GW3 double gameweek: Saturday's prices (collected Friday) are known at the deadline, the
+    # Tuesday match's prices (collected that Tuesday) aren't; closing prices are an upper bound
+    assert np.isfinite(f.loc[("Alice", 3), od.FEATURES]).all()
+    assert f.loc[("Alice", 4), od.FEATURES].isna().all() and f.loc[("Lee", 4), od.FEATURES].isna().all()
+    assert np.isfinite(f.loc[("Alice", 4), od.CLOSING_FEATURES]).all()
+    assert f.loc[("Alice", 1), "odds_win_c"] > alice["odds_win"]             # the price shortened
+
+
+def test_odds_features_ignore_results_and_later_prices(odds_history):
+    history, table = odds_history
+    before = pm.build_features(history)
+    before = before.join(od.odds_features(before, table))
+    hist2 = history.copy()
+    hist2.loc[hist2["GW"] >= 2, ["team_h_score", "team_a_score", "total_points"]] = [0, 5, 0]
+    table2 = table.copy()
+    table2.loc[table2["date"] > pd.Timestamp("2026-08-23").date(), ["p_home", "p_away"]] = [0.1, 0.8]
+    after = pm.build_features(hist2)
+    after = after.join(od.odds_features(after, table2))
+    gw1 = before["GW"] == 1
+    pd.testing.assert_frame_equal(before.loc[gw1, od.FEATURES + od.CLOSING_FEATURES],
+                                  after.loc[gw1, od.FEATURES + od.CLOSING_FEATURES])
+
+
+def test_odds_features_for_upcoming_rows(odds_history):
+    history, table = odds_history
+    upcoming = pd.DataFrame([{
+        "season": "2026-27", "name": n, "position": p, "team": t, "opponent": o, "fixture": 99,
+        "kickoff_time": "2026-09-12T14:00:00Z", "GW": 4, "was_home": h, "value": 61,
+    } for n, p, t, o, h in (("Lee", "DEF", "Leeds", "Chelsea", False), ("Bob", "FWD", "Chelsea", "Leeds", True))])
+    fixtures = od.parse_odds(_fd_rows([("12/09/2026", "Chelsea", "Leeds", (1.7, 3.9, 4.8), (1.95, 1.85), None)]),
+                             "2026-27")
+    f = pm.build_features(history, upcoming)
+    f = f.join(od.odds_features(f, pd.concat([table, fixtures], ignore_index=True))).query("is_upcoming")
+    f = f.set_index("name")
+    assert f.loc["Lee", "odds_win"] == pytest.approx(fixtures["p_away"].iloc[0])
+    assert f.loc["Bob", "odds_win"] == pytest.approx(fixtures["p_home"].iloc[0])
+    assert np.isnan(f.loc["Lee", "odds_win_c"])                              # no closing price yet

@@ -18,13 +18,18 @@ Variants (VARIANTS): "current" is what ml.points_model trains, "previous" is v3 
 2026-10 features; the others add candidate features computed only here (add_extra_features) or
 change training settings. Subset metrics (promoted teams in their first 6 gameweeks, players new
 from the Championship in their first 6, teams within 60 days of a manager change, clubs playing
-in Europe, fixtures within 4 days of a cup or European tie) show effects too local to move the
-overall numbers. Two pick metrics target rotation: the mean points of the top 20 picks among
-players of clubs in Europe, and the share of the overall top 20 who didn't play (dnp20).
+in Europe, fixtures within 4 days of a cup or European tie, goalkeepers and defenders) show effects
+too local to move the overall numbers. Pick metrics beyond the overall top 20: the mean points of
+the top 20 picks among players of clubs in Europe and among goalkeepers and defenders, the
+clean-sheet points of those GK/DEF picks (cs20_sub_gkdef), and the share of the overall top 20 who
+didn't play (dnp20).
 
 The non-Premier-League data (data/non_pl_*.csv, ml/other_competitions.py) comes from the
 transfermarkt-datasets dump, which has no 2026-27 season: compare those variants with
 `--folds 2023-24,2024-25,2025-26`.
+
+Bookmaker odds (ml/odds.py, variants odds and odds_close) come from football-data.co.uk, whose
+files aren't committed: run `python -m scripts.data.fetch_odds` first (the workflow does).
 """
 import argparse
 import glob
@@ -40,6 +45,7 @@ import pandas as pd
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
+from ml import odds as od  # noqa: E402
 from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
 from utils.text import normalize_name  # noqa: E402
@@ -291,6 +297,10 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     df["sub_efl_player_early"] = (df["efl_g90"].notna() & (df["GW"] <= 6)).astype(float)
     df["sub_new_manager"] = (df["team_mgr_days"] < 60).astype(float)
     df["sub_after_absence"] = (df["since_return"] <= 3).astype(float)
+
+    # Bookmaker odds: pre-closing prices known at the deadline, and closing prices (an upper bound)
+    df = df.join(od.odds_features(df, od.load_odds()))
+    df["sub_gkdef"] = df["position"].isin(["GK", "DEF"]).astype(float)
     return df
 
 
@@ -309,11 +319,17 @@ G_OC_PLAYER = oc.PLAYER_FEATURES
 G_OC_STATUS = oc.STATUS_FEATURES
 G_ABS_FORM = [f"{c}_a" for c in FORM_A]
 G_ABS_FLAGS = ["absent_run", "since_return"]
-SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS + ["sub_after_absence"]
-PICK_SUBSETS = ["sub_euro_club"]   # top-20 picks among these players only
+G_ODDS = od.FEATURES
+G_ODDS_CLOSE = od.CLOSING_FEATURES
+SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS + ["sub_after_absence",
+                                                                                            "sub_gkdef"]
+PICK_SUBSETS = ["sub_euro_club", "sub_gkdef"]   # top-20 picks among these players only
+CS_PICKS = "sub_gkdef"                          # ... and the clean-sheet points of these picks
+PICK_METRICS = ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS] + [f"cs20_{CS_PICKS}"]
 EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
-EXTRA += G_ABS_FORM + G_ABS_FLAGS
-KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP"]
+EXTRA += G_ABS_FORM + G_ABS_FLAGS + G_ODDS + G_ODDS_CLOSE
+KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
+        "clean_sheets"]
 
 
 def cmd_features(args) -> None:
@@ -337,8 +353,10 @@ def cmd_features(args) -> None:
     feats.to_pickle(args.out)
     cover = {c: round(float(feats[c].notna().mean()), 3) for c in G_MGR + G_ROT + G_EFL_TEAM[:1] + G_EFL_PLAYER[:1]
              + ["oc_minutes_last", "ac_ga_p90_r8"]}
+    odds_cover = feats.groupby("season")[["odds_win", "odds_win_c"]].agg(lambda s: round(float(s.notna().mean()), 3))
     print(f"saved {args.out}: {feats.shape}, seasons {feats.groupby('season').size().to_dict()}, "
-          f"subset rows {feats[SUBSETS].sum().astype(int).to_dict()}, coverage {cover} "
+          f"subset rows {feats[SUBSETS].sum().astype(int).to_dict()}, coverage {cover}, "
+          f"odds coverage (pre-closing, closing) {odds_cover.to_dict(orient='index')} "
           f"in {time.time() - t0:.0f}s", flush=True)
 
 
@@ -371,6 +389,10 @@ VARIANTS = {
     "abs_flags": {"features": CURRENT + G_ABS_FLAGS},
     "abs_skip": {"features": [f"{c}_a" if c in FORM_A else c for c in CURRENT]},
     "abs_skip_flags": {"features": [f"{c}_a" if c in FORM_A else c for c in CURRENT] + G_ABS_FLAGS},
+    # bookmaker odds (football-data.co.uk), 2026-10: prices known at the deadline, and closing
+    # prices (after lineups) as an upper bound that can't be served
+    "odds": {"features": CURRENT + G_ODDS},
+    "odds_close": {"features": CURRENT + G_ODDS_CLOSE},
 }
 
 
@@ -394,7 +416,8 @@ def _patience_stop(curve, patience):
 
 def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
     subsets = [c for c in SUBSETS if c in test.columns]
-    d = test[["season", "GW", "name", "total_points", "minutes"] + subsets].copy()
+    extra = ["clean_sheets"] if "clean_sheets" in test.columns else []
+    d = test[["season", "GW", "name", "total_points", "minutes"] + extra + subsets].copy()
     d["pred"] = pred.astype(float)
     d["err"] = d["pred"] - d["total_points"]
     d["se"] = d["err"] ** 2
@@ -409,7 +432,7 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
     picks = [c for c in PICK_SUBSETS if c in subsets]
     pg = d.groupby(["season", "GW", "name"], as_index=False).agg(
         pred=("pred", "sum"), total_points=("total_points", "sum"), minutes=("minutes", "sum"),
-        **{c: (c, "max") for c in picks})
+        **{c: (c, "max") for c in picks}, **{c: (c, "sum") for c in extra})
     out = []
     for (s, gw), g in pg.groupby(["season", "GW"]):
         r = g.sort_values("pred", ascending=False, kind="mergesort")
@@ -422,6 +445,8 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
         for c in picks:
             sub = r[r[c] > 0]
             row[f"top20_{c}"] = float(sub["total_points"].head(20).mean()) if len(sub) >= 40 else np.nan
+            if c == CS_PICKS and extra:   # GK/DEF score 4 points per clean sheet
+                row[f"cs20_{c}"] = float(4 * sub["clean_sheets"].head(20).mean()) if len(sub) >= 40 else np.nan
         out.append(row)
     return pd.DataFrame(out).merge(rows, on=["season", "GW"])
 
@@ -430,7 +455,7 @@ def summarize(t: pd.DataFrame) -> dict:
     out = {"rmse": float(np.sqrt(t["se"].sum() / t["rows"].sum())), "mae": float(t["ae"].sum() / t["rows"].sum()),
            "top20": float(t["top20"].mean()), "top50": float(t["top50"].mean()), "capt": float(t["capt"].mean()),
            "spear": float(t["spear"].mean()), "gws": int(len(t))}
-    for k in ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS]:
+    for k in PICK_METRICS:
         if k in t and t[k].notna().any():
             out[k] = float(t[k].mean())
     for c in SUBSETS:
@@ -557,14 +582,22 @@ def run_inseason(feats, spec, season, cols, params, present) -> dict:
 
 
 def cmd_run(args) -> None:
-    global INSEASON, TEST_SEASONS
+    global INSEASON, TEST_SEASONS, SEEDS
     feats = pd.read_pickle(args.feats)
     if args.inseason:
         INSEASON = tuple(args.inseason.split(","))
+    if args.seeds:
+        SEEDS = tuple(int(s) for s in args.seeds.split(","))
     if args.folds is not None:
         TEST_SEASONS = [s for s in args.folds.split(",") if s]
+    names = args.variants.split(",")
+    for name in names:
+        # e.g. odds features when the odds weren't fetched (the workflow fetches them only for odds* variants)
+        empty = [c for c in VARIANTS[name].get("features", CURRENT) if not feats[c].notna().any()]
+        if empty:
+            raise SystemExit(f"variant {name}: no values in {', '.join(empty)}; was its data fetched?")
     out = []
-    for name in args.variants.split(","):
+    for name in names:
         t0 = time.time()
         print(f"== {name}", flush=True)
         out.append(run_variant(feats, name, VARIANTS[name]))
@@ -580,7 +613,7 @@ def _boot(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, len(m), size=(n, len(m)))
     out = {}
-    for k in ("top20", "top50", "capt", "spear", "dnp20", *[f"top20_{c}" for c in PICK_SUBSETS]):
+    for k in ("top20", "top50", "capt", "spear", *PICK_METRICS):
         if f"{k}_v" not in m or f"{k}_b" not in m:
             continue
         d = (m[f"{k}_v"] - m[f"{k}_b"]).to_numpy(dtype=float)
@@ -626,13 +659,16 @@ def cmd_report(args) -> None:
             continue
         lines.append(f"\n## Protocol: {proto}\n")
         lines.append(f"### {args.ref}, seed-averaged\n")
-        lines.append("| fold | rmse | mae | top20 | top50 | capt | spear | dnp20 | top20 euro clubs | bias GK/DEF/MID/FWD |")
-        lines.append("|---|---|---|---|---|---|---|---|---|---|")
+        lines.append("| fold | rmse | mae | top20 | top50 | capt | spear | dnp20 | top20 euro clubs | top20 GK/DEF "
+                     "| CS pts top20 GK/DEF | bias GK/DEF/MID/FWD |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
+        nan = float("nan")
         for s, u in units(base, proto).items():
             sm, pb = u["summary"], u["position_bias"]
             lines.append(f"| {s} | {sm['rmse']:.4f} | {sm['mae']:.4f} | {sm['top20']:.3f} | {sm['top50']:.3f} | "
-                         f"{sm['capt']:.2f} | {sm['spear']:.4f} | {sm.get('dnp20', float('nan')):.3f} | "
-                         f"{sm.get('top20_sub_euro_club', float('nan')):.3f} | "
+                         f"{sm['capt']:.2f} | {sm['spear']:.4f} | {sm.get('dnp20', nan):.3f} | "
+                         f"{sm.get('top20_sub_euro_club', nan):.3f} | {sm.get('top20_sub_gkdef', nan):.3f} | "
+                         f"{sm.get('cs20_sub_gkdef', nan):.3f} | "
                          f"{'/'.join(f'{pb.get(p_, 0):+.3f}' for p_ in pm.POSITIONS)} |")
         lines.append("\n### Variant minus reference (pooled: mean [95% CI]; per fold: Δtop20 / Δrmse×1000)\n")
         lines.append("| variant | Δrmse pooled | Δtop20 pooled | Δtop50 pooled | Δcapt pooled | per fold |")
@@ -652,13 +688,13 @@ def cmd_report(args) -> None:
             lines.append(f"| {name} | {_fmt(b['rmse'], 4)} | {_fmt(b['top20'])} | {_fmt(b['top50'])} | "
                          f"{_fmt(b['capt'], 2)} | {'; '.join(per)} |")
             subset_rows.append(f"| {name} | " + " | ".join(_fmt(b[c], 4) if c in b else "-" for c in SUBSETS) + " |")
-            pick_rows.append(f"| {name} | " + " | ".join(_fmt(b[k]) if k in b else "-" for k in
-                                                         ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS]) + " |")
+            pick_rows.append(f"| {name} | " + " | ".join(_fmt(b[k]) if k in b else "-" for k in PICK_METRICS) + " |")
         if pick_rows:
-            lines.append("\n#### Rotation picks: share of the top 20 who didn't play (lower is better) and "
-                         "top-20 points among players of clubs in Europe, variant minus reference [95% CI]\n")
-            lines.append("| variant | Δdnp20 | Δtop20 euro clubs |")
-            lines.append("|---|---|---|")
+            lines.append("\n#### Pick subsets: share of the top 20 who didn't play (lower is better), top-20 points "
+                         "among players of clubs in Europe and among GK/DEF, and the clean-sheet points of those "
+                         "GK/DEF picks, variant minus reference [95% CI]\n")
+            lines.append("| variant | Δdnp20 | Δtop20 euro clubs | Δtop20 GK/DEF | ΔCS pts top20 GK/DEF |")
+            lines.append("|---|---|---|---|---|")
             lines += pick_rows
         ref_sub = []
         for c in SUBSETS:
@@ -713,6 +749,7 @@ def main() -> int:
     r.add_argument("--out", required=True)
     r.add_argument("--inseason", default="", help="seasons to replay with in-season retraining, e.g. 2025-26")
     r.add_argument("--folds", default=None, help="test seasons for the es/refit folds (default: all)")
+    r.add_argument("--seeds", default="", help="training seeds, e.g. 3,4,5 to replicate a run (default: 0,1,2)")
     rep = sub.add_parser("report")
     rep.add_argument("paths", nargs="+")
     rep.add_argument("--out")

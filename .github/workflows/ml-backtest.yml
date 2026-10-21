@@ -18,12 +18,16 @@ on:
       folds:
         description: 'Test seasons for the es/refit folds, comma-separated (blank for all)'
         default: ''
+      seeds:
+        description: 'Training seeds, comma-separated (blank for 0,1,2; e.g. 3,4,5 to replicate a run)'
+        default: ''
 
 env:
   VARIANTS: ${{ inputs.variants }}
   INSEASON: ${{ inputs.inseason }}
   REF: ${{ inputs.ref }}
   FOLDS: ${{ inputs.folds }}
+  SEEDS: ${{ inputs.seeds }}
 
 jobs:
   features:
@@ -42,6 +46,12 @@ jobs:
         run: python -c 'import json, os; print("matrix=" + json.dumps(os.environ["VARIANTS"].split(",")))' >> "$GITHUB_OUTPUT"
       - name: Fetch the current season from the FPL API
         run: python -m pipeline.current_season --out-dir data/live || echo "::warning::live fetch failed; current-season fold skipped"
+      # football-data.co.uk's files aren't committed (free for private use, not for redistribution).
+      # Fetched only when a requested variant uses them (the odds* variants), so other runs don't
+      # touch the site; a variant whose features come out empty fails in the run step.
+      - name: Fetch bookmaker odds from football-data.co.uk
+        if: contains(inputs.variants, 'odds')
+        run: python -m scripts.data.fetch_odds || echo "::warning::odds fetch incomplete; see the odds coverage in the features step"
       - run: python -m scripts.analysis.ml_backtest features --out feats.pkl.gz
       - uses: actions/upload-artifact@v4
         with:
@@ -67,7 +77,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: feats
-      - run: python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.variant }}' --inseason "$INSEASON" ${FOLDS:+--folds "$FOLDS"} --out 'res_${{ matrix.variant }}.json'
+      - run: python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.variant }}' --inseason "$INSEASON" ${FOLDS:+--folds "$FOLDS"} ${SEEDS:+--seeds "$SEEDS"} --out 'res_${{ matrix.variant }}.json'
       - uses: actions/upload-artifact@v4
         with:
           name: res-${{ matrix.variant }}

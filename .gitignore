@@ -37,5 +37,9 @@ Thumbs.db
 # Current-season files written by the pipeline (pipeline/current_season.py)
 data/live/
 
+# Bookmaker odds from football-data.co.uk (scripts/data/fetch_odds.py): free for private use,
+# not for redistribution
+data/odds/
+
 # TypeScript incremental build info
 *.tsbuildinfo
