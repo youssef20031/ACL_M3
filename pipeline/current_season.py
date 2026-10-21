@@ -11,7 +11,9 @@ Writes to LIVE_DATA_DIR (default data/live):
   player_status_YYYY_YY.csv   current availability: status, news, chance of playing, price, form
   xp_snapshots.csv            FPL's expected points per player per gameweek, captured before
                               each deadline (the API only exposes the upcoming gameweek's value)
-  meta.json                   season, finished fixtures included, timestamps
+  meta.json                   season, finished fixtures included, timestamps, and per gameweek
+                              its deadline, whether it's finished and FPL's average and
+                              highest manager score (`events`)
 
 Only fixtures FPL marks `finished` (final, bonus confirmed) are included, so rows never
 change after they're written.
@@ -76,6 +78,21 @@ def next_event(bootstrap: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+EVENT_FIELDS = ("id", "deadline_time", "finished", "data_checked", "average_entry_score", "highest_score")
+
+
+def event_summaries(bootstrap: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Per gameweek: deadline, finished flags and FPL's average/highest manager score
+    (0 until FPL computes them, which is stored as None)."""
+    out = []
+    for e in bootstrap["events"]:
+        row = {k: e.get(k) for k in EVENT_FIELDS}
+        for k in ("average_entry_score", "highest_score"):
+            row[k] = row[k] or None
+        out.append(row)
+    return out
 
 
 # ------------------------------------------------------------------ builders
@@ -214,6 +231,7 @@ def run(out_dir: str = LIVE_DATA_DIR, full: bool = False, status_only: bool = Fa
             season=season, status_fetched_at=_now(),
             next_gameweek=event["id"] if event else None,
             next_deadline=event["deadline_time"] if event else None,
+            events=event_summaries(bootstrap),
             files={"season": os.path.basename(season_csv), "status": os.path.basename(status_csv),
                    "xp": os.path.basename(xp_csv)},
         )

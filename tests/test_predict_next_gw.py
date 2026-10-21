@@ -239,6 +239,7 @@ def test_predict_next_gameweek_end_to_end(live_dir):
     assert summary["double_gameweek_players"] == 3        # the three Arsenal players
     assert summary["history_last_kickoff"] < "2026-10-17"
     assert not any(p.endswith(".tmp") for p in os.listdir(live_dir))
+    assert summary["model_pick"] is None                  # GW7's deadline has passed: its pick is final
     for col in ["name", "team", "position", "opponent", "is_home", "kickoff_time", "gameweek",
                 "predicted_points", "value", "prediction_method"]:
         assert col in out.columns

@@ -4,7 +4,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   apiService,
   handleApiError,
-  type PositionCode,
+  isNotFoundError,
   type TeamOfWeekMode,
   type TeamOfWeekPlayer,
 } from '../services/api';
@@ -26,14 +26,15 @@ import {
   TabPanel,
   Tabs,
 } from '../components/ui';
+import { ModelReview } from '../components/totw/ModelReview';
+import { PITCH_LINES } from '../components/totw/pitchLines';
 import { usePageMeta } from '../hooks/usePageMeta';
 
-const LINES: { position: PositionCode; label: string }[] = [
-  { position: 'GK', label: 'Goalkeeper' },
-  { position: 'DEF', label: 'Defenders' },
-  { position: 'MID', label: 'Midfielders' },
-  { position: 'FWD', label: 'Forwards' },
-];
+// The page's tabs: the two squads from /api/team-of-the-week, plus the model's past picks
+// against what they scored (/api/model-review). `mode` in the URL; predicted is the default.
+type View = TeamOfWeekMode | 'review';
+
+const parseView = (value: string | null): View => (value === 'actual' || value === 'review' ? value : 'predicted');
 
 function fmtPoints(points: number, mode: TeamOfWeekMode) {
   return mode === 'predicted' ? points.toFixed(1) : String(Math.round(points));
@@ -42,7 +43,7 @@ function fmtPoints(points: number, mode: TeamOfWeekMode) {
 function TeamPitch({ starters, mode, gameweek }: { starters: TeamOfWeekPlayer[]; mode: TeamOfWeekMode; gameweek: number }) {
   return (
     <Pitch label={`${mode === 'predicted' ? 'Predicted' : 'Dream'} team, gameweek ${gameweek}`}>
-      {LINES.map((line) => (
+      {PITCH_LINES.map((line) => (
         <PitchRow key={line.position} label={line.label}>
           {starters
             .filter((p) => p.position === line.position)
@@ -72,9 +73,10 @@ function PitchSkeleton() {
 }
 
 export function TeamOfTheWeek() {
-  usePageMeta({ title: "Team of the Week", description: "The highest-scoring FPL squad our model predicts for the next gameweek (£100m, 3 per club), plus each week's dream team." });
+  usePageMeta({ title: "Team of the Week", description: "The highest-scoring FPL squad our model predicts for the next gameweek (£100m, 3 per club), how its past picks scored, and each week's dream team." });
   const [params, setParams] = useSearchParams();
-  const mode: TeamOfWeekMode = params.get('mode') === 'actual' ? 'actual' : 'predicted';
+  const view = parseView(params.get('mode'));
+  const mode: TeamOfWeekMode = view === 'actual' ? 'actual' : 'predicted';
   const requestedGw = Number(params.get('gw')) || undefined;
 
   const { data: season } = useQuery({
@@ -84,23 +86,36 @@ export function TeamOfTheWeek() {
   });
   const finished = season?.finished_gameweeks ?? [];
 
-  const gameweek = mode === 'actual' ? requestedGw : undefined;
+  const gameweek = view === 'actual' ? requestedGw : undefined;
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['team-of-the-week', mode, gameweek ?? 'default'],
     queryFn: () => apiService.getTeamOfTheWeek(mode, gameweek),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60_000,
+    enabled: view !== 'review',
   });
 
-  // Keep the gw param out of the URL in predicted mode (it only applies to dream teams).
+  const reviewGw = view === 'review' ? requestedGw : undefined;
+  const review = useQuery({
+    queryKey: ['model-review', reviewGw ?? 'default'],
+    queryFn: () => apiService.getModelReview(reviewGw),
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60_000,
+    enabled: view === 'review',
+    // A 404 only means no saved pick for that gameweek: show it at once rather than retrying.
+    retry: (failures, err) => !isNotFoundError(err) && failures < 1,
+  });
+
+  // Keep the gw param out of the URL in predicted mode (it only applies to past gameweeks).
   useEffect(() => {
-    if (mode === 'predicted' && params.has('gw')) {
+    if (view === 'predicted' && params.has('gw')) {
       params.delete('gw');
       setParams(params, { replace: true });
     }
-  }, [mode, params, setParams]);
+  }, [view, params, setParams]);
 
-  const setMode = (next: TeamOfWeekMode) => setParams(next === 'actual' ? { mode: 'actual' } : {});
+  // Switching tabs drops the gameweek: each tab has its own default.
+  const setView = (next: View) => setParams(next === 'predicted' ? {} : { mode: next });
   const team = data && data.mode === mode ? data : undefined;
   const captain = team?.starters.find((p) => p.captain);
 
@@ -110,25 +125,38 @@ export function TeamOfTheWeek() {
         eyebrow={season?.season ?? 'This season'}
         title="Team of the Week"
         description={
-          mode === 'predicted'
+          view === 'predicted'
             ? 'The highest-scoring XI our model expects next gameweek, picked like a real FPL squad: £100m, 3 players per club at most.'
-            : 'The best-performing XI of a finished gameweek, by actual FPL points.'
+            : view === 'review'
+              ? 'How the model’s pick for a past gameweek actually did: each player’s predicted and real FPL points, against the average FPL score.'
+              : 'The best-performing XI of a finished gameweek, by actual FPL points.'
         }
       />
 
       <Tabs
         label="Team of the Week view"
         idPrefix="totw"
-        value={mode}
-        onChange={setMode}
+        value={view}
+        onChange={setView}
         items={[
           { value: 'predicted', label: `Predicted${season?.next_gameweek ? ` · GW${season.next_gameweek}` : ''}` },
+          { value: 'review', label: 'Model vs actual' },
           { value: 'actual', label: 'Dream team' },
         ]}
       />
 
-      <TabPanel idPrefix="totw" value={mode} className="pt-5">
-        {isError ? (
+      <TabPanel idPrefix="totw" value={view} className="pt-5">
+        {view === 'review' ? (
+          <ModelReview
+            review={review.data}
+            error={review.isError ? review.error : undefined}
+            selectedGameweek={reviewGw}
+            updating={review.isFetching && review.isPlaceholderData}
+            onGameweekChange={(gw) => setParams({ mode: 'review', gw: String(gw) })}
+            onRetry={() => review.refetch()}
+            onShowLatest={reviewGw ? () => setParams({ mode: 'review' }) : undefined}
+          />
+        ) : isError ? (
           <Card>
             <ErrorState title="Couldn't build the team" description={handleApiError(error)} onRetry={() => refetch()} />
           </Card>

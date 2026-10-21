@@ -561,6 +561,73 @@ export interface TeamOfWeekResponse {
   bench: TeamOfWeekPlayer[];
 }
 
+/** One player of a saved model pick, scored with that gameweek's FPL points. */
+export interface ModelReviewPlayer {
+  name: string;
+  /** FPL's short display name ("Raya"), when known. */
+  web_name: string | null;
+  team: string;
+  position: PositionCode;
+  /** £m. */
+  cost: number | null;
+  /** The model's prediction for this gameweek. */
+  predicted_points: number | null;
+  /** Raw FPL points this gameweek; null until one of his matches has finished. */
+  points: number | null;
+  minutes: number | null;
+  /** 0 = on the bench after auto-subs, 1, 2 = captain whose points count double (the vice if the captain didn't play). */
+  multiplier: number;
+  /** As picked. */
+  captain: boolean;
+  /** As picked. */
+  vice_captain: boolean;
+  /** null while his matches are still to finish. */
+  played: boolean | null;
+  /** Came off the bench via an auto-sub. */
+  subbed_in: boolean;
+  /** Picked to start, didn't play, replaced. */
+  subbed_out: boolean;
+  opponents: Array<{ team: string; home: boolean }>;
+  photo: string | null;
+}
+
+/** The squad the model picked before a past deadline, and how it actually scored. */
+export interface ModelReviewResponse {
+  season: string;
+  gameweek: number;
+  /** Every gameweek with a saved pick, ascending. */
+  gameweeks: number[];
+  /** finished = FPL has marked the gameweek finished. */
+  status: 'live' | 'finished';
+  deadline: string | null;
+  /** When the pick was saved (ISO). */
+  archived_at: string | null;
+  /** manual = recorded by hand from the FPL app. */
+  source: 'pipeline' | 'manual';
+  note: string | null;
+  /** Final XI after auto-subs, e.g. "4-4-2". */
+  formation: string;
+  /** The model's XI before auto-subs. */
+  picked_formation: string;
+  /** Model's XI + captain again, as predicted. */
+  predicted_points: number;
+  /** FPL score: final XI × multipliers. */
+  points: number;
+  /** Points left on the bench after auto-subs. */
+  bench_points: number;
+  fpl_average: number | null;
+  fpl_highest: number | null;
+  /** £m. */
+  total_cost: number | null;
+  /** £m. */
+  budget: number | null;
+  /** Final XI after auto-subs, GK, DEF, MID, FWD order. */
+  starters: ModelReviewPlayer[];
+  /** Final bench in priority order, goalkeeper first. */
+  bench: ModelReviewPlayer[];
+  auto_subs: Array<{ out: string; in: string }>;
+}
+
 export type PlayerLeaderSort =
   | 'total_points'
   | 'goals'
@@ -852,6 +919,14 @@ export const apiService = {
     return data;
   },
 
+  /** The model's saved pick for a past gameweek (default: the latest whose deadline passed). 404 when none. */
+  async getModelReview(gameweek?: number): Promise<ModelReviewResponse> {
+    const { data } = await api.get<ModelReviewResponse>('/api/model-review', {
+      params: gameweek ? { gameweek } : undefined,
+    });
+    return data;
+  },
+
   // Data Management
   async loadFPLData(clearExisting: boolean = true): Promise<{ success: boolean; stats: unknown }> {
     const { data } = await api.post('/api/data/load', { clear_existing: clearExisting });
@@ -886,5 +961,9 @@ export const handleApiError = (error: unknown): string => {
   }
   return 'An unknown error occurred';
 };
+
+/** True for an HTTP 404, e.g. a resource that doesn't exist yet (not a failure worth retrying). */
+export const isNotFoundError = (error: unknown): boolean =>
+  axios.isAxiosError(error) && error.response?.status === 404;
 
 export default apiService;

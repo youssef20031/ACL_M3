@@ -1,0 +1,355 @@
+{
+  "season": "2026-27",
+  "gameweek": 7,
+  "deadline": "2026-10-17T10:00:00Z",
+  "archived_at": null,
+  "source": "manual",
+  "note": "Recorded from the FPL app: the squad, captaincy and bench order the model's pick had at the deadline, before picks were saved automatically. Predicted points were recomputed afterwards with the same model from data before the GW7 deadline, without that day's team news.",
+  "players": [
+    {
+      "element": 1,
+      "name": "David Raya Martín",
+      "position": "GK",
+      "team": "Arsenal",
+      "cost": 6.1,
+      "predicted_points": 3.68,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": true,
+      "fixtures": [
+        69
+      ],
+      "opponents": [
+        {
+          "team": "Nott'm Forest",
+          "home": false
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 115,
+      "name": "Maxim De Cuyper",
+      "position": "DEF",
+      "team": "Brighton",
+      "cost": 5.2,
+      "predicted_points": 4.62,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        63
+      ],
+      "opponents": [
+        {
+          "team": "Crystal Palace",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 112,
+      "name": "Jan Paul van Hecke",
+      "position": "DEF",
+      "team": "Spurs",
+      "cost": 4.9,
+      "predicted_points": 4.12,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        70
+      ],
+      "opponents": [
+        {
+          "team": "Coventry City",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 4,
+      "name": "Gabriel dos Santos Magalhães",
+      "position": "DEF",
+      "team": "Arsenal",
+      "cost": 7.9,
+      "predicted_points": 3.81,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        69
+      ],
+      "opponents": [
+        {
+          "team": "Nott'm Forest",
+          "home": false
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 397,
+      "name": "Antoine Semenyo",
+      "position": "MID",
+      "team": "Man City",
+      "cost": 8.3,
+      "predicted_points": 4.61,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        67
+      ],
+      "opponents": [
+        {
+          "team": "Ipswich",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 124,
+      "name": "Pascal Groß",
+      "position": "MID",
+      "team": "Brighton",
+      "cost": 6.1,
+      "predicted_points": 4.41,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        63
+      ],
+      "opponents": [
+        {
+          "team": "Crystal Palace",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 455,
+      "name": "Sandro Tonali",
+      "position": "MID",
+      "team": "Spurs",
+      "cost": 5.3,
+      "predicted_points": 4.31,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        70
+      ],
+      "opponents": [
+        {
+          "team": "Coventry City",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 236,
+      "name": "Kiernan Dewsbury-Hall",
+      "position": "MID",
+      "team": "Everton",
+      "cost": 6.6,
+      "predicted_points": 3.81,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        64
+      ],
+      "opponents": [
+        {
+          "team": "Chelsea",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 399,
+      "name": "Rayan Cherki",
+      "position": "MID",
+      "team": "Man City",
+      "cost": 7.9,
+      "predicted_points": 5.2,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        67
+      ],
+      "opponents": [
+        {
+          "team": "Ipswich",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 411,
+      "name": "Erling Haaland",
+      "position": "FWD",
+      "team": "Man City",
+      "cost": 15.7,
+      "predicted_points": 8.57,
+      "role": "starter",
+      "captain": true,
+      "vice_captain": false,
+      "fixtures": [
+        67
+      ],
+      "opponents": [
+        {
+          "team": "Ipswich",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 106,
+      "name": "Igor Thiago Nascimento Rodrigues",
+      "position": "FWD",
+      "team": "Brentford",
+      "cost": 7.8,
+      "predicted_points": 3.42,
+      "role": "starter",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        62
+      ],
+      "opponents": [
+        {
+          "team": "Liverpool",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 497,
+      "name": "Martin Dubravka",
+      "position": "GK",
+      "team": "Spurs",
+      "cost": 4.0,
+      "predicted_points": 0.05,
+      "role": "bench",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        70
+      ],
+      "opponents": [
+        {
+          "team": "Coventry City",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 306,
+      "name": "Jacob Greaves",
+      "position": "DEF",
+      "team": "Ipswich",
+      "cost": 3.9,
+      "predicted_points": 0.37,
+      "role": "bench",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        67
+      ],
+      "opponents": [
+        {
+          "team": "Man City",
+          "home": false
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 175,
+      "name": "Milan van Ewijk",
+      "position": "DEF",
+      "team": "Coventry City",
+      "cost": 3.9,
+      "predicted_points": 2.07,
+      "role": "bench",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        70
+      ],
+      "opponents": [
+        {
+          "team": "Spurs",
+          "home": false
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    },
+    {
+      "element": 272,
+      "name": "Jonah Kusi-Asare",
+      "position": "FWD",
+      "team": "Fulham",
+      "cost": 4.4,
+      "predicted_points": 0.04,
+      "role": "bench",
+      "captain": false,
+      "vice_captain": false,
+      "fixtures": [
+        65
+      ],
+      "opponents": [
+        {
+          "team": "Hull City",
+          "home": true
+        }
+      ],
+      "status": null,
+      "chance_of_playing_next_round": null,
+      "news": null
+    }
+  ]
+}

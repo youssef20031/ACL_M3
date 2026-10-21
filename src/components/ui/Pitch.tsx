@@ -77,12 +77,18 @@ export interface PitchOpponent {
 
 interface PitchPlayerProps {
   name: string;
+  /** Name plate text, e.g. FPL's web name; defaults to the last word of `name`. */
+  displayName?: string | null;
   /** The player's club: crest on the photo. */
   team?: string | null;
   /** Who they played (or play). Several entries for a double gameweek. */
   opponents?: PitchOpponent[];
   /** Bottom strip, e.g. "12 pts". */
   value?: ReactNode;
+  /** Quieter strip under `value`, e.g. the model's prediction next to actual points. */
+  detail?: ReactNode;
+  /** Small badge on the photo's lower-left corner, e.g. an auto-sub arrow (give icons sr-only text). */
+  marker?: ReactNode;
   photo?: string | null;
   captain?: boolean;
   viceCaptain?: boolean;
@@ -122,9 +128,12 @@ function Armband({ letter, label, compact = false }: { letter: 'C' | 'V'; label:
 /** One player on the pitch: photo with crest and armband, name plate, opponent and value strips. */
 export function PitchPlayer({
   name,
+  displayName,
   team,
   opponents,
   value,
+  detail,
+  marker,
   photo,
   captain,
   viceCaptain,
@@ -134,7 +143,7 @@ export function PitchPlayer({
   actionLabel,
   compact = false,
 }: PitchPlayerProps) {
-  const shortName = name.split(' ').slice(-1)[0] || name;
+  const shortName = displayName || name.split(' ').slice(-1)[0] || name;
   const code = (status ?? '').toLowerCase();
   const plate = PLATE[code] ?? 'bg-fg text-brand';
   const Inner = onClick ? 'button' : 'div';
@@ -165,6 +174,7 @@ export function PitchPlayer({
               <ClubCrest team={team} size={compact ? 18 : 26} />
             </span>
           )}
+          {marker && <span className="absolute -left-1 bottom-0 z-[1] flex">{marker}</span>}
         </span>
 
         <span className={cn('w-full truncate rounded-t-sm px-1 py-0.5 text-micro font-bold', plate)}>
@@ -190,7 +200,14 @@ export function PitchPlayer({
         )}
 
         {value != null && (
-          <span className="w-full truncate rounded-b-sm bg-brand px-1 py-0.5 text-micro font-bold text-fg">{value}</span>
+          <span className={cn('w-full truncate bg-brand px-1 py-0.5 text-micro font-bold text-fg', detail == null && 'rounded-b-sm')}>
+            {value}
+          </span>
+        )}
+        {detail != null && (
+          <span className="w-full truncate rounded-b-sm bg-surface px-1 py-0.5 text-micro font-semibold text-fg-muted">
+            {detail}
+          </span>
         )}
       </Inner>
     </li>
