@@ -42,6 +42,9 @@ jobs:
         run: python -c 'import json, os; print("matrix=" + json.dumps(os.environ["VARIANTS"].split(",")))' >> "$GITHUB_OUTPUT"
       - name: Fetch the current season from the FPL API
         run: python -m pipeline.current_season --out-dir data/live || echo "::warning::live fetch failed; current-season fold skipped"
+      # football-data.co.uk's files aren't committed (free for private use, not for redistribution)
+      - name: Fetch bookmaker odds from football-data.co.uk
+        run: python -m scripts.data.fetch_odds || echo "::warning::odds fetch incomplete; see the odds coverage in the features step"
       - run: python -m scripts.analysis.ml_backtest features --out feats.pkl.gz
       - uses: actions/upload-artifact@v4
         with:
