@@ -582,10 +582,12 @@ def run_inseason(feats, spec, season, cols, params, present) -> dict:
 
 
 def cmd_run(args) -> None:
-    global INSEASON, TEST_SEASONS
+    global INSEASON, TEST_SEASONS, SEEDS
     feats = pd.read_pickle(args.feats)
     if args.inseason:
         INSEASON = tuple(args.inseason.split(","))
+    if args.seeds:
+        SEEDS = tuple(int(s) for s in args.seeds.split(","))
     if args.folds is not None:
         TEST_SEASONS = [s for s in args.folds.split(",") if s]
     out = []
@@ -741,6 +743,7 @@ def main() -> int:
     r.add_argument("--out", required=True)
     r.add_argument("--inseason", default="", help="seasons to replay with in-season retraining, e.g. 2025-26")
     r.add_argument("--folds", default=None, help="test seasons for the es/refit folds (default: all)")
+    r.add_argument("--seeds", default="", help="training seeds, e.g. 3,4,5 to replicate a run (default: 0,1,2)")
     rep = sub.add_parser("report")
     rep.add_argument("paths", nargs="+")
     rep.add_argument("--out")
