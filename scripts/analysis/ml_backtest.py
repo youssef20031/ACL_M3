@@ -590,8 +590,14 @@ def cmd_run(args) -> None:
         SEEDS = tuple(int(s) for s in args.seeds.split(","))
     if args.folds is not None:
         TEST_SEASONS = [s for s in args.folds.split(",") if s]
+    names = args.variants.split(",")
+    for name in names:
+        # e.g. odds features when the odds weren't fetched (the workflow fetches them only for odds* variants)
+        empty = [c for c in VARIANTS[name].get("features", CURRENT) if not feats[c].notna().any()]
+        if empty:
+            raise SystemExit(f"variant {name}: no values in {', '.join(empty)}; was its data fetched?")
     out = []
-    for name in args.variants.split(","):
+    for name in names:
         t0 = time.time()
         print(f"== {name}", flush=True)
         out.append(run_variant(feats, name, VARIANTS[name]))
