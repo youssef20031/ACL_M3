@@ -55,6 +55,7 @@ from services.player_index import PlayerIndex
 from services.avatars import AvatarService, ImageProxy, is_proxy_allowed, FPL_PHOTO_URL
 from services.predictions import get_predictions_df
 from services import season_service
+from services import model_review
 from services import answer_cards
 from services import analytics
 from services.security import RateLimiter, limits_from_env, require_admin
@@ -1028,6 +1029,56 @@ class TeamOfWeekResponse(BaseModel):
 # Keep in sync with season_service.LEADER_SORTS (tests/test_player_leaders.py checks it).
 LeaderSort = Literal["total_points", "goals", "assists", "clean_sheets", "bonus", "points_per_game", "minutes"]
 LeaderPosition = Literal["GK", "DEF", "MID", "FWD"]
+
+
+class ModelReviewPlayer(BaseModel):
+    name: str
+    web_name: Optional[str] = None
+    team: str
+    position: str
+    cost: Optional[float] = None
+    predicted_points: Optional[float] = None
+    points: Optional[int] = None
+    minutes: Optional[int] = None
+    multiplier: int
+    captain: bool
+    vice_captain: bool
+    played: Optional[bool] = None
+    subbed_in: bool
+    subbed_out: bool
+    opponents: List[Opponent]
+    photo: Optional[str] = None
+
+
+class AutoSub(BaseModel):
+    out: str
+    # `in` is a keyword
+    in_: str = Field(alias="in", serialization_alias="in")
+
+    model_config = {"populate_by_name": True}
+
+
+class ModelReviewResponse(BaseModel):
+    season: str
+    gameweek: int
+    gameweeks: List[int]
+    status: str
+    deadline: Optional[str] = None
+    archived_at: Optional[str] = None
+    source: str
+    note: Optional[str] = None
+    formation: str
+    picked_formation: str
+    predicted_points: float
+    points: int
+    bench_points: int
+    fpl_average: Optional[int] = None
+    fpl_highest: Optional[int] = None
+    total_cost: Optional[float] = None
+    budget: Optional[float] = None
+    starters: List[ModelReviewPlayer]
+    bench: List[ModelReviewPlayer]
+    auto_subs: List[AutoSub]
 
 
 class PlayerLeader(BaseModel):
@@ -2481,6 +2532,14 @@ def team_of_the_week(mode: str = "predicted", gameweek: Optional[int] = None):
     if conn is None and mode == "actual":
         raise HTTPException(status_code=503, detail="Neo4j not connected")
     return _season_call(season_service.get_team_of_the_week, conn, mode, gameweek, photo_for=_photo_for)
+
+
+@app.get("/api/model-review", response_model=ModelReviewResponse, response_model_by_alias=True)
+def model_review_endpoint(gameweek: Optional[int] = Query(None, ge=1, le=38)):
+    """The model's squad saved before a past gameweek's deadline, scored like FPL (auto-subs,
+    captain/vice), with FPL's average and highest score. Default: the latest saved pick
+    whose deadline has passed. 404 when there's none."""
+    return _season_call(model_review.get_model_review, gameweek, photo_for=_photo_for)
 
 
 @app.get("/api/players/leaders", response_model=PlayerLeadersResponse)

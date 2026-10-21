@@ -34,11 +34,14 @@ import {
 } from '../components/ui';
 import { AnswerCards, AnswerCardSkeleton, FollowUps } from '../components/assistant/cards/AnswerCards';
 import { SAMPLE_CARDS, SAMPLE_FOLLOW_UPS } from '../components/assistant/cards/samples';
+import { ModelReview } from '../components/totw/ModelReview';
+import { SAMPLE_MODEL_REVIEW } from '../components/totw/samples';
 
 /*
  * Hidden /design route: a living reference for the Pitch Me design system.
  * Everything below is SAMPLE DATA for showing components; no page in the app
- * uses these values.
+ * uses these values. The one exception to "made-up" is the model review, which
+ * replays the model's real GW7 pick (components/totw/samples.ts).
  */
 
 interface SampleRow {
@@ -126,7 +129,7 @@ export function DesignSystem() {
         <PageHeader
           eyebrow="Internal · sample data"
           title="Design system"
-          description="Every component the redesigned pages are built from. All names, numbers and news on this page are made-up sample data."
+          description="Every component the redesigned pages are built from. All names, numbers and news on this page are made-up sample data, except the model review, which replays the model’s real GW7 pick."
           actions={
             <>
               <Button>Primary</Button>
@@ -306,6 +309,15 @@ export function DesignSystem() {
               </PitchRow>
             </Pitch>
           </div>
+        </Section>
+
+        <Section title="Model vs actual">
+          <p className="mb-4 max-w-3xl text-body text-fg-muted">
+            The Team of the Week review tab: the squad the model picked before a deadline and what it scored, with
+            FPL&rsquo;s auto-subs applied (Greaves came on for Cherki, who didn&rsquo;t play). Points are counted, so
+            the captain&rsquo;s are doubled; the prediction sits under them.
+          </p>
+          <ModelReview review={SAMPLE_MODEL_REVIEW} onGameweekChange={() => undefined} />
         </Section>
 
         <Section title="Assistant answer cards">

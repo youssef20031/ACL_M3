@@ -385,6 +385,38 @@ def predicted_candidates(rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]
     return out
 
 
+def predicted_selection(rows: Iterable[Dict[str, Any]],
+                        opponents: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+                        codes: Optional[Dict[int, int]] = None) -> Tuple[opt.Selection, Dict[str, Dict[str, Any]]]:
+    """The predicted team of the week from prediction rows: (selection, details by name).
+    Shared with pipeline.predict_next_gw, which saves it as the gameweek's pick, so the
+    saved squad is the one the page showed. NotFoundError when no squad fits."""
+    opponents, codes = opponents or {}, codes or {}
+    pool, details = [], {}
+    for r in predicted_candidates(rows):
+        name, position = str(r["name"]), normalize_position(r.get("position"))
+        if name in details or position not in opt.POSITIONS:
+            continue
+        value = _int_or_none(r["value"])
+        pool.append(opt.Candidate(id=name, position=position, team=str(r["team"]),
+                                  points=float(r["predicted_points"]), cost=value))
+        team = str(r["team"])
+        details[name] = {
+            "team": team,
+            "cost": round(value / 10.0, 1),
+            "opponents": opponents.get(team) if team in opponents else opponents_from_prediction(r),
+            "status": _str_or_none(r.get("status")) or "a",
+            "chance_of_playing_next_round": _int_or_none(r.get("chance_of_playing_next_round")),
+            "news": _str_or_none(r.get("news")),
+            "element": _int_or_none(r.get("element")),
+            "_code": codes.get(_int_or_none(r.get("element"))),
+        }
+    try:
+        return opt.best_squad(pool, budget=BUDGET), details
+    except opt.InfeasibleError as exc:
+        raise NotFoundError(f"Not enough available players for a squad: {exc}") from exc
+
+
 def opponents_from_prediction(row: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Fallback when the graph has no fixtures: 'A & B' with the first fixture's venue."""
     text = _str_or_none(row.get("opponent"))
@@ -700,30 +732,7 @@ def _predicted_team(conn, gameweek: Optional[int], season: str) -> Dict[str, Any
                 opponents = team_opponents(load_fixtures(conn, season), file_gw)
             except Exception as exc:  # the predictions file alone is enough
                 logger.warning("Fixtures unavailable for team of the week opponents: %s", exc)
-        codes = status_lookup(season)["code"]
-        rows = predicted_candidates(df.to_dict("records"))
-        pool, details = [], {}
-        for r in rows:
-            name, position = str(r["name"]), normalize_position(r.get("position"))
-            if name in details or position not in opt.POSITIONS:
-                continue
-            value = _int_or_none(r["value"])
-            pool.append(opt.Candidate(id=name, position=position, team=str(r["team"]),
-                                      points=float(r["predicted_points"]), cost=value))
-            team = str(r["team"])
-            details[name] = {
-                "team": team,
-                "cost": round(value / 10.0, 1),
-                "opponents": opponents.get(team) if team in opponents else opponents_from_prediction(r),
-                "status": _str_or_none(r.get("status")) or "a",
-                "chance_of_playing_next_round": _int_or_none(r.get("chance_of_playing_next_round")),
-                "news": _str_or_none(r.get("news")),
-                "_code": codes.get(_int_or_none(r.get("element"))),
-            }
-        try:
-            selection = opt.best_squad(pool, budget=BUDGET)
-        except opt.InfeasibleError as exc:
-            raise NotFoundError(f"Not enough available players for a squad: {exc}") from exc
+        selection, details = predicted_selection(df.to_dict("records"), opponents, status_lookup(season)["code"])
         return build_team_of_the_week(selection, details, "predicted", file_gw, BUDGET / 10.0)
 
     return _cached(("totw", "predicted", path, _mtime(path), conn is not None), build)

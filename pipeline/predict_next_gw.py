@@ -12,7 +12,9 @@ Inputs:
 
 Output: LIVE_DATA_DIR/next_gw_predictions.csv (+ .json), same schema as the old
 ml/predictions/next_gw_predictions.csv plus a few transparency columns, written
-atomically. services/predictions.py prefers this file over the bundled one.
+atomically. services/predictions.py prefers this file over the bundled one. Before the
+deadline it also saves the gameweek's squad pick (services/model_review.save_picks) for
+the Team of the Week page's "Model vs actual" review.
 
 How a prediction is built: each player gets one row per fixture of the predicted
 gameweek and goes through ml.points_model.build_features together with his real
@@ -331,6 +333,15 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
     _atomic_write(json_path, lambda p: out.to_json(p, orient="records", indent=2))
     _atomic_write(csv_path, lambda p: out.to_csv(p, index=False))  # CSV last: it is what the API watches
 
+    # Keep this gameweek's pick: the last run before the deadline leaves the final one.
+    # A failure here mustn't cost the predictions themselves.
+    try:
+        from services.model_review import save_picks
+        picks_path = save_picks(live_dir, season, gameweek, event["deadline_time"], csv_path, fixtures_by_team)
+    except Exception:
+        logger.exception("Couldn't save the model's pick for GW%s", gameweek)
+        picks_path = "failed"
+
     has_fixture = out["fixtures"] > 0
     return {
         "season": season,
@@ -347,6 +358,7 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
         "history_last_kickoff": str(history["kickoff_time"].max()) if len(history) else None,
         "output": csv_path,
         "output_json": json_path,
+        "model_pick": picks_path,
         "seconds": round(time.perf_counter() - started, 1),
         "peak_memory_mb": (round(peak_memory_mb(), 1) if peak_memory_mb() is not None else None),
     }
