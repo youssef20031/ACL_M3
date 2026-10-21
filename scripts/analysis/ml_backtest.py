@@ -17,8 +17,14 @@ variant is compared with a reference variant using paired bootstrap CIs over gam
 Variants (VARIANTS): "current" is what ml.points_model trains, "previous" is v3 before the
 2026-10 features; the others add candidate features computed only here (add_extra_features) or
 change training settings. Subset metrics (promoted teams in their first 6 gameweeks, players new
-from the Championship in their first 6, teams within 60 days of a manager change) show effects
-too local to move the overall numbers.
+from the Championship in their first 6, teams within 60 days of a manager change, clubs playing
+in Europe, fixtures within 4 days of a cup or European tie) show effects too local to move the
+overall numbers. Two pick metrics target rotation: the mean points of the top 20 picks among
+players of clubs in Europe, and the share of the overall top 20 who didn't play (dnp20).
+
+The non-Premier-League data (data/non_pl_*.csv, ml/other_competitions.py) comes from the
+transfermarkt-datasets dump, which has no 2026-27 season: compare those variants with
+`--folds 2023-24,2024-25,2025-26`.
 """
 import argparse
 import glob
@@ -33,6 +39,7 @@ import pandas as pd
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
+from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
 from utils.text import normalize_name  # noqa: E402
 
@@ -162,6 +169,10 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.reset_index(drop=True).copy()
     known = df["minutes"].notna()
 
+    # Matches outside the Premier League: congestion, minutes in cup ties, still in which cups
+    matches, apps = oc.load_other_competitions()
+    df = df.join(oc.other_competition_features(df, matches, apps))
+
     # Per-90 rates over the last 10 / 30 matches, counting only minutes where the stat exists
     aux = {}
     for s in P90_STATS:
@@ -216,8 +227,12 @@ G_MGR = ["team_mgr_days", "opp_mgr_days"]
 G_ROT = ["team_rotation_r6"]
 G_EFL_TEAM = ["efl_team_gf_pg", "efl_team_ga_pg", "efl_team_ppg", "opp_efl_gf_pg", "opp_efl_ga_pg", "opp_efl_ppg"]
 G_EFL_PLAYER = ["efl_min_share", "efl_g90", "efl_a90", "efl_sh90", "efl_ppm", "efl_onga90"]
-SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"]
-EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER
+G_OC_SCHED = oc.SCHEDULE_FEATURES
+G_OC_PLAYER = oc.PLAYER_FEATURES
+G_OC_STATUS = oc.STATUS_FEATURES
+SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS
+PICK_SUBSETS = ["sub_euro_club"]   # top-20 picks among these players only
+EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
 KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP"]
 
 
@@ -240,7 +255,8 @@ def cmd_features(args) -> None:
         if feats[c].dtype == "float64":
             feats[c] = feats[c].astype("float32")
     feats.to_pickle(args.out)
-    cover = {c: round(float(feats[c].notna().mean()), 3) for c in G_MGR + G_ROT + G_EFL_TEAM[:1] + G_EFL_PLAYER[:1]}
+    cover = {c: round(float(feats[c].notna().mean()), 3) for c in G_MGR + G_ROT + G_EFL_TEAM[:1] + G_EFL_PLAYER[:1]
+             + ["oc_minutes_last", "ac_ga_p90_r8"]}
     print(f"saved {args.out}: {feats.shape}, seasons {feats.groupby('season').size().to_dict()}, "
           f"subset rows {feats[SUBSETS].sum().astype(int).to_dict()}, coverage {cover} "
           f"in {time.time() - t0:.0f}s", flush=True)
@@ -266,6 +282,11 @@ VARIANTS = {
     "efl_team": {"features": CURRENT + G_EFL_TEAM},
     "efl_player": {"features": CURRENT + G_EFL_PLAYER},
     "efl": {"features": CURRENT + G_EFL_TEAM + G_EFL_PLAYER},
+    # matches outside the Premier League (2026-10; transfermarkt-datasets, so no EFL Cup and no 2026-27)
+    "oc_sched": {"features": CURRENT + G_OC_SCHED},
+    "oc_player": {"features": CURRENT + G_OC_PLAYER},
+    "oc_status": {"features": CURRENT + G_OC_STATUS},
+    "oc": {"features": CURRENT + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS},
 }
 
 
@@ -289,7 +310,7 @@ def _patience_stop(curve, patience):
 
 def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
     subsets = [c for c in SUBSETS if c in test.columns]
-    d = test[["season", "GW", "name", "total_points"] + subsets].copy()
+    d = test[["season", "GW", "name", "total_points", "minutes"] + subsets].copy()
     d["pred"] = pred.astype(float)
     d["err"] = d["pred"] - d["total_points"]
     d["se"] = d["err"] ** 2
@@ -301,15 +322,23 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
         agg.update({f"se_{c}": (f"se_{c}", "sum"), f"err_{c}": (f"err_{c}", "sum"), f"n_{c}": (f"n_{c}", "sum")})
     rows = d.groupby(["season", "GW"]).agg(**agg).reset_index()
     rows["GW"] = rows["GW"].astype(int)
-    pg = d.groupby(["season", "GW", "name"], as_index=False)[["pred", "total_points"]].sum()
+    picks = [c for c in PICK_SUBSETS if c in subsets]
+    pg = d.groupby(["season", "GW", "name"], as_index=False).agg(
+        pred=("pred", "sum"), total_points=("total_points", "sum"), minutes=("minutes", "sum"),
+        **{c: (c, "max") for c in picks})
     out = []
     for (s, gw), g in pg.groupby(["season", "GW"]):
         r = g.sort_values("pred", ascending=False, kind="mergesort")
-        out.append({"season": s, "GW": int(gw), "players": len(g),
-                    "top20": float(r["total_points"].head(20).mean()),
-                    "top50": float(r["total_points"].head(50).mean()),
-                    "capt": float(r["total_points"].iloc[0]),
-                    "spear": float(g["pred"].corr(g["total_points"], method="spearman"))})
+        row = {"season": s, "GW": int(gw), "players": len(g),
+               "top20": float(r["total_points"].head(20).mean()),
+               "top50": float(r["total_points"].head(50).mean()),
+               "capt": float(r["total_points"].iloc[0]),
+               "spear": float(g["pred"].corr(g["total_points"], method="spearman")),
+               "dnp20": float((r["minutes"].head(20) == 0).mean())}
+        for c in picks:
+            sub = r[r[c] > 0]
+            row[f"top20_{c}"] = float(sub["total_points"].head(20).mean()) if len(sub) >= 40 else np.nan
+        out.append(row)
     return pd.DataFrame(out).merge(rows, on=["season", "GW"])
 
 
@@ -317,6 +346,9 @@ def summarize(t: pd.DataFrame) -> dict:
     out = {"rmse": float(np.sqrt(t["se"].sum() / t["rows"].sum())), "mae": float(t["ae"].sum() / t["rows"].sum()),
            "top20": float(t["top20"].mean()), "top50": float(t["top50"].mean()), "capt": float(t["capt"].mean()),
            "spear": float(t["spear"].mean()), "gws": int(len(t))}
+    for k in ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS]:
+        if k in t and t[k].notna().any():
+            out[k] = float(t[k].mean())
     for c in SUBSETS:
         if f"n_{c}" in t and t[f"n_{c}"].sum() > 0:
             n = t[f"n_{c}"].sum()
@@ -464,10 +496,14 @@ def _boot(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, len(m), size=(n, len(m)))
     out = {}
-    for k in ("top20", "top50", "capt", "spear"):
-        d = (m[f"{k}_v"] - m[f"{k}_b"]).to_numpy()
-        bs = d[idx].mean(axis=1)
-        out[k] = (float(d.mean()), float(np.percentile(bs, 2.5)), float(np.percentile(bs, 97.5)))
+    for k in ("top20", "top50", "capt", "spear", "dnp20", *[f"top20_{c}" for c in PICK_SUBSETS]):
+        if f"{k}_v" not in m or f"{k}_b" not in m:
+            continue
+        d = (m[f"{k}_v"] - m[f"{k}_b"]).to_numpy(dtype=float)
+        if np.isnan(d).all():
+            continue
+        bs = np.nanmean(d[idx], axis=1)   # NaN: too few subset players that gameweek
+        out[k] = (float(np.nanmean(d)), float(np.nanpercentile(bs, 2.5)), float(np.nanpercentile(bs, 97.5)))
     se_b, se_v, rows = m["se_b"].to_numpy(), m["se_v"].to_numpy(), m["rows_b"].to_numpy()
     full = np.sqrt(se_v.sum() / rows.sum()) - np.sqrt(se_b.sum() / rows.sum())
     bs = np.sqrt(se_v[idx].sum(1) / rows[idx].sum(1)) - np.sqrt(se_b[idx].sum(1) / rows[idx].sum(1))
@@ -506,17 +542,18 @@ def cmd_report(args) -> None:
             continue
         lines.append(f"\n## Protocol: {proto}\n")
         lines.append(f"### {args.ref}, seed-averaged\n")
-        lines.append("| fold | rmse | mae | top20 | top50 | capt | spear | bias GK/DEF/MID/FWD |")
-        lines.append("|---|---|---|---|---|---|---|---|")
+        lines.append("| fold | rmse | mae | top20 | top50 | capt | spear | dnp20 | top20 euro clubs | bias GK/DEF/MID/FWD |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|")
         for s, u in units(base, proto).items():
             sm, pb = u["summary"], u["position_bias"]
             lines.append(f"| {s} | {sm['rmse']:.4f} | {sm['mae']:.4f} | {sm['top20']:.3f} | {sm['top50']:.3f} | "
-                         f"{sm['capt']:.2f} | {sm['spear']:.4f} | "
+                         f"{sm['capt']:.2f} | {sm['spear']:.4f} | {sm.get('dnp20', float('nan')):.3f} | "
+                         f"{sm.get('top20_sub_euro_club', float('nan')):.3f} | "
                          f"{'/'.join(f'{pb.get(p_, 0):+.3f}' for p_ in pm.POSITIONS)} |")
         lines.append("\n### Variant minus reference (pooled: mean [95% CI]; per fold: Δtop20 / Δrmse×1000)\n")
         lines.append("| variant | Δrmse pooled | Δtop20 pooled | Δtop50 pooled | Δcapt pooled | per fold |")
         lines.append("|---|---|---|---|---|---|")
-        subset_rows = []
+        subset_rows, pick_rows = [], []
         for name, r in results.items():
             ru, bu = units(r, proto), units(base, proto)
             common = [s_ for s_ in ru if s_ in bu]
@@ -531,6 +568,14 @@ def cmd_report(args) -> None:
             lines.append(f"| {name} | {_fmt(b['rmse'], 4)} | {_fmt(b['top20'])} | {_fmt(b['top50'])} | "
                          f"{_fmt(b['capt'], 2)} | {'; '.join(per)} |")
             subset_rows.append(f"| {name} | " + " | ".join(_fmt(b[c], 4) if c in b else "-" for c in SUBSETS) + " |")
+            pick_rows.append(f"| {name} | " + " | ".join(_fmt(b[k]) if k in b else "-" for k in
+                                                         ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS]) + " |")
+        if pick_rows:
+            lines.append("\n#### Rotation picks: share of the top 20 who didn't play (lower is better) and "
+                         "top-20 points among players of clubs in Europe, variant minus reference [95% CI]\n")
+            lines.append("| variant | Δdnp20 | Δtop20 euro clubs |")
+            lines.append("|---|---|---|")
+            lines += pick_rows
         ref_sub = []
         for c in SUBSETS:
             parts = [u["summary"][c] for u in units(base, proto).values() if c in u["summary"]]
