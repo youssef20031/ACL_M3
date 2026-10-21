@@ -2,8 +2,10 @@
 Pre-match bookmaker odds as candidate team features for the v3 points model: each team's
 implied chance of winning, expected goals for and against, and clean-sheet probability.
 
-Not used by the production model; the ML backtest (scripts/analysis/ml_backtest.py, variants
-odds and odds_close) measures them.
+Not used by the production model. The ML backtest (scripts/analysis/ml_backtest.py, variants
+odds and odds_close) found top-20 gains that were positive in every protocol but reliable only
+under refit, and no reliable captain gain (2026-10, see CLAUDE.md). Serving would also need
+upcoming fixtures' prices before each deadline.
 
 Source: football-data.co.uk's Premier League files (mmz4281/{yyyy}/E0.csv, one per season, with
 the current season updated twice a week). The data is free for private, non-commercial use and
