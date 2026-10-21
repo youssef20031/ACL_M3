@@ -4,6 +4,10 @@ as candidate features for the v3 points model: congestion around midweek ties, a
 minutes in his club's latest matches in any competition, and whether the club is still in
 each competition.
 
+Not used by the production model. The ML backtest (scripts/analysis/ml_backtest.py, variants
+oc_*) found a reliable but small RMSE gain and no reliable gain in top-20 or captain points
+(2026-10, see CLAUDE.md), and serving would need a current-season source.
+
 Inputs (load_other_competitions): two tables, the history in data/ (built from the
 transfermarkt-datasets dump by scripts/data/fetch_transfermarkt_non_pl.py) and, when present, the
 current season in LIVE_DATA_DIR.
