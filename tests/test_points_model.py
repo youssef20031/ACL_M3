@@ -130,3 +130,156 @@ def test_evaluate_sums_double_gameweeks_per_player():
                        "pred": list(range(40)) + [100], "total_points": list(range(40)) + [5]})
     m = pm.evaluate(df, "pred")
     assert m.captain_points == 5  # p0's two fixtures summed: pred 100 -> top pick, actual 0 + 5
+
+
+# --------------------------------------------------------------------------- other competitions
+
+from ml import other_competitions as oc  # noqa: E402
+
+
+@pytest.fixture
+def other():
+    """Arsenal's non-PL matches around the `history` fixture: a UCL tie between GW1 and GW2, an
+    EFL Cup tie inside the GW3 double gameweek (after its deadline), a scheduled UCL tie and an
+    FA Cup round without a date yet."""
+    matches = pd.DataFrame([
+        {"match_id": "m1", "season": "2026-27", "competition": "UCL", "kickoff_time": "2026-08-26T19:00:00Z",
+         "team": "Arsenal", "opponent": "Inter", "status": "finished"},
+        {"match_id": "m2", "season": "2026-27", "competition": "EFLC", "kickoff_time": "2026-09-06T19:00:00Z",
+         "team": "Arsenal", "opponent": "Hull City", "status": "finished"},
+        {"match_id": "m3", "season": "2026-27", "competition": "UCL", "kickoff_time": "2026-09-16T19:00:00Z",
+         "team": "Arsenal", "opponent": "Ajax", "status": "scheduled"},
+        {"match_id": "m4", "season": "2026-27", "competition": "FAC", "kickoff_time": None,
+         "team": "Arsenal", "opponent": None, "status": "scheduled"},
+    ])
+    matches["kickoff_time"] = pd.to_datetime(matches["kickoff_time"], utc=True)
+    apps = pd.DataFrame([
+        {"match_id": "m1", "team": "Arsenal", "name": "Alice", "started": 1, "minutes": 90, "goals": 1, "assists": 0},
+        {"match_id": "m1", "team": "Arsenal", "name": "Cara", "started": 0, "minutes": 0, "goals": 0, "assists": 0},
+        {"match_id": "m2", "team": "Arsenal", "name": "Alice", "started": 0, "minutes": 0, "goals": 0, "assists": 0},
+        {"match_id": "m2", "team": "Arsenal", "name": "Cara", "started": 1, "minutes": 90, "goals": 0, "assists": 2},
+    ])
+    return matches, apps
+
+
+def _oc_features(history, other, upcoming=None):
+    f = pm.build_features(history, upcoming)
+    return f.join(oc.other_competition_features(f, *other))
+
+
+def test_other_competition_outcomes_before_the_deadline_only(history, other):
+    f = _oc_features(history, other).set_index(["name", "fixture"])
+    assert np.isnan(f.loc[("Alice", 1), "oc_minutes_last"])         # no cup match yet
+    assert f.loc[("Alice", 2), "oc_minutes_last"] == 90 and f.loc[("Alice", 2), "oc_started_last"] == 1
+    assert f.loc[("Cara", 2), "oc_minutes_last"] == 0 and f.loc[("Cara", 2), "oc_squad_last"] == 1
+    # GW2: the UCL tie (Wed) was the club's latest match; GW1 + UCL inside the 7 days before the deadline
+    assert f.loc[("Alice", 2), "ac_minutes_last"] == 90
+    assert f.loc[("Alice", 2), "ac_minutes_7d"] == 180
+    # Double gameweek: the EFL Cup tie between fixtures 3 and 4 is after the deadline, so both
+    # fixtures see the UCL tie (Cara on the bench), not Cara's 90 minutes in the cup
+    for col in oc.PLAYER_FEATURES:
+        a, b = f.loc[("Cara", 3), col], f.loc[("Cara", 4), col]
+        assert (np.isnan(a) and np.isnan(b)) or a == b, col
+    assert f.loc[("Cara", 4), "oc_minutes_last"] == 0
+    assert f.loc[("Alice", 4), "ac_minutes_last"] == 90          # GW2, the last match before the deadline
+    # Chelsea play no other competitions
+    assert np.isnan(f.loc[("Bob", 3), "oc_minutes_last"]) and f.loc[("Bob", 3), "oc_prev_days"] == oc.CAP_DAYS
+
+
+def test_other_competition_schedule_uses_dates_around_the_fixture(history, other):
+    f = _oc_features(history, other).set_index(["name", "fixture"])
+    assert f.loc[("Alice", 2), "oc_prev_days"] == pytest.approx(2 + 19 / 24)   # Wed 19:00 -> Sat 14:00
+    assert f.loc[("Alice", 1), "oc_next_days"] == pytest.approx(4 + 5 / 24)
+    assert f.loc[("Alice", 1), "oc_next_tier"] == oc.TIE_TIER["UCL"]
+    # Fixture 4 (Tue) comes two days after the EFL Cup tie: its date is known before the deadline
+    assert f.loc[("Alice", 4), "oc_prev_days"] == pytest.approx(2.0)
+    assert f.loc[("Alice", 4), "ac_days_since"] == pytest.approx(2.0)
+    assert f.loc[("Alice", 3), "ac_matches_14d"] == 3                    # GW1, UCL, GW2
+    assert f.loc[("Alice", 3), "oc_euro_tier"] == 3 and f.loc[("Alice", 3), "oc_cups_alive"] == 2
+    assert f.loc[("Bob", 3), "oc_euro_tier"] == 0 and f.loc[("Bob", 3), "sub_euro_club"] == 0
+
+
+def test_other_competition_features_ignore_later_outcomes(history, other):
+    """Rewriting every outcome from GW3's deadline on (cup and league) changes nothing up to GW3."""
+    matches, apps = other
+    before = _oc_features(history, other)
+    cut = history.loc[history["GW"] == 3, "kickoff_time"].min() - pd.Timedelta(hours=oc.CUTOFF_HOURS)
+    late_ids = set(matches.loc[matches["kickoff_time"] >= cut, "match_id"])
+    apps2 = apps.copy()
+    apps2.loc[apps2["match_id"].isin(late_ids), ["started", "minutes", "goals", "assists"]] = [1, 90, 3, 3]
+    hist2 = history.copy()
+    late = hist2["kickoff_time"] >= cut
+    hist2.loc[late, ["minutes", "starts", "goals_scored", "assists"]] = [0, 0, 0, 0]
+    after = _oc_features(hist2, (matches, apps2))
+    upto = before["GW"] <= 3
+    cols = oc.PLAYER_FEATURES + oc.STATUS_FEATURES + oc.SCHEDULE_FEATURES
+    pd.testing.assert_frame_equal(before.loc[upto, cols], after.loc[upto, cols])
+
+
+def test_other_competition_features_for_upcoming_rows(history, other):
+    upcoming = pd.DataFrame([{
+        "season": "2026-27", "name": n, "position": "MID", "team": "Arsenal", "opponent": "Chelsea",
+        "fixture": 99, "kickoff_time": "2026-09-12T14:00:00Z", "GW": 4, "was_home": True, "value": 61,
+    } for n in ("Alice", "Cara")])
+    f = _oc_features(history, other, upcoming).query("is_upcoming").set_index("name")
+    assert f.loc["Cara", "oc_minutes_last"] == 90 and f.loc["Alice", "oc_minutes_last"] == 0   # the EFL Cup tie
+    assert f.loc["Cara", "oc_minutes_r3"] == pytest.approx(45)                               # mean(90, 0)
+    assert f.loc["Alice", "oc_next_days"] == pytest.approx(4 + 5 / 24)                       # the scheduled UCL tie
+    assert f.loc["Alice", "oc_euro_tier"] == 3
+    assert f.loc["Alice", "oc_cups_alive"] == 1           # out of the EFL Cup, FA Cup round not scheduled yet
+    assert f.loc["Cara", "ac_minutes_14d"] == 4 * 90   # GW2, GW3 x2, EFL Cup (the UCL tie was 18 days back)
+    # All-competition form: 2 assists in 450 minutes (5 appearances; the UCL bench doesn't count)
+    assert f.loc["Cara", "ac_ga_p90_r8"] == pytest.approx(2 / 450 * 90)
+
+
+# --------------------------------------------------------------------------- absences (backtest candidate)
+
+from scripts.analysis import ml_backtest as bt  # noqa: E402
+
+
+def _player_run(minutes):
+    """One Arsenal player, one fixture a week; points 2 when he plays, 0 when he doesn't."""
+    rows = []
+    for i, m in enumerate(minutes, start=1):
+        kickoff = (pd.Timestamp("2026-08-01T14:00:00Z") + pd.Timedelta(days=7 * i)).isoformat()
+        rows += _match_rows("2026-27", i, i, kickoff, "Arsenal", "Chelsea", 1, 0, {("Dan", "Arsenal", "MID"): 2})
+        rows[-1].update(minutes=m, starts=float(m >= 60), total_points=2 if m else 0)
+    df = pd.DataFrame(rows)
+    for col in pm.HISTORY_COLUMNS:
+        if col not in df.columns:
+            df[col] = np.nan
+    df["kickoff_time"] = pd.to_datetime(df["kickoff_time"], utc=True)
+    return pm.build_features(df[pm.HISTORY_COLUMNS])
+
+
+def test_absence_form_without_absences_equals_the_model_form(history):
+    f = pm.build_features(history)
+    a = bt.absence_form(f, min_run=np.inf)
+    for col in bt.FORM_A:
+        pd.testing.assert_series_equal(a[f"{col}_a"], f[col], check_names=False)
+    assert (a["absent_run"] == 0).all() and (a["since_return"] == bt.ABSENCE_CAP).all()
+
+
+def test_absence_form_leaves_out_long_runs_once_they_are_long():
+    # 3 starts, 4 matches out (injury), back for 2
+    f = _player_run([90, 90, 90, 0, 0, 0, 0, 90, 90]).set_index("GW")
+    a = bt.absence_form(f.reset_index()).set_index(f.index)
+    assert a.loc[5, "minutes_r1_a"] == 0 and a.loc[5, "absent_run"] == 0   # one zero: could be rotation
+    assert a.loc[6, "minutes_r3_a"] == pytest.approx(30)                   # 90, 0, 0
+    assert a.loc[7, "absent_run"] == 3 and a.loc[7, "minutes_r3_a"] == 90  # the run is now an absence
+    assert a.loc[8, "absent_run"] == 4 and a.loc[8, "total_points_r6_a"] == 2
+    assert a.loc[9, "absent_run"] == 0 and a.loc[9, "since_return"] == 1
+    assert a.loc[9, "minutes_r6_a"] == 90                                  # the absence doesn't drag his form
+    assert f.loc[9, "minutes_r6"] == pytest.approx(30)                     # ... as it does in the model's
+
+
+def test_absence_form_keeps_zeros_of_players_who_were_not_starting():
+    a = bt.absence_form(_player_run([20, 0, 0, 0, 0, 0, 30]))
+    assert (a["absent_run"] == 0).all()
+    assert a["minutes_r3_a"].iloc[-1] == 0
+
+
+def test_absence_form_ignores_later_matches():
+    base = bt.absence_form(_player_run([90, 90, 90, 0, 0, 90, 90, 90]))
+    later = bt.absence_form(_player_run([90, 90, 90, 0, 0, 0, 0, 0]))   # the same up to GW5's outcome
+    pd.testing.assert_frame_equal(base.iloc[:6], later.iloc[:6])

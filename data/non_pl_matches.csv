@@ -1,0 +1,895 @@
+match_id,season,competition,round,kickoff_time,team,opponent,was_home,goals_for,goals_against,status
+tm3392430,2019-20,FAC,Semi-Finals,2020-07-18 20:00:00+00:00,Arsenal,Manchester City,True,2,0,finished
+tm3392430,2019-20,FAC,Semi-Finals,2020-07-18 20:00:00+00:00,Man City,Arsenal FC,False,0,2,finished
+tm3392431,2019-20,FAC,Semi-Finals,2020-07-19 20:00:00+00:00,Chelsea,Manchester United,False,3,1,finished
+tm3392431,2019-20,FAC,Semi-Finals,2020-07-19 20:00:00+00:00,Man Utd,Chelsea FC,True,1,3,finished
+tm3401687,2019-20,FAC,Final,2020-08-01 20:00:00+00:00,Arsenal,Chelsea FC,True,2,1,finished
+tm3401687,2019-20,FAC,Final,2020-08-01 20:00:00+00:00,Chelsea,Arsenal FC,False,1,2,finished
+tm3328549,2019-20,UEL,last 16 2nd leg,2020-08-05 20:00:00+00:00,Man Utd,LASK,True,2,1,finished
+tm3328546,2019-20,UEL,last 16 2nd leg,2020-08-06 20:00:00+00:00,Wolves,Olympiakos Syndesmos Filathlon Peiraios,True,1,0,finished
+tm3291936,2019-20,UCL,last 16 2nd leg,2020-08-07 20:00:00+00:00,Man City,Real Madrid,True,2,1,finished
+tm3291939,2019-20,UCL,last 16 2nd leg,2020-08-08 20:00:00+00:00,Chelsea,Bayern Munich,False,1,4,finished
+tm3412693,2019-20,UEL,Quarter-Finals,2020-08-10 20:00:00+00:00,Man Utd,FC Copenhagen,True,1,0,finished
+tm3412696,2019-20,UEL,Quarter-Finals,2020-08-11 20:00:00+00:00,Wolves,Sevilla FC,True,0,1,finished
+tm3414689,2019-20,UCL,Quarter-Finals,2020-08-15 20:00:00+00:00,Man City,Olympique Lyon,True,1,3,finished
+tm3416982,2019-20,UEL,Semi-Finals,2020-08-16 20:00:00+00:00,Man Utd,Sevilla FC,False,1,2,finished
+tm3430487,2020-21,CS,Final,2020-08-29 20:00:00+00:00,Arsenal,Liverpool FC,True,6,5,finished
+tm3430487,2020-21,CS,Final,2020-08-29 20:00:00+00:00,Liverpool,Arsenal FC,False,5,6,finished
+tm3433589,2020-21,UELQ,Second Round,2020-09-17 20:00:00+00:00,Spurs,Lokomotiv Plovdiv,False,2,1,finished
+tm3451627,2020-21,UELQ,Third Round,2020-09-24 20:00:00+00:00,Spurs,Shkendija Tetovo,False,3,1,finished
+tm3459015,2020-21,UELQ,Qualifying Round,2020-10-01 20:00:00+00:00,Spurs,Maccabi Haifa,True,7,2,finished
+tm3461718,2020-21,UCL,Group E,2020-10-20 20:00:00+00:00,Chelsea,Sevilla FC,True,0,0,finished
+tm3461724,2020-21,UCL,Group H,2020-10-20 20:00:00+00:00,Man Utd,Paris Saint-Germain,False,2,1,finished
+tm3461714,2020-21,UCL,Group C,2020-10-21 20:00:00+00:00,Man City,FC Porto,True,3,1,finished
+tm3461716,2020-21,UCL,Group D,2020-10-21 20:00:00+00:00,Liverpool,Ajax Amsterdam,False,1,0,finished
+tm3462259,2020-21,UEL,Group B,2020-10-22 20:00:00+00:00,Arsenal,Rapid Vienna,False,2,1,finished
+tm3462269,2020-21,UEL,Group G,2020-10-22 20:00:00+00:00,Leicester,Zorya Lugansk,True,3,0,finished
+tm3462274,2020-21,UEL,group J,2020-10-22 20:00:00+00:00,Spurs,LASK,True,3,0,finished
+tm3461738,2020-21,UCL,Group C,2020-10-27 20:00:00+00:00,Man City,Olympique Marseille,False,3,0,finished
+tm3461739,2020-21,UCL,Group D,2020-10-27 20:00:00+00:00,Liverpool,FC Midtjylland,True,2,0,finished
+tm3461741,2020-21,UCL,Group E,2020-10-28 20:00:00+00:00,Chelsea,FK Krasnodar,False,4,0,finished
+tm3461748,2020-21,UCL,Group H,2020-10-28 20:00:00+00:00,Man Utd,RB Leipzig,True,5,0,finished
+tm3462281,2020-21,UEL,Group G,2020-10-29 20:00:00+00:00,Leicester,Athlitiki Enosi Konstantinoupoleos,False,2,1,finished
+tm3462286,2020-21,UEL,group J,2020-10-29 20:00:00+00:00,Spurs,Royal Antwerp FC,False,0,1,finished
+tm3462294,2020-21,UEL,Group B,2020-10-29 20:00:00+00:00,Arsenal,Dundalk FC,True,3,0,finished
+tm3461753,2020-21,UCL,Group C,2020-11-03 20:00:00+00:00,Man City,Olympiakos Syndesmos Filathlon Peiraios,True,3,0,finished
+tm3461756,2020-21,UCL,Group D,2020-11-03 20:00:00+00:00,Liverpool,Atalanta BC,False,5,0,finished
+tm3461758,2020-21,UCL,Group E,2020-11-04 20:00:00+00:00,Chelsea,Stade Rennais FC,True,3,0,finished
+tm3461763,2020-21,UCL,Group H,2020-11-04 20:00:00+00:00,Man Utd,Basaksehir FK,False,1,2,finished
+tm3462314,2020-21,UEL,group J,2020-11-05 20:00:00+00:00,Spurs,Ludogorets Razgrad,False,3,1,finished
+tm3462317,2020-21,UEL,Group B,2020-11-05 20:00:00+00:00,Arsenal,Molde Fotballklubb,True,4,1,finished
+tm3462318,2020-21,UEL,Group G,2020-11-05 20:00:00+00:00,Leicester,SC Braga,True,4,0,finished
+tm3461774,2020-21,UCL,Group E,2020-11-24 20:00:00+00:00,Chelsea,Stade Rennais FC,False,2,1,finished
+tm3461780,2020-21,UCL,Group H,2020-11-24 20:00:00+00:00,Man Utd,Basaksehir FK,True,4,1,finished
+tm3461769,2020-21,UCL,Group C,2020-11-25 20:00:00+00:00,Man City,Olympiakos Syndesmos Filathlon Peiraios,False,1,0,finished
+tm3461771,2020-21,UCL,Group D,2020-11-25 20:00:00+00:00,Liverpool,Atalanta BC,True,0,2,finished
+tm3462329,2020-21,UEL,Group B,2020-11-26 20:00:00+00:00,Arsenal,Molde Fotballklubb,False,3,0,finished
+tm3462330,2020-21,UEL,Group G,2020-11-26 20:00:00+00:00,Leicester,SC Braga,False,3,3,finished
+tm3462351,2020-21,UEL,group J,2020-11-26 20:00:00+00:00,Spurs,Ludogorets Razgrad,True,4,0,finished
+tm3461782,2020-21,UCL,Group D,2020-12-01 20:00:00+00:00,Liverpool,Ajax Amsterdam,True,1,0,finished
+tm3461806,2020-21,UCL,Group C,2020-12-01 20:00:00+00:00,Man City,FC Porto,False,0,0,finished
+tm3461785,2020-21,UCL,Group E,2020-12-02 20:00:00+00:00,Chelsea,Sevilla FC,False,4,0,finished
+tm3461791,2020-21,UCL,Group H,2020-12-02 20:00:00+00:00,Man Utd,Paris Saint-Germain,True,1,3,finished
+tm3462353,2020-21,UEL,Group G,2020-12-03 20:00:00+00:00,Leicester,Zorya Lugansk,False,0,1,finished
+tm3462358,2020-21,UEL,group J,2020-12-03 20:00:00+00:00,Spurs,LASK,False,3,3,finished
+tm3462367,2020-21,UEL,Group B,2020-12-03 20:00:00+00:00,Arsenal,Rapid Vienna,True,4,1,finished
+tm3461816,2020-21,UCL,Group E,2020-12-08 20:00:00+00:00,Chelsea,FK Krasnodar,True,1,1,finished
+tm3461823,2020-21,UCL,Group H,2020-12-08 20:00:00+00:00,Man Utd,RB Leipzig,False,2,3,finished
+tm3461812,2020-21,UCL,Group C,2020-12-09 20:00:00+00:00,Man City,Olympique Marseille,True,3,0,finished
+tm3461815,2020-21,UCL,Group D,2020-12-09 20:00:00+00:00,Liverpool,FC Midtjylland,False,1,1,finished
+tm3462378,2020-21,UEL,Group B,2020-12-10 20:00:00+00:00,Arsenal,Dundalk FC,False,4,2,finished
+tm3462389,2020-21,UEL,Group G,2020-12-10 20:00:00+00:00,Leicester,Athlitiki Enosi Konstantinoupoleos,True,2,0,finished
+tm3462394,2020-21,UEL,group J,2020-12-10 20:00:00+00:00,Spurs,Royal Antwerp FC,True,2,0,finished
+tm3491222,2020-21,FAC,Third Round,2021-01-08 20:00:00+00:00,Aston Villa,Liverpool FC,True,1,4,finished
+tm3491222,2020-21,FAC,Third Round,2021-01-08 20:00:00+00:00,Liverpool,Aston Villa,False,4,1,finished
+tm3491251,2020-21,FAC,Third Round,2021-01-08 20:00:00+00:00,Crystal Palace,Wolverhampton Wanderers,False,0,1,finished
+tm3491251,2020-21,FAC,Third Round,2021-01-08 20:00:00+00:00,Wolves,Crystal Palace,True,1,0,finished
+tm3491221,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,Arsenal,Newcastle United,True,2,0,finished
+tm3491221,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,Newcastle,Arsenal FC,False,0,2,finished
+tm3491225,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,West Brom,Blackpool FC,False,4,5,finished
+tm3491229,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,Sheffield Utd,Bristol Rovers,False,3,2,finished
+tm3491230,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,Burnley,Milton Keynes Dons,True,5,4,finished
+tm3491235,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,Everton,Rotherham United,True,2,1,finished
+tm3491240,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,Man Utd,Watford FC,True,1,0,finished
+tm3491246,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,Fulham,Queens Park Rangers,False,2,0,finished
+tm3491250,2020-21,FAC,Third Round,2021-01-09 20:00:00+00:00,Leicester,Stoke City,False,4,0,finished
+tm3491231,2020-21,FAC,Third Round,2021-01-10 20:00:00+00:00,Chelsea,Morecambe FC,True,4,0,finished
+tm3491234,2020-21,FAC,Third Round,2021-01-10 20:00:00+00:00,Leeds,Crawley Town,False,0,3,finished
+tm3491239,2020-21,FAC,Third Round,2021-01-10 20:00:00+00:00,Man City,Birmingham City,True,3,0,finished
+tm3491241,2020-21,FAC,Third Round,2021-01-10 20:00:00+00:00,Spurs,Marine FC,False,5,0,finished
+tm3491242,2020-21,FAC,Third Round,2021-01-10 20:00:00+00:00,Brighton,Newport County,False,5,4,finished
+tm3491249,2020-21,FAC,Third Round,2021-01-11 20:00:00+00:00,West Ham,Stockport County,False,1,0,finished
+tm3491247,2020-21,FAC,Third Round,2021-01-19 20:00:00+00:00,Southampton,Shrewsbury Town,True,2,0,finished
+tm3508006,2020-21,FAC,Fourth Round,2021-01-22 20:00:00+00:00,Wolves,Chorley FC,False,1,0,finished
+tm3508007,2020-21,FAC,Fourth Round,2021-01-23 20:00:00+00:00,Arsenal,Southampton FC,False,0,1,finished
+tm3508007,2020-21,FAC,Fourth Round,2021-01-23 20:00:00+00:00,Southampton,Arsenal FC,True,1,0,finished
+tm3508010,2020-21,FAC,Fourth Round,2021-01-23 20:00:00+00:00,Brighton,Blackpool FC,True,2,1,finished
+tm3508012,2020-21,FAC,Fourth Round,2021-01-23 20:00:00+00:00,Sheffield Utd,Plymouth Argyle,True,2,1,finished
+tm3508014,2020-21,FAC,Fourth Round,2021-01-23 20:00:00+00:00,West Ham,Doncaster Rovers,True,4,0,finished
+tm3508015,2020-21,FAC,Fourth Round,2021-01-23 20:00:00+00:00,Man City,Cheltenham Town,False,3,1,finished
+tm3508016,2020-21,FAC,Fourth Round,2021-01-24 20:00:00+00:00,Chelsea,Luton Town,True,3,1,finished
+tm3508017,2020-21,FAC,Fourth Round,2021-01-24 20:00:00+00:00,Leicester,Brentford FC,False,3,1,finished
+tm3508018,2020-21,FAC,Fourth Round,2021-01-24 20:00:00+00:00,Burnley,Fulham FC,False,3,0,finished
+tm3508018,2020-21,FAC,Fourth Round,2021-01-24 20:00:00+00:00,Fulham,Burnley FC,True,0,3,finished
+tm3508019,2020-21,FAC,Fourth Round,2021-01-24 20:00:00+00:00,Liverpool,Manchester United,False,2,3,finished
+tm3508019,2020-21,FAC,Fourth Round,2021-01-24 20:00:00+00:00,Man Utd,Liverpool FC,True,3,2,finished
+tm3508020,2020-21,FAC,Fourth Round,2021-01-24 20:00:00+00:00,Everton,Sheffield Wednesday,True,3,0,finished
+tm3508021,2020-21,FAC,Fourth Round,2021-01-25 20:00:00+00:00,Spurs,Wycombe Wanderers,False,4,1,finished
+tm3517363,2020-21,FAC,Fifth Round,2021-02-09 20:00:00+00:00,Burnley,AFC Bournemouth,True,0,2,finished
+tm3517364,2020-21,FAC,Fifth Round,2021-02-09 20:00:00+00:00,Man Utd,West Ham United,True,1,0,finished
+tm3517364,2020-21,FAC,Fifth Round,2021-02-09 20:00:00+00:00,West Ham,Manchester United,False,0,1,finished
+tm3517365,2020-21,FAC,Fifth Round,2021-02-10 20:00:00+00:00,Man City,Swansea City,False,3,1,finished
+tm3517366,2020-21,FAC,Fifth Round,2021-02-10 20:00:00+00:00,Sheffield Utd,Bristol City,True,1,0,finished
+tm3517367,2020-21,FAC,Fifth Round,2021-02-10 20:00:00+00:00,Brighton,Leicester City,False,0,1,finished
+tm3517367,2020-21,FAC,Fifth Round,2021-02-10 20:00:00+00:00,Leicester,Brighton & Hove Albion,True,1,0,finished
+tm3517368,2020-21,FAC,Fifth Round,2021-02-10 20:00:00+00:00,Everton,Tottenham Hotspur,True,5,4,finished
+tm3517368,2020-21,FAC,Fifth Round,2021-02-10 20:00:00+00:00,Spurs,Everton FC,False,4,5,finished
+tm3517369,2020-21,FAC,Fifth Round,2021-02-11 20:00:00+00:00,Southampton,Wolverhampton Wanderers,False,2,0,finished
+tm3517369,2020-21,FAC,Fifth Round,2021-02-11 20:00:00+00:00,Wolves,Southampton FC,True,0,2,finished
+tm3517370,2020-21,FAC,Fifth Round,2021-02-11 20:00:00+00:00,Chelsea,Barnsley FC,False,1,0,finished
+tm3496451,2020-21,UCL,last 16 1st leg,2021-02-16 20:00:00+00:00,Liverpool,RB Leipzig,False,2,0,finished
+tm3496467,2020-21,UEL,intermediate stage 1st leg,2021-02-18 20:00:00+00:00,Spurs,Wolfsberger AC,False,4,1,finished
+tm3496469,2020-21,UEL,intermediate stage 1st leg,2021-02-18 20:00:00+00:00,Man Utd,Real Sociedad,False,4,0,finished
+tm3496471,2020-21,UEL,intermediate stage 1st leg,2021-02-18 20:00:00+00:00,Arsenal,SL Benfica,False,1,1,finished
+tm3496474,2020-21,UEL,intermediate stage 1st leg,2021-02-18 20:00:00+00:00,Leicester,SK Slavia Prague,False,0,0,finished
+tm3496450,2020-21,UCL,last 16 1st leg,2021-02-23 20:00:00+00:00,Chelsea,Atlético de Madrid,False,1,0,finished
+tm3496448,2020-21,UCL,last 16 1st leg,2021-02-24 20:00:00+00:00,Man City,Borussia Mönchengladbach,False,2,0,finished
+tm3496483,2020-21,UEL,intermediate stage 2nd leg,2021-02-24 20:00:00+00:00,Spurs,Wolfsberger AC,True,4,0,finished
+tm3496485,2020-21,UEL,intermediate stage 2nd leg,2021-02-25 20:00:00+00:00,Man Utd,Real Sociedad,True,0,0,finished
+tm3496486,2020-21,UEL,intermediate stage 2nd leg,2021-02-25 20:00:00+00:00,Arsenal,SL Benfica,True,3,2,finished
+tm3496489,2020-21,UEL,intermediate stage 2nd leg,2021-02-25 20:00:00+00:00,Leicester,SK Slavia Prague,True,0,2,finished
+tm3496459,2020-21,UCL,last 16 2nd leg,2021-03-10 20:00:00+00:00,Liverpool,RB Leipzig,True,2,0,finished
+tm3528462,2020-21,UEL,last 16 1st leg,2021-03-11 20:00:00+00:00,Arsenal,Olympiakos Syndesmos Filathlon Peiraios,False,3,1,finished
+tm3528468,2020-21,UEL,last 16 1st leg,2021-03-11 20:00:00+00:00,Man Utd,AC Milan,True,1,1,finished
+tm3534273,2020-21,UEL,last 16 1st leg,2021-03-11 20:00:00+00:00,Spurs,GNK Dinamo Zagreb,True,2,0,finished
+tm3496456,2020-21,UCL,last 16 2nd leg,2021-03-16 20:00:00+00:00,Man City,Borussia Mönchengladbach,True,2,0,finished
+tm3496458,2020-21,UCL,last 16 2nd leg,2021-03-17 20:00:00+00:00,Chelsea,Atlético de Madrid,True,2,0,finished
+tm3528470,2020-21,UEL,last 16 2nd leg,2021-03-18 20:00:00+00:00,Arsenal,Olympiakos Syndesmos Filathlon Peiraios,True,0,1,finished
+tm3528476,2020-21,UEL,last 16 2nd leg,2021-03-18 20:00:00+00:00,Man Utd,AC Milan,False,1,0,finished
+tm3534272,2020-21,UEL,last 16 2nd leg,2021-03-18 20:00:00+00:00,Spurs,GNK Dinamo Zagreb,False,0,3,finished
+tm3538213,2020-21,FAC,Quarter-Finals,2021-03-20 20:00:00+00:00,Everton,Manchester City,True,0,2,finished
+tm3538213,2020-21,FAC,Quarter-Finals,2021-03-20 20:00:00+00:00,Man City,Everton FC,False,2,0,finished
+tm3538214,2020-21,FAC,Quarter-Finals,2021-03-20 20:00:00+00:00,Southampton,AFC Bournemouth,False,3,0,finished
+tm3537809,2020-21,FAC,Quarter-Finals,2021-03-21 20:00:00+00:00,Leicester,Manchester United,True,3,1,finished
+tm3537809,2020-21,FAC,Quarter-Finals,2021-03-21 20:00:00+00:00,Man Utd,Leicester City,False,1,3,finished
+tm3537810,2020-21,FAC,Quarter-Finals,2021-03-21 20:00:00+00:00,Chelsea,Sheffield United,True,2,0,finished
+tm3537810,2020-21,FAC,Quarter-Finals,2021-03-21 20:00:00+00:00,Sheffield Utd,Chelsea FC,False,0,2,finished
+tm3537799,2020-21,UCL,Quarter-Finals 1st leg,2021-04-06 20:00:00+00:00,Man City,Borussia Dortmund,True,2,1,finished
+tm3537802,2020-21,UCL,Quarter-Finals 1st leg,2021-04-06 20:00:00+00:00,Liverpool,Real Madrid,False,1,3,finished
+tm3537800,2020-21,UCL,Quarter-Finals 1st leg,2021-04-07 20:00:00+00:00,Chelsea,FC Porto,False,2,0,finished
+tm3538205,2020-21,UEL,Quarter-Finals 1st leg,2021-04-08 20:00:00+00:00,Arsenal,SK Slavia Prague,True,1,1,finished
+tm3538207,2020-21,UEL,Quarter-Finals 1st leg,2021-04-08 20:00:00+00:00,Man Utd,Granada CF,False,2,0,finished
+tm3537804,2020-21,UCL,Quarter-Finals 2nd leg,2021-04-13 20:00:00+00:00,Chelsea,FC Porto,True,0,1,finished
+tm3537803,2020-21,UCL,Quarter-Finals 2nd leg,2021-04-14 20:00:00+00:00,Man City,Borussia Dortmund,False,2,1,finished
+tm3537806,2020-21,UCL,Quarter-Finals 2nd leg,2021-04-14 20:00:00+00:00,Liverpool,Real Madrid,True,0,0,finished
+tm3538209,2020-21,UEL,Quarter-Finals 2nd leg,2021-04-15 20:00:00+00:00,Arsenal,SK Slavia Prague,False,4,0,finished
+tm3538211,2020-21,UEL,Quarter-Finals 2nd leg,2021-04-15 20:00:00+00:00,Man Utd,Granada CF,True,2,0,finished
+tm3540999,2020-21,FAC,Semi-Finals,2021-04-17 20:00:00+00:00,Chelsea,Manchester City,True,1,0,finished
+tm3540999,2020-21,FAC,Semi-Finals,2021-04-17 20:00:00+00:00,Man City,Chelsea FC,False,0,1,finished
+tm3541000,2020-21,FAC,Semi-Finals,2021-04-18 20:00:00+00:00,Leicester,Southampton FC,True,1,0,finished
+tm3541000,2020-21,FAC,Semi-Finals,2021-04-18 20:00:00+00:00,Southampton,Leicester City,False,0,1,finished
+tm3552987,2020-21,UCL,Semi-Finals 1st Leg,2021-04-27 20:00:00+00:00,Chelsea,Real Madrid,False,1,1,finished
+tm3552988,2020-21,UCL,Semi-Finals 1st Leg,2021-04-28 20:00:00+00:00,Man City,Paris Saint-Germain,False,2,1,finished
+tm3553249,2020-21,UEL,Semi-Finals 1st Leg,2021-04-29 20:00:00+00:00,Man Utd,Associazione Sportiva Roma,True,6,2,finished
+tm3553250,2020-21,UEL,Semi-Finals 1st Leg,2021-04-29 20:00:00+00:00,Arsenal,Villarreal CF,False,1,2,finished
+tm3552989,2020-21,UCL,Semi-Finals 2nd Leg,2021-05-04 20:00:00+00:00,Man City,Paris Saint-Germain,True,2,0,finished
+tm3552990,2020-21,UCL,Semi-Finals 2nd Leg,2021-05-05 20:00:00+00:00,Chelsea,Real Madrid,True,2,0,finished
+tm3553251,2020-21,UEL,Semi-Finals 2nd Leg,2021-05-06 20:00:00+00:00,Man Utd,Associazione Sportiva Roma,False,2,3,finished
+tm3553252,2020-21,UEL,Semi-Finals 2nd Leg,2021-05-06 20:00:00+00:00,Arsenal,Villarreal CF,True,0,0,finished
+tm3554787,2020-21,FAC,Final,2021-05-15 20:00:00+00:00,Chelsea,Leicester City,True,0,1,finished
+tm3554787,2020-21,FAC,Final,2021-05-15 20:00:00+00:00,Leicester,Chelsea FC,False,1,0,finished
+tm3563783,2020-21,UEL,Final,2021-05-26 20:00:00+00:00,Man Utd,Villarreal CF,False,11,12,finished
+tm3562547,2020-21,UCL,Final,2021-05-29 20:00:00+00:00,Chelsea,Manchester City,False,1,0,finished
+tm3562547,2020-21,UCL,Final,2021-05-29 20:00:00+00:00,Man City,Chelsea FC,True,0,1,finished
+tm3578075,2021-22,CS,Final,2021-08-07 20:00:00+00:00,Leicester,Manchester City,True,1,0,finished
+tm3578075,2021-22,CS,Final,2021-08-07 20:00:00+00:00,Man City,Leicester City,False,0,1,finished
+tm3639329,2021-22,USC,Final,2021-08-11 20:00:00+00:00,Chelsea,Villarreal CF,True,7,6,finished
+tm3645112,2021-22,UECLQ,Qualifying Round 1st leg,2021-08-19 20:00:00+00:00,Spurs,FC Paços de Ferreira,False,0,1,finished
+tm3645113,2021-22,UECLQ,Qualifying Round 2nd leg,2021-08-26 20:00:00+00:00,Spurs,FC Paços de Ferreira,True,3,0,finished
+tm3651031,2021-22,UCL,Group F,2021-09-14 20:00:00+00:00,Man Utd,BSC Young Boys,False,1,2,finished
+tm3651035,2021-22,UCL,Group H,2021-09-14 20:00:00+00:00,Chelsea,AO FK Zenit Sankt-Peterburg,True,1,0,finished
+tm3651037,2021-22,UCL,Group A,2021-09-15 20:00:00+00:00,Man City,RB Leipzig,True,6,3,finished
+tm3651040,2021-22,UCL,Group B,2021-09-15 20:00:00+00:00,Liverpool,AC Milan,True,3,2,finished
+tm3651277,2021-22,UECL,Group G,2021-09-16 20:00:00+00:00,Spurs,Stade Rennais FC,False,2,2,finished
+tm3651578,2021-22,UEL,Group H,2021-09-16 20:00:00+00:00,West Ham,GNK Dinamo Zagreb,False,2,0,finished
+tm3651680,2021-22,UEL,Group C,2021-09-16 20:00:00+00:00,Leicester,SSC Napoli,True,2,2,finished
+tm3651061,2021-22,UCL,Group A,2021-09-28 20:00:00+00:00,Man City,Paris Saint-Germain,False,0,2,finished
+tm3651064,2021-22,UCL,Group B,2021-09-28 20:00:00+00:00,Liverpool,FC Porto,False,5,1,finished
+tm3651072,2021-22,UCL,Group F,2021-09-29 20:00:00+00:00,Man Utd,Villarreal CF,True,2,1,finished
+tm3651076,2021-22,UCL,Group H,2021-09-29 20:00:00+00:00,Chelsea,Juventus FC,False,0,1,finished
+tm3651413,2021-22,UECL,Group G,2021-09-30 20:00:00+00:00,Spurs,NS Mura,True,5,1,finished
+tm3651685,2021-22,UEL,Group C,2021-09-30 20:00:00+00:00,Leicester,Legia Warszawa,False,0,1,finished
+tm3651696,2021-22,UEL,Group H,2021-09-30 20:00:00+00:00,West Ham,Rapid Vienna,True,2,0,finished
+tm3651077,2021-22,UCL,Group A,2021-10-19 20:00:00+00:00,Man City,Club Brugge KV,False,5,1,finished
+tm3651079,2021-22,UCL,Group B,2021-10-19 20:00:00+00:00,Liverpool,Atlético de Madrid,False,3,2,finished
+tm3651088,2021-22,UCL,Group F,2021-10-20 20:00:00+00:00,Man Utd,Atalanta BC,True,3,2,finished
+tm3651091,2021-22,UCL,Group H,2021-10-20 20:00:00+00:00,Chelsea,Malmö Fotbollförening,True,4,0,finished
+tm3651934,2021-22,UEL,Group C,2021-10-20 20:00:00+00:00,Leicester,FK Spartak Moskva,False,4,3,finished
+tm3651440,2021-22,UECL,Group G,2021-10-21 20:00:00+00:00,Spurs,Vitesse Arnhem,False,0,1,finished
+tm3651948,2021-22,UEL,Group H,2021-10-21 20:00:00+00:00,West Ham,KRC Genk,True,3,0,finished
+tm3651096,2021-22,UCL,Group F,2021-11-02 20:00:00+00:00,Man Utd,Atalanta BC,False,2,2,finished
+tm3651099,2021-22,UCL,Group H,2021-11-02 20:00:00+00:00,Chelsea,Malmö Fotbollförening,False,1,0,finished
+tm3651101,2021-22,UCL,Group A,2021-11-03 20:00:00+00:00,Man City,Club Brugge KV,True,4,1,finished
+tm3651104,2021-22,UCL,Group B,2021-11-03 20:00:00+00:00,Liverpool,Atlético de Madrid,True,2,0,finished
+tm3651493,2021-22,UECL,Group G,2021-11-04 20:00:00+00:00,Spurs,Vitesse Arnhem,True,3,2,finished
+tm3660435,2021-22,UEL,Group H,2021-11-04 20:00:00+00:00,West Ham,KRC Genk,False,2,2,finished
+tm3660444,2021-22,UEL,Group C,2021-11-04 20:00:00+00:00,Leicester,FK Spartak Moskva,True,1,1,finished
+tm3651111,2021-22,UCL,Group F,2021-11-23 20:00:00+00:00,Man Utd,Villarreal CF,False,2,0,finished
+tm3651116,2021-22,UCL,Group H,2021-11-23 20:00:00+00:00,Chelsea,Juventus FC,True,4,0,finished
+tm3651117,2021-22,UCL,Group A,2021-11-24 20:00:00+00:00,Man City,Paris Saint-Germain,True,2,1,finished
+tm3651120,2021-22,UCL,Group B,2021-11-24 20:00:00+00:00,Liverpool,FC Porto,True,2,0,finished
+tm3651506,2021-22,UECL,Group G,2021-11-25 20:00:00+00:00,Spurs,NS Mura,False,1,2,finished
+tm3683201,2021-22,UEL,Group C,2021-11-25 20:00:00+00:00,Leicester,Legia Warszawa,True,3,1,finished
+tm3683210,2021-22,UEL,Group H,2021-11-25 20:00:00+00:00,West Ham,Rapid Vienna,False,2,0,finished
+tm3651126,2021-22,UCL,Group A,2021-12-07 20:00:00+00:00,Man City,RB Leipzig,False,1,2,finished
+tm3651128,2021-22,UCL,Group B,2021-12-07 20:00:00+00:00,Liverpool,AC Milan,False,2,1,finished
+tm3651135,2021-22,UCL,Group F,2021-12-08 20:00:00+00:00,Man Utd,BSC Young Boys,True,1,1,finished
+tm3651140,2021-22,UCL,Group H,2021-12-08 20:00:00+00:00,Chelsea,AO FK Zenit Sankt-Peterburg,False,3,3,finished
+tm3651534,2021-22,UECL,Group G,2021-12-09 20:00:00+00:00,Spurs,Stade Rennais FC,True,0,3,finished
+tm3683255,2021-22,UEL,Group C,2021-12-09 20:00:00+00:00,Leicester,SSC Napoli,False,2,3,finished
+tm3683264,2021-22,UEL,Group H,2021-12-09 20:00:00+00:00,West Ham,GNK Dinamo Zagreb,True,0,1,finished
+tm3710352,2021-22,FAC,Third Round,2022-01-07 20:00:00+00:00,Man City,Swindon Town,False,4,1,finished
+tm3710336,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Southampton,Swansea City,False,3,2,finished
+tm3710337,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Chelsea,Chesterfield FC,True,5,1,finished
+tm3710341,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Burnley,Huddersfield Town,True,1,2,finished
+tm3710342,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Brighton,West Bromwich Albion,False,2,1,finished
+tm3710344,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Leicester,Watford FC,True,4,1,finished
+tm3710344,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Watford,Leicester City,False,1,4,finished
+tm3710347,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Everton,Hull City,False,3,2,finished
+tm3710350,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Crystal Palace,Millwall FC,False,2,1,finished
+tm3710351,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Brentford,Port Vale FC,False,4,1,finished
+tm3710358,2021-22,FAC,Third Round,2022-01-08 20:00:00+00:00,Newcastle,Cambridge United,True,0,1,finished
+tm3710338,2021-22,FAC,Third Round,2022-01-09 20:00:00+00:00,Liverpool,Shrewsbury Town,True,4,1,finished
+tm3710349,2021-22,FAC,Third Round,2022-01-09 20:00:00+00:00,Spurs,Morecambe FC,True,3,1,finished
+tm3710357,2021-22,FAC,Third Round,2022-01-09 20:00:00+00:00,Wolves,Sheffield United,True,3,0,finished
+tm3710360,2021-22,FAC,Third Round,2022-01-09 20:00:00+00:00,Leeds,West Ham United,False,0,2,finished
+tm3710360,2021-22,FAC,Third Round,2022-01-09 20:00:00+00:00,West Ham,Leeds United,True,2,0,finished
+tm3710362,2021-22,FAC,Third Round,2022-01-09 20:00:00+00:00,Norwich,Charlton Athletic,False,1,0,finished
+tm3710363,2021-22,FAC,Third Round,2022-01-09 20:00:00+00:00,Arsenal,Nottingham Forest,False,0,1,finished
+tm3710356,2021-22,FAC,Third Round,2022-01-10 20:00:00+00:00,Aston Villa,Manchester United,False,0,1,finished
+tm3710356,2021-22,FAC,Third Round,2022-01-10 20:00:00+00:00,Man Utd,Aston Villa,True,1,0,finished
+tm3729276,2021-22,FAC,Fourth Round,2022-02-04 20:00:00+00:00,Man Utd,Middlesbrough FC,True,8,9,finished
+tm3729267,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Chelsea,Plymouth Argyle,True,2,1,finished
+tm3729268,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Crystal Palace,Hartlepool United,True,2,0,finished
+tm3729273,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Southampton,Coventry City,True,2,1,finished
+tm3729274,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Brentford,Everton FC,False,1,4,finished
+tm3729274,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Everton,Brentford FC,True,4,1,finished
+tm3729275,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,West Ham,Kidderminster Harriers,False,2,1,finished
+tm3729277,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Brighton,Tottenham Hotspur,False,1,3,finished
+tm3729277,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Spurs,Brighton & Hove Albion,True,3,1,finished
+tm3729281,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Man City,Fulham FC,True,4,1,finished
+tm3729282,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Norwich,Wolverhampton Wanderers,False,1,0,finished
+tm3729282,2021-22,FAC,Fourth Round,2022-02-05 20:00:00+00:00,Wolves,Norwich City,True,0,1,finished
+tm3729278,2021-22,FAC,Fourth Round,2022-02-06 20:00:00+00:00,Liverpool,Cardiff City,True,3,1,finished
+tm3729280,2021-22,FAC,Fourth Round,2022-02-06 20:00:00+00:00,Leicester,Nottingham Forest,False,1,4,finished
+tm3714215,2021-22,UCL,last 16 1st leg,2022-02-15 20:00:00+00:00,Man City,Sporting CP,False,5,0,finished
+tm3714220,2021-22,UCL,last 16 1st leg,2022-02-16 20:00:00+00:00,Liverpool,Inter Milan,False,2,0,finished
+tm3714110,2021-22,UECL,intermediate stage 1st leg,2022-02-17 20:00:00+00:00,Leicester,Randers FC,True,4,1,finished
+tm3714217,2021-22,UCL,last 16 1st leg,2022-02-22 20:00:00+00:00,Chelsea,LOSC Lille,True,2,0,finished
+tm3714218,2021-22,UCL,last 16 1st leg,2022-02-23 20:00:00+00:00,Man Utd,Atlético de Madrid,False,1,1,finished
+tm3714124,2021-22,UECL,intermediate stage 2nd leg,2022-02-24 20:00:00+00:00,Leicester,Randers FC,False,3,1,finished
+tm3758669,2021-22,FAC,Fifth Round,2022-03-01 20:00:00+00:00,Man City,Peterborough United,False,2,0,finished
+tm3758670,2021-22,FAC,Fifth Round,2022-03-01 20:00:00+00:00,Crystal Palace,Stoke City,True,2,1,finished
+tm3758671,2021-22,FAC,Fifth Round,2022-03-01 20:00:00+00:00,Spurs,Middlesbrough FC,False,0,1,finished
+tm3758672,2021-22,FAC,Fifth Round,2022-03-02 20:00:00+00:00,Chelsea,Luton Town,False,3,2,finished
+tm3758673,2021-22,FAC,Fifth Round,2022-03-02 20:00:00+00:00,Southampton,West Ham United,True,3,1,finished
+tm3758673,2021-22,FAC,Fifth Round,2022-03-02 20:00:00+00:00,West Ham,Southampton FC,False,1,3,finished
+tm3758674,2021-22,FAC,Fifth Round,2022-03-02 20:00:00+00:00,Liverpool,Norwich City,True,2,1,finished
+tm3758674,2021-22,FAC,Fifth Round,2022-03-02 20:00:00+00:00,Norwich,Liverpool FC,False,1,2,finished
+tm3758675,2021-22,FAC,Fifth Round,2022-03-03 20:00:00+00:00,Everton,Boreham Wood FC,True,2,0,finished
+tm3714228,2021-22,UCL,last 16 2nd leg,2022-03-08 20:00:00+00:00,Liverpool,Inter Milan,True,0,1,finished
+tm3714223,2021-22,UCL,last 16 2nd leg,2022-03-09 20:00:00+00:00,Man City,Sporting CP,True,0,0,finished
+tm3757961,2021-22,UEL,last 16 1st leg,2022-03-10 20:00:00+00:00,West Ham,Sevilla FC,False,0,1,finished
+tm3757974,2021-22,UECL,last 16 1st leg,2022-03-10 20:00:00+00:00,Leicester,Stade Rennais FC,True,2,0,finished
+tm3714226,2021-22,UCL,last 16 2nd leg,2022-03-15 20:00:00+00:00,Man Utd,Atlético de Madrid,True,0,1,finished
+tm3714225,2021-22,UCL,last 16 2nd leg,2022-03-16 20:00:00+00:00,Chelsea,LOSC Lille,False,2,1,finished
+tm3757969,2021-22,UEL,last 16 2nd leg,2022-03-17 20:00:00+00:00,West Ham,Sevilla FC,True,2,0,finished
+tm3757982,2021-22,UECL,last 16 2nd leg,2022-03-17 20:00:00+00:00,Leicester,Stade Rennais FC,False,1,2,finished
+tm3774688,2021-22,FAC,Quarter-Finals,2022-03-19 20:00:00+00:00,Chelsea,Middlesbrough FC,False,2,0,finished
+tm3774689,2021-22,FAC,Quarter-Finals,2022-03-20 20:00:00+00:00,Crystal Palace,Everton FC,True,4,0,finished
+tm3774689,2021-22,FAC,Quarter-Finals,2022-03-20 20:00:00+00:00,Everton,Crystal Palace,False,0,4,finished
+tm3774690,2021-22,FAC,Quarter-Finals,2022-03-20 20:00:00+00:00,Man City,Southampton FC,False,4,1,finished
+tm3774690,2021-22,FAC,Quarter-Finals,2022-03-20 20:00:00+00:00,Southampton,Manchester City,True,1,4,finished
+tm3774691,2021-22,FAC,Quarter-Finals,2022-03-20 20:00:00+00:00,Liverpool,Nottingham Forest,False,1,0,finished
+tm3773445,2021-22,UCL,Quarter-Finals 1st leg,2022-04-05 20:00:00+00:00,Man City,Atlético de Madrid,True,1,0,finished
+tm3773447,2021-22,UCL,Quarter-Finals 1st leg,2022-04-05 20:00:00+00:00,Liverpool,SL Benfica,False,3,1,finished
+tm3773444,2021-22,UCL,Quarter-Finals 1st leg,2022-04-06 20:00:00+00:00,Chelsea,Real Madrid,True,1,3,finished
+tm3773621,2021-22,UEL,Quarter-Finals 1st leg,2022-04-07 20:00:00+00:00,West Ham,Olympique Lyon,True,1,1,finished
+tm3773688,2021-22,UECL,Quarter-Finals 1st leg,2022-04-07 20:00:00+00:00,Leicester,PSV Eindhoven,True,0,0,finished
+tm3773448,2021-22,UCL,Quarter-Finals 2nd leg,2022-04-12 20:00:00+00:00,Chelsea,Real Madrid,False,3,2,finished
+tm3773449,2021-22,UCL,Quarter-Finals 2nd leg,2022-04-13 20:00:00+00:00,Man City,Atlético de Madrid,False,0,0,finished
+tm3773451,2021-22,UCL,Quarter-Finals 2nd leg,2022-04-13 20:00:00+00:00,Liverpool,SL Benfica,True,3,3,finished
+tm3773625,2021-22,UEL,Quarter-Finals 2nd leg,2022-04-14 20:00:00+00:00,West Ham,Olympique Lyon,False,3,0,finished
+tm3773691,2021-22,UECL,Quarter-Finals 2nd leg,2022-04-14 20:00:00+00:00,Leicester,PSV Eindhoven,False,2,1,finished
+tm3775361,2021-22,FAC,Semi-Finals,2022-04-16 20:00:00+00:00,Liverpool,Manchester City,False,3,2,finished
+tm3775361,2021-22,FAC,Semi-Finals,2022-04-16 20:00:00+00:00,Man City,Liverpool FC,True,2,3,finished
+tm3775360,2021-22,FAC,Semi-Finals,2022-04-17 20:00:00+00:00,Chelsea,Crystal Palace,True,2,0,finished
+tm3775360,2021-22,FAC,Semi-Finals,2022-04-17 20:00:00+00:00,Crystal Palace,Chelsea FC,False,0,2,finished
+tm3796966,2021-22,UCL,Semi-Finals 1st Leg,2022-04-26 20:00:00+00:00,Man City,Real Madrid,True,4,3,finished
+tm3796967,2021-22,UCL,Semi-Finals 1st Leg,2022-04-27 20:00:00+00:00,Liverpool,Villarreal CF,True,2,0,finished
+tm3796448,2021-22,UECL,Semi-Finals 1st Leg,2022-04-28 20:00:00+00:00,Leicester,Associazione Sportiva Roma,True,1,1,finished
+tm3796544,2021-22,UEL,Semi-Finals 1st Leg,2022-04-28 20:00:00+00:00,West Ham,Eintracht Frankfurt,True,1,2,finished
+tm3796969,2021-22,UCL,Semi-Finals 2nd Leg,2022-05-03 20:00:00+00:00,Liverpool,Villarreal CF,False,3,2,finished
+tm3796968,2021-22,UCL,Semi-Finals 2nd Leg,2022-05-04 20:00:00+00:00,Man City,Real Madrid,False,1,3,finished
+tm3796450,2021-22,UECL,Semi-Finals 2nd Leg,2022-05-05 20:00:00+00:00,Leicester,Associazione Sportiva Roma,False,0,1,finished
+tm3796546,2021-22,UEL,Semi-Finals 2nd Leg,2022-05-05 20:00:00+00:00,West Ham,Eintracht Frankfurt,False,0,1,finished
+tm3813442,2021-22,FAC,Final,2022-05-14 20:00:00+00:00,Chelsea,Liverpool FC,True,5,6,finished
+tm3813442,2021-22,FAC,Final,2022-05-14 20:00:00+00:00,Liverpool,Chelsea FC,False,6,5,finished
+tm3812391,2021-22,UCL,Final,2022-05-28 20:00:00+00:00,Liverpool,Real Madrid,True,0,1,finished
+tm3889181,2022-23,CS,Final,2022-07-30 20:00:00+00:00,Liverpool,Manchester City,True,3,1,finished
+tm3889181,2022-23,CS,Final,2022-07-30 20:00:00+00:00,Man City,Liverpool FC,False,1,3,finished
+tm3899237,2022-23,UECLQ,Qualifying Round 1st leg,2022-08-18 20:00:00+00:00,West Ham,Viborg FF,True,3,1,finished
+tm3901643,2022-23,UECLQ,Qualifying Round 2nd leg,2022-08-25 20:00:00+00:00,West Ham,Viborg FF,False,3,0,finished
+tm3911816,2022-23,UCL,Group E,2022-09-06 20:00:00+00:00,Chelsea,GNK Dinamo Zagreb,False,0,1,finished
+tm3911834,2022-23,UCL,Group G,2022-09-06 20:00:00+00:00,Man City,Sevilla FC,False,4,0,finished
+tm3911727,2022-23,UCL,Group A,2022-09-07 20:00:00+00:00,Liverpool,SSC Napoli,False,1,4,finished
+tm3911799,2022-23,UCL,Group D,2022-09-07 20:00:00+00:00,Spurs,Olympique Marseille,True,2,0,finished
+tm3912544,2022-23,UEL,Group A,2022-09-08 20:00:00+00:00,Arsenal,FC Zürich,False,2,1,finished
+tm3912583,2022-23,UEL,Group E,2022-09-08 20:00:00+00:00,Man Utd,Real Sociedad,True,0,1,finished
+tm3912654,2022-23,UECL,Group B,2022-09-08 20:00:00+00:00,West Ham,FCSB,True,3,1,finished
+tm3911801,2022-23,UCL,Group D,2022-09-13 20:00:00+00:00,Spurs,Sporting CP,False,0,2,finished
+tm3913722,2022-23,UCL,Group A,2022-09-13 20:00:00+00:00,Liverpool,Ajax Amsterdam,True,2,1,finished
+tm3911810,2022-23,UCL,Group E,2022-09-14 20:00:00+00:00,Chelsea,Fußballclub Red Bull Salzburg,True,1,1,finished
+tm3911832,2022-23,UCL,Group G,2022-09-14 20:00:00+00:00,Man City,Borussia Dortmund,True,2,1,finished
+tm3912589,2022-23,UEL,Group E,2022-09-15 20:00:00+00:00,Man Utd,FC Sheriff Tiraspol,False,2,0,finished
+tm3912663,2022-23,UECL,Group B,2022-09-15 20:00:00+00:00,West Ham,Silkeborg IF,False,3,2,finished
+tm3911725,2022-23,UCL,Group A,2022-10-04 20:00:00+00:00,Liverpool,Rangers FC,True,2,0,finished
+tm3911794,2022-23,UCL,Group D,2022-10-04 20:00:00+00:00,Spurs,Eintracht Frankfurt,False,0,0,finished
+tm3911809,2022-23,UCL,Group E,2022-10-05 20:00:00+00:00,Chelsea,AC Milan,True,3,0,finished
+tm3911833,2022-23,UCL,Group G,2022-10-05 20:00:00+00:00,Man City,FC Copenhagen,True,5,0,finished
+tm3912536,2022-23,UEL,Group A,2022-10-06 20:00:00+00:00,Arsenal,Fotballklubben Bodø/Glimt,True,3,0,finished
+tm3912592,2022-23,UEL,Group E,2022-10-06 20:00:00+00:00,Man Utd,Omonia Nicosia,False,3,2,finished
+tm3912660,2022-23,UECL,Group B,2022-10-06 20:00:00+00:00,West Ham,RSC Anderlecht,False,1,0,finished
+tm3911807,2022-23,UCL,Group E,2022-10-11 20:00:00+00:00,Chelsea,AC Milan,False,2,0,finished
+tm3913698,2022-23,UCL,Group G,2022-10-11 20:00:00+00:00,Man City,FC Copenhagen,False,0,0,finished
+tm3911730,2022-23,UCL,Group A,2022-10-12 20:00:00+00:00,Liverpool,Rangers FC,False,7,1,finished
+tm3911797,2022-23,UCL,Group D,2022-10-12 20:00:00+00:00,Spurs,Eintracht Frankfurt,True,3,2,finished
+tm3912541,2022-23,UEL,Group A,2022-10-13 20:00:00+00:00,Arsenal,Fotballklubben Bodø/Glimt,False,1,0,finished
+tm3912585,2022-23,UEL,Group E,2022-10-13 20:00:00+00:00,Man Utd,Omonia Nicosia,True,1,0,finished
+tm3912655,2022-23,UECL,Group B,2022-10-13 20:00:00+00:00,West Ham,RSC Anderlecht,True,2,1,finished
+tm3912535,2022-23,UEL,Group A,2022-10-20 20:00:00+00:00,Arsenal,PSV Eindhoven,True,1,0,finished
+tm3911813,2022-23,UCL,Group E,2022-10-25 20:00:00+00:00,Chelsea,Fußballclub Red Bull Salzburg,False,2,1,finished
+tm3913700,2022-23,UCL,Group G,2022-10-25 20:00:00+00:00,Man City,Borussia Dortmund,False,0,0,finished
+tm3911720,2022-23,UCL,Group A,2022-10-26 20:00:00+00:00,Liverpool,Ajax Amsterdam,False,3,0,finished
+tm3911798,2022-23,UCL,Group D,2022-10-26 20:00:00+00:00,Spurs,Sporting CP,True,1,1,finished
+tm3912538,2022-23,UEL,Group A,2022-10-27 20:00:00+00:00,Arsenal,PSV Eindhoven,False,0,2,finished
+tm3912584,2022-23,UEL,Group E,2022-10-27 20:00:00+00:00,Man Utd,FC Sheriff Tiraspol,True,3,0,finished
+tm3912656,2022-23,UECL,Group B,2022-10-27 20:00:00+00:00,West Ham,Silkeborg IF,True,1,0,finished
+tm3911724,2022-23,UCL,Group A,2022-11-01 20:00:00+00:00,Liverpool,SSC Napoli,True,2,0,finished
+tm3911804,2022-23,UCL,Group D,2022-11-01 20:00:00+00:00,Spurs,Olympique Marseille,False,2,1,finished
+tm3911811,2022-23,UCL,Group E,2022-11-02 20:00:00+00:00,Chelsea,GNK Dinamo Zagreb,True,2,1,finished
+tm3911831,2022-23,UCL,Group G,2022-11-02 20:00:00+00:00,Man City,Sevilla FC,True,3,1,finished
+tm3912537,2022-23,UEL,Group A,2022-11-03 20:00:00+00:00,Arsenal,FC Zürich,True,1,0,finished
+tm3912586,2022-23,UEL,Group E,2022-11-03 20:00:00+00:00,Man Utd,Real Sociedad,False,1,0,finished
+tm3912657,2022-23,UECL,Group B,2022-11-03 20:00:00+00:00,West Ham,FCSB,False,3,0,finished
+tm3974017,2022-23,FAC,Third Round,2023-01-06 20:00:00+00:00,Everton,Manchester United,False,1,3,finished
+tm3974017,2022-23,FAC,Third Round,2023-01-06 20:00:00+00:00,Man Utd,Everton FC,True,3,1,finished
+tm3974018,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Crystal Palace,Southampton FC,True,1,2,finished
+tm3974018,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Southampton,Crystal Palace,False,2,1,finished
+tm3974022,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Leicester,Gillingham FC,False,1,0,finished
+tm3974023,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Spurs,Portsmouth FC,True,1,0,finished
+tm3974024,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Nott'm Forest,Blackpool FC,False,1,4,finished
+tm3974026,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Bournemouth,Burnley FC,True,2,4,finished
+tm3974029,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Fulham,Hull City,False,2,0,finished
+tm3974031,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Brighton,Middlesbrough FC,False,5,1,finished
+tm3974034,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Brentford,West Ham United,True,0,1,finished
+tm3974034,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,West Ham,Brentford FC,False,1,0,finished
+tm3974038,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Newcastle,Sheffield Wednesday,False,1,2,finished
+tm3974039,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Liverpool,Wolverhampton Wanderers,True,2,2,finished
+tm3974039,2022-23,FAC,Third Round,2023-01-07 20:00:00+00:00,Wolves,Liverpool FC,False,2,2,finished
+tm3974043,2022-23,FAC,Third Round,2023-01-08 20:00:00+00:00,Leeds,Cardiff City,False,2,2,finished
+tm3974047,2022-23,FAC,Third Round,2023-01-08 20:00:00+00:00,Aston Villa,Stevenage FC,True,1,2,finished
+tm3974048,2022-23,FAC,Third Round,2023-01-08 20:00:00+00:00,Chelsea,Manchester City,False,0,4,finished
+tm3974048,2022-23,FAC,Third Round,2023-01-08 20:00:00+00:00,Man City,Chelsea FC,True,4,0,finished
+tm3974040,2022-23,FAC,Third Round,2023-01-09 20:00:00+00:00,Arsenal,Oxford United,False,3,0,finished
+tm3999705,2022-23,FAC,Third Round Replay,2023-01-17 20:00:00+00:00,Liverpool,Wolverhampton Wanderers,False,1,0,finished
+tm3999705,2022-23,FAC,Third Round Replay,2023-01-17 20:00:00+00:00,Wolves,Liverpool FC,True,0,1,finished
+tm3999707,2022-23,FAC,Third Round Replay,2023-01-18 20:00:00+00:00,Leeds,Cardiff City,True,5,2,finished
+tm4013646,2022-23,FAC,Fourth Round,2023-01-27 20:00:00+00:00,Arsenal,Manchester City,False,0,1,finished
+tm4013646,2022-23,FAC,Fourth Round,2023-01-27 20:00:00+00:00,Man City,Arsenal FC,True,1,0,finished
+tm4013647,2022-23,FAC,Fourth Round,2023-01-28 20:00:00+00:00,Leeds,Accrington Stanley,False,3,1,finished
+tm4013648,2022-23,FAC,Fourth Round,2023-01-28 20:00:00+00:00,Leicester,Walsall FC,False,1,0,finished
+tm4013651,2022-23,FAC,Fourth Round,2023-01-28 20:00:00+00:00,Fulham,Sunderland AFC,True,1,1,finished
+tm4013655,2022-23,FAC,Fourth Round,2023-01-28 20:00:00+00:00,Southampton,Blackpool FC,True,2,1,finished
+tm4013656,2022-23,FAC,Fourth Round,2023-01-28 20:00:00+00:00,Spurs,Preston North End,False,3,0,finished
+tm4013657,2022-23,FAC,Fourth Round,2023-01-28 20:00:00+00:00,Man Utd,Reading FC,True,3,1,finished
+tm4013658,2022-23,FAC,Fourth Round,2023-01-29 20:00:00+00:00,Brighton,Liverpool FC,True,2,1,finished
+tm4013658,2022-23,FAC,Fourth Round,2023-01-29 20:00:00+00:00,Liverpool,Brighton & Hove Albion,False,1,2,finished
+tm4013661,2022-23,FAC,Fourth Round,2023-01-30 20:00:00+00:00,West Ham,Derby County,False,2,0,finished
+tm4016898,2022-23,FAC,4th round deciders,2023-02-08 20:00:00+00:00,Fulham,Sunderland AFC,False,3,2,finished
+tm3956695,2022-23,UCL,last 16 1st leg,2023-02-14 20:00:00+00:00,Spurs,AC Milan,False,0,1,finished
+tm3956697,2022-23,UCL,last 16 1st leg,2023-02-15 20:00:00+00:00,Chelsea,Borussia Dortmund,False,0,1,finished
+tm3956708,2022-23,UEL,intermediate stage 1st leg,2023-02-16 20:00:00+00:00,Man Utd,FC Barcelona,False,2,2,finished
+tm3956694,2022-23,UCL,last 16 1st leg,2023-02-21 20:00:00+00:00,Liverpool,Real Madrid,True,2,5,finished
+tm3956692,2022-23,UCL,last 16 1st leg,2023-02-22 20:00:00+00:00,Man City,RB Leipzig,False,1,1,finished
+tm3956716,2022-23,UEL,intermediate stage 2nd leg,2023-02-23 20:00:00+00:00,Man Utd,FC Barcelona,True,2,1,finished
+tm4018345,2022-23,FAC,Fifth Round,2023-02-28 20:00:00+00:00,Man City,Bristol City,False,3,0,finished
+tm4018346,2022-23,FAC,Fifth Round,2023-02-28 20:00:00+00:00,Leicester,Blackburn Rovers,True,1,2,finished
+tm4018348,2022-23,FAC,Fifth Round,2023-02-28 20:00:00+00:00,Brighton,Stoke City,False,1,0,finished
+tm4022849,2022-23,FAC,Fifth Round,2023-02-28 20:00:00+00:00,Fulham,Leeds United,True,2,0,finished
+tm4022849,2022-23,FAC,Fifth Round,2023-02-28 20:00:00+00:00,Leeds,Fulham FC,False,0,2,finished
+tm4018347,2022-23,FAC,Fifth Round,2023-03-01 20:00:00+00:00,Man Utd,West Ham United,True,3,1,finished
+tm4018347,2022-23,FAC,Fifth Round,2023-03-01 20:00:00+00:00,West Ham,Manchester United,False,1,3,finished
+tm4022850,2022-23,FAC,Fifth Round,2023-03-01 20:00:00+00:00,Southampton,Grimsby Town,True,1,2,finished
+tm4022852,2022-23,FAC,Fifth Round,2023-03-01 20:00:00+00:00,Spurs,Sheffield United,False,0,1,finished
+tm3956689,2022-23,UCL,last 16 2nd leg,2023-03-07 20:00:00+00:00,Chelsea,Borussia Dortmund,True,2,0,finished
+tm3956687,2022-23,UCL,last 16 2nd leg,2023-03-08 20:00:00+00:00,Spurs,AC Milan,True,0,0,finished
+tm4031387,2022-23,UEL,last 16 1st leg,2023-03-09 20:00:00+00:00,Arsenal,Sporting CP,False,2,2,finished
+tm4031388,2022-23,UEL,last 16 1st leg,2023-03-09 20:00:00+00:00,Man Utd,Real Betis Balompié,True,4,1,finished
+tm4031429,2022-23,UECL,last 16 1st leg,2023-03-09 20:00:00+00:00,West Ham,AEK Larnaca,False,2,0,finished
+tm3956684,2022-23,UCL,last 16 2nd leg,2023-03-14 20:00:00+00:00,Man City,RB Leipzig,True,7,0,finished
+tm3956686,2022-23,UCL,last 16 2nd leg,2023-03-15 20:00:00+00:00,Liverpool,Real Madrid,False,0,1,finished
+tm4031395,2022-23,UEL,last 16 2nd leg,2023-03-16 20:00:00+00:00,Arsenal,Sporting CP,True,4,6,finished
+tm4031396,2022-23,UEL,last 16 2nd leg,2023-03-16 20:00:00+00:00,Man Utd,Real Betis Balompié,False,1,0,finished
+tm4031421,2022-23,UECL,last 16 2nd leg,2023-03-16 20:00:00+00:00,West Ham,AEK Larnaca,True,4,0,finished
+tm4035008,2022-23,FAC,Quarter-Finals,2023-03-18 20:00:00+00:00,Man City,Burnley FC,True,6,0,finished
+tm4035007,2022-23,FAC,Quarter-Finals,2023-03-19 20:00:00+00:00,Brighton,Grimsby Town,True,5,0,finished
+tm4035009,2022-23,FAC,Quarter-Finals,2023-03-19 20:00:00+00:00,Fulham,Manchester United,False,1,3,finished
+tm4035009,2022-23,FAC,Quarter-Finals,2023-03-19 20:00:00+00:00,Man Utd,Fulham FC,True,3,1,finished
+tm4041602,2022-23,UCL,Quarter-Finals 1st leg,2023-04-11 20:00:00+00:00,Man City,Bayern Munich,True,3,0,finished
+tm4041600,2022-23,UCL,Quarter-Finals 1st leg,2023-04-12 20:00:00+00:00,Chelsea,Real Madrid,False,0,2,finished
+tm4041608,2022-23,UEL,Quarter-Finals 1st leg,2023-04-13 20:00:00+00:00,Man Utd,Sevilla FC,True,2,2,finished
+tm4041618,2022-23,UECL,Quarter-Finals 1st leg,2023-04-13 20:00:00+00:00,West Ham,KAA Gent,False,1,1,finished
+tm4041607,2022-23,UCL,Quarter-Finals 2nd leg,2023-04-18 20:00:00+00:00,Chelsea,Real Madrid,True,0,2,finished
+tm4041605,2022-23,UCL,Quarter-Finals 2nd leg,2023-04-19 20:00:00+00:00,Man City,Bayern Munich,False,1,1,finished
+tm4041612,2022-23,UEL,Quarter-Finals 2nd leg,2023-04-20 20:00:00+00:00,Man Utd,Sevilla FC,False,0,3,finished
+tm4041621,2022-23,UECL,Quarter-Finals 2nd leg,2023-04-20 20:00:00+00:00,West Ham,KAA Gent,True,4,1,finished
+tm4042689,2022-23,FAC,Semi-Finals,2023-04-22 20:00:00+00:00,Man City,Sheffield United,True,3,0,finished
+tm4042688,2022-23,FAC,Semi-Finals,2023-04-23 20:00:00+00:00,Brighton,Manchester United,True,6,7,finished
+tm4042688,2022-23,FAC,Semi-Finals,2023-04-23 20:00:00+00:00,Man Utd,Brighton & Hove Albion,False,7,6,finished
+tm4060794,2022-23,UCL,Semi-Finals 1st Leg,2023-05-09 20:00:00+00:00,Man City,Real Madrid,False,1,1,finished
+tm4061728,2022-23,UECL,Semi-Finals 1st Leg,2023-05-11 20:00:00+00:00,West Ham,AZ Alkmaar,True,2,1,finished
+tm4060797,2022-23,UCL,Semi-Finals 2nd Leg,2023-05-17 20:00:00+00:00,Man City,Real Madrid,True,4,0,finished
+tm4061730,2022-23,UECL,Semi-Finals 2nd Leg,2023-05-18 20:00:00+00:00,West Ham,AZ Alkmaar,False,1,0,finished
+tm4064735,2022-23,FAC,Final,2023-06-03 20:00:00+00:00,Man City,Manchester United,True,2,1,finished
+tm4064735,2022-23,FAC,Final,2023-06-03 20:00:00+00:00,Man Utd,Manchester City,False,1,2,finished
+tm4078395,2022-23,UECL,Final,2023-06-07 20:00:00+00:00,West Ham,ACF Fiorentina,False,2,1,finished
+tm4077814,2022-23,UCL,Final,2023-06-10 20:00:00+00:00,Man City,Inter Milan,True,1,0,finished
+tm4149666,2023-24,CS,Final,2023-08-06 20:00:00+00:00,Arsenal,Manchester City,True,5,2,finished
+tm4149666,2023-24,CS,Final,2023-08-06 20:00:00+00:00,Man City,Arsenal FC,False,2,5,finished
+tm4087203,2023-24,USC,Final,2023-08-16 20:00:00+00:00,Man City,Sevilla FC,True,6,5,finished
+tm4162619,2023-24,UECLQ,Qualifying Round 1st leg,2023-08-23 20:00:00+00:00,Aston Villa,Hibernian FC,False,5,0,finished
+tm4162643,2023-24,UECLQ,Qualifying Round 2nd leg,2023-08-31 20:00:00+00:00,Aston Villa,Hibernian FC,True,3,0,finished
+tm4171292,2023-24,UCL,Group F,2023-09-19 20:00:00+00:00,Newcastle,AC Milan,False,0,0,finished
+tm4171305,2023-24,UCL,Group G,2023-09-19 20:00:00+00:00,Man City,Red Star Belgrade,True,3,1,finished
+tm4171216,2023-24,UCL,Group A,2023-09-20 20:00:00+00:00,Man Utd,Bayern Munich,False,3,4,finished
+tm4171232,2023-24,UCL,Group B,2023-09-20 20:00:00+00:00,Arsenal,PSV Eindhoven,True,4,0,finished
+tm4172063,2023-24,UEL,Group A,2023-09-21 20:00:00+00:00,West Ham,FK TSC Backa Topola,True,3,1,finished
+tm4172081,2023-24,UEL,Group B,2023-09-21 20:00:00+00:00,Brighton,Athlitiki Enosi Konstantinoupoleos,True,2,3,finished
+tm4172113,2023-24,UEL,Group E,2023-09-21 20:00:00+00:00,Liverpool,LASK,False,3,1,finished
+tm4172285,2023-24,UECL,Group E,2023-09-21 20:00:00+00:00,Aston Villa,Legia Warszawa,False,2,3,finished
+tm4171221,2023-24,UCL,Group A,2023-10-03 20:00:00+00:00,Man Utd,Galatasaray,True,2,3,finished
+tm4171238,2023-24,UCL,Group B,2023-10-03 20:00:00+00:00,Arsenal,RC Lens,False,1,2,finished
+tm4171293,2023-24,UCL,Group F,2023-10-04 20:00:00+00:00,Newcastle,Paris Saint-Germain,True,4,1,finished
+tm4171307,2023-24,UCL,Group G,2023-10-04 20:00:00+00:00,Man City,RB Leipzig,False,3,1,finished
+tm4172067,2023-24,UEL,Group A,2023-10-05 20:00:00+00:00,West Ham,SC Freiburg,False,2,1,finished
+tm4172077,2023-24,UEL,Group B,2023-10-05 20:00:00+00:00,Brighton,Olympique Marseille,False,2,2,finished
+tm4172111,2023-24,UEL,Group E,2023-10-05 20:00:00+00:00,Liverpool,Union Saint-Gilloise,True,2,0,finished
+tm4172283,2023-24,UECL,Group E,2023-10-05 20:00:00+00:00,Aston Villa,HSK Zrinjski Mostar,True,1,0,finished
+tm4171220,2023-24,UCL,Group A,2023-10-24 20:00:00+00:00,Man Utd,FC Copenhagen,True,1,0,finished
+tm4171228,2023-24,UCL,Group B,2023-10-24 20:00:00+00:00,Arsenal,Sevilla FC,False,2,1,finished
+tm4171294,2023-24,UCL,Group F,2023-10-25 20:00:00+00:00,Newcastle,Borussia Dortmund,True,0,1,finished
+tm4171324,2023-24,UCL,Group G,2023-10-25 20:00:00+00:00,Man City,BSC Young Boys,False,3,1,finished
+tm4172064,2023-24,UEL,Group A,2023-10-26 20:00:00+00:00,West Ham,Olympiakos Syndesmos Filathlon Peiraios,False,1,2,finished
+tm4172079,2023-24,UEL,Group B,2023-10-26 20:00:00+00:00,Brighton,Ajax Amsterdam,True,2,0,finished
+tm4172112,2023-24,UEL,Group E,2023-10-26 20:00:00+00:00,Liverpool,FC Toulouse,True,5,1,finished
+tm4172278,2023-24,UECL,Group E,2023-10-26 20:00:00+00:00,Aston Villa,AZ Alkmaar,False,4,1,finished
+tm4171289,2023-24,UCL,Group F,2023-11-07 20:00:00+00:00,Newcastle,Borussia Dortmund,False,0,2,finished
+tm4171317,2023-24,UCL,Group G,2023-11-07 20:00:00+00:00,Man City,BSC Young Boys,True,3,0,finished
+tm4171223,2023-24,UCL,Group A,2023-11-08 20:00:00+00:00,Man Utd,FC Copenhagen,False,3,4,finished
+tm4171231,2023-24,UCL,Group B,2023-11-08 20:00:00+00:00,Arsenal,Sevilla FC,True,2,0,finished
+tm4172061,2023-24,UEL,Group A,2023-11-09 20:00:00+00:00,West Ham,Olympiakos Syndesmos Filathlon Peiraios,True,1,0,finished
+tm4172074,2023-24,UEL,Group B,2023-11-09 20:00:00+00:00,Brighton,Ajax Amsterdam,False,2,0,finished
+tm4172119,2023-24,UEL,Group E,2023-11-09 20:00:00+00:00,Liverpool,FC Toulouse,False,2,3,finished
+tm4172281,2023-24,UECL,Group E,2023-11-09 20:00:00+00:00,Aston Villa,AZ Alkmaar,True,2,1,finished
+tm4171286,2023-24,UCL,Group F,2023-11-28 20:00:00+00:00,Newcastle,Paris Saint-Germain,False,1,1,finished
+tm4171304,2023-24,UCL,Group G,2023-11-28 20:00:00+00:00,Man City,RB Leipzig,True,3,2,finished
+tm4171226,2023-24,UCL,Group A,2023-11-29 20:00:00+00:00,Man Utd,Galatasaray,False,3,3,finished
+tm4171233,2023-24,UCL,Group B,2023-11-29 20:00:00+00:00,Arsenal,RC Lens,True,6,0,finished
+tm4172070,2023-24,UEL,Group A,2023-11-30 20:00:00+00:00,West Ham,FK TSC Backa Topola,False,1,0,finished
+tm4172084,2023-24,UEL,Group B,2023-11-30 20:00:00+00:00,Brighton,Athlitiki Enosi Konstantinoupoleos,False,1,0,finished
+tm4172110,2023-24,UEL,Group E,2023-11-30 20:00:00+00:00,Liverpool,LASK,True,4,0,finished
+tm4172282,2023-24,UECL,Group E,2023-11-30 20:00:00+00:00,Aston Villa,Legia Warszawa,True,2,1,finished
+tm4171219,2023-24,UCL,Group A,2023-12-12 20:00:00+00:00,Man Utd,Bayern Munich,True,0,1,finished
+tm4171235,2023-24,UCL,Group B,2023-12-12 20:00:00+00:00,Arsenal,PSV Eindhoven,False,1,1,finished
+tm4171295,2023-24,UCL,Group F,2023-12-13 20:00:00+00:00,Newcastle,AC Milan,True,1,2,finished
+tm4171321,2023-24,UCL,Group G,2023-12-13 20:00:00+00:00,Man City,Red Star Belgrade,False,3,2,finished
+tm4172062,2023-24,UEL,Group A,2023-12-14 20:00:00+00:00,West Ham,SC Freiburg,True,2,0,finished
+tm4172080,2023-24,UEL,Group B,2023-12-14 20:00:00+00:00,Brighton,Olympique Marseille,True,1,0,finished
+tm4172116,2023-24,UEL,Group E,2023-12-14 20:00:00+00:00,Liverpool,Union Saint-Gilloise,False,1,2,finished
+tm4172288,2023-24,UECL,Group E,2023-12-14 20:00:00+00:00,Aston Villa,HSK Zrinjski Mostar,False,1,1,finished
+tm4246466,2023-24,FAC,Third Round,2024-01-04 20:00:00+00:00,Crystal Palace,Everton FC,True,0,0,finished
+tm4246466,2023-24,FAC,Third Round,2024-01-04 20:00:00+00:00,Everton,Crystal Palace,False,0,0,finished
+tm4246467,2023-24,FAC,Third Round,2024-01-05 20:00:00+00:00,Brentford,Wolverhampton Wanderers,True,1,1,finished
+tm4246467,2023-24,FAC,Third Round,2024-01-05 20:00:00+00:00,Wolves,Brentford FC,False,1,1,finished
+tm4246468,2023-24,FAC,Third Round,2024-01-05 20:00:00+00:00,Fulham,Rotherham United,True,1,0,finished
+tm4246469,2023-24,FAC,Third Round,2024-01-05 20:00:00+00:00,Burnley,Tottenham Hotspur,False,0,1,finished
+tm4246469,2023-24,FAC,Third Round,2024-01-05 20:00:00+00:00,Spurs,Burnley FC,True,1,0,finished
+tm4246474,2023-24,FAC,Third Round,2024-01-06 20:00:00+00:00,Newcastle,Sunderland AFC,False,3,0,finished
+tm4246476,2023-24,FAC,Third Round,2024-01-06 20:00:00+00:00,Sheffield Utd,Gillingham FC,False,4,0,finished
+tm4246481,2023-24,FAC,Third Round,2024-01-06 20:00:00+00:00,Bournemouth,Queens Park Rangers,False,3,2,finished
+tm4246483,2023-24,FAC,Third Round,2024-01-06 20:00:00+00:00,Brighton,Stoke City,False,4,2,finished
+tm4246485,2023-24,FAC,Third Round,2024-01-06 20:00:00+00:00,Chelsea,Preston North End,True,4,0,finished
+tm4246486,2023-24,FAC,Third Round,2024-01-06 20:00:00+00:00,Aston Villa,Middlesbrough FC,False,1,0,finished
+tm4246520,2023-24,FAC,Third Round,2024-01-07 20:00:00+00:00,Luton,Bolton Wanderers,True,0,0,finished
+tm4246521,2023-24,FAC,Third Round,2024-01-07 20:00:00+00:00,Man City,Huddersfield Town,True,5,0,finished
+tm4246522,2023-24,FAC,Third Round,2024-01-07 20:00:00+00:00,Nott'm Forest,Blackpool FC,True,2,2,finished
+tm4246526,2023-24,FAC,Third Round,2024-01-07 20:00:00+00:00,West Ham,Bristol City,True,1,1,finished
+tm4246527,2023-24,FAC,Third Round,2024-01-07 20:00:00+00:00,Arsenal,Liverpool FC,True,0,2,finished
+tm4246527,2023-24,FAC,Third Round,2024-01-07 20:00:00+00:00,Liverpool,Arsenal FC,False,2,0,finished
+tm4246528,2023-24,FAC,Third Round,2024-01-08 20:00:00+00:00,Man Utd,Wigan Athletic,False,2,0,finished
+tm4259456,2023-24,FAC,Third Round Replay,2024-01-16 20:00:00+00:00,Brentford,Wolverhampton Wanderers,False,2,3,finished
+tm4259456,2023-24,FAC,Third Round Replay,2024-01-16 20:00:00+00:00,Wolves,Brentford FC,True,3,2,finished
+tm4259458,2023-24,FAC,Third Round Replay,2024-01-16 20:00:00+00:00,Luton,Bolton Wanderers,False,2,1,finished
+tm4259459,2023-24,FAC,Third Round Replay,2024-01-16 20:00:00+00:00,West Ham,Bristol City,False,0,1,finished
+tm4259461,2023-24,FAC,Third Round Replay,2024-01-17 20:00:00+00:00,Nott'm Forest,Blackpool FC,False,3,2,finished
+tm4259463,2023-24,FAC,Third Round Replay,2024-01-17 20:00:00+00:00,Crystal Palace,Everton FC,False,0,1,finished
+tm4259463,2023-24,FAC,Third Round Replay,2024-01-17 20:00:00+00:00,Everton,Crystal Palace,True,1,0,finished
+tm4268988,2023-24,FAC,Fourth Round,2024-01-25 20:00:00+00:00,Bournemouth,Swansea City,True,5,0,finished
+tm4268989,2023-24,FAC,Fourth Round,2024-01-26 20:00:00+00:00,Nott'm Forest,Bristol City,False,0,0,finished
+tm4268990,2023-24,FAC,Fourth Round,2024-01-26 20:00:00+00:00,Aston Villa,Chelsea FC,False,0,0,finished
+tm4268990,2023-24,FAC,Fourth Round,2024-01-26 20:00:00+00:00,Chelsea,Aston Villa,True,0,0,finished
+tm4268992,2023-24,FAC,Fourth Round,2024-01-26 20:00:00+00:00,Man City,Tottenham Hotspur,False,1,0,finished
+tm4268992,2023-24,FAC,Fourth Round,2024-01-26 20:00:00+00:00,Spurs,Manchester City,True,0,1,finished
+tm4268994,2023-24,FAC,Fourth Round,2024-01-27 20:00:00+00:00,Everton,Luton Town,True,1,2,finished
+tm4268994,2023-24,FAC,Fourth Round,2024-01-27 20:00:00+00:00,Luton,Everton FC,False,2,1,finished
+tm4268997,2023-24,FAC,Fourth Round,2024-01-27 20:00:00+00:00,Brighton,Sheffield United,False,5,2,finished
+tm4268997,2023-24,FAC,Fourth Round,2024-01-27 20:00:00+00:00,Sheffield Utd,Brighton & Hove Albion,True,2,5,finished
+tm4268998,2023-24,FAC,Fourth Round,2024-01-27 20:00:00+00:00,Fulham,Newcastle United,True,0,2,finished
+tm4268998,2023-24,FAC,Fourth Round,2024-01-27 20:00:00+00:00,Newcastle,Fulham FC,False,2,0,finished
+tm4268999,2023-24,FAC,Fourth Round,2024-01-28 20:00:00+00:00,Wolves,West Bromwich Albion,False,2,0,finished
+tm4269001,2023-24,FAC,Fourth Round,2024-01-28 20:00:00+00:00,Liverpool,Norwich City,True,5,2,finished
+tm4269002,2023-24,FAC,Fourth Round,2024-01-28 20:00:00+00:00,Man Utd,Newport County,False,4,2,finished
+tm4279371,2023-24,FAC,4th round deciders,2024-02-07 20:00:00+00:00,Nott'm Forest,Bristol City,True,6,4,finished
+tm4279372,2023-24,FAC,4th round deciders,2024-02-07 20:00:00+00:00,Aston Villa,Chelsea FC,True,1,3,finished
+tm4279372,2023-24,FAC,4th round deciders,2024-02-07 20:00:00+00:00,Chelsea,Aston Villa,False,3,1,finished
+tm4243694,2023-24,UCL,last 16 1st leg,2024-02-13 20:00:00+00:00,Man City,FC Copenhagen,False,3,1,finished
+tm4243688,2023-24,UCL,last 16 1st leg,2024-02-21 20:00:00+00:00,Arsenal,FC Porto,False,0,1,finished
+tm4285019,2023-24,FAC,Fifth Round,2024-02-27 20:00:00+00:00,Bournemouth,Leicester City,True,0,1,finished
+tm4285020,2023-24,FAC,Fifth Round,2024-02-27 20:00:00+00:00,Newcastle,Blackburn Rovers,False,5,4,finished
+tm4285021,2023-24,FAC,Fifth Round,2024-02-27 20:00:00+00:00,Luton,Manchester City,True,2,6,finished
+tm4285021,2023-24,FAC,Fifth Round,2024-02-27 20:00:00+00:00,Man City,Luton Town,False,6,2,finished
+tm4285022,2023-24,FAC,Fifth Round,2024-02-28 20:00:00+00:00,Chelsea,Leeds United,True,3,2,finished
+tm4285023,2023-24,FAC,Fifth Round,2024-02-28 20:00:00+00:00,Man Utd,Nottingham Forest,False,1,0,finished
+tm4285023,2023-24,FAC,Fifth Round,2024-02-28 20:00:00+00:00,Nott'm Forest,Manchester United,True,0,1,finished
+tm4285024,2023-24,FAC,Fifth Round,2024-02-28 20:00:00+00:00,Brighton,Wolverhampton Wanderers,False,0,1,finished
+tm4285024,2023-24,FAC,Fifth Round,2024-02-28 20:00:00+00:00,Wolves,Brighton & Hove Albion,True,1,0,finished
+tm4285025,2023-24,FAC,Fifth Round,2024-02-28 20:00:00+00:00,Liverpool,Southampton FC,True,3,0,finished
+tm4243702,2023-24,UCL,last 16 2nd leg,2024-03-06 20:00:00+00:00,Man City,FC Copenhagen,True,3,1,finished
+tm4295483,2023-24,UEL,last 16 1st leg,2024-03-07 20:00:00+00:00,Liverpool,AC Sparta Prague,False,5,1,finished
+tm4295485,2023-24,UEL,last 16 1st leg,2024-03-07 20:00:00+00:00,Brighton,Associazione Sportiva Roma,False,0,4,finished
+tm4295487,2023-24,UEL,last 16 1st leg,2024-03-07 20:00:00+00:00,West Ham,SC Freiburg,False,0,1,finished
+tm4295562,2023-24,UECL,last 16 1st leg,2024-03-07 20:00:00+00:00,Aston Villa,Ajax Amsterdam,False,0,0,finished
+tm4243696,2023-24,UCL,last 16 2nd leg,2024-03-12 20:00:00+00:00,Arsenal,FC Porto,True,4,2,finished
+tm4295490,2023-24,UEL,last 16 2nd leg,2024-03-14 20:00:00+00:00,Liverpool,AC Sparta Prague,True,6,1,finished
+tm4295492,2023-24,UEL,last 16 2nd leg,2024-03-14 20:00:00+00:00,Brighton,Associazione Sportiva Roma,True,1,0,finished
+tm4295494,2023-24,UEL,last 16 2nd leg,2024-03-14 20:00:00+00:00,West Ham,SC Freiburg,True,5,0,finished
+tm4295570,2023-24,UECL,last 16 2nd leg,2024-03-14 20:00:00+00:00,Aston Villa,Ajax Amsterdam,True,4,0,finished
+tm4300787,2023-24,FAC,Quarter-Finals,2024-03-16 20:00:00+00:00,Man City,Newcastle United,True,2,0,finished
+tm4300787,2023-24,FAC,Quarter-Finals,2024-03-16 20:00:00+00:00,Newcastle,Manchester City,False,0,2,finished
+tm4300789,2023-24,FAC,Quarter-Finals,2024-03-16 20:00:00+00:00,Wolves,Coventry City,True,2,3,finished
+tm4300786,2023-24,FAC,Quarter-Finals,2024-03-17 20:00:00+00:00,Chelsea,Leicester City,True,4,2,finished
+tm4300788,2023-24,FAC,Quarter-Finals,2024-03-17 20:00:00+00:00,Liverpool,Manchester United,False,3,4,finished
+tm4300788,2023-24,FAC,Quarter-Finals,2024-03-17 20:00:00+00:00,Man Utd,Liverpool FC,True,4,3,finished
+tm4312021,2023-24,UCL,Quarter-Finals 1st leg,2024-04-09 20:00:00+00:00,Arsenal,Bayern Munich,True,2,2,finished
+tm4312023,2023-24,UCL,Quarter-Finals 1st leg,2024-04-09 20:00:00+00:00,Man City,Real Madrid,False,3,3,finished
+tm4312040,2023-24,UEL,Quarter-Finals 1st leg,2024-04-11 20:00:00+00:00,Liverpool,Atalanta BC,True,0,3,finished
+tm4312041,2023-24,UEL,Quarter-Finals 1st leg,2024-04-11 20:00:00+00:00,West Ham,Bayer 04 Leverkusen,False,0,2,finished
+tm4312075,2023-24,UECL,Quarter-Finals 1st leg,2024-04-11 20:00:00+00:00,Aston Villa,LOSC Lille,True,2,1,finished
+tm4312025,2023-24,UCL,Quarter-Finals 2nd leg,2024-04-17 20:00:00+00:00,Arsenal,Bayern Munich,False,0,1,finished
+tm4312027,2023-24,UCL,Quarter-Finals 2nd leg,2024-04-17 20:00:00+00:00,Man City,Real Madrid,True,4,5,finished
+tm4312044,2023-24,UEL,Quarter-Finals 2nd leg,2024-04-18 20:00:00+00:00,Liverpool,Atalanta BC,False,1,0,finished
+tm4312045,2023-24,UEL,Quarter-Finals 2nd leg,2024-04-18 20:00:00+00:00,West Ham,Bayer 04 Leverkusen,True,1,1,finished
+tm4312079,2023-24,UECL,Quarter-Finals 2nd leg,2024-04-18 20:00:00+00:00,Aston Villa,LOSC Lille,False,5,5,finished
+tm4313193,2023-24,FAC,Semi-Finals,2024-04-20 20:00:00+00:00,Chelsea,Manchester City,False,0,1,finished
+tm4313193,2023-24,FAC,Semi-Finals,2024-04-20 20:00:00+00:00,Man City,Chelsea FC,True,1,0,finished
+tm4313194,2023-24,FAC,Semi-Finals,2024-04-21 20:00:00+00:00,Man Utd,Coventry City,False,7,5,finished
+tm4331991,2023-24,UECL,Semi-Finals 1st Leg,2024-05-02 20:00:00+00:00,Aston Villa,Olympiakos Syndesmos Filathlon Peiraios,True,2,4,finished
+tm4331993,2023-24,UECL,Semi-Finals 2nd Leg,2024-05-09 20:00:00+00:00,Aston Villa,Olympiakos Syndesmos Filathlon Peiraios,False,0,2,finished
+tm4334126,2023-24,FAC,Final,2024-05-25 20:00:00+00:00,Man City,Manchester United,True,1,2,finished
+tm4334126,2023-24,FAC,Final,2024-05-25 20:00:00+00:00,Man Utd,Manchester City,False,2,1,finished
+tm4411692,2024-25,CS,Final,2024-08-10 20:00:00+00:00,Man City,Manchester United,False,8,7,finished
+tm4411692,2024-25,CS,Final,2024-08-10 20:00:00+00:00,Man Utd,Manchester City,True,7,8,finished
+tm4431118,2024-25,UECLQ,Qualifying Round 1st leg,2024-08-22 20:00:00+00:00,Chelsea,Servette FC,True,2,0,finished
+tm4431124,2024-25,UECLQ,Qualifying Round 2nd leg,2024-08-29 20:00:00+00:00,Chelsea,Servette FC,False,1,2,finished
+tm4445100,2024-25,UCL,Group Stage,2024-09-17 20:00:00+00:00,Liverpool,AC Milan,False,3,1,finished
+tm4445131,2024-25,UCL,Group Stage,2024-09-17 20:00:00+00:00,Aston Villa,BSC Young Boys,False,3,0,finished
+tm4445038,2024-25,UCL,Group Stage,2024-09-18 20:00:00+00:00,Man City,Inter Milan,True,0,0,finished
+tm4445077,2024-25,UCL,Group Stage,2024-09-19 20:00:00+00:00,Arsenal,Atalanta BC,False,0,0,finished
+tm4445350,2024-25,UEL,Group Stage,2024-09-25 20:00:00+00:00,Man Utd,FC Twente Enschede,True,1,1,finished
+tm4445378,2024-25,UEL,Group Stage,2024-09-26 20:00:00+00:00,Spurs,Qarabağ FK,True,3,0,finished
+tm4445088,2024-25,UCL,Group Stage,2024-10-01 20:00:00+00:00,Arsenal,Paris Saint-Germain,True,2,0,finished
+tm4445148,2024-25,UCL,Group Stage,2024-10-01 20:00:00+00:00,Man City,Slovan Bratislava,False,4,0,finished
+tm4445050,2024-25,UCL,Group Stage,2024-10-02 20:00:00+00:00,Liverpool,Bologna Football Club 1909,True,2,0,finished
+tm4445160,2024-25,UCL,Group Stage,2024-10-02 20:00:00+00:00,Aston Villa,Bayern Munich,True,1,0,finished
+tm4445351,2024-25,UEL,Group Stage,2024-10-03 20:00:00+00:00,Man Utd,FC Porto,False,3,3,finished
+tm4445561,2024-25,UECL,Group Stage,2024-10-03 20:00:00+00:00,Chelsea,KAA Gent,True,4,2,finished
+tm4445694,2024-25,UEL,Group Stage,2024-10-03 20:00:00+00:00,Spurs,Ferencvárosi TC,False,2,1,finished
+tm4445089,2024-25,UCL,Group Stage,2024-10-22 20:00:00+00:00,Arsenal,FC Shakhtar Donetsk,True,1,0,finished
+tm4445163,2024-25,UCL,Group Stage,2024-10-22 20:00:00+00:00,Aston Villa,Bologna Football Club 1909,True,2,0,finished
+tm4445045,2024-25,UCL,Group Stage,2024-10-23 20:00:00+00:00,Man City,AC Sparta Prague,True,5,0,finished
+tm4445060,2024-25,UCL,Group Stage,2024-10-23 20:00:00+00:00,Liverpool,RB Leipzig,False,1,0,finished
+tm4445377,2024-25,UEL,Group Stage,2024-10-24 20:00:00+00:00,Spurs,AZ Alkmaar,True,1,0,finished
+tm4445403,2024-25,UEL,Group Stage,2024-10-24 20:00:00+00:00,Man Utd,Fenerbahce,False,1,1,finished
+tm4445543,2024-25,UECL,Group Stage,2024-10-24 20:00:00+00:00,Chelsea,Panathinaikos Athlitikos Omilos,False,4,1,finished
+tm4445048,2024-25,UCL,Group Stage,2024-11-05 20:00:00+00:00,Liverpool,Bayer 04 Leverkusen,True,4,0,finished
+tm4445108,2024-25,UCL,Group Stage,2024-11-05 20:00:00+00:00,Man City,Sporting CP,False,1,4,finished
+tm4445053,2024-25,UCL,Group Stage,2024-11-06 20:00:00+00:00,Arsenal,Inter Milan,False,0,1,finished
+tm4445095,2024-25,UCL,Group Stage,2024-11-06 20:00:00+00:00,Aston Villa,Club Brugge KV,False,0,1,finished
+tm4445348,2024-25,UEL,Group Stage,2024-11-07 20:00:00+00:00,Man Utd,Panthessalonikios Athlitikos Omilos Konstantinoupoliton,True,2,0,finished
+tm4445427,2024-25,UEL,Group Stage,2024-11-07 20:00:00+00:00,Spurs,Galatasaray,False,2,3,finished
+tm4445563,2024-25,UECL,Group Stage,2024-11-07 20:00:00+00:00,Chelsea,FC Noah Yerevan,True,8,0,finished
+tm4445044,2024-25,UCL,Group Stage,2024-11-26 20:00:00+00:00,Man City,Feyenoord Rotterdam,True,3,3,finished
+tm4445109,2024-25,UCL,Group Stage,2024-11-26 20:00:00+00:00,Arsenal,Sporting CP,False,5,1,finished
+tm4445047,2024-25,UCL,Group Stage,2024-11-27 20:00:00+00:00,Liverpool,Real Madrid,True,2,0,finished
+tm4445161,2024-25,UCL,Group Stage,2024-11-27 20:00:00+00:00,Aston Villa,Juventus FC,True,0,0,finished
+tm4445349,2024-25,UEL,Group Stage,2024-11-28 20:00:00+00:00,Man Utd,Fotballklubben Bodø/Glimt,True,3,2,finished
+tm4445376,2024-25,UEL,Group Stage,2024-11-28 20:00:00+00:00,Spurs,Associazione Sportiva Roma,True,2,2,finished
+tm4445558,2024-25,UECL,Group Stage,2024-11-28 20:00:00+00:00,Chelsea,1. Fußballclub Heidenheim 1846,False,2,0,finished
+tm4445063,2024-25,UCL,Group Stage,2024-12-10 20:00:00+00:00,Aston Villa,RB Leipzig,False,3,2,finished
+tm4445168,2024-25,UCL,Group Stage,2024-12-10 20:00:00+00:00,Liverpool,Girona FC,False,1,0,finished
+tm4445080,2024-25,UCL,Group Stage,2024-12-11 20:00:00+00:00,Man City,Juventus FC,False,0,2,finished
+tm4445091,2024-25,UCL,Group Stage,2024-12-11 20:00:00+00:00,Arsenal,AS Monaco,True,3,0,finished
+tm4445355,2024-25,UEL,Group Stage,2024-12-12 20:00:00+00:00,Spurs,Rangers FC,False,1,1,finished
+tm4445455,2024-25,UECL,Group Stage,2024-12-12 20:00:00+00:00,Chelsea,FC Astana,False,3,1,finished
+tm4445578,2024-25,UEL,Group Stage,2024-12-12 20:00:00+00:00,Man Utd,FC Viktoria Plzen,False,2,1,finished
+tm4445562,2024-25,UECL,Group Stage,2024-12-19 20:00:00+00:00,Chelsea,Shamrock Rovers,True,5,1,finished
+tm4502589,2024-25,FAC,Third Round,2025-01-09 20:00:00+00:00,Everton,Peterborough United,True,2,0,finished
+tm4502596,2024-25,FAC,Third Round,2025-01-09 20:00:00+00:00,Fulham,Watford FC,True,4,1,finished
+tm4502577,2024-25,FAC,Third Round,2025-01-10 20:00:00+00:00,Aston Villa,West Ham United,True,2,1,finished
+tm4502577,2024-25,FAC,Third Round,2025-01-10 20:00:00+00:00,West Ham,Aston Villa,False,1,2,finished
+tm4502570,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Brighton,Norwich City,False,4,0,finished
+tm4502571,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Man City,Salford City,True,8,0,finished
+tm4502573,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Liverpool,Accrington Stanley,True,4,0,finished
+tm4502574,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Wolves,Bristol City,False,2,1,finished
+tm4502576,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Chelsea,Morecambe FC,True,5,0,finished
+tm4502583,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Bournemouth,West Bromwich Albion,True,5,1,finished
+tm4502584,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Leicester,Queens Park Rangers,True,6,2,finished
+tm4502586,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Brentford,Plymouth Argyle,True,0,1,finished
+tm4502593,2024-25,FAC,Third Round,2025-01-11 20:00:00+00:00,Nott'm Forest,Luton Town,True,2,0,finished
+tm4502565,2024-25,FAC,Third Round,2025-01-12 20:00:00+00:00,Southampton,Swansea City,True,3,0,finished
+tm4502566,2024-25,FAC,Third Round,2025-01-12 20:00:00+00:00,Arsenal,Manchester United,True,4,6,finished
+tm4502566,2024-25,FAC,Third Round,2025-01-12 20:00:00+00:00,Man Utd,Arsenal FC,False,6,4,finished
+tm4502580,2024-25,FAC,Third Round,2025-01-12 20:00:00+00:00,Spurs,Tamworth FC,False,3,0,finished
+tm4502588,2024-25,FAC,Third Round,2025-01-12 20:00:00+00:00,Newcastle,Bromley FC,True,3,1,finished
+tm4502595,2024-25,FAC,Third Round,2025-01-12 20:00:00+00:00,Ipswich,Bristol Rovers,True,3,0,finished
+tm4502597,2024-25,FAC,Third Round,2025-01-12 20:00:00+00:00,Crystal Palace,Stockport County,True,1,0,finished
+tm4445049,2024-25,UCL,Group Stage,2025-01-21 20:00:00+00:00,Liverpool,LOSC Lille,True,2,1,finished
+tm4445155,2024-25,UCL,Group Stage,2025-01-21 20:00:00+00:00,Aston Villa,AS Monaco,False,0,1,finished
+tm4445090,2024-25,UCL,Group Stage,2025-01-22 20:00:00+00:00,Arsenal,GNK Dinamo Zagreb,True,3,0,finished
+tm4461915,2024-25,UCL,Group Stage,2025-01-22 20:00:00+00:00,Man City,Paris Saint-Germain,False,2,4,finished
+tm4445347,2024-25,UEL,Group Stage,2025-01-23 20:00:00+00:00,Man Utd,Rangers FC,True,2,1,finished
+tm4445415,2024-25,UEL,Group Stage,2025-01-23 20:00:00+00:00,Spurs,TSG 1899 Hoffenheim,False,3,2,finished
+tm4445039,2024-25,UCL,Group Stage,2025-01-29 20:00:00+00:00,Man City,Club Brugge KV,True,3,1,finished
+tm4445112,2024-25,UCL,Group Stage,2025-01-29 20:00:00+00:00,Liverpool,PSV Eindhoven,False,2,3,finished
+tm4445162,2024-25,UCL,Group Stage,2025-01-29 20:00:00+00:00,Aston Villa,Celtic FC,True,4,2,finished
+tm4445169,2024-25,UCL,Group Stage,2025-01-29 20:00:00+00:00,Arsenal,Girona FC,False,2,1,finished
+tm4445379,2024-25,UEL,Group Stage,2025-01-30 20:00:00+00:00,Spurs,Idrottsföreningen Elfsborg,True,3,0,finished
+tm4445791,2024-25,UEL,Group Stage,2025-01-30 20:00:00+00:00,Man Utd,FCSB,False,2,0,finished
+tm4532769,2024-25,FAC,Fourth Round,2025-02-07 20:00:00+00:00,Leicester,Manchester United,False,1,2,finished
+tm4532769,2024-25,FAC,Fourth Round,2025-02-07 20:00:00+00:00,Man Utd,Leicester City,True,2,1,finished
+tm4532771,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Brighton,Chelsea FC,True,2,1,finished
+tm4532771,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Chelsea,Brighton & Hove Albion,False,1,2,finished
+tm4532773,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Ipswich,Coventry City,False,4,1,finished
+tm4532775,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Newcastle,Birmingham City,False,3,2,finished
+tm4532777,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Bournemouth,Everton FC,False,2,0,finished
+tm4532777,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Everton,AFC Bournemouth,True,0,2,finished
+tm4532779,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Southampton,Burnley FC,True,0,1,finished
+tm4546258,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Man City,Leyton Orient,False,2,1,finished
+tm4546260,2024-25,FAC,Fourth Round,2025-02-08 20:00:00+00:00,Fulham,Wigan Athletic,False,2,1,finished
+tm4532774,2024-25,FAC,Fourth Round,2025-02-09 20:00:00+00:00,Wolves,Blackburn Rovers,False,2,0,finished
+tm4532776,2024-25,FAC,Fourth Round,2025-02-09 20:00:00+00:00,Liverpool,Plymouth Argyle,False,0,1,finished
+tm4532778,2024-25,FAC,Fourth Round,2025-02-09 20:00:00+00:00,Aston Villa,Tottenham Hotspur,True,2,1,finished
+tm4532778,2024-25,FAC,Fourth Round,2025-02-09 20:00:00+00:00,Spurs,Aston Villa,False,1,2,finished
+tm4532780,2024-25,FAC,Fourth Round,2025-02-10 20:00:00+00:00,Crystal Palace,Doncaster Rovers,False,2,0,finished
+tm4532772,2024-25,FAC,Fourth Round,2025-02-11 20:00:00+00:00,Nott'm Forest,Exeter City,False,6,4,finished
+tm4547617,2024-25,UCL,intermediate stage 1st leg,2025-02-11 20:00:00+00:00,Man City,Real Madrid,True,2,3,finished
+tm4547623,2024-25,UCL,intermediate stage 2nd leg,2025-02-19 20:00:00+00:00,Man City,Real Madrid,False,1,3,finished
+tm4562593,2024-25,FAC,Fifth Round,2025-02-28 20:00:00+00:00,Aston Villa,Cardiff City,True,2,0,finished
+tm4562595,2024-25,FAC,Fifth Round,2025-03-01 20:00:00+00:00,Crystal Palace,Millwall FC,True,3,1,finished
+tm4562596,2024-25,FAC,Fifth Round,2025-03-01 20:00:00+00:00,Bournemouth,Wolverhampton Wanderers,True,6,5,finished
+tm4562596,2024-25,FAC,Fifth Round,2025-03-01 20:00:00+00:00,Wolves,AFC Bournemouth,False,5,6,finished
+tm4562597,2024-25,FAC,Fifth Round,2025-03-01 20:00:00+00:00,Man City,Plymouth Argyle,True,3,1,finished
+tm4562598,2024-25,FAC,Fifth Round,2025-03-02 20:00:00+00:00,Brighton,Newcastle United,False,2,1,finished
+tm4562598,2024-25,FAC,Fifth Round,2025-03-02 20:00:00+00:00,Newcastle,Brighton & Hove Albion,True,1,2,finished
+tm4562599,2024-25,FAC,Fifth Round,2025-03-02 20:00:00+00:00,Fulham,Manchester United,False,5,4,finished
+tm4562599,2024-25,FAC,Fifth Round,2025-03-02 20:00:00+00:00,Man Utd,Fulham FC,True,4,5,finished
+tm4562600,2024-25,FAC,Fifth Round,2025-03-03 20:00:00+00:00,Ipswich,Nottingham Forest,False,5,6,finished
+tm4562600,2024-25,FAC,Fifth Round,2025-03-03 20:00:00+00:00,Nott'm Forest,Ipswich Town,True,6,5,finished
+tm4547629,2024-25,UCL,last 16 1st leg,2025-03-04 20:00:00+00:00,Aston Villa,Club Brugge KV,False,3,1,finished
+tm4547631,2024-25,UCL,last 16 1st leg,2025-03-04 20:00:00+00:00,Arsenal,PSV Eindhoven,False,7,1,finished
+tm4547603,2024-25,UCL,last 16 1st leg,2025-03-05 20:00:00+00:00,Liverpool,Paris Saint-Germain,False,1,0,finished
+tm4513810,2024-25,UECL,last 16 1st leg,2025-03-06 20:00:00+00:00,Chelsea,FC Copenhagen,False,2,1,finished
+tm4547686,2024-25,UEL,last 16 1st leg,2025-03-06 20:00:00+00:00,Spurs,AZ Alkmaar,False,0,1,finished
+tm4547690,2024-25,UEL,last 16 1st leg,2025-03-06 20:00:00+00:00,Man Utd,Real Sociedad,False,1,1,finished
+tm4547604,2024-25,UCL,last 16 2nd leg,2025-03-11 20:00:00+00:00,Liverpool,Paris Saint-Germain,True,1,5,finished
+tm4547636,2024-25,UCL,last 16 2nd leg,2025-03-12 20:00:00+00:00,Aston Villa,Club Brugge KV,True,3,0,finished
+tm4547638,2024-25,UCL,last 16 2nd leg,2025-03-12 20:00:00+00:00,Arsenal,PSV Eindhoven,True,2,2,finished
+tm4513818,2024-25,UECL,last 16 2nd leg,2025-03-13 20:00:00+00:00,Chelsea,FC Copenhagen,True,1,0,finished
+tm4547694,2024-25,UEL,last 16 2nd leg,2025-03-13 20:00:00+00:00,Spurs,AZ Alkmaar,True,3,1,finished
+tm4547698,2024-25,UEL,last 16 2nd leg,2025-03-13 20:00:00+00:00,Man Utd,Real Sociedad,True,4,1,finished
+tm4572895,2024-25,FAC,Quarter-Finals,2025-03-29 20:00:00+00:00,Crystal Palace,Fulham FC,False,3,0,finished
+tm4572895,2024-25,FAC,Quarter-Finals,2025-03-29 20:00:00+00:00,Fulham,Crystal Palace,True,0,3,finished
+tm4572898,2024-25,FAC,Quarter-Finals,2025-03-29 20:00:00+00:00,Brighton,Nottingham Forest,True,3,4,finished
+tm4572898,2024-25,FAC,Quarter-Finals,2025-03-29 20:00:00+00:00,Nott'm Forest,Brighton & Hove Albion,False,4,3,finished
+tm4572896,2024-25,FAC,Quarter-Finals,2025-03-30 20:00:00+00:00,Aston Villa,Preston North End,False,3,0,finished
+tm4572897,2024-25,FAC,Quarter-Finals,2025-03-30 20:00:00+00:00,Bournemouth,Manchester City,True,1,2,finished
+tm4572897,2024-25,FAC,Quarter-Finals,2025-03-30 20:00:00+00:00,Man City,AFC Bournemouth,False,2,1,finished
+tm4547644,2024-25,UCL,Quarter-Finals 1st leg,2025-04-08 20:00:00+00:00,Arsenal,Real Madrid,True,3,0,finished
+tm4547643,2024-25,UCL,Quarter-Finals 1st leg,2025-04-09 20:00:00+00:00,Aston Villa,Paris Saint-Germain,False,1,3,finished
+tm4547796,2024-25,UEL,Quarter-Finals 1st leg,2025-04-10 20:00:00+00:00,Spurs,Eintracht Frankfurt,True,1,1,finished
+tm4547798,2024-25,UEL,Quarter-Finals 1st leg,2025-04-10 20:00:00+00:00,Man Utd,Olympique Lyon,False,2,2,finished
+tm4547820,2024-25,UECL,Quarter-Finals 1st leg,2025-04-10 20:00:00+00:00,Chelsea,Legia Warszawa,False,3,0,finished
+tm4547647,2024-25,UCL,Quarter-Finals 2nd leg,2025-04-15 20:00:00+00:00,Aston Villa,Paris Saint-Germain,True,3,2,finished
+tm4547648,2024-25,UCL,Quarter-Finals 2nd leg,2025-04-16 20:00:00+00:00,Arsenal,Real Madrid,False,2,1,finished
+tm4547800,2024-25,UEL,Quarter-Finals 2nd leg,2025-04-17 20:00:00+00:00,Spurs,Eintracht Frankfurt,False,1,0,finished
+tm4547802,2024-25,UEL,Quarter-Finals 2nd leg,2025-04-17 20:00:00+00:00,Man Utd,Olympique Lyon,True,5,4,finished
+tm4547824,2024-25,UECL,Quarter-Finals 2nd leg,2025-04-17 20:00:00+00:00,Chelsea,Legia Warszawa,True,1,2,finished
+tm4595352,2024-25,FAC,Semi-Finals,2025-04-26 20:00:00+00:00,Aston Villa,Crystal Palace,False,0,3,finished
+tm4595352,2024-25,FAC,Semi-Finals,2025-04-26 20:00:00+00:00,Crystal Palace,Aston Villa,True,3,0,finished
+tm4595353,2024-25,FAC,Semi-Finals,2025-04-27 20:00:00+00:00,Man City,Nottingham Forest,False,2,0,finished
+tm4595353,2024-25,FAC,Semi-Finals,2025-04-27 20:00:00+00:00,Nott'm Forest,Manchester City,True,0,2,finished
+tm4547651,2024-25,UCL,Semi-Finals 1st Leg,2025-04-29 20:00:00+00:00,Arsenal,Paris Saint-Germain,True,0,1,finished
+tm4547803,2024-25,UEL,Semi-Finals 1st Leg,2025-05-01 20:00:00+00:00,Spurs,Fotballklubben Bodø/Glimt,True,3,1,finished
+tm4547804,2024-25,UEL,Semi-Finals 1st Leg,2025-05-01 20:00:00+00:00,Man Utd,Athletic Bilbao,False,3,0,finished
+tm4604197,2024-25,UECL,Semi-Finals 1st Leg,2025-05-01 20:00:00+00:00,Chelsea,Djurgårdens Idrottsförening,False,4,1,finished
+tm4547653,2024-25,UCL,Semi-Finals 2nd Leg,2025-05-07 20:00:00+00:00,Arsenal,Paris Saint-Germain,False,1,2,finished
+tm4547805,2024-25,UEL,Semi-Finals 2nd Leg,2025-05-08 20:00:00+00:00,Spurs,Fotballklubben Bodø/Glimt,False,2,0,finished
+tm4547806,2024-25,UEL,Semi-Finals 2nd Leg,2025-05-08 20:00:00+00:00,Man Utd,Athletic Bilbao,True,4,1,finished
+tm4604198,2024-25,UECL,Semi-Finals 2nd Leg,2025-05-08 20:00:00+00:00,Chelsea,Djurgårdens Idrottsförening,True,1,0,finished
+tm4601575,2024-25,FAC,Final,2025-05-17 20:00:00+00:00,Crystal Palace,Manchester City,True,1,0,finished
+tm4601575,2024-25,FAC,Final,2025-05-17 20:00:00+00:00,Man City,Crystal Palace,False,0,1,finished
+tm4547807,2024-25,UEL,Final,2025-05-21 20:00:00+00:00,Man Utd,Tottenham Hotspur,False,0,1,finished
+tm4547807,2024-25,UEL,Final,2025-05-21 20:00:00+00:00,Spurs,Manchester United,True,1,0,finished
+tm4547831,2024-25,UECL,Final,2025-05-28 20:00:00+00:00,Chelsea,Real Betis Balompié,False,4,1,finished
+tm4703996,2025-26,CS,Final,2025-08-10 20:00:00+00:00,Crystal Palace,Liverpool FC,True,5,4,finished
+tm4703996,2025-26,CS,Final,2025-08-10 20:00:00+00:00,Liverpool,Crystal Palace,False,4,5,finished
+tm4625635,2025-26,USC,Final,2025-08-13 20:00:00+00:00,Spurs,Paris Saint-Germain,False,5,6,finished
+tm4707339,2025-26,UECLQ,Qualifying Round 1st leg,2025-08-21 20:00:00+00:00,Crystal Palace,Fredrikstad Fotballklubb,True,1,0,finished
+tm4707364,2025-26,UECLQ,Qualifying Round 2nd leg,2025-08-28 20:00:00+00:00,Crystal Palace,Fredrikstad Fotballklubb,False,0,0,finished
+tm4716778,2025-26,UCL,Group Stage,2025-09-16 20:00:00+00:00,Arsenal,Athletic Bilbao,False,2,0,finished
+tm4716845,2025-26,UCL,Group Stage,2025-09-16 20:00:00+00:00,Spurs,Villarreal CF,True,1,0,finished
+tm4717478,2025-26,UCL,Group Stage,2025-09-17 20:00:00+00:00,Chelsea,Bayern Munich,False,1,3,finished
+tm4717479,2025-26,UCL,Group Stage,2025-09-17 20:00:00+00:00,Liverpool,Atlético de Madrid,True,3,2,finished
+tm4716776,2025-26,UCL,Group Stage,2025-09-18 20:00:00+00:00,Man City,SSC Napoli,True,2,0,finished
+tm4717484,2025-26,UCL,Group Stage,2025-09-18 20:00:00+00:00,Newcastle,FC Barcelona,True,1,2,finished
+tm4715941,2025-26,UEL,Group Stage,2025-09-24 20:00:00+00:00,Nott'm Forest,Real Betis Balompié,False,2,2,finished
+tm4715950,2025-26,UEL,Group Stage,2025-09-25 20:00:00+00:00,Aston Villa,Bologna Football Club 1909,True,1,0,finished
+tm4715003,2025-26,UCL,Group Stage,2025-09-30 20:00:00+00:00,Chelsea,SL Benfica,True,1,0,finished
+tm4715103,2025-26,UCL,Group Stage,2025-09-30 20:00:00+00:00,Spurs,Fotballklubben Bodø/Glimt,False,2,2,finished
+tm4715117,2025-26,UCL,Group Stage,2025-09-30 20:00:00+00:00,Liverpool,Galatasaray,False,0,1,finished
+tm4715016,2025-26,UCL,Group Stage,2025-10-01 20:00:00+00:00,Arsenal,Olympiakos Syndesmos Filathlon Peiraios,True,2,0,finished
+tm4715113,2025-26,UCL,Group Stage,2025-10-01 20:00:00+00:00,Man City,AS Monaco,False,2,2,finished
+tm4715124,2025-26,UCL,Group Stage,2025-10-01 20:00:00+00:00,Newcastle,Union Saint-Gilloise,False,4,0,finished
+tm4715927,2025-26,UEL,Group Stage,2025-10-02 20:00:00+00:00,Aston Villa,Feyenoord Rotterdam,False,2,0,finished
+tm4716005,2025-26,UEL,Group Stage,2025-10-02 20:00:00+00:00,Nott'm Forest,FC Midtjylland,True,2,3,finished
+tm4716091,2025-26,UECL,Group Stage,2025-10-02 20:00:00+00:00,Crystal Palace,Dynamo Kyiv,False,2,0,finished
+tm4715015,2025-26,UCL,Group Stage,2025-10-21 20:00:00+00:00,Arsenal,Atlético de Madrid,True,4,0,finished
+tm4715034,2025-26,UCL,Group Stage,2025-10-21 20:00:00+00:00,Man City,Villarreal CF,False,2,0,finished
+tm4715134,2025-26,UCL,Group Stage,2025-10-21 20:00:00+00:00,Newcastle,SL Benfica,True,3,0,finished
+tm4715004,2025-26,UCL,Group Stage,2025-10-22 20:00:00+00:00,Chelsea,Ajax Amsterdam,True,5,1,finished
+tm4715006,2025-26,UCL,Group Stage,2025-10-22 20:00:00+00:00,Liverpool,Eintracht Frankfurt,False,5,1,finished
+tm4715057,2025-26,UCL,Group Stage,2025-10-22 20:00:00+00:00,Spurs,AS Monaco,False,0,0,finished
+tm4716003,2025-26,UEL,Group Stage,2025-10-23 20:00:00+00:00,Nott'm Forest,FC Porto,True,2,0,finished
+tm4716039,2025-26,UEL,Group Stage,2025-10-23 20:00:00+00:00,Aston Villa,Go Ahead Eagles,False,1,2,finished
+tm4716096,2025-26,UECL,Group Stage,2025-10-23 20:00:00+00:00,Crystal Palace,AEK Larnaca,True,0,1,finished
+tm4714990,2025-26,UCL,Group Stage,2025-11-04 20:00:00+00:00,Liverpool,Real Madrid,True,1,0,finished
+tm4714992,2025-26,UCL,Group Stage,2025-11-04 20:00:00+00:00,Spurs,FC Copenhagen,True,4,0,finished
+tm4715033,2025-26,UCL,Group Stage,2025-11-04 20:00:00+00:00,Arsenal,SK Slavia Prague,False,3,0,finished
+tm4714982,2025-26,UCL,Group Stage,2025-11-05 20:00:00+00:00,Man City,Borussia Dortmund,True,4,1,finished
+tm4715055,2025-26,UCL,Group Stage,2025-11-05 20:00:00+00:00,Chelsea,Qarabağ FK,False,2,2,finished
+tm4715143,2025-26,UCL,Group Stage,2025-11-05 20:00:00+00:00,Newcastle,Athletic Bilbao,True,2,0,finished
+tm4715948,2025-26,UEL,Group Stage,2025-11-06 20:00:00+00:00,Aston Villa,Maccabi Tel Aviv,True,2,0,finished
+tm4716009,2025-26,UEL,Group Stage,2025-11-06 20:00:00+00:00,Nott'm Forest,Sportklub Puntigamer Sturm Graz,False,0,0,finished
+tm4716094,2025-26,UECL,Group Stage,2025-11-06 20:00:00+00:00,Crystal Palace,AZ Alkmaar,True,3,1,finished
+tm4715021,2025-26,UCL,Group Stage,2025-11-25 20:00:00+00:00,Newcastle,Olympique Marseille,False,1,2,finished
+tm4715053,2025-26,UCL,Group Stage,2025-11-25 20:00:00+00:00,Chelsea,FC Barcelona,True,3,0,finished
+tm4715095,2025-26,UCL,Group Stage,2025-11-25 20:00:00+00:00,Man City,Bayer 04 Leverkusen,True,0,2,finished
+tm4715060,2025-26,UCL,Group Stage,2025-11-26 20:00:00+00:00,Spurs,Paris Saint-Germain,False,3,5,finished
+tm4715066,2025-26,UCL,Group Stage,2025-11-26 20:00:00+00:00,Liverpool,PSV Eindhoven,True,1,4,finished
+tm4715130,2025-26,UCL,Group Stage,2025-11-26 20:00:00+00:00,Arsenal,Bayern Munich,True,3,1,finished
+tm4715949,2025-26,UEL,Group Stage,2025-11-27 20:00:00+00:00,Aston Villa,BSC Young Boys,True,2,1,finished
+tm4716006,2025-26,UEL,Group Stage,2025-11-27 20:00:00+00:00,Nott'm Forest,Malmö Fotbollförening,True,3,0,finished
+tm4716112,2025-26,UECL,Group Stage,2025-11-27 20:00:00+00:00,Crystal Palace,RC Strasbourg Alsace,False,1,2,finished
+tm4714993,2025-26,UCL,Group Stage,2025-12-09 20:00:00+00:00,Spurs,SK Slavia Prague,True,3,0,finished
+tm4715058,2025-26,UCL,Group Stage,2025-12-09 20:00:00+00:00,Liverpool,Inter Milan,False,1,0,finished
+tm4715112,2025-26,UCL,Group Stage,2025-12-09 20:00:00+00:00,Chelsea,Atalanta BC,False,1,2,finished
+tm4714998,2025-26,UCL,Group Stage,2025-12-10 20:00:00+00:00,Arsenal,Club Brugge KV,False,3,0,finished
+tm4715065,2025-26,UCL,Group Stage,2025-12-10 20:00:00+00:00,Man City,Real Madrid,False,2,1,finished
+tm4715126,2025-26,UCL,Group Stage,2025-12-10 20:00:00+00:00,Newcastle,Bayer 04 Leverkusen,False,2,2,finished
+tm4715991,2025-26,UEL,Group Stage,2025-12-11 20:00:00+00:00,Aston Villa,FC Basel 1893,False,2,1,finished
+tm4716045,2025-26,UEL,Group Stage,2025-12-11 20:00:00+00:00,Nott'm Forest,FC Utrecht,False,2,1,finished
+tm4716175,2025-26,UECL,Group Stage,2025-12-11 20:00:00+00:00,Crystal Palace,Shelbourne FC,False,3,0,finished
+tm4716095,2025-26,UECL,Group Stage,2025-12-18 20:00:00+00:00,Crystal Palace,Kuopion Palloseura,True,2,2,finished
+tm4788497,2025-26,FAC,Third Round,2026-01-09 20:00:00+00:00,Nott'm Forest,Wrexham AFC,False,6,7,finished
+tm4788498,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Crystal Palace,Macclesfield FC,False,1,2,finished
+tm4788499,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Wolves,Shrewsbury Town,True,6,1,finished
+tm4788503,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Man City,Exeter City,True,10,1,finished
+tm4788505,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Brentford,Sheffield Wednesday,False,2,0,finished
+tm4788506,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Fulham,Middlesbrough FC,True,3,1,finished
+tm4788507,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Everton,Sunderland AFC,True,1,4,finished
+tm4788507,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Sunderland,Everton FC,False,4,1,finished
+tm4788508,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Burnley,Millwall FC,True,5,1,finished
+tm4788515,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Bournemouth,Newcastle United,False,9,10,finished
+tm4788515,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Newcastle,AFC Bournemouth,True,10,9,finished
+tm4788523,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Aston Villa,Tottenham Hotspur,False,2,1,finished
+tm4788523,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Spurs,Aston Villa,True,1,2,finished
+tm4788524,2025-26,FAC,Third Round,2026-01-10 20:00:00+00:00,Chelsea,Charlton Athletic,False,5,1,finished
+tm4788504,2025-26,FAC,Third Round,2026-01-11 20:00:00+00:00,West Ham,Queens Park Rangers,True,2,1,finished
+tm4788525,2025-26,FAC,Third Round,2026-01-11 20:00:00+00:00,Leeds,Derby County,False,3,1,finished
+tm4788526,2025-26,FAC,Third Round,2026-01-11 20:00:00+00:00,Arsenal,Portsmouth FC,False,4,1,finished
+tm4788527,2025-26,FAC,Third Round,2026-01-11 20:00:00+00:00,Brighton,Manchester United,False,2,1,finished
+tm4788527,2025-26,FAC,Third Round,2026-01-11 20:00:00+00:00,Man Utd,Brighton & Hove Albion,True,1,2,finished
+tm4788528,2025-26,FAC,Third Round,2026-01-12 20:00:00+00:00,Liverpool,Barnsley FC,True,4,1,finished
+tm4715029,2025-26,UCL,Group Stage,2026-01-20 20:00:00+00:00,Man City,Fotballklubben Bodø/Glimt,False,1,3,finished
+tm4715046,2025-26,UCL,Group Stage,2026-01-20 20:00:00+00:00,Spurs,Borussia Dortmund,True,2,0,finished
+tm4715056,2025-26,UCL,Group Stage,2026-01-20 20:00:00+00:00,Arsenal,Inter Milan,False,3,1,finished
+tm4715024,2025-26,UCL,Group Stage,2026-01-21 20:00:00+00:00,Liverpool,Olympique Marseille,False,3,0,finished
+tm4715052,2025-26,UCL,Group Stage,2026-01-21 20:00:00+00:00,Chelsea,Pafos FC,True,1,0,finished
+tm4715148,2025-26,UCL,Group Stage,2026-01-21 20:00:00+00:00,Newcastle,PSV Eindhoven,True,3,0,finished
+tm4715951,2025-26,UEL,Group Stage,2026-01-22 20:00:00+00:00,Aston Villa,Fenerbahce,False,1,0,finished
+tm4715957,2025-26,UEL,Group Stage,2026-01-22 20:00:00+00:00,Nott'm Forest,SC Braga,False,0,1,finished
+tm4714981,2025-26,UCL,Group Stage,2026-01-28 20:00:00+00:00,Chelsea,SSC Napoli,False,3,2,finished
+tm4715002,2025-26,UCL,Group Stage,2026-01-28 20:00:00+00:00,Spurs,Eintracht Frankfurt,False,2,0,finished
+tm4715059,2025-26,UCL,Group Stage,2026-01-28 20:00:00+00:00,Newcastle,Paris Saint-Germain,False,1,1,finished
+tm4715094,2025-26,UCL,Group Stage,2026-01-28 20:00:00+00:00,Man City,Galatasaray,True,2,0,finished
+tm4715104,2025-26,UCL,Group Stage,2026-01-28 20:00:00+00:00,Liverpool,Qarabağ FK,True,6,0,finished
+tm4715129,2025-26,UCL,Group Stage,2026-01-28 20:00:00+00:00,Arsenal,Kairat Almaty,True,3,2,finished
+tm4715947,2025-26,UEL,Group Stage,2026-01-29 20:00:00+00:00,Aston Villa,Fußballclub Red Bull Salzburg,True,3,2,finished
+tm4716004,2025-26,UEL,Group Stage,2026-01-29 20:00:00+00:00,Nott'm Forest,Ferencvárosi TC,True,4,0,finished
+tm4808360,2025-26,FAC,Fourth Round,2026-02-13 20:00:00+00:00,Chelsea,Hull City,False,4,0,finished
+tm4808362,2025-26,FAC,Fourth Round,2026-02-14 20:00:00+00:00,West Ham,Burton Albion,False,1,0,finished
+tm4808363,2025-26,FAC,Fourth Round,2026-02-14 20:00:00+00:00,Burnley,Mansfield Town,True,1,2,finished
+tm4808364,2025-26,FAC,Fourth Round,2026-02-14 20:00:00+00:00,Man City,Salford City,True,2,0,finished
+tm4808368,2025-26,FAC,Fourth Round,2026-02-14 20:00:00+00:00,Aston Villa,Newcastle United,True,1,3,finished
+tm4808368,2025-26,FAC,Fourth Round,2026-02-14 20:00:00+00:00,Newcastle,Aston Villa,False,3,1,finished
+tm4808369,2025-26,FAC,Fourth Round,2026-02-14 20:00:00+00:00,Brighton,Liverpool FC,False,0,3,finished
+tm4808369,2025-26,FAC,Fourth Round,2026-02-14 20:00:00+00:00,Liverpool,Brighton & Hove Albion,True,3,0,finished
+tm4808370,2025-26,FAC,Fourth Round,2026-02-15 20:00:00+00:00,Leeds,Birmingham City,False,5,3,finished
+tm4808371,2025-26,FAC,Fourth Round,2026-02-15 20:00:00+00:00,Wolves,Grimsby Town,False,1,0,finished
+tm4808372,2025-26,FAC,Fourth Round,2026-02-15 20:00:00+00:00,Sunderland,Oxford United,False,1,0,finished
+tm4808373,2025-26,FAC,Fourth Round,2026-02-15 20:00:00+00:00,Fulham,Stoke City,False,2,1,finished
+tm4808374,2025-26,FAC,Fourth Round,2026-02-15 20:00:00+00:00,Arsenal,Wigan Athletic,True,4,0,finished
+tm4808375,2025-26,FAC,Fourth Round,2026-02-16 20:00:00+00:00,Brentford,Macclesfield FC,False,1,0,finished
+tm4814099,2025-26,UCL,intermediate stage 1st leg,2026-02-18 20:00:00+00:00,Newcastle,Qarabağ FK,False,6,1,finished
+tm4805837,2025-26,UECL,intermediate stage 1st leg,2026-02-19 20:00:00+00:00,Crystal Palace,HSK Zrinjski Mostar,False,1,1,finished
+tm4805893,2025-26,UEL,intermediate stage 1st leg,2026-02-19 20:00:00+00:00,Nott'm Forest,Fenerbahce,False,3,0,finished
+tm4814107,2025-26,UCL,intermediate stage 2nd leg,2026-02-24 20:00:00+00:00,Newcastle,Qarabağ FK,True,3,2,finished
+tm4805845,2025-26,UECL,intermediate stage 2nd leg,2026-02-26 20:00:00+00:00,Crystal Palace,HSK Zrinjski Mostar,True,2,0,finished
+tm4805901,2025-26,UEL,intermediate stage 2nd leg,2026-02-26 20:00:00+00:00,Nott'm Forest,Fenerbahce,True,1,2,finished
+tm4827502,2025-26,FAC,Round of 16,2026-03-06 20:00:00+00:00,Liverpool,Wolverhampton Wanderers,False,3,1,finished
+tm4827502,2025-26,FAC,Round of 16,2026-03-06 20:00:00+00:00,Wolves,Liverpool FC,True,1,3,finished
+tm4827501,2025-26,FAC,Round of 16,2026-03-07 20:00:00+00:00,Man City,Newcastle United,False,3,1,finished
+tm4827501,2025-26,FAC,Round of 16,2026-03-07 20:00:00+00:00,Newcastle,Manchester City,True,1,3,finished
+tm4827503,2025-26,FAC,Round of 16,2026-03-07 20:00:00+00:00,Chelsea,Wrexham AFC,False,4,2,finished
+tm4827505,2025-26,FAC,Round of 16,2026-03-07 20:00:00+00:00,Arsenal,Mansfield Town,False,2,1,finished
+tm4827506,2025-26,FAC,Round of 16,2026-03-08 20:00:00+00:00,Fulham,Southampton FC,True,0,1,finished
+tm4827507,2025-26,FAC,Round of 16,2026-03-08 20:00:00+00:00,Leeds,Norwich City,True,3,0,finished
+tm4827508,2025-26,FAC,Round of 16,2026-03-08 20:00:00+00:00,Sunderland,Port Vale FC,False,0,1,finished
+tm4827504,2025-26,FAC,Round of 16,2026-03-09 20:00:00+00:00,Brentford,West Ham United,False,5,7,finished
+tm4827504,2025-26,FAC,Round of 16,2026-03-09 20:00:00+00:00,West Ham,Brentford FC,True,7,5,finished
+tm4814355,2025-26,UCL,Last 16 1st Leg,2026-03-10 20:00:00+00:00,Liverpool,Galatasaray,False,0,1,finished
+tm4814358,2025-26,UCL,Last 16 1st Leg,2026-03-10 20:00:00+00:00,Newcastle,FC Barcelona,True,1,1,finished
+tm4814359,2025-26,UCL,Last 16 1st Leg,2026-03-10 20:00:00+00:00,Spurs,Atlético de Madrid,False,2,5,finished
+tm4814354,2025-26,UCL,Last 16 1st Leg,2026-03-11 20:00:00+00:00,Chelsea,Paris Saint-Germain,False,2,5,finished
+tm4814356,2025-26,UCL,Last 16 1st Leg,2026-03-11 20:00:00+00:00,Man City,Real Madrid,False,0,3,finished
+tm4814361,2025-26,UCL,Last 16 1st Leg,2026-03-11 20:00:00+00:00,Arsenal,Bayer 04 Leverkusen,False,1,1,finished
+tm4805861,2025-26,UECL,Last 16 1st Leg,2026-03-12 20:00:00+00:00,Crystal Palace,AEK Larnaca,True,0,0,finished
+tm4805909,2025-26,UEL,Last 16 1st Leg,2026-03-12 20:00:00+00:00,Nott'm Forest,FC Midtjylland,True,0,1,finished
+tm4805911,2025-26,UEL,Last 16 1st Leg,2026-03-12 20:00:00+00:00,Aston Villa,LOSC Lille,False,1,0,finished
+tm4814362,2025-26,UCL,Last 16 2nd Leg,2026-03-17 20:00:00+00:00,Chelsea,Paris Saint-Germain,True,0,3,finished
+tm4814364,2025-26,UCL,Last 16 2nd Leg,2026-03-17 20:00:00+00:00,Man City,Real Madrid,True,1,2,finished
+tm4814369,2025-26,UCL,Last 16 2nd Leg,2026-03-17 20:00:00+00:00,Arsenal,Bayer 04 Leverkusen,True,2,0,finished
+tm4814363,2025-26,UCL,Last 16 2nd Leg,2026-03-18 20:00:00+00:00,Liverpool,Galatasaray,True,4,0,finished
+tm4814366,2025-26,UCL,Last 16 2nd Leg,2026-03-18 20:00:00+00:00,Newcastle,FC Barcelona,False,2,7,finished
+tm4814367,2025-26,UCL,Last 16 2nd Leg,2026-03-18 20:00:00+00:00,Spurs,Atlético de Madrid,True,3,2,finished
+tm4805869,2025-26,UECL,Last 16 2nd Leg,2026-03-19 20:00:00+00:00,Crystal Palace,AEK Larnaca,False,2,1,finished
+tm4805917,2025-26,UEL,Last 16 2nd Leg,2026-03-19 20:00:00+00:00,Nott'm Forest,FC Midtjylland,False,5,1,finished
+tm4805919,2025-26,UEL,Last 16 2nd Leg,2026-03-19 20:00:00+00:00,Aston Villa,LOSC Lille,True,2,0,finished
+tm4844306,2025-26,FAC,Quarter-Finals,2026-04-04 20:00:00+00:00,Liverpool,Manchester City,False,0,4,finished
+tm4844306,2025-26,FAC,Quarter-Finals,2026-04-04 20:00:00+00:00,Man City,Liverpool FC,True,4,0,finished
+tm4844307,2025-26,FAC,Quarter-Finals,2026-04-04 20:00:00+00:00,Chelsea,Port Vale FC,True,7,0,finished
+tm4844308,2025-26,FAC,Quarter-Finals,2026-04-04 20:00:00+00:00,Arsenal,Southampton FC,False,1,2,finished
+tm4844309,2025-26,FAC,Quarter-Finals,2026-04-05 20:00:00+00:00,Leeds,West Ham United,False,6,4,finished
+tm4844309,2025-26,FAC,Quarter-Finals,2026-04-05 20:00:00+00:00,West Ham,Leeds United,True,4,6,finished
+tm4814373,2025-26,UCL,Quarter-Finals 1st Leg,2026-04-07 20:00:00+00:00,Arsenal,Sporting CP,False,1,0,finished
+tm4814370,2025-26,UCL,Quarter-Finals 1st Leg,2026-04-08 20:00:00+00:00,Liverpool,Paris Saint-Germain,False,0,2,finished
+tm4805876,2025-26,UECL,Quarter-Finals 1st Leg,2026-04-09 20:00:00+00:00,Crystal Palace,ACF Fiorentina,True,3,0,finished
+tm4805922,2025-26,UEL,Quarter-Finals 1st Leg,2026-04-09 20:00:00+00:00,Nott'm Forest,FC Porto,False,1,1,finished
+tm4805923,2025-26,UEL,Quarter-Finals 1st Leg,2026-04-09 20:00:00+00:00,Aston Villa,Bologna Football Club 1909,False,3,1,finished
+tm4814374,2025-26,UCL,Quarter-Finals 2nd Leg,2026-04-14 20:00:00+00:00,Liverpool,Paris Saint-Germain,True,0,2,finished
+tm4814377,2025-26,UCL,Quarter-Finals 2nd Leg,2026-04-15 20:00:00+00:00,Arsenal,Sporting CP,True,0,0,finished
+tm4805880,2025-26,UECL,Quarter-Finals 2nd Leg,2026-04-16 20:00:00+00:00,Crystal Palace,ACF Fiorentina,False,1,2,finished
+tm4805926,2025-26,UEL,Quarter-Finals 2nd Leg,2026-04-16 20:00:00+00:00,Nott'm Forest,FC Porto,True,1,0,finished
+tm4805927,2025-26,UEL,Quarter-Finals 2nd Leg,2026-04-16 20:00:00+00:00,Aston Villa,Bologna Football Club 1909,True,4,0,finished
+tm4859279,2025-26,FAC,Semi-Finals,2026-04-25 20:00:00+00:00,Man City,Southampton FC,True,2,1,finished
+tm4859278,2025-26,FAC,Semi-Finals,2026-04-26 20:00:00+00:00,Chelsea,Leeds United,True,1,0,finished
+tm4859278,2025-26,FAC,Semi-Finals,2026-04-26 20:00:00+00:00,Leeds,Chelsea FC,False,0,1,finished
+tm4814379,2025-26,UCL,Semi-Finals 1st Leg,2026-04-29 20:00:00+00:00,Arsenal,Atlético de Madrid,False,1,1,finished
+tm4805883,2025-26,UECL,Semi-Finals 1st Leg,2026-04-30 20:00:00+00:00,Crystal Palace,FC Shakhtar Donetsk,False,3,1,finished
+tm4805929,2025-26,UEL,Semi-Finals 1st Leg,2026-04-30 20:00:00+00:00,Aston Villa,Nottingham Forest,False,0,1,finished
+tm4805929,2025-26,UEL,Semi-Finals 1st Leg,2026-04-30 20:00:00+00:00,Nott'm Forest,Aston Villa,True,1,0,finished
+tm4814381,2025-26,UCL,Semi-Finals 2nd Leg,2026-05-05 20:00:00+00:00,Arsenal,Atlético de Madrid,True,1,0,finished
+tm4805885,2025-26,UECL,Semi-Finals 2nd Leg,2026-05-07 20:00:00+00:00,Crystal Palace,FC Shakhtar Donetsk,True,2,1,finished
+tm4805931,2025-26,UEL,Semi-Finals 2nd Leg,2026-05-07 20:00:00+00:00,Aston Villa,Nottingham Forest,True,4,0,finished
+tm4805931,2025-26,UEL,Semi-Finals 2nd Leg,2026-05-07 20:00:00+00:00,Nott'm Forest,Aston Villa,False,0,4,finished

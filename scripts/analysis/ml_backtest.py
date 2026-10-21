@@ -17,8 +17,14 @@ variant is compared with a reference variant using paired bootstrap CIs over gam
 Variants (VARIANTS): "current" is what ml.points_model trains, "previous" is v3 before the
 2026-10 features; the others add candidate features computed only here (add_extra_features) or
 change training settings. Subset metrics (promoted teams in their first 6 gameweeks, players new
-from the Championship in their first 6, teams within 60 days of a manager change) show effects
-too local to move the overall numbers.
+from the Championship in their first 6, teams within 60 days of a manager change, clubs playing
+in Europe, fixtures within 4 days of a cup or European tie) show effects too local to move the
+overall numbers. Two pick metrics target rotation: the mean points of the top 20 picks among
+players of clubs in Europe, and the share of the overall top 20 who didn't play (dnp20).
+
+The non-Premier-League data (data/non_pl_*.csv, ml/other_competitions.py) comes from the
+transfermarkt-datasets dump, which has no 2026-27 season: compare those variants with
+`--folds 2023-24,2024-25,2025-26`.
 """
 import argparse
 import glob
@@ -26,6 +32,7 @@ import json
 import os
 import sys
 import time
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -33,6 +40,7 @@ import pandas as pd
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
+from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
 from utils.text import normalize_name  # noqa: E402
 
@@ -112,6 +120,78 @@ def _team_rotation(df: pd.DataFrame) -> np.ndarray:
     return keyed.reindex(pd.MultiIndex.from_frame(df[["season", "fixture", "team"]])).to_numpy()
 
 
+ABSENCE_MIN_RUN = 3       # consecutive 0-minute matches before a run counts as an absence
+ABSENCE_REGULAR = 2       # ... if he had started this many of his last 3 counted matches
+ABSENCE_CAP = 10          # since_return for "no absence in the last 10 matches"
+FORM_A = [f"{c}_r{w}" for w in pm.WINDOWS for c in pm.FORM_STATS] + [f"{c}_r1" for c in pm.LAST_MATCH_STATS]
+
+
+def absence_form(df: pd.DataFrame, min_run: float = ABSENCE_MIN_RUN) -> pd.DataFrame:
+    """The rolling form features (FORM_A, renamed *_a) with absences left out, plus absent_run
+    (matches of the absence the player is in, 0 if none) and since_return (matches since the
+    last absence ended, capped at ABSENCE_CAP).
+
+    History has no pre-deadline FPL status, so an absence (injury, suspension, AFCON) is a run of
+    `min_run`+ consecutive 0-minute matches that began while the player had started
+    ABSENCE_REGULAR of his last 3 counted matches. Decided causally: at each match only earlier
+    matches are known, so a run is left out only once it has reached `min_run` matches; shorter
+    runs (rotation, a one-off benching) stay in the form as zeros. Like pm._rolling_before_gameweek,
+    the values are frozen at each gameweek's first fixture; with min_run=inf they equal it.
+    """
+    frame = df.sort_values(["name", "kickoff_time"], kind="mergesort")
+    stats = list(pm.FORM_STATS)
+    x = frame[stats].to_numpy(dtype=float)
+    minutes = frame["minutes"].to_numpy(dtype=float)
+    started = frame["started"].to_numpy(dtype=float)
+    last_idx = [stats.index(c) for c in pm.LAST_MATCH_STATS]
+    n, wmax = len(frame), max(pm.WINDOWS)
+    out = {w: np.full((n, len(stats)), np.nan) for w in pm.WINDOWS}
+    r1 = np.full((n, len(last_idx)), np.nan)
+    absent, since = np.zeros(n), np.full(n, float(ABSENCE_CAP))
+    names = frame["name"].to_numpy()
+    bounds = np.flatnonzero(np.r_[True, names[1:] != names[:-1], True])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)   # nanmean of an all-NaN stat (no xG yet)
+        for a, b in zip(bounds[:-1], bounds[1:]):
+            kept, pending = [], []          # counted matches; trailing zeros not (yet) an absence
+            in_absence, back, regular = 0, ABSENCE_CAP, False
+            for j in range(a, b):
+                eff = (kept[-wmax:] + pending)[-wmax:]
+                if eff:
+                    for w in pm.WINDOWS:
+                        out[w][j] = np.nanmean(x[eff[-w:]], axis=0)
+                    r1[j] = x[eff[-1], last_idx]
+                absent[j], since[j] = in_absence, back
+                m = minutes[j]
+                if np.isnan(m):             # an upcoming fixture: no outcome to add
+                    continue
+                back = min(back + 1, ABSENCE_CAP)
+                if m == 0:
+                    if in_absence:
+                        in_absence += 1
+                        continue
+                    if not pending:
+                        regular = np.nansum(started[kept[-3:]]) >= ABSENCE_REGULAR if kept else False
+                    pending.append(j)
+                    if regular and len(pending) >= min_run:
+                        in_absence, pending = len(pending), []
+                else:
+                    if in_absence:
+                        in_absence, back = 0, 1
+                    kept += pending + [j]
+                    pending = []
+    res = pd.DataFrame(index=frame.index)
+    for w in pm.WINDOWS:
+        res[[f"{c}_r{w}_a" for c in stats]] = out[w]
+    res[[f"{c}_r1_a" for c in pm.LAST_MATCH_STATS]] = r1
+    res["absent_run"], res["since_return"] = absent, since
+    first_in_gw = frame.groupby(["name", "season", "GW"], sort=False).cumcount() == 0
+    res = res.where(first_in_gw)
+    res[["_k", "_s", "_g"]] = frame[["name", "season", "GW"]].to_numpy()
+    res = res.groupby(["_k", "_s", "_g"], sort=False).transform("first")
+    return res.reindex(df.index)
+
+
 def _read_fbref(path: str) -> pd.DataFrame:
     """FBref table export; some files have a column-group row above the header."""
     with open(path, encoding="utf-8") as f:
@@ -162,6 +242,10 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.reset_index(drop=True).copy()
     known = df["minutes"].notna()
 
+    # Matches outside the Premier League: congestion, minutes in cup ties, still in which cups
+    matches, apps = oc.load_other_competitions()
+    df = df.join(oc.other_competition_features(df, matches, apps))
+
     # Per-90 rates over the last 10 / 30 matches, counting only minutes where the stat exists
     aux = {}
     for s in P90_STATS:
@@ -191,6 +275,9 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
         df[col] = vals
     df["team_rotation_r6"] = _team_rotation(df)
 
+    # Form that leaves out injuries, suspensions and tournaments (runs of 0-minute matches)
+    df = df.join(absence_form(df))
+
     # Previous Championship season: promoted clubs (and their opponents), players new from it
     efl = _efl_team_table()
     stats = [c for c in efl.columns if c.startswith("efl_")]
@@ -203,6 +290,7 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     df["sub_promoted_early"] = (df["efl_team_gf_pg"].notna() & (df["GW"] <= 6)).astype(float)
     df["sub_efl_player_early"] = (df["efl_g90"].notna() & (df["GW"] <= 6)).astype(float)
     df["sub_new_manager"] = (df["team_mgr_days"] < 60).astype(float)
+    df["sub_after_absence"] = (df["since_return"] <= 3).astype(float)
     return df
 
 
@@ -216,8 +304,15 @@ G_MGR = ["team_mgr_days", "opp_mgr_days"]
 G_ROT = ["team_rotation_r6"]
 G_EFL_TEAM = ["efl_team_gf_pg", "efl_team_ga_pg", "efl_team_ppg", "opp_efl_gf_pg", "opp_efl_ga_pg", "opp_efl_ppg"]
 G_EFL_PLAYER = ["efl_min_share", "efl_g90", "efl_a90", "efl_sh90", "efl_ppm", "efl_onga90"]
-SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"]
-EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER
+G_OC_SCHED = oc.SCHEDULE_FEATURES
+G_OC_PLAYER = oc.PLAYER_FEATURES
+G_OC_STATUS = oc.STATUS_FEATURES
+G_ABS_FORM = [f"{c}_a" for c in FORM_A]
+G_ABS_FLAGS = ["absent_run", "since_return"]
+SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS + ["sub_after_absence"]
+PICK_SUBSETS = ["sub_euro_club"]   # top-20 picks among these players only
+EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
+EXTRA += G_ABS_FORM + G_ABS_FLAGS
 KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP"]
 
 
@@ -240,7 +335,8 @@ def cmd_features(args) -> None:
         if feats[c].dtype == "float64":
             feats[c] = feats[c].astype("float32")
     feats.to_pickle(args.out)
-    cover = {c: round(float(feats[c].notna().mean()), 3) for c in G_MGR + G_ROT + G_EFL_TEAM[:1] + G_EFL_PLAYER[:1]}
+    cover = {c: round(float(feats[c].notna().mean()), 3) for c in G_MGR + G_ROT + G_EFL_TEAM[:1] + G_EFL_PLAYER[:1]
+             + ["oc_minutes_last", "ac_ga_p90_r8"]}
     print(f"saved {args.out}: {feats.shape}, seasons {feats.groupby('season').size().to_dict()}, "
           f"subset rows {feats[SUBSETS].sum().astype(int).to_dict()}, coverage {cover} "
           f"in {time.time() - t0:.0f}s", flush=True)
@@ -266,6 +362,15 @@ VARIANTS = {
     "efl_team": {"features": CURRENT + G_EFL_TEAM},
     "efl_player": {"features": CURRENT + G_EFL_PLAYER},
     "efl": {"features": CURRENT + G_EFL_TEAM + G_EFL_PLAYER},
+    # matches outside the Premier League (2026-10; transfermarkt-datasets, so no EFL Cup and no 2026-27)
+    "oc_sched": {"features": CURRENT + G_OC_SCHED},
+    "oc_player": {"features": CURRENT + G_OC_PLAYER},
+    "oc_status": {"features": CURRENT + G_OC_STATUS},
+    "oc": {"features": CURRENT + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS},
+    # form that leaves out absences (runs of 3+ 0-minute matches after regular starts), 2026-10
+    "abs_flags": {"features": CURRENT + G_ABS_FLAGS},
+    "abs_skip": {"features": [f"{c}_a" if c in FORM_A else c for c in CURRENT]},
+    "abs_skip_flags": {"features": [f"{c}_a" if c in FORM_A else c for c in CURRENT] + G_ABS_FLAGS},
 }
 
 
@@ -289,7 +394,7 @@ def _patience_stop(curve, patience):
 
 def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
     subsets = [c for c in SUBSETS if c in test.columns]
-    d = test[["season", "GW", "name", "total_points"] + subsets].copy()
+    d = test[["season", "GW", "name", "total_points", "minutes"] + subsets].copy()
     d["pred"] = pred.astype(float)
     d["err"] = d["pred"] - d["total_points"]
     d["se"] = d["err"] ** 2
@@ -301,15 +406,23 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
         agg.update({f"se_{c}": (f"se_{c}", "sum"), f"err_{c}": (f"err_{c}", "sum"), f"n_{c}": (f"n_{c}", "sum")})
     rows = d.groupby(["season", "GW"]).agg(**agg).reset_index()
     rows["GW"] = rows["GW"].astype(int)
-    pg = d.groupby(["season", "GW", "name"], as_index=False)[["pred", "total_points"]].sum()
+    picks = [c for c in PICK_SUBSETS if c in subsets]
+    pg = d.groupby(["season", "GW", "name"], as_index=False).agg(
+        pred=("pred", "sum"), total_points=("total_points", "sum"), minutes=("minutes", "sum"),
+        **{c: (c, "max") for c in picks})
     out = []
     for (s, gw), g in pg.groupby(["season", "GW"]):
         r = g.sort_values("pred", ascending=False, kind="mergesort")
-        out.append({"season": s, "GW": int(gw), "players": len(g),
-                    "top20": float(r["total_points"].head(20).mean()),
-                    "top50": float(r["total_points"].head(50).mean()),
-                    "capt": float(r["total_points"].iloc[0]),
-                    "spear": float(g["pred"].corr(g["total_points"], method="spearman"))})
+        row = {"season": s, "GW": int(gw), "players": len(g),
+               "top20": float(r["total_points"].head(20).mean()),
+               "top50": float(r["total_points"].head(50).mean()),
+               "capt": float(r["total_points"].iloc[0]),
+               "spear": float(g["pred"].corr(g["total_points"], method="spearman")),
+               "dnp20": float((r["minutes"].head(20) == 0).mean())}
+        for c in picks:
+            sub = r[r[c] > 0]
+            row[f"top20_{c}"] = float(sub["total_points"].head(20).mean()) if len(sub) >= 40 else np.nan
+        out.append(row)
     return pd.DataFrame(out).merge(rows, on=["season", "GW"])
 
 
@@ -317,6 +430,9 @@ def summarize(t: pd.DataFrame) -> dict:
     out = {"rmse": float(np.sqrt(t["se"].sum() / t["rows"].sum())), "mae": float(t["ae"].sum() / t["rows"].sum()),
            "top20": float(t["top20"].mean()), "top50": float(t["top50"].mean()), "capt": float(t["capt"].mean()),
            "spear": float(t["spear"].mean()), "gws": int(len(t))}
+    for k in ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS]:
+        if k in t and t[k].notna().any():
+            out[k] = float(t[k].mean())
     for c in SUBSETS:
         if f"n_{c}" in t and t[f"n_{c}"].sum() > 0:
             n = t[f"n_{c}"].sum()
@@ -464,10 +580,14 @@ def _boot(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, len(m), size=(n, len(m)))
     out = {}
-    for k in ("top20", "top50", "capt", "spear"):
-        d = (m[f"{k}_v"] - m[f"{k}_b"]).to_numpy()
-        bs = d[idx].mean(axis=1)
-        out[k] = (float(d.mean()), float(np.percentile(bs, 2.5)), float(np.percentile(bs, 97.5)))
+    for k in ("top20", "top50", "capt", "spear", "dnp20", *[f"top20_{c}" for c in PICK_SUBSETS]):
+        if f"{k}_v" not in m or f"{k}_b" not in m:
+            continue
+        d = (m[f"{k}_v"] - m[f"{k}_b"]).to_numpy(dtype=float)
+        if np.isnan(d).all():
+            continue
+        bs = np.nanmean(d[idx], axis=1)   # NaN: too few subset players that gameweek
+        out[k] = (float(np.nanmean(d)), float(np.nanpercentile(bs, 2.5)), float(np.nanpercentile(bs, 97.5)))
     se_b, se_v, rows = m["se_b"].to_numpy(), m["se_v"].to_numpy(), m["rows_b"].to_numpy()
     full = np.sqrt(se_v.sum() / rows.sum()) - np.sqrt(se_b.sum() / rows.sum())
     bs = np.sqrt(se_v[idx].sum(1) / rows[idx].sum(1)) - np.sqrt(se_b[idx].sum(1) / rows[idx].sum(1))
@@ -506,17 +626,18 @@ def cmd_report(args) -> None:
             continue
         lines.append(f"\n## Protocol: {proto}\n")
         lines.append(f"### {args.ref}, seed-averaged\n")
-        lines.append("| fold | rmse | mae | top20 | top50 | capt | spear | bias GK/DEF/MID/FWD |")
-        lines.append("|---|---|---|---|---|---|---|---|")
+        lines.append("| fold | rmse | mae | top20 | top50 | capt | spear | dnp20 | top20 euro clubs | bias GK/DEF/MID/FWD |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|")
         for s, u in units(base, proto).items():
             sm, pb = u["summary"], u["position_bias"]
             lines.append(f"| {s} | {sm['rmse']:.4f} | {sm['mae']:.4f} | {sm['top20']:.3f} | {sm['top50']:.3f} | "
-                         f"{sm['capt']:.2f} | {sm['spear']:.4f} | "
+                         f"{sm['capt']:.2f} | {sm['spear']:.4f} | {sm.get('dnp20', float('nan')):.3f} | "
+                         f"{sm.get('top20_sub_euro_club', float('nan')):.3f} | "
                          f"{'/'.join(f'{pb.get(p_, 0):+.3f}' for p_ in pm.POSITIONS)} |")
         lines.append("\n### Variant minus reference (pooled: mean [95% CI]; per fold: Δtop20 / Δrmse×1000)\n")
         lines.append("| variant | Δrmse pooled | Δtop20 pooled | Δtop50 pooled | Δcapt pooled | per fold |")
         lines.append("|---|---|---|---|---|---|")
-        subset_rows = []
+        subset_rows, pick_rows = [], []
         for name, r in results.items():
             ru, bu = units(r, proto), units(base, proto)
             common = [s_ for s_ in ru if s_ in bu]
@@ -531,6 +652,14 @@ def cmd_report(args) -> None:
             lines.append(f"| {name} | {_fmt(b['rmse'], 4)} | {_fmt(b['top20'])} | {_fmt(b['top50'])} | "
                          f"{_fmt(b['capt'], 2)} | {'; '.join(per)} |")
             subset_rows.append(f"| {name} | " + " | ".join(_fmt(b[c], 4) if c in b else "-" for c in SUBSETS) + " |")
+            pick_rows.append(f"| {name} | " + " | ".join(_fmt(b[k]) if k in b else "-" for k in
+                                                         ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS]) + " |")
+        if pick_rows:
+            lines.append("\n#### Rotation picks: share of the top 20 who didn't play (lower is better) and "
+                         "top-20 points among players of clubs in Europe, variant minus reference [95% CI]\n")
+            lines.append("| variant | Δdnp20 | Δtop20 euro clubs |")
+            lines.append("|---|---|---|")
+            lines += pick_rows
         ref_sub = []
         for c in SUBSETS:
             parts = [u["summary"][c] for u in units(base, proto).values() if c in u["summary"]]

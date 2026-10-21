@@ -15,11 +15,15 @@ on:
       ref:
         description: 'Variant the others are compared against'
         default: 'current'
+      folds:
+        description: 'Test seasons for the es/refit folds, comma-separated (blank for all)'
+        default: ''
 
 env:
   VARIANTS: ${{ inputs.variants }}
   INSEASON: ${{ inputs.inseason }}
   REF: ${{ inputs.ref }}
+  FOLDS: ${{ inputs.folds }}
 
 jobs:
   features:
@@ -63,7 +67,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: feats
-      - run: python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.variant }}' --inseason "$INSEASON" --out 'res_${{ matrix.variant }}.json'
+      - run: python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.variant }}' --inseason "$INSEASON" ${FOLDS:+--folds "$FOLDS"} --out 'res_${{ matrix.variant }}.json'
       - uses: actions/upload-artifact@v4
         with:
           name: res-${{ matrix.variant }}
