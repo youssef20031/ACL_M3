@@ -32,6 +32,7 @@ import json
 import os
 import sys
 import time
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -119,6 +120,78 @@ def _team_rotation(df: pd.DataFrame) -> np.ndarray:
     return keyed.reindex(pd.MultiIndex.from_frame(df[["season", "fixture", "team"]])).to_numpy()
 
 
+ABSENCE_MIN_RUN = 3       # consecutive 0-minute matches before a run counts as an absence
+ABSENCE_REGULAR = 2       # ... if he had started this many of his last 3 counted matches
+ABSENCE_CAP = 10          # since_return for "no absence in the last 10 matches"
+FORM_A = [f"{c}_r{w}" for w in pm.WINDOWS for c in pm.FORM_STATS] + [f"{c}_r1" for c in pm.LAST_MATCH_STATS]
+
+
+def absence_form(df: pd.DataFrame, min_run: float = ABSENCE_MIN_RUN) -> pd.DataFrame:
+    """The rolling form features (FORM_A, renamed *_a) with absences left out, plus absent_run
+    (matches of the absence the player is in, 0 if none) and since_return (matches since the
+    last absence ended, capped at ABSENCE_CAP).
+
+    History has no pre-deadline FPL status, so an absence (injury, suspension, AFCON) is a run of
+    `min_run`+ consecutive 0-minute matches that began while the player had started
+    ABSENCE_REGULAR of his last 3 counted matches. Decided causally: at each match only earlier
+    matches are known, so a run is left out only once it has reached `min_run` matches; shorter
+    runs (rotation, a one-off benching) stay in the form as zeros. Like pm._rolling_before_gameweek,
+    the values are frozen at each gameweek's first fixture; with min_run=inf they equal it.
+    """
+    frame = df.sort_values(["name", "kickoff_time"], kind="mergesort")
+    stats = list(pm.FORM_STATS)
+    x = frame[stats].to_numpy(dtype=float)
+    minutes = frame["minutes"].to_numpy(dtype=float)
+    started = frame["started"].to_numpy(dtype=float)
+    last_idx = [stats.index(c) for c in pm.LAST_MATCH_STATS]
+    n, wmax = len(frame), max(pm.WINDOWS)
+    out = {w: np.full((n, len(stats)), np.nan) for w in pm.WINDOWS}
+    r1 = np.full((n, len(last_idx)), np.nan)
+    absent, since = np.zeros(n), np.full(n, float(ABSENCE_CAP))
+    names = frame["name"].to_numpy()
+    bounds = np.flatnonzero(np.r_[True, names[1:] != names[:-1], True])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)   # nanmean of an all-NaN stat (no xG yet)
+        for a, b in zip(bounds[:-1], bounds[1:]):
+            kept, pending = [], []          # counted matches; trailing zeros not (yet) an absence
+            in_absence, back, regular = 0, ABSENCE_CAP, False
+            for j in range(a, b):
+                eff = (kept[-wmax:] + pending)[-wmax:]
+                if eff:
+                    for w in pm.WINDOWS:
+                        out[w][j] = np.nanmean(x[eff[-w:]], axis=0)
+                    r1[j] = x[eff[-1], last_idx]
+                absent[j], since[j] = in_absence, back
+                m = minutes[j]
+                if np.isnan(m):             # an upcoming fixture: no outcome to add
+                    continue
+                back = min(back + 1, ABSENCE_CAP)
+                if m == 0:
+                    if in_absence:
+                        in_absence += 1
+                        continue
+                    if not pending:
+                        regular = np.nansum(started[kept[-3:]]) >= ABSENCE_REGULAR if kept else False
+                    pending.append(j)
+                    if regular and len(pending) >= min_run:
+                        in_absence, pending = len(pending), []
+                else:
+                    if in_absence:
+                        in_absence, back = 0, 1
+                    kept += pending + [j]
+                    pending = []
+    res = pd.DataFrame(index=frame.index)
+    for w in pm.WINDOWS:
+        res[[f"{c}_r{w}_a" for c in stats]] = out[w]
+    res[[f"{c}_r1_a" for c in pm.LAST_MATCH_STATS]] = r1
+    res["absent_run"], res["since_return"] = absent, since
+    first_in_gw = frame.groupby(["name", "season", "GW"], sort=False).cumcount() == 0
+    res = res.where(first_in_gw)
+    res[["_k", "_s", "_g"]] = frame[["name", "season", "GW"]].to_numpy()
+    res = res.groupby(["_k", "_s", "_g"], sort=False).transform("first")
+    return res.reindex(df.index)
+
+
 def _read_fbref(path: str) -> pd.DataFrame:
     """FBref table export; some files have a column-group row above the header."""
     with open(path, encoding="utf-8") as f:
@@ -202,6 +275,9 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
         df[col] = vals
     df["team_rotation_r6"] = _team_rotation(df)
 
+    # Form that leaves out injuries, suspensions and tournaments (runs of 0-minute matches)
+    df = df.join(absence_form(df))
+
     # Previous Championship season: promoted clubs (and their opponents), players new from it
     efl = _efl_team_table()
     stats = [c for c in efl.columns if c.startswith("efl_")]
@@ -214,6 +290,7 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     df["sub_promoted_early"] = (df["efl_team_gf_pg"].notna() & (df["GW"] <= 6)).astype(float)
     df["sub_efl_player_early"] = (df["efl_g90"].notna() & (df["GW"] <= 6)).astype(float)
     df["sub_new_manager"] = (df["team_mgr_days"] < 60).astype(float)
+    df["sub_after_absence"] = (df["since_return"] <= 3).astype(float)
     return df
 
 
@@ -230,9 +307,12 @@ G_EFL_PLAYER = ["efl_min_share", "efl_g90", "efl_a90", "efl_sh90", "efl_ppm", "e
 G_OC_SCHED = oc.SCHEDULE_FEATURES
 G_OC_PLAYER = oc.PLAYER_FEATURES
 G_OC_STATUS = oc.STATUS_FEATURES
-SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS
+G_ABS_FORM = [f"{c}_a" for c in FORM_A]
+G_ABS_FLAGS = ["absent_run", "since_return"]
+SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS + ["sub_after_absence"]
 PICK_SUBSETS = ["sub_euro_club"]   # top-20 picks among these players only
 EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
+EXTRA += G_ABS_FORM + G_ABS_FLAGS
 KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP"]
 
 
@@ -287,6 +367,10 @@ VARIANTS = {
     "oc_player": {"features": CURRENT + G_OC_PLAYER},
     "oc_status": {"features": CURRENT + G_OC_STATUS},
     "oc": {"features": CURRENT + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS},
+    # form that leaves out absences (runs of 3+ 0-minute matches after regular starts), 2026-10
+    "abs_flags": {"features": CURRENT + G_ABS_FLAGS},
+    "abs_skip": {"features": [f"{c}_a" if c in FORM_A else c for c in CURRENT]},
+    "abs_skip_flags": {"features": [f"{c}_a" if c in FORM_A else c for c in CURRENT] + G_ABS_FLAGS},
 }
 
 

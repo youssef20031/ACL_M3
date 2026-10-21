@@ -230,3 +230,56 @@ def test_other_competition_features_for_upcoming_rows(history, other):
     assert f.loc["Cara", "ac_minutes_14d"] == 4 * 90   # GW2, GW3 x2, EFL Cup (the UCL tie was 18 days back)
     # All-competition form: 2 assists in 450 minutes (5 appearances; the UCL bench doesn't count)
     assert f.loc["Cara", "ac_ga_p90_r8"] == pytest.approx(2 / 450 * 90)
+
+
+# --------------------------------------------------------------------------- absences (backtest candidate)
+
+from scripts.analysis import ml_backtest as bt  # noqa: E402
+
+
+def _player_run(minutes):
+    """One Arsenal player, one fixture a week; points 2 when he plays, 0 when he doesn't."""
+    rows = []
+    for i, m in enumerate(minutes, start=1):
+        kickoff = (pd.Timestamp("2026-08-01T14:00:00Z") + pd.Timedelta(days=7 * i)).isoformat()
+        rows += _match_rows("2026-27", i, i, kickoff, "Arsenal", "Chelsea", 1, 0, {("Dan", "Arsenal", "MID"): 2})
+        rows[-1].update(minutes=m, starts=float(m >= 60), total_points=2 if m else 0)
+    df = pd.DataFrame(rows)
+    for col in pm.HISTORY_COLUMNS:
+        if col not in df.columns:
+            df[col] = np.nan
+    df["kickoff_time"] = pd.to_datetime(df["kickoff_time"], utc=True)
+    return pm.build_features(df[pm.HISTORY_COLUMNS])
+
+
+def test_absence_form_without_absences_equals_the_model_form(history):
+    f = pm.build_features(history)
+    a = bt.absence_form(f, min_run=np.inf)
+    for col in bt.FORM_A:
+        pd.testing.assert_series_equal(a[f"{col}_a"], f[col], check_names=False)
+    assert (a["absent_run"] == 0).all() and (a["since_return"] == bt.ABSENCE_CAP).all()
+
+
+def test_absence_form_leaves_out_long_runs_once_they_are_long():
+    # 3 starts, 4 matches out (injury), back for 2
+    f = _player_run([90, 90, 90, 0, 0, 0, 0, 90, 90]).set_index("GW")
+    a = bt.absence_form(f.reset_index()).set_index(f.index)
+    assert a.loc[5, "minutes_r1_a"] == 0 and a.loc[5, "absent_run"] == 0   # one zero: could be rotation
+    assert a.loc[6, "minutes_r3_a"] == pytest.approx(30)                   # 90, 0, 0
+    assert a.loc[7, "absent_run"] == 3 and a.loc[7, "minutes_r3_a"] == 90  # the run is now an absence
+    assert a.loc[8, "absent_run"] == 4 and a.loc[8, "total_points_r6_a"] == 2
+    assert a.loc[9, "absent_run"] == 0 and a.loc[9, "since_return"] == 1
+    assert a.loc[9, "minutes_r6_a"] == 90                                  # the absence doesn't drag his form
+    assert f.loc[9, "minutes_r6"] == pytest.approx(30)                     # ... as it does in the model's
+
+
+def test_absence_form_keeps_zeros_of_players_who_were_not_starting():
+    a = bt.absence_form(_player_run([20, 0, 0, 0, 0, 0, 30]))
+    assert (a["absent_run"] == 0).all()
+    assert a["minutes_r3_a"].iloc[-1] == 0
+
+
+def test_absence_form_ignores_later_matches():
+    base = bt.absence_form(_player_run([90, 90, 90, 0, 0, 90, 90, 90]))
+    later = bt.absence_form(_player_run([90, 90, 90, 0, 0, 0, 0, 0]))   # the same up to GW5's outcome
+    pd.testing.assert_frame_equal(base.iloc[:6], later.iloc[:6])
