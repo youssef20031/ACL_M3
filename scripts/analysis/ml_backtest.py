@@ -30,6 +30,11 @@ transfermarkt-datasets dump, which has no 2026-27 season: compare those variants
 
 Bookmaker odds (ml/odds.py, variants odds and odds_close) come from football-data.co.uk, whose
 files aren't committed: run `python -m scripts.data.fetch_odds` first (the workflow does).
+
+Round of 2026-10-22: fixture-strength products and opponent-adjusted team ratings
+(ml/fixture_strength.py, variants matchup and ratings), transfer-market ranks and price changes
+(ml/market.py, variant transfers), a Tweedie objective (tweedie) and a two-stage model that
+multiplies P(plays) by the expected points if he plays (hurdle).
 """
 import argparse
 import glob
@@ -45,6 +50,8 @@ import pandas as pd
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
+from ml import fixture_strength as fs  # noqa: E402
+from ml import market as mk  # noqa: E402
 from ml import odds as od  # noqa: E402
 from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
@@ -244,7 +251,7 @@ def _efl_player_table() -> pd.DataFrame:
     return out.reset_index()
 
 
-def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_extra_features(df: pd.DataFrame, transfers: pd.DataFrame = None) -> pd.DataFrame:
     df = df.reset_index(drop=True).copy()
     known = df["minutes"].notna()
 
@@ -301,6 +308,13 @@ def add_extra_features(df: pd.DataFrame) -> pd.DataFrame:
     # Bookmaker odds: pre-closing prices known at the deadline, and closing prices (an upper bound)
     df = df.join(od.odds_features(df, od.load_odds()))
     df["sub_gkdef"] = df["position"].isin(["GK", "DEF"]).astype(float)
+
+    # Fixture-strength products, opponent-adjusted team ratings and transfer-market signals (2026-10-22)
+    df = df.join(fs.matchup_features(df)).join(fs.ratings_features(df))
+    if transfers is not None:
+        df = df.join(mk.transfer_features(df, transfers))
+    else:
+        df[mk.FEATURES] = np.nan
     return df
 
 
@@ -321,13 +335,16 @@ G_ABS_FORM = [f"{c}_a" for c in FORM_A]
 G_ABS_FLAGS = ["absent_run", "since_return"]
 G_ODDS = od.FEATURES
 G_ODDS_CLOSE = od.CLOSING_FEATURES
+G_MATCHUP = fs.MATCHUP_FEATURES
+G_RATINGS = fs.RATING_FEATURES
+G_TRANSFERS = mk.FEATURES
 SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS + ["sub_after_absence",
                                                                                             "sub_gkdef"]
 PICK_SUBSETS = ["sub_euro_club", "sub_gkdef"]   # top-20 picks among these players only
 CS_PICKS = "sub_gkdef"                          # ... and the clean-sheet points of these picks
 PICK_METRICS = ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS] + [f"cs20_{CS_PICKS}"]
 EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
-EXTRA += G_ABS_FORM + G_ABS_FLAGS + G_ODDS + G_ODDS_CLOSE
+EXTRA += G_ABS_FORM + G_ABS_FLAGS + G_ODDS + G_ODDS_CLOSE + G_MATCHUP + G_RATINGS + G_TRANSFERS
 KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
         "clean_sheets"]
 
@@ -343,7 +360,7 @@ def cmd_features(args) -> None:
     feats = pm.build_features(history)
     print(f"model features: {len(feats)} rows in {time.time() - t0:.0f}s", flush=True)
     n = len(feats)
-    feats = add_extra_features(feats)
+    feats = add_extra_features(feats, mk.load_transfers(live_csv=live_csv, live_season=live_season))
     assert len(feats) == n, "a merge duplicated rows"
     feats = feats[feats["total_points"].notna()]
     feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS))].copy()
@@ -352,7 +369,7 @@ def cmd_features(args) -> None:
             feats[c] = feats[c].astype("float32")
     feats.to_pickle(args.out)
     cover = {c: round(float(feats[c].notna().mean()), 3) for c in G_MGR + G_ROT + G_EFL_TEAM[:1] + G_EFL_PLAYER[:1]
-             + ["oc_minutes_last", "ac_ga_p90_r8"]}
+             + ["oc_minutes_last", "ac_ga_p90_r8", "mu_xgf", "mu_pxg", "rt_xgf", "tr_bal_rank", "price_change_3"]}
     odds_cover = feats.groupby("season")[["odds_win", "odds_win_c"]].agg(lambda s: round(float(s.notna().mean()), 3))
     print(f"saved {args.out}: {feats.shape}, seasons {feats.groupby('season').size().to_dict()}, "
           f"subset rows {feats[SUBSETS].sum().astype(int).to_dict()}, coverage {cover}, "
@@ -393,7 +410,67 @@ VARIANTS = {
     # prices (after lineups) as an upper bound that can't be served
     "odds": {"features": CURRENT + G_ODDS},
     "odds_close": {"features": CURRENT + G_ODDS_CLOSE},
+    # 2026-10-22: fixture-strength products of the model's own team stats, opponent-adjusted
+    # team ratings, transfer-market ranks and price changes, a Tweedie objective (log link,
+    # zero-inflated target; trained on points floored at 0, early-stopped on RMSE) and a
+    # two-stage model, P(minutes > 0) x E[points | minutes > 0]
+    "matchup": {"features": CURRENT + G_MATCHUP},
+    "ratings": {"features": CURRENT + G_RATINGS},
+    "transfers": {"features": CURRENT + G_TRANSFERS},
+    "tweedie": {"params": {**P, "objective": "reg:tweedie", "tweedie_variance_power": 1.3, "eval_metric": "rmse"},
+                "clip_target": 0.0},
+    "hurdle": {"model": "hurdle"},
+    "ratings_transfers": {"features": CURRENT + G_RATINGS + G_TRANSFERS},
 }
+
+
+def _target(frame: pd.DataFrame, spec: dict) -> pd.Series:
+    y = frame["total_points"]
+    return y.clip(lower=spec["clip_target"]) if "clip_target" in spec else y
+
+
+def _hurdle_es(train, valid, cols, p):
+    """Early-stopped hurdle models, P(plays) and E[points | plays], with their tree counts."""
+    import xgboost as xgb
+    played, vplayed = train["minutes"] > 0, valid["minutes"] > 0
+    cls = xgb.XGBClassifier(n_estimators=NMAX, early_stopping_rounds=PATIENCE,
+                            **{**p, "objective": "binary:logistic", "eval_metric": "logloss"})
+    cls.fit(train[cols], played.astype(int), eval_set=[(valid[cols], vplayed.astype(int))], verbose=False)
+    reg = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
+    reg.fit(train.loc[played, cols], train.loc[played, "total_points"],
+            eval_set=[(valid.loc[vplayed, cols], valid.loc[vplayed, "total_points"])], verbose=False)
+    return cls, reg, cls.best_iteration + 1, reg.best_iteration + 1
+
+
+def _hurdle_fit(frame, cols, p, n_cls, n_reg):
+    import xgboost as xgb
+    played = frame["minutes"] > 0
+    cls = xgb.XGBClassifier(n_estimators=n_cls, **{**p, "objective": "binary:logistic"})
+    cls.fit(frame[cols], played.astype(int), verbose=False)
+    reg = xgb.XGBRegressor(n_estimators=n_reg, **p)
+    reg.fit(frame.loc[played, cols], frame.loc[played, "total_points"], verbose=False)
+    return cls, reg
+
+
+def _hurdle_predict(cls, reg, frame, cols) -> np.ndarray:
+    return cls.predict_proba(frame[cols])[:, 1] * reg.predict(frame[cols])
+
+
+def _hurdle_fold(tr, va, te, both, cols, p) -> tuple:
+    """es and refit predictions of the hurdle model for one fold and seed, plus run info."""
+    cls, reg, n_cls, n_reg = _hurdle_es(tr, va, cols, p)
+    pe = _hurdle_predict(cls, reg, te, cols)
+    valid_rmse = float(np.sqrt(np.mean((_hurdle_predict(cls, reg, va, cols) - va["total_points"]) ** 2)))
+    scale = len(both) / len(tr)
+    r_cls, r_reg = min(int(n_cls * scale), 4000), min(int(n_reg * scale), 4000)
+    cls2, reg2 = _hurdle_fit(both, cols, p, r_cls, r_reg)
+    pr = _hurdle_predict(cls2, reg2, te, cols)
+    gain = reg2.get_booster().get_score(importance_type="gain")
+    info = {"best_iter": n_reg, "best_iter_cls": n_cls, "trained": n_reg, "n_refit": r_reg, "n_refit_cls": r_cls,
+            "valid_rmse_at_best": valid_rmse, "valid_rmse_min": valid_rmse, "argmin_valid": n_reg,
+            "es": summarize(gw_table(te, pe)), "refit": summarize(gw_table(te, pr)),
+            "top_gain": sorted(gain.items(), key=lambda kv: -kv[1])[:25]}
+    return pe, pr, info
 
 
 def _weights(df, halflife):
@@ -495,15 +572,25 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict) -> dict:
         for seed in SEEDS:
             t0 = time.time()
             p = {**params, "random_state": seed}
+            if spec.get("model") == "hurdle":
+                pe, pr, info = _hurdle_fold(tr, va, te, both, cols, p)
+                info["secs"] = round(time.time() - t0, 1)
+                preds["es"].append(pe)
+                preds["refit"].append(pr)
+                fold["seeds"][seed] = info
+                print(f"  {name} {test_season} seed {seed}: best {info['best_iter']}/{info['best_iter_cls']} "
+                      f"es top20 {info['es']['top20']:.3f} refit top20 {info['refit']['top20']:.3f} "
+                      f"rmse {info['refit']['rmse']:.4f} ({info['secs']}s)", flush=True)
+                continue
             m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE_FIT, **p)
-            m.fit(tr[cols], tr["total_points"], sample_weight=_weights(tr, spec.get("halflife")),
+            m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
                   eval_set=[(va[cols], va["total_points"])], verbose=False)
             curve = m.evals_result()["validation_0"]["rmse"]
             best = _patience_stop(curve, PATIENCE)
             pe = m.predict(te[cols], iteration_range=(0, best + 1))
             n_refit = min(int((best + 1) * len(both) / len(tr)), 4000)
             m2 = xgb.XGBRegressor(n_estimators=n_refit, **p)
-            m2.fit(both[cols], both["total_points"], sample_weight=_weights(both, spec.get("halflife")), verbose=False)
+            m2.fit(both[cols], _target(both, spec), sample_weight=_weights(both, spec.get("halflife")), verbose=False)
             pr = m2.predict(te[cols])
             preds["es"].append(pe)
             preds["refit"].append(pr)
@@ -558,8 +645,22 @@ def run_inseason(feats, spec, season, cols, params, present) -> dict:
     preds = []
     for seed in SEEDS:
         p = {**params, "random_state": seed}
+        if spec.get("model") == "hurdle":
+            _, _, n_cls, n_reg = _hurdle_es(tr, va, cols, p)
+            out = pd.Series(np.nan, index=cur.index)
+            for start in range(int(gws[0]), int(gws[-1]) + 1, INSEASON_EVERY):
+                seen = feats[feats["season"].isin(pool) | ((feats["season"] == season) & (feats["GW"] < start))]
+                block = cur[(cur["GW"] >= start) & (cur["GW"] < start + INSEASON_EVERY)]
+                if block.empty:
+                    continue
+                scale = len(seen) / len(tr)
+                cls, reg = _hurdle_fit(seen, cols, p, min(int(n_cls * scale), 4000), min(int(n_reg * scale), 4000))
+                out.loc[block.index] = _hurdle_predict(cls, reg, block, cols)
+            preds.append(out.to_numpy())
+            print(f"  inseason {season} seed {seed}: best {n_reg}/{n_cls}", flush=True)
+            continue
         m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
-        m.fit(tr[cols], tr["total_points"], sample_weight=_weights(tr, spec.get("halflife")),
+        m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
               eval_set=[(va[cols], va["total_points"])], verbose=False)
         best = int(m.best_iteration) + 1
         out = pd.Series(np.nan, index=cur.index)
@@ -570,7 +671,7 @@ def run_inseason(feats, spec, season, cols, params, present) -> dict:
                 continue
             n = min(int(best * len(seen) / len(tr)), 4000)
             m2 = xgb.XGBRegressor(n_estimators=n, **p)
-            m2.fit(seen[cols], seen["total_points"], sample_weight=_weights(seen, spec.get("halflife")), verbose=False)
+            m2.fit(seen[cols], _target(seen, spec), sample_weight=_weights(seen, spec.get("halflife")), verbose=False)
             out.loc[block.index] = m2.predict(block[cols])
         preds.append(out.to_numpy())
         print(f"  inseason {season} seed {seed}: best {best}", flush=True)

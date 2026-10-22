@@ -415,3 +415,65 @@ def test_odds_features_for_upcoming_rows(odds_history):
     assert f.loc["Lee", "odds_win"] == pytest.approx(fixtures["p_away"].iloc[0])
     assert f.loc["Bob", "odds_win"] == pytest.approx(fixtures["p_home"].iloc[0])
     assert np.isnan(f.loc["Lee", "odds_win_c"])                              # no closing price yet
+
+
+# --------------------------------------------------------------------------- fixture strength, market
+from ml import fixture_strength as fs  # noqa: E402
+from ml import market as mk  # noqa: E402
+
+
+def test_matchup_features_multiply_attack_by_the_opponents_defence(history):
+    f = pm.build_features(history)
+    m = fs.matchup_features(f).join(f[["name", "fixture"]]).set_index(["name", "fixture"])
+    # No xG in the synthetic history, so goals stand in. Before GW3 Arsenal scored 2, 1 (gf 1.5 over
+    # both windows) and Chelsea conceded 2, 1 (ga 1.5); Arsenal are at home.
+    assert m.loc[("Alice", 3), "mu_xgf"] == pytest.approx(1.5 * 1.5 / fs.LEAGUE_XG * fs.HOME_FACTOR)
+    # Both fixtures of the double gameweek see the same pre-deadline strengths
+    assert m.loc[("Alice", 4), "mu_xgf"] == pytest.approx(1.5 * f.set_index(["name", "fixture"]).loc[
+        ("Alice", 4), "opp_ga"] / fs.LEAGUE_XG * fs.HOME_FACTOR)
+    assert m.loc[("Alice", 3), "mu_xgd"] == pytest.approx(m.loc[("Alice", 3), "mu_xgf"] - m.loc[("Alice", 3), "mu_xga"])
+
+
+def test_team_ratings_use_only_earlier_gameweeks(history):
+    f = pm.build_features(history)
+    before = fs.ratings_features(f)
+    hist2 = history.copy()
+    hist2.loc[hist2["GW"] == 3, ["team_h_score", "team_a_score"]] = [0, 6]   # GW3 results change
+    f2 = pm.build_features(hist2)
+    after = fs.ratings_features(f2)
+    pd.testing.assert_frame_equal(before[fs.RATING_FEATURES[:4]], after[fs.RATING_FEATURES[:4]])
+    r = before.join(f[["name", "fixture"]]).set_index(["name", "fixture"])
+    assert r.loc[("Alice", 1), "rt_att"] == 0.0                     # first season: everyone starts at 0
+    assert r.loc[("Alice", 2), "rt_att"] > 0                        # Arsenal beat Chelsea 2-0 in GW1
+    assert r.loc[("Bob", 2), "rt_def"] < 0
+    # The double gameweek's second fixture doesn't see the first
+    assert r.loc[("Alice", 4), "rt_att"] == r.loc[("Alice", 3), "rt_att"]
+
+
+def test_team_ratings_for_upcoming_rows_are_the_latest(history):
+    upcoming = pd.DataFrame([{
+        "season": "2026-27", "name": "Alice", "position": "MID", "team": "Arsenal", "opponent": "Chelsea",
+        "fixture": 99, "kickoff_time": "2026-09-15T14:00:00Z", "GW": 4, "was_home": True, "value": 61,
+    }])
+    f = pm.build_features(history, upcoming)
+    _, latest, _ = fs.team_ratings(f[~f["is_upcoming"]])
+    up = fs.ratings_features(f)[f["is_upcoming"].to_numpy()].iloc[0]
+    assert up["rt_att"] == pytest.approx(latest["Arsenal"][0])
+    assert up["rt_opp_def"] == pytest.approx(latest["Chelsea"][1])
+    assert up["rt_xgf"] == pytest.approx(fs.LEAGUE_XG * np.exp(latest["Arsenal"][0] - latest["Chelsea"][1] + fs.HOME_LOG))
+
+
+def test_transfer_features_rank_within_the_gameweek(history):
+    f = pm.build_features(history)
+    transfers = f[["season", "name", "fixture"]].copy()
+    transfers["transfers_balance"] = transfers["name"].map({"Alice": 500, "Bob": -200, "Cara": 0})
+    transfers["transfers_in"] = transfers["transfers_balance"].clip(lower=0)
+    transfers["transfers_out"] = (-transfers["transfers_balance"]).clip(lower=0)
+    out = mk.transfer_features(f, transfers).join(f[["name", "fixture", "GW"]]).set_index(["name", "fixture"])
+    assert out.loc[("Alice", 1), "tr_bal_rank"] == 1.0
+    assert out.loc[("Bob", 1), "tr_bal_rank"] == pytest.approx(1 / 3)
+    # Double gameweek: one value per player, Bob has no GW3 second fixture
+    assert out.loc[("Alice", 4), "tr_bal_rank"] == out.loc[("Alice", 3), "tr_bal_rank"]
+    assert out.loc[("Cara", 3), "tr_bal_rank"] == pytest.approx(2 / 3)  # ranked among Alice, Bob, Cara
+    assert np.isnan(out.loc[("Alice", 1), "price_change_1"])           # no earlier match this season
+    assert out.loc[("Alice", 2), "price_change_1"] == 0.0
