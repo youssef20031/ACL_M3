@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Info, RefreshCw, Sparkles } from 'lucide-react';
+import { Info, Lightbulb, RefreshCw, Sparkles } from 'lucide-react';
 import { apiService, handleApiError, MLPrediction } from '../services/api';
 import { useAppStore } from '../store/appStore';
 import { cn } from '../utils/cn';
@@ -9,6 +9,7 @@ import { PlayerWithClub } from '../components/PlayerWithClub';
 import { usePlayerAvatars } from '../hooks/usePlayerAvatars';
 import {
   Button,
+  ButtonLink,
   Card,
   Chip,
   ClubCrest,
@@ -389,6 +390,9 @@ export function Predictions() {
             <Chip tone="brand" icon={<Sparkles className="h-3 w-3 text-accent" aria-hidden="true" />} className="h-8 px-2.5">
               Model: <span className="uppercase">{mlModelType || 'Linear Reg'}</span>
             </Chip>
+            <ButtonLink to="/model" variant="secondary" size="sm" icon={<Lightbulb className="h-4 w-4" aria-hidden="true" />}>
+              Why these numbers?
+            </ButtonLink>
             <Button
               variant="secondary"
               size="sm"
