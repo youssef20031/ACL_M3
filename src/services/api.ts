@@ -628,6 +628,160 @@ export interface ModelReviewResponse {
   auto_subs: Array<{ out: string; in: string }>;
 }
 
+// --- Model insights: SHAP and LIME explanations of the v3 points model's next-gameweek predictions.
+
+/** One model feature. `importance` = mean |SHAP| in points over this gameweek's player-fixture rows. */
+export interface ExplainFeature {
+  feature: string;
+  label: string;
+  group: string;
+  description: string;
+  importance: number;
+}
+
+/** Mean |SHAP| summed per feature family. */
+export interface ExplainGroup {
+  group: string;
+  importance: number;
+}
+
+/** SHAP summary-plot points for one feature: [feature value percentile 0..1 (null = missing), shap]. */
+export interface ExplainBeeswarm {
+  feature: string;
+  label: string;
+  points: Array<[number | null, number]>;
+}
+
+export interface ExplainMetrics {
+  /** Average actual points of the top 20 picks per gameweek. */
+  top20_points: number;
+  /** Average actual points of the top pick per gameweek. */
+  captain_points: number;
+  rmse: number;
+  mae: number;
+  spearman: number;
+  rows?: number;
+}
+
+export interface ExplainModelInfo {
+  version: string;
+  trained_at: string | null;
+  n_trees: number | null;
+  seasons: string[];
+  rows: number | null;
+  /** live = the weekly retrained copy on the server; bundled = the model shipped with the code. */
+  source: 'live' | 'bundled';
+  /** Keys like 'v3', 'last3_avg', 'last6_avg', 'season_ppg'. */
+  test_metrics: Record<string, ExplainMetrics>;
+}
+
+export interface ExplainPlayerHit {
+  name: string;
+  element: number;
+  team: string;
+  position: string;
+  predicted_points: number;
+}
+
+export interface ExplainSummary {
+  season: string;
+  gameweek: number;
+  generated_at: string | null;
+  base_value: number;
+  /** Player-fixture rows explained. */
+  rows: number;
+  players: number;
+  model: ExplainModelInfo;
+  /** Sorted by importance, descending. */
+  groups: ExplainGroup[];
+  /** Every model feature, sorted by importance, descending. */
+  features: ExplainFeature[];
+  /** The top 10 features. */
+  beeswarm: ExplainBeeswarm[];
+  /** The top 12 by predicted points. */
+  top_players: ExplainPlayerHit[];
+}
+
+/** One feature's SHAP contribution to a prediction. Contributions arrive sorted by |shap|, descending. */
+export interface ExplainContribution {
+  feature: string;
+  label: string;
+  group: string;
+  value: number | null;
+  shap: number;
+}
+
+export interface LimeWeight {
+  feature: string;
+  label: string;
+  /** Human-readable rule, e.g. "minutes_r3 > 78". */
+  condition: string;
+  /** Points. */
+  weight: number;
+  value: number | null;
+}
+
+export interface LimeExplanation {
+  intercept: number;
+  local_prediction: number;
+  model_prediction: number;
+  /** R² of the local linear fit. */
+  score: number;
+  num_samples: number;
+  kernel_width: number;
+  weights: LimeWeight[];
+}
+
+export interface ExplainFixture {
+  fixture: number;
+  opponent: string;
+  is_home: boolean;
+  kickoff_time: string | null;
+  base_value: number;
+  /** The raw model output for this fixture (can be negative). */
+  model_points: number;
+  contributions: ExplainContribution[];
+  lime: LimeExplanation;
+}
+
+export interface PlayerExplanation {
+  player: {
+    name: string;
+    element: number;
+    team: string;
+    position: string;
+    status: string | null;
+    chance_of_playing_next_round: number | null;
+    news: string;
+  };
+  season: string;
+  gameweek: number;
+  /** Two in a double gameweek, none in a blank one. */
+  fixtures: ExplainFixture[];
+  /** Sum over fixtures of max(0, model_points). */
+  model_points: number;
+  /** 0..1, FPL's chance of playing. */
+  availability_factor: number;
+  /** The number the rest of the site shows. */
+  predicted_points: number;
+}
+
+export interface ExplainDependencePoint {
+  name: string;
+  element: number;
+  position: string;
+  value: number | null;
+  shap: number;
+}
+
+export interface ExplainDependence {
+  feature: string;
+  label: string;
+  group: string;
+  description: string;
+  points: ExplainDependencePoint[];
+}
+
 export type PlayerLeaderSort =
   | 'total_points'
   | 'goals'
@@ -927,6 +1081,28 @@ export const apiService = {
     return data;
   },
 
+  // Model insights (SHAP / LIME). 503 until the first prediction run has written explanations.
+  async getExplainSummary(signal?: AbortSignal): Promise<ExplainSummary> {
+    const { data } = await api.get<ExplainSummary>('/api/ml/explain/summary', { signal });
+    return data;
+  },
+
+  /** One player's explanation, by FPL element id or by name. 404 when he isn't in this gameweek's predictions. */
+  async getPlayerExplanation(player: { element: number } | { name: string }, signal?: AbortSignal): Promise<PlayerExplanation> {
+    const { data } = await api.get<PlayerExplanation>('/api/ml/explain/player', { params: player, signal });
+    return data;
+  },
+
+  async getExplainDependence(feature: string, signal?: AbortSignal): Promise<ExplainDependence> {
+    const { data } = await api.get<ExplainDependence>('/api/ml/explain/dependence', { params: { feature }, signal });
+    return data;
+  },
+
+  async searchExplainPlayers(q: string, limit = 20, signal?: AbortSignal): Promise<{ players: ExplainPlayerHit[] }> {
+    const { data } = await api.get<{ players: ExplainPlayerHit[] }>('/api/ml/explain/players', { params: { q, limit }, signal });
+    return data;
+  },
+
   // Data Management
   async loadFPLData(clearExisting: boolean = true): Promise<{ success: boolean; stats: unknown }> {
     const { data } = await api.post('/api/data/load', { clear_existing: clearExisting });
@@ -965,5 +1141,9 @@ export const handleApiError = (error: unknown): string => {
 /** True for an HTTP 404, e.g. a resource that doesn't exist yet (not a failure worth retrying). */
 export const isNotFoundError = (error: unknown): boolean =>
   axios.isAxiosError(error) && error.response?.status === 404;
+
+/** True for an HTTP 503: the service is up but its data isn't ready (e.g. no explanations yet). */
+export const isServiceUnavailableError = (error: unknown): boolean =>
+  axios.isAxiosError(error) && error.response?.status === 503;
 
 export default apiService;

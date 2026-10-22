@@ -36,6 +36,12 @@ import { AnswerCards, AnswerCardSkeleton, FollowUps } from '../components/assist
 import { SAMPLE_CARDS, SAMPLE_FOLLOW_UPS } from '../components/assistant/cards/samples';
 import { ModelReview } from '../components/totw/ModelReview';
 import { SAMPLE_MODEL_REVIEW } from '../components/totw/samples';
+import { ExplainOverview } from '../components/explain/ExplainOverview';
+import { PlayerExplainer } from '../components/explain/PlayerExplainer';
+import { FeatureEffects } from '../components/explain/FeatureEffects';
+import { PlayerChips, PlayerSearchBox } from '../components/explain/PlayerPicker';
+import { ExplainError, ExplainUnavailable } from '../components/explain/ExplainStates';
+import { SAMPLE_DEPENDENCE, SAMPLE_NOT_FOUND_ERROR, SAMPLE_PLAYER_EXPLANATION, SAMPLE_SUMMARY } from '../components/explain/samples';
 
 /*
  * Hidden /design route: a living reference for the Pitch Me design system.
@@ -120,6 +126,7 @@ const SAMPLE_DEADLINE = new Date(Date.now() + 2 * 86400000 + 5 * 3600000);
 export function DesignSystem() {
   const [tab, setTab] = useState<'overview' | 'stats' | 'fixtures'>('overview');
   const [query, setQuery] = useState('');
+  const [explainFeature, setExplainFeature] = useState(SAMPLE_DEPENDENCE.feature);
 
   return (
     <div data-theme="dark" className="pm-root min-h-screen">
@@ -318,6 +325,58 @@ export function DesignSystem() {
             the captain&rsquo;s are doubled; the prediction sits under them.
           </p>
           <ModelReview review={SAMPLE_MODEL_REVIEW} onGameweekChange={() => undefined} />
+        </Section>
+
+        <Section title="Model insights">
+          <p className="mb-4 max-w-3xl text-body text-fg-muted">
+            The /model page&rsquo;s three tabs with made-up explanations: global SHAP importance and the beeswarm, one
+            player&rsquo;s SHAP waterfall and LIME weights per fixture (a double gameweek for a doubtful player, so every
+            adjustment step shows), and a SHAP dependence plot.
+          </p>
+          <p className="mb-2 text-micro font-semibold uppercase text-fg-subtle">Overview</p>
+          <ExplainOverview summary={SAMPLE_SUMMARY} onPickPlayer={() => undefined} />
+
+          <p className="mb-2 mt-10 text-micro font-semibold uppercase text-fg-subtle">Explain a player</p>
+          <Card className="mb-6">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+              <PlayerSearchBox onSelect={() => undefined} />
+              <div className="min-w-0">
+                <p className="mb-1.5 text-micro font-semibold uppercase text-fg-muted">Top predicted</p>
+                <PlayerChips players={SAMPLE_SUMMARY.top_players} selected={SAMPLE_PLAYER_EXPLANATION.player.element} onSelect={() => undefined} />
+              </div>
+            </div>
+          </Card>
+          <PlayerExplainer
+            explanation={SAMPLE_PLAYER_EXPLANATION}
+            descriptions={Object.fromEntries(SAMPLE_SUMMARY.features.map((f) => [f.feature, f.description]))}
+            lookupPhotos={false}
+          />
+
+          <p className="mb-2 mt-10 text-micro font-semibold uppercase text-fg-subtle">Feature effects</p>
+          <FeatureEffects
+            features={SAMPLE_SUMMARY.features}
+            feature={explainFeature}
+            onFeatureChange={setExplainFeature}
+            dependence={SAMPLE_DEPENDENCE}
+            problem={
+              explainFeature !== SAMPLE_DEPENDENCE.feature ? (
+                <EmptyState title="Sample data covers one feature" description={`Pick “${SAMPLE_DEPENDENCE.label}” to see the plot.`} />
+              ) : undefined
+            }
+          />
+
+          <p className="mb-2 mt-10 text-micro font-semibold uppercase text-fg-subtle">States</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <ExplainUnavailable />
+            <ExplainError
+              error={SAMPLE_NOT_FOUND_ERROR}
+              what="this player’s explanation"
+              notFound={{
+                title: 'Not in this gameweek’s predictions',
+                description: 'There’s no prediction to explain for this player in gameweek 9, usually because he isn’t in the FPL game any more. Try another player.',
+              }}
+            />
+          </div>
         </Section>
 
         <Section title="Assistant answer cards">

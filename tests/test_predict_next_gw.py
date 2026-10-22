@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from ml import points_model as pm
 from pipeline import predict_next_gw as png
 from services import predictions as preds_service
 
@@ -248,6 +249,14 @@ def test_predict_next_gameweek_end_to_end(live_dir):
     assert rows.loc["Gone Gunner", "predicted_points"] == 0
     assert rows.loc["Fit Gunner", "predicted_points"] > 0
     assert rows.loc["Fit Gunner", "opponent"] == "Chelsea & Spurs"
+
+    # The model's inputs, for the /model page's explanations (services/explain.py)
+    assert summary["model_inputs"] == str(live_dir / png.FEATURES_NAME)
+    inputs = pd.read_csv(live_dir / png.FEATURES_NAME)
+    assert set(png.FEATURE_ID_COLUMNS + ["model_points"] + pm.feature_columns()) <= set(inputs.columns)
+    fit = inputs[inputs["name"] == "Fit Gunner"]
+    assert list(fit["opponent"]) == ["Chelsea", "Spurs"]
+    assert fit["model_points"].clip(lower=0).sum() == pytest.approx(rows.loc["Fit Gunner", "predicted_points"], abs=0.01)
 
 
 # ------------------------------------------------------------------ services/predictions.py
