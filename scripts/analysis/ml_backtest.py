@@ -421,6 +421,10 @@ VARIANTS = {
                 "clip_target": 0.0},
     "hurdle": {"model": "hurdle"},
     "ratings_transfers": {"features": CURRENT + G_RATINGS + G_TRANSFERS},
+    # which part of the transfer signal: the ranks (serving sees counts before the deadline) or the
+    # price changes (known exactly at the deadline)
+    "tr_ranks": {"features": CURRENT + G_TRANSFERS[:3]},
+    "tr_price": {"features": CURRENT + G_TRANSFERS[3:]},
 }
 
 
