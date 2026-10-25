@@ -120,6 +120,18 @@ def test_assemble_output_applies_availability_blank_and_schema():
     assert bool(blank["is_promoted_team"]) is True
     assert set(out["gameweek"]) == {7}
     assert out[["opponent", "kickoff_time", "value", "gameweek"]].notna().all().all()
+    assert out["play60"].isna().sum() == 4 and rows.loc["Blank Tiger", "play60"] == 0.0   # no play60 given
+
+
+def test_assemble_output_scales_play60_like_points():
+    by_team = png.gameweek_fixtures(GW_FIXTURES, 7, TEAMS)
+    predictions = {k: {"points": 5.0, "method": "xgboost_v3", "play60": 0.9} for k in ("1", "2", "3", "5")}
+    rows = png.assemble_output(players_frame(), predictions, by_team, 7, "2026-10-17T10:00:00Z", []).set_index("name")
+    assert rows.loc["Fit Gunner", "play60"] == 0.9
+    assert rows.loc["Doubtful Blue", "play60"] == 0.45          # 0.9 x 50% chance of playing
+    assert rows.loc["Injured Gunner", "play60"] == 0.0
+    assert rows.loc["Gone Gunner", "play60"] == 0.0
+    assert rows.loc["Blank Tiger", "play60"] == 0.0             # no fixture
 
 
 # ------------------------------------------------------------------ history + model rows
@@ -211,6 +223,24 @@ def test_predict_players_sums_double_gameweek_and_uses_prior_matches_only(live_d
     # fixtures of the double gameweek
     assert list(fit["total_points_r3"]) == pytest.approx([11.0, 11.0])
     assert list(fit["opponent"]) == ["Chelsea", "Spurs"]
+    assert all("play60" not in v for v in out.values())    # no play60 model given
+
+
+def test_predict_players_averages_play60_over_a_double_gameweek(live_dir):
+    history = png.load_history(str(live_dir / "FPL_2026_2027.csv"), "2026-27", before_gw=7,
+                               before_time=None, history_csv=str(live_dir / "history.csv"))
+    by_team = png.gameweek_fixtures(GW_FIXTURES, 7, TEAMS)
+    def play60(frame):      # 0.6 for each player's first fixture, 0.9 for his second
+        return np.where(frame.groupby("name").cumcount() == 0, 0.6, 0.9)
+
+    out = png.predict_players(players_frame(), history, by_team, "2026-27", 7, RecordingModel(2.5), play60_fn=play60)
+    assert out["1"]["play60"] == pytest.approx(0.75)      # Arsenal double: mean, not sum
+    assert out["2"]["play60"] == pytest.approx(0.6)
+
+    def broken(frame):
+        raise KeyError("missing feature")
+    out = png.predict_players(players_frame(), history, by_team, "2026-27", 7, RecordingModel(2.5), play60_fn=broken)
+    assert out["1"]["points"] == pytest.approx(5.0) and "play60" not in out["1"]   # points still go out
 
 
 class FakeClient:
@@ -249,6 +279,10 @@ def test_predict_next_gameweek_end_to_end(live_dir):
     assert rows.loc["Gone Gunner", "predicted_points"] == 0
     assert rows.loc["Fit Gunner", "predicted_points"] > 0
     assert rows.loc["Fit Gunner", "opponent"] == "Chelsea & Spurs"
+    # The bundled play60 model: a probability for everyone with a fixture, 0 when ruled out
+    assert summary["play60_players"] == 5 and out["play60"].between(0, 1).all()
+    assert 0 < rows.loc["Fit Gunner", "play60"] < 1
+    assert rows.loc["Injured Gunner", "play60"] == 0 and rows.loc["Blank Tiger", "play60"] == 0
 
     # The model's inputs, for the /model page's explanations (services/explain.py)
     assert summary["model_inputs"] == str(live_dir / png.FEATURES_NAME)

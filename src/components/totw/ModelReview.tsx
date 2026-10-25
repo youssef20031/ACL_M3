@@ -5,6 +5,7 @@ import {
   isNotFoundError,
   type ModelReviewPlayer,
   type ModelReviewResponse,
+  type TeamOfWeekPick,
 } from '../../services/api';
 import { cn } from '../../utils/cn';
 import {
@@ -395,6 +396,8 @@ function ComparisonTable({
 }
 
 interface ModelReviewProps {
+  /** Which saved pick is shown (the default one, or the safer one saved next to it); only the wording changes. */
+  pick?: TeamOfWeekPick;
   /** Undefined while the first load is in flight (skeletons show). */
   review?: ModelReviewResponse;
   /** The query's error, if any: a 404 means there's no saved pick for that gameweek. */
@@ -412,6 +415,7 @@ interface ModelReviewProps {
 
 /** The model's saved pick for a past gameweek against what it actually scored. */
 export function ModelReview({
+  pick = 'default',
   review,
   error,
   selectedGameweek,
@@ -421,6 +425,8 @@ export function ModelReview({
   onShowLatest,
 }: ModelReviewProps) {
   const tableHeadingId = useId();
+  const safer = pick === 'safer';
+  const pickName = safer ? 'safer pick' : 'pick';
 
   if (error) {
     return (
@@ -428,8 +434,12 @@ export function ModelReview({
         {isNotFoundError(error) ? (
           <EmptyState
             icon={<CalendarClock className="h-8 w-8" aria-hidden="true" />}
-            title={selectedGameweek ? `No saved pick for gameweek ${selectedGameweek}` : 'No saved pick yet'}
-            description="The model’s picks are saved before each deadline from GW7 on, and shown here once the deadline has passed."
+            title={selectedGameweek ? `No saved ${pickName} for gameweek ${selectedGameweek}` : `No saved ${pickName} yet`}
+            description={
+              safer
+                ? 'The safer pick is saved before each deadline next to the main one, from the first prediction run that had it, and shown here once the deadline has passed.'
+                : 'The model’s picks are saved before each deadline from GW7 on, and shown here once the deadline has passed.'
+            }
             action={
               onShowLatest && (
                 <Button variant="secondary" size="sm" onClick={onShowLatest}>
@@ -463,7 +473,7 @@ export function ModelReview({
     <div aria-busy={updating || !review}>
       {review && (
         <h2 className="sr-only">
-          Gameweek {review.gameweek}: the model’s pick against its actual points
+          Gameweek {review.gameweek}: the model’s {pickName} against its actual points
         </h2>
       )}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
@@ -502,7 +512,7 @@ export function ModelReview({
           {review ? review.bench.length > 0 && <Bench review={review} replacedBy={replacedBy} /> : <Skeleton className="h-60 w-full rounded-lg" />}
 
           <p className="text-data text-fg-subtle">
-            The squad the model picked before the deadline{deadline ? ` (${deadline})` : ''}, scored with FPL’s rules: a
+            The {safer ? 'safer squad' : 'squad the model'} picked before the deadline{deadline ? ` (${deadline})` : ''}, scored with FPL’s rules: a
             starter who doesn’t play is replaced by the first bench player who keeps the formation valid, and if the
             captain doesn’t play, the vice-captain’s points count double. Under each player’s points is what the model
             predicted.

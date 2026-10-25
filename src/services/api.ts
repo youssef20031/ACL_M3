@@ -545,13 +545,23 @@ export interface TeamOfWeekPlayer {
   status: string | null;
   chance_of_playing_next_round: number | null;
   news: string | null;
+  /** Chance of playing 60+ minutes (0–1) in predicted mode, after FPL's availability; null when unknown. */
+  play60?: number | null;
   photo: string | null;
 }
 
 export type TeamOfWeekMode = 'predicted' | 'actual';
 
+/**
+ * Which predicted squad: the most expected points, or the safer pick, where players who may not
+ * play 60 minutes count for less, most of all when clubmates start together.
+ */
+export type TeamOfWeekPick = 'default' | 'safer';
+
 export interface TeamOfWeekResponse {
   mode: TeamOfWeekMode;
+  /** Missing from older backends: the default pick. */
+  pick?: TeamOfWeekPick;
   gameweek: number;
   formation: string;
   total_points: number;
@@ -594,6 +604,8 @@ export interface ModelReviewPlayer {
 /** The squad the model picked before a past deadline, and how it actually scored. */
 export interface ModelReviewResponse {
   season: string;
+  /** Which saved pick this is; missing from older backends (the default pick). */
+  pick?: TeamOfWeekPick;
   gameweek: number;
   /** Every gameweek with a saved pick, ascending. */
   gameweeks: number[];
@@ -1066,17 +1078,22 @@ export const apiService = {
     return data;
   },
 
-  async getTeamOfTheWeek(mode: TeamOfWeekMode = 'predicted', gameweek?: number): Promise<TeamOfWeekResponse> {
+  /** The safer pick (predicted mode only) answers 503 until the predictions carry play60. */
+  async getTeamOfTheWeek(
+    mode: TeamOfWeekMode = 'predicted',
+    gameweek?: number,
+    pick: TeamOfWeekPick = 'default',
+  ): Promise<TeamOfWeekResponse> {
     const { data } = await api.get<TeamOfWeekResponse>('/api/team-of-the-week', {
-      params: { mode, ...(gameweek ? { gameweek } : {}) },
+      params: { mode, ...(gameweek ? { gameweek } : {}), ...(pick === 'safer' ? { pick } : {}) },
     });
     return data;
   },
 
   /** The model's saved pick for a past gameweek (default: the latest whose deadline passed). 404 when none. */
-  async getModelReview(gameweek?: number): Promise<ModelReviewResponse> {
+  async getModelReview(gameweek?: number, pick: TeamOfWeekPick = 'default'): Promise<ModelReviewResponse> {
     const { data } = await api.get<ModelReviewResponse>('/api/model-review', {
-      params: gameweek ? { gameweek } : undefined,
+      params: { ...(gameweek ? { gameweek } : {}), ...(pick === 'safer' ? { pick } : {}) },
     });
     return data;
   },

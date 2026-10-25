@@ -29,6 +29,7 @@ huggingface_hub>=0.22.0     # InferenceClient.chat_completion
 sentence-transformers>=2.5.1   # pulls transformers + torch
 torch>=2.1.0                   # CPU build is sufficient (see note above)
 spacy>=3.7.0
+preshed<3.0.14                 # spaCy dep: the 3.0.14 wheels (Cython 3.3) break model loading with an OverflowError (explosion/spaCy#14058); lift once a fixed release is out
 rapidfuzz>=3.9                 # fuzzy player search (services/player_index.py)
 
 # --- ML predictions (pickled XGBoost / scikit-learn models in ml/models) ----

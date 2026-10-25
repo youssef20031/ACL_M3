@@ -8,13 +8,16 @@ Inputs:
   * LIVE_DATA_DIR (written by `python -m pipeline.current_season`): this season's
     finished matches (FPL_YYYY_YYYY.csv) and every current player's status/news.
   * data/cleaned_merged_seasons_cleaned.csv: all historical seasons.
-  * The v3 points model (ml/models/points_v3.json, trained by `python -m ml.train_points_v3`).
+  * The v3 points model (ml/models/points_v3.json, trained by `python -m ml.train_points_v3`)
+    and the play60 model (ml/models/play60_v1.json, the chance of playing 60+ minutes,
+    trained alongside it; without it the play60 column is empty).
 
 Output: LIVE_DATA_DIR/next_gw_predictions.csv (+ .json), same schema as the old
 ml/predictions/next_gw_predictions.csv plus a few transparency columns, written
 atomically. services/predictions.py prefers this file over the bundled one. Before the
-deadline it also saves the gameweek's squad pick (services/model_review.save_picks) for
-the Team of the Week page's "Model vs actual" review, and every run writes the model's
+deadline it also saves the gameweek's squad picks, default and safer
+(services/model_review.save_picks), for the Team of the Week page's "Model vs actual"
+review, and every run writes the model's
 inputs for each upcoming row (next_gw_features.csv), which services/explain.py turns into
 SHAP and LIME explanations for the /model page.
 
@@ -29,6 +32,7 @@ are dropped before anything is computed).
   * Availability: status u/n, or chance_of_playing_next_round 0 -> 0 points;
     otherwise points x chance/100. Historical availability isn't recorded, so the
     model itself can't know about injuries; this adjustment is the only place they count.
+    play60 is scaled the same way, and averaged (not summed) over a double gameweek.
 """
 import argparse
 import json
@@ -63,6 +67,8 @@ OUTPUT_COLUMNS = [
     "gameweek", "kickoff_time", "prediction_method", "is_promoted_team",
     # transparency columns (consumers ignore unknown columns)
     "fixtures", "status", "chance_of_playing_next_round", "news", "element",
+    # chance of playing 60+ minutes (ml/play60_model.py, x availability); the safer team of the week's input
+    "play60",
 ]
 
 
@@ -228,14 +234,17 @@ def save_model_inputs(rows: pd.DataFrame, path: str) -> None:
 def predict_players(players: pd.DataFrame, history: pd.DataFrame,
                     fixtures_by_team: Dict[str, List[Dict[str, Any]]], season: str, gameweek: int,
                     predict_fn: Callable[[pd.DataFrame], np.ndarray],
-                    features_path: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
-    """element (str) -> {'points': model points summed over the gameweek's fixtures, 'method'}.
+                    features_path: Optional[str] = None,
+                    play60_fn: Optional[Callable[[pd.DataFrame], np.ndarray]] = None) -> Dict[str, Dict[str, Any]]:
+    """element (str) -> {'points': model points summed over the gameweek's fixtures, 'method'},
+    plus 'play60' (the mean chance of playing 60+ minutes over those fixtures) with `play60_fn`.
 
     Features come from ml.points_model.build_features, the same code used in training;
     the upcoming rows have no outcomes, so their features only see earlier matches.
     Players without any earlier matches still get a prediction from price, position,
     ownership and their team/opponent strength. With `features_path`, the model's inputs
-    are saved there too (save_model_inputs); a failure to save is logged, not raised.
+    are saved there too (save_model_inputs); a failure to save, or of the play60 model, is
+    logged, not raised.
     """
     upcoming = upcoming_rows(players, fixtures_by_team, season, gameweek)
     if upcoming.empty:
@@ -252,12 +261,33 @@ def predict_players(players: pd.DataFrame, history: pd.DataFrame,
         except Exception:
             logger.exception("Couldn't save the model inputs for GW%s", gameweek)
     totals = rows.groupby("element")["points"].sum()
-    return {str(int(k)): {"points": float(v), "method": MODEL_METHOD} for k, v in totals.items()}
+    out = {str(int(k)): {"points": float(v), "method": MODEL_METHOD} for k, v in totals.items()}
+    if play60_fn is not None:
+        try:
+            rows["play60"] = np.clip(play60_fn(rows), 0.0, 1.0)
+            for k, v in rows.groupby("element")["play60"].mean().items():
+                out[str(int(k))]["play60"] = float(v)
+        except Exception:
+            logger.exception("Couldn't predict the chance of playing 60 minutes for GW%s", gameweek)
+    return out
 
 
 def _v3_predict_fn():
     booster, meta = pm.load_model()
     return lambda frame: pm.predict(booster, meta, frame)
+
+
+def _play60_predict_fn() -> Optional[Callable[[pd.DataFrame], np.ndarray]]:
+    """The play60 model as a predict function, or None before it has been trained (the
+    predictions then go out without play60 and the safer team of the week is unavailable)."""
+    from ml import play60_model
+
+    model_path, meta_path = play60_model.active_model_paths()
+    if not (os.path.exists(model_path) and os.path.exists(meta_path)):
+        logger.warning("No play60 model at %s: predictions go out without play60", model_path)
+        return None
+    booster, meta = play60_model.load_model(model_path, meta_path)
+    return lambda frame: play60_model.predict(booster, meta, frame)
 
 
 # ------------------------------------------------------------------ assembly
@@ -274,10 +304,13 @@ def assemble_output(players: pd.DataFrame, predictions: Dict[str, Dict[str, Any]
         if entries:
             opponent, is_home, kickoff = describe_fixtures(entries)
             pred = predictions.get(key, {"points": 0.0, "method": MODEL_METHOD})
-            points = pred["points"] * availability_factor(p.status, p.chance_of_playing_next_round)
+            factor = availability_factor(p.status, p.chance_of_playing_next_round)
+            points = pred["points"] * factor
+            play60 = round(pred["play60"] * factor, 3) if pred.get("play60") is not None else None
             method = pred["method"]
         else:
             opponent, is_home, kickoff, points, method = NO_FIXTURE_OPPONENT, False, deadline, 0.0, NO_FIXTURE_METHOD
+            play60 = 0.0
         rows.append({
             "name": p.name, "position": p.position, "team": p.team,
             "predicted_points": round(float(points), 2), "value": int(p.now_cost),
@@ -286,6 +319,7 @@ def assemble_output(players: pd.DataFrame, predictions: Dict[str, Dict[str, Any]
             "is_promoted_team": p.team in promoted, "fixtures": len(entries),
             "status": p.status, "chance_of_playing_next_round": p.chance_of_playing_next_round,
             "news": p.news if isinstance(p.news, str) else "", "element": int(p.element),
+            "play60": play60,
         })
     df = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
     return df.sort_values(["predicted_points", "name"], ascending=[False, True]).reset_index(drop=True)
@@ -323,8 +357,10 @@ def _context(client, live_dir: str, gameweek: Optional[int] = None):
 
 
 def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_csv: str = HISTORY_CSV,
-                          predict_fn: Optional[Callable[[pd.DataFrame], np.ndarray]] = None) -> Dict[str, Any]:
-    """Predict every current player's points for the next gameweek and write the CSV/JSON.
+                          predict_fn: Optional[Callable[[pd.DataFrame], np.ndarray]] = None,
+                          play60_fn: Optional[Callable[[pd.DataFrame], np.ndarray]] = None) -> Dict[str, Any]:
+    """Predict every current player's points (and chance of playing 60+ minutes) for the next
+    gameweek and write the CSV/JSON.
 
     Returns a summary: gameweek, deadline, row counts, output paths, timing, memory.
     """
@@ -348,7 +384,8 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
     os.makedirs(live_dir, exist_ok=True)
     features_path = os.path.join(live_dir, FEATURES_NAME)
     predictions = predict_players(players, history, fixtures_by_team, season, gameweek,
-                                  predict_fn or _v3_predict_fn(), features_path=features_path)
+                                  predict_fn or _v3_predict_fn(), features_path=features_path,
+                                  play60_fn=play60_fn or _play60_predict_fn())
     promoted = promoted_teams(previous_season_teams(history, season), players["team"])
     out = assemble_output(players, predictions, fixtures_by_team, gameweek, event["deadline_time"], promoted)
 
@@ -376,6 +413,7 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
         "players_unavailable": int((has_fixture & (out["predicted_points"] == 0)
                                     & out["status"].isin(["i", "s", "u", "n"])).sum()),
         "double_gameweek_players": int((out["fixtures"] > 1).sum()),
+        "play60_players": int(out["play60"].notna().sum()),
         "blank_teams": sorted(set(players["team"]) - set(fixtures_by_team)),
         "promoted_teams": promoted,
         "history_rows": int(len(history)),

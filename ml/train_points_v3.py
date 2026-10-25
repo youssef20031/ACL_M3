@@ -12,6 +12,9 @@ Baselines on the same test rows: FPL's own expected points (xP, where present), 
 player's last-3 and last-6 average points, and season-to-date points per game.
 The production model is then refit on all seasons with the early-stopped tree count
 scaled by the extra data.
+
+The chance-of-playing-60-minutes model (ml/play60_model.py) is trained and saved alongside,
+on the same feature table and split; its test metrics are report["play60"].
 """
 import argparse
 import json
@@ -21,6 +24,7 @@ import time
 
 import pandas as pd
 
+from ml import play60_model
 from ml import points_model as pm
 from pipeline.current_season import LIVE_DATA_DIR
 
@@ -40,8 +44,11 @@ def _live_csv() -> tuple:
 
 
 def train_and_report(model_path: str = pm.MODEL_PATH, meta_path: str = pm.META_PATH,
-                     report_path: str = REPORT_PATH, eval_only: bool = False) -> dict:
-    """Evaluate on the held-out seasons, then (unless eval_only) refit on everything and save.
+                     report_path: str = REPORT_PATH, eval_only: bool = False,
+                     play60_model_path: str = play60_model.MODEL_PATH,
+                     play60_meta_path: str = play60_model.META_PATH) -> dict:
+    """Evaluate on the held-out seasons, then (unless eval_only) refit on everything and save,
+    for the points model and the play60 model.
 
     Returns the report dict; report["test"]["all"] holds the combined test metrics.
     """
@@ -91,6 +98,8 @@ def train_and_report(model_path: str = pm.MODEL_PATH, meta_path: str = pm.META_P
         report["production"] = {k: v for k, v in meta.items() if k != "test_metrics"}
         logger.info("Saved %s (%d trees, %d rows)", model_path, n_trees, len(feats))
 
+    report["play60"] = play60_model.train_and_save(feats, TRAIN_SEASONS, VALID_SEASONS, play60_model_path,
+                                                   play60_meta_path, eval_only=eval_only)
     report["seconds"] = round(time.time() - t0, 1)
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, default=str)
@@ -106,6 +115,7 @@ def main() -> int:
     report = train_and_report(eval_only=args.eval_only)
     print(json.dumps(report["test"], indent=2))
     print("top features:", [k for k, _ in report["top_features"]])
+    print("play60:", json.dumps(report["play60"]["test"].get("all")))
     return 0
 
 
