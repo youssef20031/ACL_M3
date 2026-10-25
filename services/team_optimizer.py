@@ -10,11 +10,14 @@ Team-of-the-week selection: pure functions, no Neo4j or file IO.
                       and each bench player's points weighted by how often that bench slot
                       comes on (BENCH_WEIGHTS). So spare cash buys a bench that plays, and
                       a little XI value is traded for a much better first substitute.
+                      safer=True also weighs each player's risk of not playing 60 minutes
+                      (Candidate.play60), most of all when clubmates start together; see
+                      SAFER_EPSILON.
 
 Costs are integers in FPL tenths (156 = 15.6m). Ties are deterministic: the pool is
 sorted before solving and every ordering ends on the candidate id.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 POSITIONS: Tuple[str, ...] = ("GK", "DEF", "MID", "FWD")
@@ -33,6 +36,21 @@ DEFAULT_MAX_PER_CLUB = 3
 BENCH_WEIGHTS: Tuple[float, float, float] = (0.5, 0.15, 0.05)   # outfield subs 1, 2, 3
 BENCH_GK_WEIGHT = 0.05
 
+# Safer squads (best_squad(safer=True)). A player's points at risk are his predicted points
+# times his chance of not playing 60 minutes (points_at_risk). He counts as points minus
+# SAFER_EPSILON x risk, and every pair of clubmates in the XI costs SAFER_LAMBDA x (risk of
+# one + risk of the other). So stacks of doubtful players cost more than stacks of nailed
+# ones, and when a stack is broken up the nailed player stays: a penalty on the pair alone
+# vanishes whichever clubmate leaves, so without the per-player term the cheaper one would go.
+# Backtest (2023-24 .. 2026-27 GW7, 121 gameweeks, every model trained on earlier seasons
+# only): the mildest setting tried, -0.43 points per gameweek against the default squad
+# (95% CI -1.80 to +0.90) with same-club pairs in the XI down from 5.6 to 3.1; twice as strong
+# was -1.09 and started dropping the nailed star again. It is an alternative pick, not a
+# better one: correlation between clubmates changes the spread of a squad's score, not its
+# expected points.
+SAFER_EPSILON = 0.25
+SAFER_LAMBDA = 0.25
+
 
 class InfeasibleError(ValueError):
     """The pool can't fill a valid team under the constraints."""
@@ -45,6 +63,14 @@ class Candidate:
     team: str
     points: float
     cost: int = 0      # FPL tenths
+    play60: Optional[float] = None   # chance of playing 60+ minutes (0-1); safer squads only
+
+
+def points_at_risk(c: Candidate) -> float:
+    """Predicted points that hang on playing 60 minutes: points x (1 - play60), 0 when unknown."""
+    if c.play60 is None:
+        return 0.0
+    return max(c.points, 0.0) * (1.0 - min(max(c.play60, 0.0), 1.0))
 
 
 @dataclass
@@ -133,9 +159,14 @@ def best_xi(pool: Iterable[Candidate]) -> Selection:
 
 def best_squad(pool: Iterable[Candidate], budget: int = DEFAULT_BUDGET,
                max_per_club: int = DEFAULT_MAX_PER_CLUB,
-               time_limit: float = 20.0) -> Selection:
+               time_limit: float = 20.0, safer: bool = False) -> Selection:
     """Best 15-man squad within budget/club limits, by expected points: XI + captain
     + bench weighted by BENCH_WEIGHTS / BENCH_GK_WEIGHT.
+
+    safer=True values players at points - SAFER_EPSILON x points_at_risk and charges every
+    pair of starting clubmates SAFER_LAMBDA x their summed risk. Starters, bench order and
+    captaincy then follow those risk-adjusted values; the returned candidates keep their
+    predicted points.
 
     Raises InfeasibleError when no valid squad exists.
     """
@@ -152,14 +183,24 @@ def best_squad(pool: Iterable[Candidate], budget: int = DEFAULT_BUDGET,
             raise InfeasibleError(f"Need {SQUAD_SIZE[p]} {p}, have {have}")
 
     n = len(pool)
-    points = np.array([c.points for c in pool], dtype=float)
+    risk = [points_at_risk(c) if safer else 0.0 for c in pool]
+    points = np.array([c.points - SAFER_EPSILON * r for c, r in zip(pool, risk)], dtype=float)
     cost = np.array([c.cost for c in pool], dtype=float)
     clubs = sorted({c.team for c in pool})
     is_gk = np.array([c.position == "GK" for c in pool])
+    pairs: List[Tuple[int, int, float]] = []          # safer: clubmates (i, j) and their penalty
+    if safer:
+        for club in clubs:
+            idx = [i for i, c in enumerate(pool) if c.team == club]
+            pairs += [(i, j, SAFER_LAMBDA * (risk[i] + risk[j]))
+                      for a, i in enumerate(idx) for j in idx[a + 1:] if risk[i] + risk[j] > 0]
 
     # Variables, n each: x (in squad), s (starts), k (captain), f (first outfield sub),
-    # g (second outfield sub). The other bench players are covered by x - s.
+    # g (second outfield sub). The other bench players are covered by x - s. Safer squads add
+    # one y per pair of clubmates, forced to 1 when both start.
     X, S, K, F, G = (j * n for j in range(5))
+    Y = 5 * n
+    nvar = Y + len(pairs)
     rows: List[Tuple[Dict[int, float], float, float]] = []
     for i in range(n):
         rows.append(({S + i: 1.0, X + i: -1.0}, -np.inf, 0.0))                   # s <= x
@@ -177,8 +218,10 @@ def best_squad(pool: Iterable[Candidate], budget: int = DEFAULT_BUDGET,
         idx = [i for i, c in enumerate(pool) if c.team == club]
         if len(idx) > max_per_club:
             rows.append(({X + i: 1.0 for i in idx}, -np.inf, float(max_per_club)))
+    for e, (i, j, _) in enumerate(pairs):
+        rows.append(({Y + e: 1.0, S + i: -1.0, S + j: -1.0}, -1.0, np.inf))     # y >= s_i + s_j - 1
 
-    a = lil_matrix((len(rows), 5 * n))
+    a = lil_matrix((len(rows), nvar))
     lb = np.empty(len(rows))
     ub = np.empty(len(rows))
     for r, (coefs, lo, hi) in enumerate(rows):
@@ -193,22 +236,28 @@ def best_squad(pool: Iterable[Candidate], budget: int = DEFAULT_BUDGET,
                            (1.0 - w_bench) * points,       # s: from bench weight to 1
                            points,                         # captain counts twice
                            (w1 - w_rest) * points,
-                           (w2 - w_rest) * points])
-    upper = np.ones(5 * n)
+                           (w2 - w_rest) * points,
+                           -np.array([w for _, _, w in pairs])])   # y: safer squads' pair penalty
+    upper = np.ones(nvar)
     upper[F:F + n][is_gk] = 0                              # subs 1 and 2 are outfielders
     upper[G:G + n][is_gk] = 0
+    integrality = np.r_[np.ones(5 * n), np.zeros(len(pairs))]   # y is 0 or 1 at the optimum anyway
     res = milp(-gain, constraints=LinearConstraint(a.tocsr(), lb, ub),
-               integrality=np.ones(5 * n), bounds=Bounds(0, upper),
+               integrality=integrality, bounds=Bounds(0, upper),
                options={"mip_rel_gap": 0.0, "time_limit": time_limit, "presolve": True})
     if res.x is None:
         raise InfeasibleError(f"No valid squad: {res.message}")
 
     x = np.round(res.x[X:X + n]).astype(int)
     s = np.round(res.x[S:S + n]).astype(int)
-    starters = order_starters(pool[i] for i in range(n) if s[i])
-    bench = order_bench(pool[i] for i in range(n) if x[i] and not s[i])
+    # Order and pick captains by the values that were optimised, return the original candidates
+    ranked = [replace(c, points=float(v)) for c, v in zip(pool, points)] if safer else pool
+    original = {c.id: c for c in pool}
+    starters = order_starters(ranked[i] for i in range(n) if s[i])
+    bench = order_bench(ranked[i] for i in range(n) if x[i] and not s[i])
     captain, vice = pick_captains(starters)
-    return Selection(starters=starters, bench=bench, captain=captain, vice_captain=vice)
+    return Selection(starters=[original[c.id] for c in starters], bench=[original[c.id] for c in bench],
+                     captain=original[captain.id], vice_captain=original[vice.id] if vice is not None else None)
 
 
 # ------------------------------------------------------------------ validation

@@ -36,12 +36,17 @@ STATUS_ORDER = {"i": 0, "s": 1, "d": 2, "u": 3, "n": 4}
 UNAVAILABLE = {"i", "s", "u", "n"}      # excluded from the predicted team of the week
 FORM_LENGTH = 5
 BUDGET = opt.DEFAULT_BUDGET              # tenths
+PICKS = ("default", "safer")             # the predicted team: most expected points, or opt's safer squad
 
 PhotoFn = Callable[[str, Optional[str], Optional[int]], Optional[str]]
 
 
 class NotFoundError(LookupError):
     """Unknown gameweek, or nothing to show for it (mapped to HTTP 404)."""
+
+
+class UnavailableError(RuntimeError):
+    """The data a view needs isn't there yet, e.g. play60 for the safer pick (mapped to HTTP 503)."""
 
 
 # ------------------------------------------------------------------ cache
@@ -105,6 +110,14 @@ def _str_or_none(value: Any) -> Optional[str]:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _probability_or_none(value: Any) -> Optional[float]:
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(f) else min(max(f, 0.0), 1.0)
 
 
 def normalize_position(position: Any) -> Optional[str]:
@@ -387,10 +400,12 @@ def predicted_candidates(rows: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]
 
 def predicted_selection(rows: Iterable[Dict[str, Any]],
                         opponents: Optional[Dict[str, List[Dict[str, Any]]]] = None,
-                        codes: Optional[Dict[int, int]] = None) -> Tuple[opt.Selection, Dict[str, Dict[str, Any]]]:
+                        codes: Optional[Dict[int, int]] = None,
+                        safer: bool = False) -> Tuple[opt.Selection, Dict[str, Dict[str, Any]]]:
     """The predicted team of the week from prediction rows: (selection, details by name).
     Shared with pipeline.predict_next_gw, which saves it as the gameweek's pick, so the
-    saved squad is the one the page showed. NotFoundError when no squad fits."""
+    saved squad is the one the page showed. NotFoundError when no squad fits. safer picks
+    opt.best_squad's safer squad from the rows' play60 (UnavailableError when they have none)."""
     opponents, codes = opponents or {}, codes or {}
     pool, details = [], {}
     for r in predicted_candidates(rows):
@@ -398,8 +413,9 @@ def predicted_selection(rows: Iterable[Dict[str, Any]],
         if name in details or position not in opt.POSITIONS:
             continue
         value = _int_or_none(r["value"])
+        play60 = _probability_or_none(r.get("play60"))
         pool.append(opt.Candidate(id=name, position=position, team=str(r["team"]),
-                                  points=float(r["predicted_points"]), cost=value))
+                                  points=float(r["predicted_points"]), cost=value, play60=play60))
         team = str(r["team"])
         details[name] = {
             "team": team,
@@ -408,11 +424,15 @@ def predicted_selection(rows: Iterable[Dict[str, Any]],
             "status": _str_or_none(r.get("status")) or "a",
             "chance_of_playing_next_round": _int_or_none(r.get("chance_of_playing_next_round")),
             "news": _str_or_none(r.get("news")),
+            "play60": play60,
             "element": _int_or_none(r.get("element")),
             "_code": codes.get(_int_or_none(r.get("element"))),
         }
+    if safer and not any(c.play60 is not None for c in pool):
+        raise UnavailableError("The safer pick needs each player's chance of playing 60 minutes, "
+                               "which comes with the next prediction run")
     try:
-        return opt.best_squad(pool, budget=BUDGET), details
+        return opt.best_squad(pool, budget=BUDGET, safer=safer), details
     except opt.InfeasibleError as exc:
         raise NotFoundError(f"Not enough available players for a squad: {exc}") from exc
 
@@ -427,11 +447,13 @@ def opponents_from_prediction(row: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def build_team_of_the_week(selection: opt.Selection, details: Dict[str, Dict[str, Any]],
-                           mode: str, gameweek: int, budget: Optional[float]) -> Dict[str, Any]:
+                           mode: str, gameweek: int, budget: Optional[float],
+                           pick: str = "default") -> Dict[str, Any]:
     """Response dict from an optimiser selection. details[id] holds the per-player
-    fields (team, cost, opponents, status, chance_of_playing_next_round, news, _code)."""
+    fields (team, cost, opponents, status, chance_of_playing_next_round, news, play60, _code)."""
     def player(c: opt.Candidate) -> Dict[str, Any]:
         d = details[c.id]
+        play60 = d.get("play60")
         return {
             "name": c.id,
             "team": d["team"],
@@ -444,6 +466,7 @@ def build_team_of_the_week(selection: opt.Selection, details: Dict[str, Dict[str
             "status": d.get("status"),
             "chance_of_playing_next_round": d.get("chance_of_playing_next_round"),
             "news": d.get("news"),
+            "play60": round(play60, 3) if play60 is not None else None,
             "_code": d.get("_code"),
         }
 
@@ -456,6 +479,7 @@ def build_team_of_the_week(selection: opt.Selection, details: Dict[str, Dict[str
     total_cost = round(sum(costs), 1) if costs and all(c is not None for c in costs) else None
     return {
         "mode": mode,
+        "pick": pick,
         "gameweek": gameweek,
         "formation": selection.formation,
         "total_points": round(float(total), 2),
@@ -702,9 +726,13 @@ def get_player_leaders(conn, season: str = CURRENT_SEASON, position: Optional[st
 
 def get_team_of_the_week(conn, mode: str = "predicted", gameweek: Optional[int] = None,
                          photo_for: Optional[PhotoFn] = None,
-                         season: str = CURRENT_SEASON) -> Dict[str, Any]:
+                         season: str = CURRENT_SEASON, pick: str = "default") -> Dict[str, Any]:
+    """mode predicted: the squad for the next gameweek, pick "default" (most expected points) or
+    "safer" (opt.best_squad(safer=True)); mode actual: a finished gameweek's dream team."""
+    if pick not in PICKS or (pick != "default" and mode != "predicted"):
+        raise ValueError("pick must be 'default', or 'safer' with mode 'predicted'")
     if mode == "predicted":
-        payload = _predicted_team(conn, gameweek, season)
+        payload = _predicted_team(conn, gameweek, season, pick)
     elif mode == "actual":
         payload = _actual_team(conn, gameweek, season)
     else:
@@ -712,7 +740,7 @@ def get_team_of_the_week(conn, mode: str = "predicted", gameweek: Optional[int] 
     return with_photos(payload, photo_for)
 
 
-def _predicted_team(conn, gameweek: Optional[int], season: str) -> Dict[str, Any]:
+def _predicted_team(conn, gameweek: Optional[int], season: str, pick: str = "default") -> Dict[str, Any]:
     from services.predictions import get_predictions_df, predictions_path
 
     path = predictions_path()
@@ -732,10 +760,11 @@ def _predicted_team(conn, gameweek: Optional[int], season: str) -> Dict[str, Any
                 opponents = team_opponents(load_fixtures(conn, season), file_gw)
             except Exception as exc:  # the predictions file alone is enough
                 logger.warning("Fixtures unavailable for team of the week opponents: %s", exc)
-        selection, details = predicted_selection(df.to_dict("records"), opponents, status_lookup(season)["code"])
-        return build_team_of_the_week(selection, details, "predicted", file_gw, BUDGET / 10.0)
+        selection, details = predicted_selection(df.to_dict("records"), opponents, status_lookup(season)["code"],
+                                                 safer=pick == "safer")
+        return build_team_of_the_week(selection, details, "predicted", file_gw, BUDGET / 10.0, pick)
 
-    return _cached(("totw", "predicted", path, _mtime(path), conn is not None), build)
+    return _cached(("totw", "predicted", pick, path, _mtime(path), conn is not None), build)
 
 
 def _actual_team(conn, gameweek: Optional[int], season: str) -> Dict[str, Any]:

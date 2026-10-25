@@ -1,6 +1,7 @@
 """Tests for services.team_optimizer (pure; no Neo4j)."""
 import random
 import unittest
+from dataclasses import replace
 
 from services import team_optimizer as opt
 from services.team_optimizer import Candidate
@@ -180,6 +181,80 @@ class TestBestSquad(unittest.TestCase):
             opt.best_squad([c for c in make_pool(0) if c.position != "GK"])
         with self.assertRaises(opt.InfeasibleError):
             opt.best_squad(make_pool(0), budget=100)
+
+
+def safer_pool():
+    """Arsenal's nailed star and a doubtful clubmate with the same prediction, City's two
+    nailed attackers, and enough others and fodder for a squad; the budget isn't binding."""
+    pool = [
+        Candidate("GK one", "GK", "Brentford", 5.0, 50, play60=0.99),
+        Candidate("Gabriel", "DEF", "Arsenal", 5.0, 79, play60=0.95),
+        Candidate("Calafiori", "DEF", "Arsenal", 5.0, 60, play60=0.60),
+        Candidate("Williams", "DEF", "Forest", 4.6, 50, play60=0.95),
+        Candidate("Backup", "DEF", "Fulham", 4.2, 45, play60=0.95),
+        Candidate("Semenyo", "MID", "Man City", 6.5, 83, play60=0.97),
+        Candidate("MID two", "MID", "Chelsea", 6.4, 80, play60=0.95),
+        Candidate("MID three", "MID", "Spurs", 6.3, 70, play60=0.95),
+        Candidate("MID four", "MID", "Everton", 6.2, 66, play60=0.95),
+        Candidate("Haaland", "FWD", "Man City", 9.0, 157, play60=0.97),
+        Candidate("FWD two", "FWD", "Leeds", 6.1, 70, play60=0.95),
+        Candidate("FWD three", "FWD", "Wolves", 6.0, 60, play60=0.95),
+    ]
+    for k, pos in enumerate(["GK", "GK", "DEF", "DEF", "MID", "MID"]):
+        pool.append(Candidate(f"{pos} fodder {k}", pos, f"Z{k}", 0.5, 40))
+    return pool
+
+
+class TestSaferSquad(unittest.TestCase):
+    BUDGET = 10_000
+
+    def starters(self, sel):
+        return {c.id for c in sel.starters}
+
+    def test_points_at_risk(self):
+        self.assertAlmostEqual(opt.points_at_risk(Candidate("x", "MID", "A", 6.0, play60=0.75)), 1.5)
+        self.assertEqual(opt.points_at_risk(Candidate("x", "MID", "A", 6.0)), 0.0)          # unknown
+        self.assertEqual(opt.points_at_risk(Candidate("x", "MID", "A", -1.0, play60=0.2)), 0.0)
+        self.assertEqual(opt.points_at_risk(Candidate("x", "MID", "A", 6.0, play60=1.3)), 0.0)
+
+    def test_keeps_the_nailed_star_and_drops_the_doubtful_clubmate(self):
+        default = opt.best_squad(safer_pool(), budget=self.BUDGET)
+        self.assertTrue({"Gabriel", "Calafiori", "Williams"} <= self.starters(default))
+        sel = opt.best_squad(safer_pool(), budget=self.BUDGET, safer=True)
+        self.assertEqual(opt.validate_squad(sel, budget=self.BUDGET), [])
+        starters = self.starters(sel)
+        # Dropping either Arsenal defender ends the stack; the doubtful one goes, not the star
+        self.assertIn("Gabriel", starters)
+        self.assertNotIn("Calafiori", starters)
+        self.assertTrue({"Williams", "Backup"} <= starters)
+        # A stack of nailed players costs little: City's pair stays, Haaland keeps the armband
+        self.assertTrue({"Haaland", "Semenyo"} <= starters)
+        self.assertEqual(sel.captain.id, "Haaland")
+        # Predicted points are reported as predicted, not risk-adjusted
+        gabriel = next(c for c in sel.starters if c.id == "Gabriel")
+        self.assertEqual((gabriel.points, gabriel.play60), (5.0, 0.95))
+
+    def test_without_play60_safer_is_the_default_squad(self):
+        pool = make_pool(5)
+        a, b = opt.best_squad(pool), opt.best_squad(pool, safer=True)
+        self.assertEqual([c.id for c in a.starters + a.bench], [c.id for c in b.starters + b.bench])
+        self.assertEqual((a.captain.id, a.vice_captain.id), (b.captain.id, b.vice_captain.id))
+
+    def test_default_ignores_play60(self):
+        pool = make_pool(6)
+        rng = random.Random(6)
+        with_play60 = [replace(c, play60=round(rng.uniform(0.3, 1.0), 2)) for c in pool]
+        a, b = opt.best_squad(pool), opt.best_squad(with_play60)
+        self.assertEqual([c.id for c in a.starters + a.bench], [c.id for c in b.starters + b.bench])
+
+    def test_valid_on_random_pools(self):
+        for seed in range(4):
+            rng = random.Random(seed)
+            pool = [replace(c, play60=round(rng.uniform(0.3, 1.0), 2)) for c in make_pool(seed)]
+            for budget in (1000, 850):
+                sel = opt.best_squad(pool, budget=budget, safer=True)
+                self.assertEqual(opt.validate_squad(sel, budget, opt.DEFAULT_MAX_PER_CLUB), [])
+                self.assertEqual((len(sel.starters), len(sel.bench)), (11, 4))
 
 
 class TestBestXI(unittest.TestCase):

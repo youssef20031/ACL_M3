@@ -7,6 +7,8 @@ squad the Team of the Week page showed (season_service.predicted_selection, the 
 function). Files:
 
   $LIVE_DATA_DIR/model_picks/<season>/gwNN.json             the 15-man squad as picked
+  $LIVE_DATA_DIR/model_picks/<season>/gwNN_safer.json       the safer pick (team_optimizer's
+                                                            safer squad), when play60 exists
   $LIVE_DATA_DIR/model_picks/<season>/gwNN_predictions.csv  every player's prediction
 
 Picks recorded by hand (GW7, from the FPL app, before saving existed) are committed in
@@ -41,8 +43,15 @@ FORMATION_MIN = {"DEF": 3, "MID": 2, "FWD": 1}
 
 # ------------------------------------------------------------------ files
 
-def _pick_name(gameweek: int) -> str:
-    return f"gw{int(gameweek):02d}.json"
+def _pick_name(gameweek: int, pick: str = "default") -> str:
+    return f"gw{int(gameweek):02d}{'' if pick == 'default' else '_' + pick}.json"
+
+
+def _pick_gameweek(name: str, pick: str = "default") -> Optional[int]:
+    """The gameweek of a saved pick's file name for `pick`, else None."""
+    suffix = ".json" if pick == "default" else f"_{pick}.json"
+    middle = name[2:-len(suffix)] if name.startswith("gw") and name.endswith(suffix) else ""
+    return int(middle) if middle.isdigit() else None
 
 
 def _dirs(season: str) -> List[str]:
@@ -62,7 +71,7 @@ def _parse_time(value: Optional[str]) -> Optional[datetime]:
 
 def build_picks(selection: opt.Selection, details: Dict[str, Dict[str, Any]], season: str, gameweek: int,
                 deadline: Optional[str], fixture_ids: Dict[str, List[int]],
-                archived_at: Optional[str] = None) -> Dict[str, Any]:
+                archived_at: Optional[str] = None, pick: str = "default") -> Dict[str, Any]:
     """The JSON saved for a gameweek: starters in XI order, then the bench in priority
     order (goalkeeper first). `fixture_ids` maps a club to its fixture ids that gameweek."""
     def player(c: opt.Candidate, role: str) -> Dict[str, Any]:
@@ -74,11 +83,11 @@ def build_picks(selection: opt.Selection, details: Dict[str, Dict[str, Any]], se
             "vice_captain": selection.vice_captain is not None and c.id == selection.vice_captain.id,
             "fixtures": list(fixture_ids.get(d["team"], [])), "opponents": d.get("opponents") or [],
             "status": d.get("status"), "chance_of_playing_next_round": d.get("chance_of_playing_next_round"),
-            "news": d.get("news"),
+            "news": d.get("news"), "play60": d.get("play60"),
         }
 
     return {
-        "season": season, "gameweek": int(gameweek), "deadline": deadline,
+        "season": season, "gameweek": int(gameweek), "pick": pick, "deadline": deadline,
         "archived_at": archived_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": "pipeline", "note": None,
         "players": [player(c, "starter") for c in selection.starters]
@@ -88,8 +97,9 @@ def build_picks(selection: opt.Selection, details: Dict[str, Dict[str, Any]], se
 
 def save_picks(live_dir: str, season: str, gameweek: int, deadline: Optional[str], predictions_csv: str,
                fixtures_by_team: Dict[str, List[Dict[str, Any]]], now: Optional[datetime] = None) -> Optional[str]:
-    """Save the gameweek's pick and predictions, unless the deadline has passed (then the
-    saved pick is final). Returns the JSON path, or None when nothing was written."""
+    """Save the gameweek's picks and predictions, unless the deadline has passed (then the
+    saved picks are final): the default pick, and the safer one when the predictions carry
+    play60. Returns the default pick's JSON path, or None when nothing was written."""
     import pandas as pd
 
     now = now or datetime.now(timezone.utc)
@@ -98,21 +108,30 @@ def save_picks(live_dir: str, season: str, gameweek: int, deadline: Optional[str
         logger.info("GW%s deadline has passed; keeping its saved pick", gameweek)
         return None
     df = pd.read_csv(predictions_csv)      # exactly what the API reads
+    rows = df.to_dict("records")
     opponents = {team: [{"team": e["opponent"], "home": bool(e["is_home"])} for e in entries]
                  for team, entries in fixtures_by_team.items()}
-    selection, details = ss.predicted_selection(df.to_dict("records"), opponents)
     fixture_ids = {team: [int(e["fixture_id"]) for e in entries] for team, entries in fixtures_by_team.items()}
-    picks = build_picks(selection, details, season, gameweek, deadline, fixture_ids,
-                        archived_at=now.isoformat(timespec="seconds"))
+    selection, details = ss.predicted_selection(rows, opponents)
+    picks = {"default": build_picks(selection, details, season, gameweek, deadline, fixture_ids,
+                                    archived_at=now.isoformat(timespec="seconds"))}
+    try:
+        selection, details = ss.predicted_selection(rows, opponents, safer=True)
+        picks["safer"] = build_picks(selection, details, season, gameweek, deadline, fixture_ids,
+                                     archived_at=now.isoformat(timespec="seconds"), pick="safer")
+    except ss.UnavailableError as exc:
+        logger.info("GW%s: no safer pick saved: %s", gameweek, exc)
     out_dir = os.path.join(live_dir, PICKS_DIR, season)
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, _pick_name(gameweek))
     tmp = path[:-5] + "_predictions.csv.tmp"
     df.to_csv(tmp, index=False)
     os.replace(tmp, path[:-5] + "_predictions.csv")
-    with open(f"{path}.tmp", "w", encoding="utf-8") as f:   # JSON last: it marks the pick as saved
-        json.dump(picks, f, indent=2)
-    os.replace(f"{path}.tmp", path)
+    for pick, data in picks.items():                          # JSON last: it marks a pick as saved
+        target = os.path.join(out_dir, _pick_name(gameweek, pick))
+        with open(f"{target}.tmp", "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        os.replace(f"{target}.tmp", target)
     return path
 
 
@@ -126,16 +145,17 @@ def _read_json(path: str) -> Optional[Dict[str, Any]]:
     return ss._cached(("model-picks", path, ss._mtime(path)), load)
 
 
-def load_picks(gameweek: int, season: str = CURRENT_SEASON) -> Optional[Dict[str, Any]]:
+def load_picks(gameweek: int, season: str = CURRENT_SEASON, pick: str = "default") -> Optional[Dict[str, Any]]:
     for d in _dirs(season):
-        picks = _read_json(os.path.join(d, _pick_name(gameweek)))
+        picks = _read_json(os.path.join(d, _pick_name(gameweek, pick)))
         if picks is not None:
             return picks
     return None
 
 
-def reviewable_gameweeks(season: str = CURRENT_SEASON, now: Optional[datetime] = None) -> List[int]:
-    """Gameweeks with a saved pick whose deadline has passed, ascending."""
+def reviewable_gameweeks(season: str = CURRENT_SEASON, now: Optional[datetime] = None,
+                         pick: str = "default") -> List[int]:
+    """Gameweeks with a saved `pick` whose deadline has passed, ascending."""
     now = now or datetime.now(timezone.utc)
     found = set()
     for d in _dirs(season):
@@ -143,12 +163,10 @@ def reviewable_gameweeks(season: str = CURRENT_SEASON, now: Optional[datetime] =
             names = os.listdir(d)
         except OSError:
             continue
-        for name in names:
-            if name.startswith("gw") and name.endswith(".json") and name[2:-5].isdigit():
-                found.add(int(name[2:-5]))
+        found.update(gw for gw in (_pick_gameweek(name, pick) for name in names) if gw is not None)
     out = []
     for gw in sorted(found):
-        picks = load_picks(gw, season) or {}
+        picks = load_picks(gw, season, pick) or {}
         deadline = _parse_time(picks.get("deadline"))
         if deadline is not None and deadline <= now:
             out.append(gw)
@@ -292,19 +310,23 @@ def score_picks(picks: Dict[str, Any], actual: Dict[int, Dict[str, int]], event:
 # ------------------------------------------------------------------ endpoint payload
 
 def get_model_review(gameweek: Optional[int] = None, photo_for: Optional[ss.PhotoFn] = None,
-                     season: str = CURRENT_SEASON) -> Dict[str, Any]:
-    gameweeks = reviewable_gameweeks(season)
+                     season: str = CURRENT_SEASON, pick: str = "default") -> Dict[str, Any]:
+    if pick not in ss.PICKS:
+        raise ValueError(f"pick must be one of {ss.PICKS}")
+    what = "model pick" if pick == "default" else f"{pick} pick"
+    gameweeks = reviewable_gameweeks(season, pick=pick)
     if not gameweeks:
-        raise ss.NotFoundError("No saved model pick yet")
+        raise ss.NotFoundError(f"No saved {what} yet")
     if gameweek is None:
         gameweek = gameweeks[-1]
     elif gameweek not in gameweeks:
-        raise ss.NotFoundError(f"No saved model pick for gameweek {gameweek}")
-    picks = load_picks(gameweek, season)
+        raise ss.NotFoundError(f"No saved {what} for gameweek {gameweek}")
+    picks = load_picks(gameweek, season, pick)
     meta = ss.read_meta(season)
     payload = score_picks(picks, actual_by_element(gameweek, season), event_info(gameweek, season),
                           meta.get("finished_fixtures") or [])
     payload["season"] = payload["season"] or season
+    payload["pick"] = pick
     payload["gameweeks"] = gameweeks
     payload["budget"] = ss.BUDGET / 10.0
     lookup = ss.status_lookup(season)

@@ -1,6 +1,7 @@
 name: ML train
 
-# Retrains the bundled v3 points model (ml/models/points_v3*.json) and regenerates its evaluation
+# Retrains the bundled v3 points model (ml/models/points_v3*.json) and the chance-of-playing-60-minutes
+# model trained with it (ml/models/play60_v1*.json), and regenerates the points model's evaluation
 # report (docs/ml_evaluation/) on GitHub's runners, with the current season fetched from the FPL
 # API; download the "model" artifact and commit its files. Use it when a code change needs a new
 # bundled model: training is too heavy for a laptop, and the VM's weekly retrain
@@ -38,5 +39,7 @@ jobs:
             ml/models/points_v3.json
             ml/models/points_v3_meta.json
             ml/models/points_v3_report.json
+            ml/models/play60_v1.json
+            ml/models/play60_v1_meta.json
             docs/ml_evaluation/
           retention-days: 14

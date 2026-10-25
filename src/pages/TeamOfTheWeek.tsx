@@ -1,17 +1,22 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { ShieldCheck } from 'lucide-react';
 import {
   apiService,
   handleApiError,
   isNotFoundError,
+  isServiceUnavailableError,
   type TeamOfWeekMode,
+  type TeamOfWeekPick,
   type TeamOfWeekPlayer,
 } from '../services/api';
 import {
+  Button,
   Card,
   ClubCrest,
   Container,
+  EmptyState,
   ErrorState,
   PageHeader,
   Pitch,
@@ -28,21 +33,39 @@ import {
 } from '../components/ui';
 import { ModelReview } from '../components/totw/ModelReview';
 import { PITCH_LINES } from '../components/totw/pitchLines';
+import { SegmentedControl, type SegmentOption } from '../components/predictions/SegmentedControl';
 import { usePageMeta } from '../hooks/usePageMeta';
 
 // The page's tabs: the two squads from /api/team-of-the-week, plus the model's past picks
 // against what they scored (/api/model-review). `mode` in the URL; predicted is the default.
+// The predicted and review tabs also switch between the default pick and the safer one
+// (`pick=safer` in the URL), which the backend saves next to it before every deadline.
 type View = TeamOfWeekMode | 'review';
 
 const parseView = (value: string | null): View => (value === 'actual' || value === 'review' ? value : 'predicted');
+const parsePick = (value: string | null): TeamOfWeekPick => (value === 'safer' ? 'safer' : 'default');
+
+const PICK_OPTIONS: SegmentOption<TeamOfWeekPick>[] = [
+  { value: 'default', label: 'Most points' },
+  { value: 'safer', label: 'Safer pick', shortLabel: 'Safer' },
+];
 
 function fmtPoints(points: number, mode: TeamOfWeekMode) {
   return mode === 'predicted' ? points.toFixed(1) : String(Math.round(points));
 }
 
-function TeamPitch({ starters, mode, gameweek }: { starters: TeamOfWeekPlayer[]; mode: TeamOfWeekMode; gameweek: number }) {
+interface TeamPitchProps {
+  starters: TeamOfWeekPlayer[];
+  mode: TeamOfWeekMode;
+  gameweek: number;
+  /** The safer pick: each player's chance of playing 60 minutes under his points. */
+  safer?: boolean;
+}
+
+function TeamPitch({ starters, mode, gameweek, safer = false }: TeamPitchProps) {
+  const label = mode === 'predicted' ? (safer ? 'Safer predicted' : 'Predicted') : 'Dream';
   return (
-    <Pitch label={`${mode === 'predicted' ? 'Predicted' : 'Dream'} team, gameweek ${gameweek}`}>
+    <Pitch label={`${label} team, gameweek ${gameweek}`}>
       {PITCH_LINES.map((line) => (
         <PitchRow key={line.position} label={line.label}>
           {starters
@@ -60,6 +83,7 @@ function TeamPitch({ starters, mode, gameweek }: { starters: TeamOfWeekPlayer[];
                 status={mode === 'predicted' ? p.status : null}
                 statusNote={mode === 'predicted' ? p.news : null}
                 value={`${fmtPoints(p.points, mode)} pts`}
+                detail={safer && p.play60 != null ? `${Math.round(p.play60 * 100)}% to play 60` : undefined}
               />
             ))}
         </PitchRow>
@@ -73,10 +97,11 @@ function PitchSkeleton() {
 }
 
 export function TeamOfTheWeek() {
-  usePageMeta({ title: "Team of the Week", description: "The highest-scoring FPL squad our model predicts for the next gameweek (£100m, 3 per club), how its past picks scored, and each week's dream team." });
+  usePageMeta({ title: "Team of the Week", description: "The highest-scoring FPL squad our model predicts for the next gameweek (£100m, 3 per club), a safer pick that avoids risky stacks, how past picks scored, and each week's dream team." });
   const [params, setParams] = useSearchParams();
   const view = parseView(params.get('mode'));
   const mode: TeamOfWeekMode = view === 'actual' ? 'actual' : 'predicted';
+  const pick: TeamOfWeekPick = view === 'actual' ? 'default' : parsePick(params.get('pick'));
   const requestedGw = Number(params.get('gw')) || undefined;
 
   const { data: season } = useQuery({
@@ -88,8 +113,8 @@ export function TeamOfTheWeek() {
 
   const gameweek = view === 'actual' ? requestedGw : undefined;
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-    queryKey: ['team-of-the-week', mode, gameweek ?? 'default'],
-    queryFn: () => apiService.getTeamOfTheWeek(mode, gameweek),
+    queryKey: ['team-of-the-week', mode, gameweek ?? 'default', pick],
+    queryFn: () => apiService.getTeamOfTheWeek(mode, gameweek, pick),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60_000,
     enabled: view !== 'review',
@@ -97,8 +122,8 @@ export function TeamOfTheWeek() {
 
   const reviewGw = view === 'review' ? requestedGw : undefined;
   const review = useQuery({
-    queryKey: ['model-review', reviewGw ?? 'default'],
-    queryFn: () => apiService.getModelReview(reviewGw),
+    queryKey: ['model-review', reviewGw ?? 'default', pick],
+    queryFn: () => apiService.getModelReview(reviewGw, pick),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60_000,
     enabled: view === 'review',
@@ -106,18 +131,31 @@ export function TeamOfTheWeek() {
     retry: (failures, err) => !isNotFoundError(err) && failures < 1,
   });
 
-  // Keep the gw param out of the URL in predicted mode (it only applies to past gameweeks).
+  // Keep the gw param out of the URL in predicted mode (it only applies to past gameweeks), and
+  // the pick out of it on the dream team tab (there's only one dream team).
   useEffect(() => {
-    if (view === 'predicted' && params.has('gw')) {
-      params.delete('gw');
+    const stale = (view === 'predicted' && params.has('gw')) || (view === 'actual' && params.has('pick'));
+    if (stale) {
+      params.delete(view === 'predicted' ? 'gw' : 'pick');
       setParams(params, { replace: true });
     }
   }, [view, params, setParams]);
 
-  // Switching tabs drops the gameweek: each tab has its own default.
-  const setView = (next: View) => setParams(next === 'predicted' ? {} : { mode: next });
-  const team = data && data.mode === mode ? data : undefined;
+  // Switching tabs drops the gameweek (each tab has its own default) but keeps the safer pick.
+  const withPick = (next: Record<string, string>) => (pick === 'safer' ? { ...next, pick } : next);
+  const setView = (next: View) =>
+    setParams(next === 'actual' ? { mode: next } : withPick(next === 'predicted' ? {} : { mode: next }));
+  const setPick = (next: TeamOfWeekPick) => {
+    const nextParams = new URLSearchParams(params);
+    if (next === 'safer') nextParams.set('pick', next);
+    else nextParams.delete('pick');
+    setParams(nextParams);
+  };
+  const team = data && data.mode === mode && (data.pick ?? 'default') === pick ? data : undefined;
   const captain = team?.starters.find((p) => p.captain);
+  const safer = pick === 'safer';
+  // An older backend ignores pick=safer and answers with the default team, without a `pick`.
+  const saferUnsupported = safer && !isFetching && data?.mode === mode && data.pick === undefined;
 
   return (
     <Container>
@@ -126,7 +164,9 @@ export function TeamOfTheWeek() {
         title="Team of the Week"
         description={
           view === 'predicted'
-            ? 'The highest-scoring XI our model expects next gameweek, picked like a real FPL squad: £100m, 3 players per club at most.'
+            ? safer
+              ? 'A safer version of the predicted squad, under the same £100m and 3-per-club rules: players who might not play 60 minutes count for less, most of all when clubmates start together, so nailed stars stay and doubtful teammates make way.'
+              : 'The highest-scoring XI our model expects next gameweek, picked like a real FPL squad: £100m, 3 players per club at most.'
             : view === 'review'
               ? 'How the model’s pick for a past gameweek actually did: each player’s predicted and real FPL points, against the average FPL score.'
               : 'The best-performing XI of a finished gameweek, by actual FPL points.'
@@ -146,16 +186,40 @@ export function TeamOfTheWeek() {
       />
 
       <TabPanel idPrefix="totw" value={view} className="pt-5">
+        {view !== 'actual' && (
+          <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <SegmentedControl label="Which predicted squad" options={PICK_OPTIONS} value={pick} onChange={setPick} />
+            <p className="text-data text-fg-muted">
+              {safer
+                ? 'Nailed players first: doubtful players, and clubmates who start together, count for less.'
+                : 'The squad with the most expected points.'}
+            </p>
+          </div>
+        )}
         {view === 'review' ? (
           <ModelReview
+            pick={pick}
             review={review.data}
             error={review.isError ? review.error : undefined}
             selectedGameweek={reviewGw}
             updating={review.isFetching && review.isPlaceholderData}
-            onGameweekChange={(gw) => setParams({ mode: 'review', gw: String(gw) })}
+            onGameweekChange={(gw) => setParams(withPick({ mode: 'review', gw: String(gw) }))}
             onRetry={() => review.refetch()}
-            onShowLatest={reviewGw ? () => setParams({ mode: 'review' }) : undefined}
+            onShowLatest={reviewGw ? () => setParams(withPick({ mode: 'review' })) : undefined}
           />
+        ) : saferUnsupported || (isError && safer && isServiceUnavailableError(error)) ? (
+          <Card>
+            <EmptyState
+              icon={<ShieldCheck className="h-8 w-8" aria-hidden="true" />}
+              title="The safer pick isn’t ready yet"
+              description={saferUnsupported ? 'This server doesn’t offer the safer pick yet.' : handleApiError(error)}
+              action={
+                <Button variant="secondary" size="sm" onClick={() => setPick('default')}>
+                  Show the main pick
+                </Button>
+              }
+            />
+          </Card>
         ) : isError ? (
           <Card>
             <ErrorState title="Couldn't build the team" description={handleApiError(error)} onRetry={() => refetch()} />
@@ -163,7 +227,11 @@ export function TeamOfTheWeek() {
         ) : (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
             <div aria-busy={isFetching}>
-              {isLoading || !team ? <PitchSkeleton /> : <TeamPitch starters={team.starters} mode={mode} gameweek={team.gameweek} />}
+              {isLoading || !team ? (
+                <PitchSkeleton />
+              ) : (
+                <TeamPitch starters={team.starters} mode={mode} gameweek={team.gameweek} safer={safer} />
+              )}
             </div>
 
             <aside className="space-y-4">
@@ -229,9 +297,11 @@ export function TeamOfTheWeek() {
               )}
 
               <p className="text-data text-fg-subtle">
-                {mode === 'predicted'
-                  ? 'Picked by an optimiser from the points model’s next-gameweek predictions. Injured and suspended players are left out; doubtful players are marked in yellow.'
-                  : 'Like FPL’s Dream Team: the best valid formation by points scored, with no budget or club limit.'}
+                {mode !== 'predicted'
+                  ? 'Like FPL’s Dream Team: the best valid formation by points scored, with no budget or club limit.'
+                  : safer
+                    ? 'The same predictions, chosen differently: each player counts as his predicted points minus a quarter of the points he’d lose by not playing 60 minutes (from a chance-of-playing model and FPL’s injury news), and clubmates who start together pay a further share of that risk. Tested on 121 past gameweeks it scored about the same as the main pick (0.4 points a week fewer, within the noise) with far fewer same-club pairs.'
+                    : 'Picked by an optimiser from the points model’s next-gameweek predictions. Injured and suspended players are left out; doubtful players are marked in yellow.'}
               </p>
             </aside>
           </div>

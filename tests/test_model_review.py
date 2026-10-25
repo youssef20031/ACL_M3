@@ -183,7 +183,7 @@ class TestCommittedGW7(unittest.TestCase):
         self.assertEqual([p["name"] for p in r["bench"]][:2], ["Martin Dubravka", "Rayan Cherki"])
 
 
-def write_predictions(path, gameweek=8):
+def write_predictions(path, gameweek=8, play60=False):
     clubs = ["Arsenal", "Chelsea", "Everton", "Fulham", "Brentford", "Leeds", "Spurs", "Wolves"]
     rows = []
     for k, pos in enumerate((["GK"] * 2 + ["DEF"] * 5 + ["MID"] * 5 + ["FWD"] * 3) * 2):
@@ -192,6 +192,8 @@ def write_predictions(path, gameweek=8):
                      "opponent": "Somebody", "is_home": True, "gameweek": gameweek,
                      "kickoff_time": "2026-10-24T14:00:00Z", "fixtures": 1, "status": "a",
                      "chance_of_playing_next_round": None, "news": None, "element": k + 1})
+        if play60:
+            rows[-1]["play60"] = round(0.5 + (k * 29 % 50) / 100, 2)
     pd.DataFrame(rows).to_csv(path, index=False)
     return rows
 
@@ -235,6 +237,46 @@ class TestSaveAndReview(unittest.TestCase):
         self.assertEqual([p["name"] for p in picks["players"]],
                          [p["name"] for p in page["starters"] + page["bench"]])
         self.assertTrue(all(p["fixtures"] for p in picks["players"]))
+        # No play60 in these predictions: no safer pick
+        self.assertFalse(os.path.exists(path.replace(".json", "_safer.json")))
+
+    def test_saves_the_safer_pick_too(self):
+        self.rows = write_predictions(self.csv, play60=True)
+        path = self.save(datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc))
+        safer = json.load(open(path.replace(".json", "_safer.json"), encoding="utf-8"))
+        self.assertEqual((safer["gameweek"], safer["pick"], len(safer["players"])), (8, "safer", 15))
+        self.assertEqual(json.load(open(path, encoding="utf-8"))["pick"], "default")
+        page = ss.get_team_of_the_week(None, "predicted", None, season="2026-27", pick="safer")
+        self.assertEqual([p["name"] for p in safer["players"]],
+                         [p["name"] for p in page["starters"] + page["bench"]])
+        self.assertTrue(all(0 <= p["play60"] <= 1 for p in safer["players"]))
+
+    def test_review_of_the_safer_pick(self):
+        self.rows = write_predictions(self.csv, play60=True)
+        self.save(datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc))
+        rows = [{"element": r["element"], "GW": 8, "minutes": 90, "total_points": 2} for r in self.rows]
+        pd.DataFrame(rows).to_csv(os.path.join(self.tmp.name, "FPL_2026_2027.csv"), index=False)
+        self.write_meta([{"id": 8, "finished": True, "average_entry_score": 55, "highest_score": 140}])
+        with patch.object(mr, "datetime") as dt:
+            dt.now.return_value = datetime(2026, 10, 27, tzinfo=timezone.utc)
+            dt.fromisoformat = datetime.fromisoformat
+            self.assertEqual(mr.reviewable_gameweeks(pick="safer"), [8])
+            safer = mr.get_model_review(pick="safer")
+            default = mr.get_model_review()
+        self.assertEqual((safer["pick"], safer["gameweek"], safer["gameweeks"]), ("safer", 8, [8]))
+        self.assertEqual(default["pick"], "default")
+        self.assertEqual(len(safer["starters"]) + len(safer["bench"]), 15)
+
+    def test_no_safer_review_without_a_saved_safer_pick(self):
+        self.save(datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc))       # no play60: default only
+        self.write_meta([])
+        with patch.object(mr, "datetime") as dt:
+            dt.now.return_value = datetime(2026, 10, 27, tzinfo=timezone.utc)
+            dt.fromisoformat = datetime.fromisoformat
+            self.assertEqual(mr.reviewable_gameweeks(), [8])
+            self.assertEqual(mr.reviewable_gameweeks(pick="safer"), [])
+            with self.assertRaises(ss.NotFoundError):
+                mr.get_model_review(pick="safer")
 
     def test_keeps_the_pick_after_the_deadline(self):
         self.assertIsNone(self.save(datetime(2026, 10, 23, 17, 30, tzinfo=timezone.utc)))
@@ -321,6 +363,31 @@ class TestRoute(unittest.TestCase):
         with patch.object(self.api.model_review, "get_model_review", side_effect=ss.NotFoundError("none")):
             self.assertEqual(self.client.get("/api/model-review").status_code, 404)
         self.assertEqual(self.client.get("/api/model-review?gameweek=0").status_code, 422)
+
+    def test_safer_pick(self):
+        payload = mr.score_picks(picks_352(), actual(), FINISHED, [])
+        payload.update(season="2026-27", gameweeks=[5], pick="safer")
+        for p in payload["starters"] + payload["bench"]:
+            p.pop("element")
+            p["photo"] = None
+        with patch.object(self.api.model_review, "get_model_review", return_value=payload) as get:
+            resp = self.client.get("/api/model-review?gameweek=5&pick=safer")
+        self.assertEqual((resp.status_code, resp.json()["pick"]), (200, "safer"))
+        self.assertEqual(get.call_args.kwargs["pick"], "safer")
+        self.assertEqual(self.client.get("/api/model-review?pick=bogus").status_code, 422)
+
+    def test_team_of_the_week_pick(self):
+        team = {"mode": "predicted", "pick": "safer", "gameweek": 9, "formation": "3-4-3", "total_points": 60.0,
+                "total_cost": 99.5, "budget": 100.0, "starters": [], "bench": []}
+        with patch.object(self.api.season_service, "get_team_of_the_week", return_value=team) as get:
+            resp = self.client.get("/api/team-of-the-week?pick=safer")
+        self.assertEqual((resp.status_code, resp.json()["pick"]), (200, "safer"))
+        self.assertEqual(get.call_args.kwargs["pick"], "safer")
+        self.assertEqual(self.client.get("/api/team-of-the-week?mode=actual&pick=safer").status_code, 422)
+        self.assertEqual(self.client.get("/api/team-of-the-week?pick=bogus").status_code, 422)
+        with patch.object(self.api.season_service, "get_team_of_the_week",
+                          side_effect=ss.UnavailableError("no play60 yet")):
+            self.assertEqual(self.client.get("/api/team-of-the-week?pick=safer").status_code, 503)
 
 
 if __name__ == "__main__":

@@ -1013,11 +1013,17 @@ class TeamOfWeekPlayer(BaseModel):
     status: Optional[str] = None
     chance_of_playing_next_round: Optional[int] = None
     news: Optional[str] = None
+    play60: Optional[float] = None      # chance of playing 60+ minutes (predicted mode)
     photo: Optional[str] = None
+
+
+# The predicted team: most expected points, or the safer squad (team_optimizer.best_squad(safer=True))
+TeamOfWeekPick = Literal["default", "safer"]
 
 
 class TeamOfWeekResponse(BaseModel):
     mode: str
+    pick: TeamOfWeekPick = "default"
     gameweek: int
     formation: str
     total_points: float
@@ -1061,6 +1067,7 @@ class AutoSub(BaseModel):
 
 class ModelReviewResponse(BaseModel):
     season: str
+    pick: TeamOfWeekPick = "default"
     gameweek: int
     gameweeks: List[int]
     status: str
@@ -2488,12 +2495,14 @@ def _photo_for(name: str, team: Optional[str], fpl_code: Optional[int]) -> Optio
 
 
 def _season_call(fn, *args, **kwargs):
-    """Map season_service errors: unknown gameweek -> 404, Neo4j down -> 503."""
+    """Map season_service errors: unknown gameweek -> 404, Neo4j down or data not there yet -> 503."""
     from neo4j.exceptions import DriverError
     try:
         return fn(*args, **kwargs)
     except season_service.NotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except season_service.UnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     except DriverError as exc:
         logger.error(f"Neo4j unavailable: {exc}")
         raise HTTPException(status_code=503, detail="Neo4j unavailable, try again shortly")
@@ -2524,23 +2533,27 @@ def season_injuries(team: Optional[str] = None, conn=Depends(get_neo4j_conn)):
 
 
 @app.get("/api/team-of-the-week", response_model=TeamOfWeekResponse)
-def team_of_the_week(mode: str = "predicted", gameweek: Optional[int] = None):
+def team_of_the_week(mode: str = "predicted", gameweek: Optional[int] = None, pick: TeamOfWeekPick = "default"):
     """Best FPL squad for the next gameweek by predicted points (budget 100.0m, max 3
-    per club), or the best XI of a finished gameweek by actual points (mode=actual)."""
+    per club), or the best XI of a finished gameweek by actual points (mode=actual).
+    pick=safer (predicted only) also weighs each player's chance of playing 60 minutes,
+    most of all for clubmates in the XI; 503 until the predictions carry it."""
     if mode not in ("predicted", "actual"):
         raise HTTPException(status_code=422, detail="mode must be 'predicted' or 'actual'")
+    if pick != "default" and mode != "predicted":
+        raise HTTPException(status_code=422, detail="pick=safer needs mode=predicted")
     conn = app_state["neo4j_conn"]
     if conn is None and mode == "actual":
         raise HTTPException(status_code=503, detail="Neo4j not connected")
-    return _season_call(season_service.get_team_of_the_week, conn, mode, gameweek, photo_for=_photo_for)
+    return _season_call(season_service.get_team_of_the_week, conn, mode, gameweek, photo_for=_photo_for, pick=pick)
 
 
 @app.get("/api/model-review", response_model=ModelReviewResponse, response_model_by_alias=True)
-def model_review_endpoint(gameweek: Optional[int] = Query(None, ge=1, le=38)):
-    """The model's squad saved before a past gameweek's deadline, scored like FPL (auto-subs,
-    captain/vice), with FPL's average and highest score. Default: the latest saved pick
-    whose deadline has passed. 404 when there's none."""
-    return _season_call(model_review.get_model_review, gameweek, photo_for=_photo_for)
+def model_review_endpoint(gameweek: Optional[int] = Query(None, ge=1, le=38), pick: TeamOfWeekPick = "default"):
+    """The model's squad saved before a past gameweek's deadline (pick=safer: the safer squad
+    saved alongside it), scored like FPL (auto-subs, captain/vice), with FPL's average and
+    highest score. Default: the latest saved pick whose deadline has passed. 404 when there's none."""
+    return _season_call(model_review.get_model_review, gameweek, photo_for=_photo_for, pick=pick)
 
 
 @app.get("/api/players/leaders", response_model=PlayerLeadersResponse)

@@ -321,7 +321,7 @@ class TestQueryLayer(LiveDirTestCase):
         with self.assertRaises(ss.NotFoundError):
             ss.get_team_of_the_week(conn, "actual", 30, season="2026-27")  # unknown gameweek
 
-    def _write_predictions(self, gameweek=4):
+    def _write_predictions(self, gameweek=4, play60=False):
         clubs = ["Arsenal", "Chelsea", "Everton", "Fulham", "Brentford", "Leeds", "Spurs", "Wolves"]
         rows = []
         for k, pos in enumerate((["GK"] * 2 + ["DEF"] * 5 + ["MID"] * 5 + ["FWD"] * 3) * 2):
@@ -334,7 +334,35 @@ class TestQueryLayer(LiveDirTestCase):
         rows.append({**rows[0], "name": "Blank", "predicted_points": 0.0})
         rows.append({**rows[2], "name": "Doubtful Star", "position": "DEF", "predicted_points": 20,
                      "status": "d", "chance_of_playing_next_round": 75, "news": "Knock", "team": "Chelsea"})
+        if play60:
+            for k, r in enumerate(rows):
+                r["play60"] = round(0.5 + (k * 29 % 50) / 100, 2)
         pd.DataFrame(rows).to_csv(os.path.join(self.tmp.name, "next_gw_predictions.csv"), index=False)
+
+    def test_safer_pick(self):
+        self._write_predictions(play60=True)
+        default = ss.get_team_of_the_week(None, "predicted", None, season="2026-27")
+        safer = ss.get_team_of_the_week(None, "predicted", None, season="2026-27", pick="safer")
+        self.assertEqual((default["pick"], safer["pick"]), ("default", "safer"))
+        players = safer["starters"] + safer["bench"]
+        self.assertEqual(len(players), 15)
+        self.assertTrue(all(0 <= p["play60"] <= 1 for p in players))
+        self.assertLessEqual(safer["total_cost"], 100.0)
+        # Each player shows his prediction either way; only the selection differs
+        shown = {p["name"]: p["points"] for p in default["starters"] + default["bench"]}
+        for p in players:
+            if p["name"] in shown:
+                self.assertEqual(p["points"], shown[p["name"]])
+        with self.assertRaises(ValueError):
+            ss.get_team_of_the_week(None, "actual", None, season="2026-27", pick="safer")
+
+    def test_safer_pick_needs_play60(self):
+        self._write_predictions()
+        with self.assertRaises(ss.UnavailableError):
+            ss.get_team_of_the_week(None, "predicted", None, season="2026-27", pick="safer")
+        default = ss.get_team_of_the_week(None, "predicted", None, season="2026-27")
+        self.assertEqual(default["pick"], "default")
+        self.assertIsNone(default["starters"][0]["play60"])
 
     def test_predicted_team_of_the_week(self):
         self._write_predictions()
