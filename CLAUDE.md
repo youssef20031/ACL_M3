@@ -31,6 +31,7 @@ Current-season pipeline (`pipeline/`, data in `data/live/`, gitignored; a Docker
 .venv/Scripts/python.exe -m pipeline.predict_next_gw  # next-gameweek predictions -> data/live/
 .venv/Scripts/python.exe -m pipeline.daily            # all of the above + API reload (what the VM timer runs)
 ```
+The FPL API only shows current values, so `pipeline.current_season` archives what was known before each deadline. On every run before a deadline it appends each player's state to `$LIVE_DATA_DIR/element_snapshots/<season>/gwNN.csv`: status, chance of playing, news, price, ownership, ep_next, the gameweek's transfers in/out and price change, and set-piece orders. Every capture is kept, so the last one before the deadline matches the last prediction run. The status file has the same transfer, price-change and set-piece columns, as one current snapshot. Historical availability and set-piece features can only be trained from this archive, which starts in 2026-27.
 Local Neo4j alternative: `docker compose up neo4j` (bolt://localhost:7687, neo4j/password).
 
 Dependencies: `requirements.txt` is runtime-only (what `api_main.py` imports); `requirements-dev.txt` adds pytest/hypothesis and training/analysis libs. In Linux containers install CPU torch first (see the Dockerfile).
