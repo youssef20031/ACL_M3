@@ -1363,7 +1363,8 @@ def cmd_report(args) -> None:
             for k in spread_keys:
                 s = _seed_spread(tp, k)
                 d = _digits(k)
-                cells.append(f"{s[0]:.{d}f} ± {s[1]:.{d}f} / {s[2]:.{d}f}" if s else "-")
+                se = f"{s[2]:.{d}f}" if s and np.isfinite(s[2]) else "-"   # rmse is a ratio: no per-GW SE
+                cells.append(f"{s[0]:.{d}f} ± {s[1]:.{d}f} / {se}" if s else "-")
             spread_rows.append(f"| {name} | {proto} | {tp['seed'].nunique()} | " + " | ".join(cells) + " |")
     if spread_rows:
         lines.append("\n## Seed variance of single models (pooled over folds): mean over seeds ± SD between seeds / "
