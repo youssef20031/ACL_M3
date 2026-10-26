@@ -107,6 +107,23 @@ def _str_or_none(value: Any) -> Optional[str]:
     return text or None
 
 
+def chance_of_playing(status: Any, chance_next: Any) -> float:
+    """Chance a player plays from FPL's status and chance_of_playing_next_round: 0 for u
+    (left / unavailable) and n (not in squad); else the chance / 100 when set; injured or
+    suspended players without a chance value are out; anyone else 1. The predictions
+    file is scaled by this (pipeline.predict_next_gw.availability_factor)."""
+    status = (_str_or_none(status) or "a").lower()
+    if status in ("u", "n"):
+        return 0.0
+    try:
+        chance = float(chance_next)
+    except (TypeError, ValueError):
+        chance = math.nan
+    if not math.isnan(chance):
+        return min(max(chance / 100.0, 0.0), 1.0)
+    return 0.0 if status in ("i", "s") else 1.0
+
+
 def normalize_position(position: Any) -> Optional[str]:
     if position is None:
         return None
@@ -398,13 +415,16 @@ def predicted_selection(rows: Iterable[Dict[str, Any]],
         if name in details or position not in opt.POSITIONS:
             continue
         value = _int_or_none(r["value"])
-        pool.append(opt.Candidate(id=name, position=position, team=str(r["team"]),
-                                  points=float(r["predicted_points"]), cost=value))
         team = str(r["team"])
+        faces = opponents.get(team) if team in opponents else opponents_from_prediction(r)
+        pool.append(opt.Candidate(id=name, position=position, team=team,
+                                  points=float(r["predicted_points"]), cost=value,
+                                  p_play=chance_of_playing(r.get("status"), r.get("chance_of_playing_next_round")),
+                                  opponents=tuple(o["team"] for o in faces or [])))
         details[name] = {
             "team": team,
             "cost": round(value / 10.0, 1),
-            "opponents": opponents.get(team) if team in opponents else opponents_from_prediction(r),
+            "opponents": faces,
             "status": _str_or_none(r.get("status")) or "a",
             "chance_of_playing_next_round": _int_or_none(r.get("chance_of_playing_next_round")),
             "news": _str_or_none(r.get("news")),

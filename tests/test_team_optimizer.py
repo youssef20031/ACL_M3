@@ -223,5 +223,68 @@ class TestBestXI(unittest.TestCase):
             opt.best_xi([Candidate("G", "GK", "A", 1)])
 
 
+def with_fillers(*players):
+    """An XI: the given players plus nailed 3.0-point fillers, each from its own club."""
+    fillers = [Candidate(f"Filler {k:02d}", "MID", f"Z{k}", 3.0) for k in range(opt.XI_SIZE)]
+    return list(players) + fillers[:opt.XI_SIZE - len(players)]
+
+
+class TestPickCaptains(unittest.TestCase):
+    """Captain and vice by expected bonus E_c + (1 - p_c) * E_v; points already include p_play."""
+
+    def picks(self, xi):
+        captain, vice = opt.pick_captains(xi)
+        return captain.id, vice.id
+
+    def test_flagged_star_captained_with_nailed_vice(self):
+        star = Candidate("Flagged star", "MID", "A", 0.75 * 8.0, p_play=0.75)   # 8.0 if he plays
+        nailed = Candidate("Nailed", "FWD", "B", 6.5)
+        self.assertEqual(self.picks(with_fillers(star, nailed)), ("Flagged star", "Nailed"))
+        self.assertAlmostEqual(opt.captain_bonus(star, nailed), 7.625)
+        self.assertAlmostEqual(opt.captain_bonus(nailed, star), 6.5)        # the old pick
+
+    def test_three_way_choice(self):
+        a = Candidate("A", "FWD", "A", 7.0)
+        b = Candidate("B", "MID", "B", 0.5 * 8.4, p_play=0.5)
+        d = Candidate("D", "MID", "D", 0.75 * 8.0, p_play=0.75)
+        self.assertEqual(self.picks(with_fillers(a, b, d)), ("D", "A"))
+        self.assertAlmostEqual(opt.captain_bonus(d, a), 7.75)
+        self.assertAlmostEqual(opt.captain_bonus(b, a), 7.70)
+        self.assertAlmostEqual(opt.captain_bonus(a, d), 7.0)
+
+    def test_all_nailed_matches_top_two_by_points(self):
+        rng = random.Random(0)
+        for seed in range(40):
+            pool = make_pool(seed)
+            xi = rng.sample(pool, opt.XI_SIZE)
+            if seed % 2:      # integer points, as in the dream team: many ties, some teammates
+                xi = [Candidate(c.id, c.position, f"Club{k % 3}", float(round(c.points))) for k, c in enumerate(xi)]
+            old = sorted(xi, key=lambda c: (-c.points, c.id))
+            self.assertEqual(self.picks(xi), (old[0].id, old[1].id))
+
+    def test_tie_goes_to_vice_from_another_fixture(self):
+        flagged = Candidate("Flagged", "FWD", "A", 5.0, p_play=0.5, opponents=("B",))
+        mate = Candidate("A mate", "MID", "A", 4.0)                     # same club
+        rival = Candidate("B rival", "DEF", "B", 4.0, opponents=("A",))  # the other side of his match
+        other = Candidate("C other", "MID", "C", 4.0, opponents=("D",))
+        self.assertEqual(self.picks(with_fillers(flagged, mate, rival, other)), ("Flagged", "C other"))
+        # A captain certain to play keeps the old order: the vice can't matter
+        nailed = Candidate("Nailed", "FWD", "A", 9.0)
+        self.assertEqual(self.picks(with_fillers(nailed, mate, other)), ("Nailed", "A mate"))
+
+    def test_single_starter(self):
+        only = Candidate("Only", "GK", "A", 2.0, p_play=0.5)
+        self.assertEqual(opt.pick_captains([only]), (only, None))
+
+    def test_best_squad_uses_the_pair_rule(self):
+        # MID star 4's slot goes to a flagged 8.25 (11.0 if he plays): 8.25 + 0.25 * 9.0 = 10.5
+        # beats MID star 1's 9.0, which the old rule would have captained
+        pool = [c for c in bench_pool() if c.id != "MID star 4"]
+        pool.append(Candidate("MID flagged", "MID", "H", 0.75 * 11.0, 80, p_play=0.75))
+        sel = opt.best_squad(pool)
+        self.assertIn("MID flagged", [c.id for c in sel.starters])
+        self.assertEqual((sel.captain.id, sel.vice_captain.id), ("MID flagged", "MID star 1"))
+
+
 if __name__ == "__main__":
     unittest.main()

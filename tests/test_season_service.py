@@ -360,6 +360,22 @@ class TestQueryLayer(LiveDirTestCase):
         with self.assertRaises(ss.NotFoundError):
             ss.get_team_of_the_week(fake_conn(), "predicted", 5, season="2026-27")
 
+    def test_predicted_selection_passes_chance_of_playing(self):
+        self._write_predictions()
+        rows = pd.read_csv(os.path.join(self.tmp.name, "next_gw_predictions.csv")).to_dict("records")
+        selection, _ = ss.predicted_selection(rows, {"Chelsea": [{"team": "Arsenal", "home": True}]})
+        star = next(c for c in selection.starters if c.id == "Doubtful Star")
+        self.assertEqual((star.p_play, star.opponents), (0.75, ("Arsenal",)))
+        self.assertEqual(selection.captain.id, "Doubtful Star")
+        others = [c for c in selection.starters + selection.bench if c.id != "Doubtful Star"]
+        self.assertTrue(all(c.p_play == 1.0 for c in others))       # NaN chance in the CSV: no flag
+
+    def test_chance_of_playing(self):
+        for status, chance, expected in [("a", None, 1.0), (None, float("nan"), 1.0), ("d", 75, 0.75),
+                                         ("D", "50", 0.5), ("d", None, 1.0), ("i", None, 0.0),
+                                         ("s", 0, 0.0), ("u", 100, 0.0), ("n", None, 0.0), ("a", 150, 1.0)]:
+            self.assertEqual(ss.chance_of_playing(status, chance), expected, (status, chance))
+
     def test_predicted_without_graph_uses_prediction_opponents(self):
         self._write_predictions()
         res = ss.get_team_of_the_week(None, "predicted", 4, season="2026-27")
