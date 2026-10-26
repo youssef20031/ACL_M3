@@ -26,7 +26,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional
 
 from config.settings import CURRENT_SEASON
 from services import season_service as ss
@@ -36,7 +36,10 @@ logger = logging.getLogger(__name__)
 
 PICKS_DIR = "model_picks"
 COMMITTED_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", PICKS_DIR)
-FORMATION_MIN = {"DEF": 3, "MID": 2, "FWD": 1}
+# Auto-subs live in team_optimizer, shared with the ML backtest
+FORMATION_MIN = opt.FORMATION_MIN
+apply_auto_subs = opt.apply_auto_subs
+_counts = opt._counts
 
 
 # ------------------------------------------------------------------ files
@@ -186,46 +189,9 @@ def event_info(gameweek: int, season: str = CURRENT_SEASON) -> Dict[str, Any]:
 
 # ------------------------------------------------------------------ pure: scoring
 
-def _counts(players: Iterable[Dict[str, Any]]) -> Dict[str, int]:
-    counts = {p: 0 for p in opt.POSITIONS}
-    for pl in players:
-        counts[pl["position"]] += 1
-    return counts
-
-
 def formation_of(players: Iterable[Dict[str, Any]]) -> str:
     c = _counts(players)
     return f"{c['DEF']}-{c['MID']}-{c['FWD']}"
-
-
-def apply_auto_subs(starters: List[Dict[str, Any]], bench: List[Dict[str, Any]]
-                    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Tuple[str, str]]]:
-    """FPL automatic substitutions. Each player has `played`: True, False (his matches
-    are over and he got no minutes) or None (undecided). Returns (final XI, final bench
-    in priority order, [(out, in) names]). A replaced starter takes his replacement's
-    bench slot, as the FPL app shows it."""
-    xi, slots = list(starters), list(bench)
-    subs: List[Tuple[str, str]] = []
-    used = set()
-    for out in [p for p in starters if p["played"] is False]:
-        for i, cand in enumerate(slots):
-            if i in used or (cand["position"] == "GK") != (out["position"] == "GK"):
-                continue
-            counts = _counts(xi)
-            counts[out["position"]] -= 1
-            counts[cand["position"]] += 1
-            if any(counts[p] < n for p, n in FORMATION_MIN.items()):
-                continue
-            if cand["played"] is None:
-                break                      # may still play: no sub until he's decided
-            if cand["played"] is False:
-                continue
-            xi[xi.index(out)] = cand
-            slots[i] = out
-            used.add(i)
-            subs.append((out["name"], cand["name"]))
-            break
-    return xi, slots, subs
 
 
 def score_picks(picks: Dict[str, Any], actual: Dict[int, Dict[str, int]], event: Dict[str, Any],

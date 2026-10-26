@@ -13,6 +13,7 @@ hypothesis>=6.100
 matplotlib>=3.8.0
 seaborn>=0.12.0
 scipy>=1.11
+pyarrow>=14                 # parquet files of scripts/analysis/ml_backtest.py (and its tests)
 joblib>=1.3.0
 psutil>=5.9                 # scripts/embeddings/build_embeddings_offline.py
 

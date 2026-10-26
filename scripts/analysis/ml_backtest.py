@@ -3,16 +3,35 @@ Rolling-origin backtest for the v3 points model. Too heavy for a laptop: run it 
 "ML backtest" workflow (.github/workflows/ml-backtest.yml), which calls
 
     python -m scripts.analysis.ml_backtest features --out feats.pkl.gz
-    python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants current,mgr --out res.json
-    python -m scripts.analysis.ml_backtest report res_*.json --ref current
+    python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants current --seeds 0-4 --out chunk_a.json
+    python -m scripts.analysis.ml_backtest score 'chunk_*.preds.parquet' --pool --reuse --out res.json
+    python -m scripts.analysis.ml_backtest report res.json --ref current
 
 For every test season S (2023-24 .. the current season) and every variant:
   * "es":       trained on seasons < S-1, early-stopped on S-1 (patience 100, as in train_points_v3)
   * "refit":    refit on all seasons < S with the early-stopped tree count scaled by the extra
                 rows, which is how the production model is built
   * "inseason": (--inseason) the weekly retrain replayed through a season, refitting every 5 GWs
-Each is trained with three seeds; the seed-averaged prediction is scored per gameweek, and every
-variant is compared with a reference variant using paired bootstrap CIs over gameweeks.
+Each is trained with several seeds (default three). Every seed's predictions and their average are
+scored per gameweek. Variants are compared with a reference variant by paired bootstrap CIs over
+gameweeks (seed-averaged predictions), and single models by a two-level bootstrap that also
+resamples seeds, so the seed lottery is inside the CI. The production model is one seed.
+
+Squad metrics score what the Team of the Week ships: per gameweek, services/team_optimizer's
+best_squad picks a 15-man squad (GBP 100m, 3 per club) from the predictions (pool: predicted
+points > 0, each position's 60 best plus its 15 cheapest; per-fixture predictions floored at 0, as
+in serving). sq_xi is the XI's actual points after FPL auto-subs with the captain counted once,
+the least noisy squad metric; sq_fpl adds the captain's points again (the vice's when the captain
+didn't play); sq_pred is the predicted XI plus captain, sq_dnp the picked starters who didn't play.
+The top-20 metrics are unconstrained and mostly midfielders, so position picks (the top 4 GK, 10 DEF,
+10 MID and 6 FWD by prediction) and pred20/pred_capt (the predicted side, for selection bias) are
+reported too.
+
+`run` writes <out>.json, <out>.gw.parquet (every per-gameweek table, per seed and seed-averaged)
+and <out>.preds.parquet (row-level predictions). `score` rescores prediction files without
+retraining; --pool merges files of the same variant with different seeds (the workflow splits a
+variant's seeds into jobs of 5 and pools them), and --reuse keeps tables whose predictions haven't
+changed.
 
 Variants (VARIANTS): "current" is what ml.points_model trains, "previous" is v3 before the
 2026-10 features; the others add candidate features computed only here (add_extra_features) or
@@ -38,6 +57,7 @@ multiplies P(plays) by the expected points if he plays (hurdle).
 """
 import argparse
 import glob
+import importlib.util
 import json
 import os
 import sys
@@ -57,7 +77,21 @@ from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
 from utils.text import normalize_name  # noqa: E402
 
-SEASONS = ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
+
+def _team_optimizer():
+    """services/team_optimizer.py on its own: services/__init__ imports the Neo4j driver."""
+    if "services.team_optimizer" in sys.modules:
+        return sys.modules["services.team_optimizer"]
+    spec = importlib.util.spec_from_file_location("team_optimizer", os.path.join(ROOT, "services", "team_optimizer.py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+opt = _team_optimizer()
+
+SEASONS =["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
 TEST_SEASONS = ["2023-24", "2024-25", "2025-26", "2026-27"]
 SEEDS = (0, 1, 2)
 NMAX = 3000
@@ -343,7 +377,16 @@ SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc
 PICK_SUBSETS = ["sub_euro_club", "sub_gkdef"]   # top-20 picks among these players only
 CS_PICKS = "sub_gkdef"                          # ... and the clean-sheet points of these picks
 PICK_METRICS = ["dnp20"] + [f"top20_{c}" for c in PICK_SUBSETS] + [f"cs20_{CS_PICKS}"]
-EXTRA = G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
+POS_TOPK = {"GK": 4, "DEF": 10, "MID": 10, "FWD": 6}     # position picks: top k by prediction
+POS_METRICS = [f"top_{p}" for p in POS_TOPK]             # ... their mean actual points
+PRED_METRICS = ["pred20", "pred_capt"] + [f"pred_{p}" for p in POS_TOPK]   # ... and predicted
+SQ_METRICS = ["sq_xi", "sq_fpl", "sq_pred", "sq_dnp"]
+SQ_TOP_PER_POS = 60       # squad pool: each position's best predictions ...
+SQ_CHEAPEST = 15          # ... plus its cheapest players, the same for every variant
+SQ_TIME_LIMIT = 5.0       # seconds per squad solve
+SQUADS = True             # run/score --no-squads skips the squad solves
+ENS = -1                  # `seed` of a seed-averaged table in the .gw.parquet files
+EXTRA =G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
 EXTRA += G_ABS_FORM + G_ABS_FLAGS + G_ODDS + G_ODDS_CLOSE + G_MATCHUP + G_RATINGS + G_TRANSFERS
 KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
         "clean_sheets"]
@@ -472,8 +515,36 @@ def _hurdle_fold(tr, va, te, both, cols, p) -> tuple:
     gain = reg2.get_booster().get_score(importance_type="gain")
     info = {"best_iter": n_reg, "best_iter_cls": n_cls, "trained": n_reg, "n_refit": r_reg, "n_refit_cls": r_cls,
             "valid_rmse_at_best": valid_rmse, "valid_rmse_min": valid_rmse, "argmin_valid": n_reg,
-            "es": summarize(gw_table(te, pe)), "refit": summarize(gw_table(te, pr)),
             "top_gain": sorted(gain.items(), key=lambda kv: -kv[1])[:25]}
+    return pe, pr, info
+
+
+def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool) -> tuple:
+    """es and refit predictions of one fold and seed, plus run info; with `curve`, also the test
+    metrics along the early-stopping fit and the refit's top features."""
+    import xgboost as xgb
+    m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE_FIT, **p)
+    m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
+          eval_set=[(va[cols], va["total_points"])], verbose=False)
+    valid = m.evals_result()["validation_0"]["rmse"]
+    best = _patience_stop(valid, PATIENCE)
+    pe = m.predict(te[cols], iteration_range=(0, best + 1))
+    n_refit = min(int((best + 1) * len(both) / len(tr)), 4000)
+    m2 = xgb.XGBRegressor(n_estimators=n_refit, **p)
+    m2.fit(both[cols], _target(both, spec), sample_weight=_weights(both, spec.get("halflife")), verbose=False)
+    pr = m2.predict(te[cols])
+    info = {"best_iter": best + 1, "trained": len(valid), "n_refit": n_refit,
+            "valid_rmse_at_best": float(valid[best]), "valid_rmse_min": float(min(valid)),
+            "argmin_valid": int(np.argmin(valid)) + 1}
+    if curve:
+        curve_metrics = {}
+        for k in CURVE_POINTS:
+            if k <= len(valid):
+                t = gw_table(te, m.predict(te[cols], iteration_range=(0, k)), squads=False)
+                curve_metrics[k] = {**summarize(t), "valid_rmse": float(valid[k - 1])}
+        info["test_curve"] = curve_metrics
+        gain = m2.get_booster().get_score(importance_type="gain")
+        info["top_gain"] = sorted(gain.items(), key=lambda kv: -kv[1])[:25]
     return pe, pr, info
 
 
@@ -495,11 +566,68 @@ def _patience_stop(curve, patience):
     return best_i
 
 
-def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
+def squad_pool(g: pd.DataFrame) -> list:
+    """Candidates for one gameweek's squad from per-player rows (name, position, team, price in
+    millions, pred_sq): predicted points > 0 and a price; each position's SQ_TOP_PER_POS best
+    predictions plus its SQ_CHEAPEST cheapest players, which keeps the MILP small."""
+    g = g[(g["pred_sq"] > 0) & g["price"].notna() & g["position"].isin(opt.POSITIONS)]
+    keep = []
+    for _, p in g.groupby("position", sort=False):
+        best = p.sort_values(["pred_sq", "name"], ascending=[False, True], kind="mergesort").head(SQ_TOP_PER_POS)
+        cheap = p.sort_values(["price", "pred_sq", "name"], ascending=[True, False, True],
+                              kind="mergesort").head(SQ_CHEAPEST)
+        keep.append(pd.concat([best, cheap]).drop_duplicates("name"))
+    if not keep:
+        return []
+    return [opt.Candidate(id=str(r.name), position=str(r.position), team=str(r.team), points=float(r.pred_sq),
+                          cost=int(round(float(r.price) * 10)))
+            for r in pd.concat(keep).itertuples(index=False)]
+
+
+def score_squad(sel, actual: dict) -> dict:
+    """FPL score of a picked squad (an opt.Selection); `actual` maps each player to his
+    (points, minutes) that gameweek. sq_xi: the XI's points after automatic substitutions, the
+    captain counted once; sq_fpl: plus the captain's points again, or the vice-captain's when the
+    captain didn't play; sq_pred: the predicted XI plus captain; sq_dnp: picked starters who didn't
+    play."""
+    def player(c):
+        points, minutes = actual[c.id]
+        return {"name": c.id, "position": c.position, "points": float(points), "played": bool(minutes > 0)}
+
+    starters = [player(c) for c in sel.starters]
+    xi, _, _ = opt.apply_auto_subs(starters, [player(c) for c in sel.bench])
+    xi_points = sum(p["points"] for p in xi)
+    armband = 0.0
+    for c in (sel.captain, sel.vice_captain):
+        if c is not None and actual[c.id][1] > 0:
+            armband = float(actual[c.id][0])
+            break
+    return {"sq_xi": xi_points, "sq_fpl": xi_points + armband,
+            "sq_pred": float(sum(c.points for c in sel.starters) + sel.captain.points),
+            "sq_dnp": float(sum(not p["played"] for p in starters))}
+
+
+def squad_metrics(g: pd.DataFrame) -> dict:
+    """The squad best_squad picks from one gameweek's per-player rows, scored on actual points;
+    NaN when no valid squad fits. sq_secs is the solve time."""
+    t0 = time.perf_counter()
+    try:
+        sel = opt.best_squad(squad_pool(g), time_limit=SQ_TIME_LIMIT)
+    except opt.InfeasibleError:
+        return {**{k: np.nan for k in SQ_METRICS}, "sq_secs": time.perf_counter() - t0}
+    actual = dict(zip(g["name"], zip(g["total_points"], g["minutes"])))
+    return {**score_squad(sel, actual), "sq_secs": time.perf_counter() - t0}
+
+
+def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.DataFrame:
+    """One row per gameweek: error sums (overall, per subset, per position), the unconstrained
+    picks (top 20/50, captain), position picks and, with `squads`, the optimiser's squad."""
     subsets = [c for c in SUBSETS if c in test.columns]
     extra = ["clean_sheets"] if "clean_sheets" in test.columns else []
-    d = test[["season", "GW", "name", "total_points", "minutes"] + extra + subsets].copy()
-    d["pred"] = pred.astype(float)
+    info = [c for c in ("position", "team", "price") if c in test.columns]
+    squads = squads and len(info) == 3
+    d = test[["season", "GW", "name", "total_points", "minutes"] + info + extra + subsets].copy()
+    d["pred"] = np.asarray(pred, dtype=float)
     d["err"] = d["pred"] - d["total_points"]
     d["se"] = d["err"] ** 2
     d["ae"] = d["err"].abs()
@@ -508,19 +636,30 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
         mask = d[c] > 0
         d[f"se_{c}"], d[f"err_{c}"], d[f"n_{c}"] = d["se"].where(mask, 0.0), d["err"].where(mask, 0.0), mask.astype(float)
         agg.update({f"se_{c}": (f"se_{c}", "sum"), f"err_{c}": (f"err_{c}", "sum"), f"n_{c}": (f"n_{c}", "sum")})
+    if "position" in info:
+        for p in opt.POSITIONS:
+            mask = d["position"] == p
+            d[f"perr_{p}"], d[f"pn_{p}"] = d["err"].where(mask, 0.0), mask.astype(float)
+            agg.update({f"perr_{p}": (f"perr_{p}", "sum"), f"pn_{p}": (f"pn_{p}", "sum")})
     rows = d.groupby(["season", "GW"]).agg(**agg).reset_index()
     rows["GW"] = rows["GW"].astype(int)
     picks = [c for c in PICK_SUBSETS if c in subsets]
+    d["pred_sq"] = d["pred"].clip(lower=0)   # serving floors each fixture at 0, then sums a double gameweek
     pg = d.groupby(["season", "GW", "name"], as_index=False).agg(
-        pred=("pred", "sum"), total_points=("total_points", "sum"), minutes=("minutes", "sum"),
+        pred=("pred", "sum"), pred_sq=("pred_sq", "sum"), total_points=("total_points", "sum"),
+        minutes=("minutes", "sum"), **{c: (c, "first") for c in info},
         **{c: (c, "max") for c in picks}, **{c: (c, "sum") for c in extra})
     out = []
     for (s, gw), g in pg.groupby(["season", "GW"]):
         r = g.sort_values("pred", ascending=False, kind="mergesort")
+        capt_row = 0 if r["minutes"].iloc[0] > 0 or len(r) < 2 else 1   # FPL: the vice if the captain didn't play
         row = {"season": s, "GW": int(gw), "players": len(g),
                "top20": float(r["total_points"].head(20).mean()),
                "top50": float(r["total_points"].head(50).mean()),
                "capt": float(r["total_points"].iloc[0]),
+               "capt_fpl": float(r["total_points"].iloc[capt_row]),
+               "pred20": float(r["pred"].head(20).mean()),
+               "pred_capt": float(r["pred"].iloc[0]),
                "spear": float(g["pred"].corr(g["total_points"], method="spearman")),
                "dnp20": float((r["minutes"].head(20) == 0).mean())}
         for c in picks:
@@ -528,6 +667,14 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray) -> pd.DataFrame:
             row[f"top20_{c}"] = float(sub["total_points"].head(20).mean()) if len(sub) >= 40 else np.nan
             if c == CS_PICKS and extra:   # GK/DEF score 4 points per clean sheet
                 row[f"cs20_{c}"] = float(4 * sub["clean_sheets"].head(20).mean()) if len(sub) >= 40 else np.nan
+        if "position" in info:
+            for p, k in POS_TOPK.items():
+                sub = r[r["position"] == p].head(k)
+                full = len(sub) == k
+                row[f"top_{p}"] = float(sub["total_points"].mean()) if full else np.nan
+                row[f"pred_{p}"] = float(sub["pred"].mean()) if full else np.nan
+        if squads:
+            row.update(squad_metrics(g))
         out.append(row)
     return pd.DataFrame(out).merge(rows, on=["season", "GW"])
 
@@ -536,9 +683,15 @@ def summarize(t: pd.DataFrame) -> dict:
     out = {"rmse": float(np.sqrt(t["se"].sum() / t["rows"].sum())), "mae": float(t["ae"].sum() / t["rows"].sum()),
            "top20": float(t["top20"].mean()), "top50": float(t["top50"].mean()), "capt": float(t["capt"].mean()),
            "spear": float(t["spear"].mean()), "gws": int(len(t))}
-    for k in PICK_METRICS:
+    for k in PICK_METRICS + ["capt_fpl"] + PRED_METRICS + POS_METRICS + SQ_METRICS:
         if k in t and t[k].notna().any():
             out[k] = float(t[k].mean())
+    for p in opt.POSITIONS:
+        if f"pn_{p}" in t and t[f"pn_{p}"].sum() > 0:
+            out[f"bias_{p}"] = float(t[f"perr_{p}"].sum() / t[f"pn_{p}"].sum())
+    if "sq_secs" in t:
+        out["sq_solves"], out["sq_failed"] = int(len(t)), int(t["sq_xi"].isna().sum())
+        out["sq_secs_mean"], out["sq_secs_max"] = float(t["sq_secs"].mean()), float(t["sq_secs"].max())
     for c in SUBSETS:
         if f"n_{c}" in t and t[f"n_{c}"].sum() > 0:
             n = t[f"n_{c}"].sum()
@@ -553,9 +706,90 @@ def position_bias(test, pred) -> dict:
     return {p: round(float(g["err"].mean()), 4) for p, g in d.groupby("position")}
 
 
-def run_variant(feats: pd.DataFrame, name: str, spec: dict) -> dict:
-    import xgboost as xgb
+ROW_KEY = ["season", "GW", "fixture", "team", "name"]
+ROW_COLUMNS = ROW_KEY + ["position", "price", "total_points", "minutes", "clean_sheets"] + SUBSETS
+TABLE_META = ["variant", "proto", "fold", "seed", "seeds"]
 
+
+class Sink:
+    """Collects a run's per-gameweek tables (every seed and the seed average) and row-level
+    predictions, saved as <out>.gw.parquet and <out>.preds.parquet."""
+
+    def __init__(self, keep_preds: bool = True):
+        self.keep_preds = keep_preds
+        self.tables, self.preds, self.rows, self.units = [], {}, [], set()
+
+    def add(self, variant, proto, fold, seed, table, rows=None, pred=None, seeds=None):
+        t = table.copy()
+        for i, (k, v) in enumerate(zip(TABLE_META, (variant, proto, fold, int(seed), seeds or str(seed)))):
+            t.insert(i, k, v)
+        self.tables.append(t)
+        if pred is not None and self.keep_preds:
+            col = f"pred|{variant}|{proto}|{seed}"
+            s = pd.Series(np.asarray(pred, dtype="float32"), index=rows.index)
+            self.preds[col] = pd.concat([self.preds[col], s]) if col in self.preds else s
+            if (proto, fold) not in self.units:      # the same rows for every seed and variant
+                self.units.add((proto, fold))
+                self.rows.append(rows[[c for c in ROW_COLUMNS if c in rows.columns]])
+
+    def save(self, out: str) -> None:
+        stem = _stem(out)
+        if self.tables:
+            pd.concat(self.tables, ignore_index=True).to_parquet(f"{stem}.gw.parquet", index=False)
+        if self.preds:
+            rows = pd.concat(self.rows)
+            rows = rows[~rows.index.duplicated()].sort_index()
+            wide = pd.DataFrame({c: s.reindex(rows.index) for c, s in self.preds.items()})
+            pd.concat([rows, wide], axis=1).to_parquet(f"{stem}.preds.parquet", index=False)
+
+
+def _stem(path: str) -> str:
+    for suffix in (".preds.parquet", ".gw.parquet", ".json"):
+        if path.endswith(suffix):
+            return path[:-len(suffix)]
+    return path
+
+
+def score_unit(rows: pd.DataFrame, seed_preds: dict, key: tuple, sink: Sink = None, reuse: dict = None) -> tuple:
+    """Scores one protocol on one season: a per-gameweek table for each seed's predictions and
+    one for their average. `key` is (variant, proto, season); `reuse` maps a seed, or
+    (ENS, "0,1,2") for an average, to a table already computed from the same predictions.
+    Returns (unit, {seed: summary}); the unit holds the seed-averaged summary, per-gameweek table
+    and position bias, as in the results JSON."""
+    reuse = reuse or {}
+    seeds = sorted(seed_preds)
+    tag = ",".join(map(str, seeds))
+    t0, solved = time.time(), 0
+    per_seed = {}
+    for seed in seeds:
+        t = reuse.get(seed)
+        if t is None:
+            t, solved = gw_table(rows, seed_preds[seed], SQUADS), solved + 1
+        per_seed[seed] = summarize(t)
+        if sink is not None:
+            sink.add(*key, seed, t, rows, seed_preds[seed])
+    ens = np.mean([seed_preds[s] for s in seeds], axis=0)
+    t = reuse.get((ENS, tag))
+    if t is None:
+        t, solved = gw_table(rows, ens, SQUADS), solved + 1
+    if sink is not None:
+        sink.add(*key, ENS, t, seeds=tag)
+    if solved:
+        print(f"  scored {'/'.join(map(str, key))}: {solved} tables in {time.time() - t0:.0f}s", flush=True)
+    unit = {"summary": summarize(t), "per_gw": t.to_dict(orient="list"), "position_bias": position_bias(rows, ens),
+            "seed_list": seeds}
+    return unit, per_seed
+
+
+def _seed_line(name, season, seed, info) -> str:
+    best = f"{info['best_iter']}/{info['best_iter_cls']}" if "best_iter_cls" in info else info["best_iter"]
+    es, rf = info["es"], info["refit"]
+    return (f"  {name} {season} seed {seed}: best {best} refit {info['n_refit']} es top20 {es['top20']:.3f} "
+            f"refit top20 {rf['top20']:.3f} rmse {rf['rmse']:.4f} sq_fpl {rf.get('sq_fpl', float('nan')):.2f} "
+            f"({info['secs']}s)")
+
+
+def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -> dict:
     cols = spec.get("features", CURRENT)
     params = spec.get("params", P)
     present = [s for s in SEASONS if s in set(feats["season"])]
@@ -571,60 +805,29 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict) -> dict:
         va = feats[feats["season"] == valid_s]
         te = feats[feats["season"] == test_season]
         both = pd.concat([tr, va])
-        preds = {"es": [], "refit": []}
+        preds = {"es": {}, "refit": {}}
         fold = {"train": train_s, "valid": valid_s, "rows": [len(tr), len(va), len(te)], "seeds": {}}
         for seed in SEEDS:
             t0 = time.time()
             p = {**params, "random_state": seed}
             if spec.get("model") == "hurdle":
                 pe, pr, info = _hurdle_fold(tr, va, te, both, cols, p)
-                info["secs"] = round(time.time() - t0, 1)
-                preds["es"].append(pe)
-                preds["refit"].append(pr)
-                fold["seeds"][seed] = info
-                print(f"  {name} {test_season} seed {seed}: best {info['best_iter']}/{info['best_iter_cls']} "
-                      f"es top20 {info['es']['top20']:.3f} refit top20 {info['refit']['top20']:.3f} "
-                      f"rmse {info['refit']['rmse']:.4f} ({info['secs']}s)", flush=True)
-                continue
-            m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE_FIT, **p)
-            m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
-                  eval_set=[(va[cols], va["total_points"])], verbose=False)
-            curve = m.evals_result()["validation_0"]["rmse"]
-            best = _patience_stop(curve, PATIENCE)
-            pe = m.predict(te[cols], iteration_range=(0, best + 1))
-            n_refit = min(int((best + 1) * len(both) / len(tr)), 4000)
-            m2 = xgb.XGBRegressor(n_estimators=n_refit, **p)
-            m2.fit(both[cols], _target(both, spec), sample_weight=_weights(both, spec.get("halflife")), verbose=False)
-            pr = m2.predict(te[cols])
-            preds["es"].append(pe)
-            preds["refit"].append(pr)
-            info = {"best_iter": best + 1, "trained": len(curve), "n_refit": n_refit,
-                    "valid_rmse_at_best": float(curve[best]), "valid_rmse_min": float(min(curve)),
-                    "argmin_valid": int(np.argmin(curve)) + 1,
-                    "es": summarize(gw_table(te, pe)), "refit": summarize(gw_table(te, pr)),
-                    "secs": round(time.time() - t0, 1)}
-            if seed == SEEDS[0]:
-                curve_metrics = {}
-                for k in CURVE_POINTS:
-                    if k <= len(curve):
-                        curve_metrics[k] = summarize(gw_table(te, m.predict(te[cols], iteration_range=(0, k))))
-                        curve_metrics[k]["valid_rmse"] = float(curve[k - 1])
-                info["test_curve"] = curve_metrics
-                gain = m2.get_booster().get_score(importance_type="gain")
-                info["top_gain"] = sorted(gain.items(), key=lambda kv: -kv[1])[:25]
+            else:
+                pe, pr, info = _xgb_fold(tr, va, te, both, cols, p, spec, curve=seed == SEEDS[0])
+            info["secs"] = round(time.time() - t0, 1)
+            preds["es"][seed], preds["refit"][seed] = pe, pr
             fold["seeds"][seed] = info
-            print(f"  {name} {test_season} seed {seed}: best {best + 1} refit {n_refit} "
-                  f"es top20 {info['es']['top20']:.3f} refit top20 {info['refit']['top20']:.3f} "
-                  f"rmse {info['refit']['rmse']:.4f} ({info['secs']}s)", flush=True)
         for proto in ("es", "refit"):
-            ens = np.mean(preds[proto], axis=0)
-            t = gw_table(te, ens)
-            fold[proto] = {"summary": summarize(t), "per_gw": t.to_dict(orient="list"),
-                           "position_bias": position_bias(te, ens)}
+            fold[proto], per_seed = score_unit(te, preds[proto], (name, proto, test_season), sink)
+            for seed, summary in per_seed.items():
+                fold["seeds"][seed][proto] = summary
+        for seed, info in fold["seeds"].items():
+            print(_seed_line(name, test_season, seed, info), flush=True)
         res["folds"][test_season] = fold
     for season in INSEASON:
         if season in present:
-            res.setdefault("inseason", {})[season] = run_inseason(feats, spec, season, cols, params, present)
+            res.setdefault("inseason", {})[season] = run_inseason(feats, spec, season, cols, params, present,
+                                                                  name, sink)
     return res
 
 
@@ -632,7 +835,7 @@ INSEASON: tuple = ()
 INSEASON_EVERY = 5
 
 
-def run_inseason(feats, spec, season, cols, params, present) -> dict:
+def run_inseason(feats, spec, season, cols, params, present, name="", sink=None) -> dict:
     """Replays the weekly retrain through `season`: every INSEASON_EVERY gameweeks the model is
     refit on all earlier seasons plus this season's finished gameweeks and predicts the next block.
     The tree count comes from early stopping on the previous season, as in train_points_v3."""
@@ -646,7 +849,7 @@ def run_inseason(feats, spec, season, cols, params, present) -> dict:
     va = feats[feats["season"] == valid_s]
     cur = feats[feats["season"] == season]
     gws = sorted(cur["GW"].unique())
-    preds = []
+    preds = {}
     for seed in SEEDS:
         p = {**params, "random_state": seed}
         if spec.get("model") == "hurdle":
@@ -660,7 +863,7 @@ def run_inseason(feats, spec, season, cols, params, present) -> dict:
                 scale = len(seen) / len(tr)
                 cls, reg = _hurdle_fit(seen, cols, p, min(int(n_cls * scale), 4000), min(int(n_reg * scale), 4000))
                 out.loc[block.index] = _hurdle_predict(cls, reg, block, cols)
-            preds.append(out.to_numpy())
+            preds[seed] = out.to_numpy()
             print(f"  inseason {season} seed {seed}: best {n_reg}/{n_cls}", flush=True)
             continue
         m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
@@ -677,38 +880,174 @@ def run_inseason(feats, spec, season, cols, params, present) -> dict:
             m2 = xgb.XGBRegressor(n_estimators=n, **p)
             m2.fit(seen[cols], _target(seen, spec), sample_weight=_weights(seen, spec.get("halflife")), verbose=False)
             out.loc[block.index] = m2.predict(block[cols])
-        preds.append(out.to_numpy())
+        preds[seed] = out.to_numpy()
         print(f"  inseason {season} seed {seed}: best {best}", flush=True)
-    ens = np.mean(preds, axis=0)
-    t = gw_table(cur, ens)
-    per_seed = [summarize(gw_table(cur, p_)) for p_ in preds]
-    return {"summary": summarize(t), "per_gw": t.to_dict(orient="list"),
-            "position_bias": position_bias(cur, ens), "seeds": per_seed}
+    unit, per_seed = score_unit(cur, preds, (name, "inseason", season), sink)
+    return {**unit, "seeds": [per_seed[s] for s in unit["seed_list"]]}
+
+
+def parse_seeds(text: str) -> list:
+    """"0-4,7" -> [0, 1, 2, 3, 4, 7]"""
+    out = []
+    for part in (text or "").replace(" ", "").split(","):
+        if "-" in part:
+            a, b = part.split("-")
+            out += list(range(int(a), int(b) + 1))
+        elif part:
+            out.append(int(part))
+    if len(set(out)) != len(out):
+        raise SystemExit(f"repeated seeds in {text!r}")
+    return out
 
 
 def cmd_run(args) -> None:
-    global INSEASON, TEST_SEASONS, SEEDS
+    global INSEASON, TEST_SEASONS, SEEDS, SQUADS
     feats = pd.read_pickle(args.feats)
     if args.inseason:
         INSEASON = tuple(args.inseason.split(","))
     if args.seeds:
-        SEEDS = tuple(int(s) for s in args.seeds.split(","))
+        SEEDS = tuple(parse_seeds(args.seeds))
     if args.folds is not None:
         TEST_SEASONS = [s for s in args.folds.split(",") if s]
+    SQUADS = not args.no_squads
     names = args.variants.split(",")
     for name in names:
         # e.g. odds features when the odds weren't fetched (the workflow fetches them only for odds* variants)
         empty = [c for c in VARIANTS[name].get("features", CURRENT) if not feats[c].notna().any()]
         if empty:
             raise SystemExit(f"variant {name}: no values in {', '.join(empty)}; was its data fetched?")
-    out = []
+    out, sink = [], Sink()
     for name in names:
         t0 = time.time()
         print(f"== {name}", flush=True)
-        out.append(run_variant(feats, name, VARIANTS[name]))
+        out.append(run_variant(feats, name, VARIANTS[name], sink))
         print(f"== {name} done in {time.time() - t0:.0f}s", flush=True)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(out, f)
+    sink.save(args.out)
+
+
+# ----------------------------------------------------------------------------- score saved predictions
+
+def _merge_preds(variant: str, frames: list) -> pd.DataFrame:
+    """One variant's predictions from several files (runs with different seeds), joined on the
+    row key; rows missing from any file are dropped, the first file's actuals are kept."""
+    merged, seen = None, set()
+    for df in frames:
+        pcols = [c for c in df.columns if c.startswith(f"pred|{variant}|")]
+        dup = seen & set(pcols)
+        if dup:
+            raise SystemExit(f"{variant}: {', '.join(sorted(dup))} in more than one file")
+        seen |= set(pcols)
+        part = df[[c for c in ROW_COLUMNS if c in df.columns] + pcols]
+        part = part[part[pcols].notna().any(axis=1)].copy()
+        part["_dup"] = part.groupby(ROW_KEY, sort=False).cumcount()
+        if merged is None:
+            merged = part
+            continue
+        n = (len(merged), len(part))
+        merged = merged.merge(part[ROW_KEY + ["_dup"] + pcols], on=ROW_KEY + ["_dup"], how="inner")
+        if len(merged) < max(n):
+            print(f"warning: {variant}: {max(n) - len(merged)} rows are in only some of the files; "
+                  f"scoring the {len(merged)} in all", flush=True)
+    return merged.drop(columns="_dup").reset_index(drop=True)
+
+
+def _training_info(variant: str, paths: list) -> dict:
+    """The variant's results without scores (tree counts, test curves, top features), seeds of
+    all files merged, from the results JSON beside each predictions file."""
+    res = {"variant": variant, "folds": {}}
+    for path in paths:
+        js = _stem(path) + ".json"
+        if not os.path.exists(js):
+            continue
+        for r in json.load(open(js, encoding="utf-8")):
+            if r["variant"] != variant:
+                continue
+            res["features"] = r.get("features")
+            for season, f in r.get("folds", {}).items():
+                fold = res["folds"].setdefault(season, {k: v for k, v in f.items() if k not in ("seeds", "es", "refit")})
+                fold.setdefault("seeds", {}).update(f.get("seeds", {}))
+    return res
+
+
+def _saved_tables(variant: str, paths: list) -> dict:
+    """{(proto, season): {seed or (ENS, seeds): table}} from the .gw.parquet beside each file."""
+    out = {}
+    for path in paths:
+        gw = _stem(path) + ".gw.parquet"
+        if not os.path.exists(gw):
+            continue
+        t = pd.read_parquet(gw)
+        for (proto, fold, seed, seeds), g in t[t["variant"] == variant].groupby(["proto", "fold", "seed", "seeds"]):
+            key = (ENS, seeds) if seed == ENS else int(seed)
+            out.setdefault((proto, fold), {})[key] = g.drop(columns=TABLE_META).reset_index(drop=True)
+    return out
+
+
+def score_variant(variant: str, rows: pd.DataFrame, base: dict, reuse: dict, sink: Sink) -> dict:
+    """Results of a variant (as `run` writes them) from its row-level predictions."""
+    cols = {}
+    for c in rows.columns:
+        if c.startswith(f"pred|{variant}|"):
+            _, _, proto, seed = c.split("|")
+            cols.setdefault(proto, {})[int(seed)] = c
+    res = {**base, "variant": variant, "folds": base.get("folds", {})}
+    for proto, by_seed in cols.items():
+        for season in sorted(rows["season"].unique()):
+            sel = rows[(rows["season"] == season) & rows[list(by_seed.values())].notna().all(axis=1)]
+            if sel.empty:
+                continue
+            seed_preds = {s: sel[c].to_numpy(dtype=float) for s, c in by_seed.items()}
+            unit, per_seed = score_unit(sel, seed_preds, (variant, proto, season), sink, reuse.get((proto, season)))
+            if proto == "inseason":
+                res.setdefault("inseason", {})[season] = {**unit, "seeds": [per_seed[s] for s in unit["seed_list"]]}
+                continue
+            fold = res["folds"].setdefault(season, {})
+            fold[proto] = unit
+            for s, summary in per_seed.items():
+                fold.setdefault("seeds", {}).setdefault(str(s), {})[proto] = summary
+    return res
+
+
+def cmd_score(args) -> None:
+    """Scores saved predictions (the .preds.parquet files `run` writes) without retraining."""
+    global SQUADS
+    SQUADS = not args.no_squads
+    paths = sorted(dict.fromkeys(p for pattern in args.preds for p in glob.glob(pattern)))
+    if not paths:
+        raise SystemExit(f"no files match {args.preds}")
+    files = {path: pd.read_parquet(path) for path in paths}
+    by_variant = {}
+    for path, df in files.items():
+        for v in dict.fromkeys(c.split("|")[1] for c in df.columns if c.startswith("pred|")):
+            by_variant.setdefault(v, []).append(path)
+    out, sink = [], Sink(keep_preds=False)
+    for variant, vpaths in by_variant.items():
+        if len(vpaths) > 1 and not args.pool:
+            raise SystemExit(f"{variant} is in {len(vpaths)} files; pass --pool to merge their seeds")
+        print(f"== {variant}: {', '.join(vpaths)}", flush=True)
+        rows = _merge_preds(variant, [files[p] for p in vpaths])
+        reuse = _saved_tables(variant, vpaths) if args.reuse else {}
+        out.append(score_variant(variant, rows, _training_info(variant, vpaths), reuse, sink))
+    with open(args.out, "w", encoding="utf-8") as f:
+        json.dump(out, f)
+    sink.save(args.out)
+
+
+def cmd_matrix(args) -> None:
+    """Prints the workflow's run matrix: one job per variant and chunk of at most --chunk seeds, so
+    a 20-seed reference runs as four jobs that `score --pool` merges."""
+    jobs = []
+    for v in args.variants.split(","):
+        if v not in VARIANTS:
+            raise SystemExit(f"unknown variant {v!r}")
+        seeds = parse_seeds(args.ref_seeds if v == args.ref and args.ref_seeds else args.seeds) or list(SEEDS)
+        chunks = [seeds[i:i + args.chunk] for i in range(0, len(seeds), args.chunk)]
+        for c in chunks:
+            jobs.append({"variant": v, "seeds": ",".join(map(str, c)),
+                         "tag": v if len(chunks) == 1 else f"{v}-s{c[0]}"})
+    print("matrix=" + json.dumps(jobs))
 
 
 # ----------------------------------------------------------------------------- report
@@ -718,7 +1057,7 @@ def _boot(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, len(m), size=(n, len(m)))
     out = {}
-    for k in ("top20", "top50", "capt", "spear", *PICK_METRICS):
+    for k in ("top20", "top50", "capt", "spear", *PICK_METRICS, "capt_fpl", *SQ_METRICS, *POS_METRICS, *PRED_METRICS):
         if f"{k}_v" not in m or f"{k}_b" not in m:
             continue
         d = (m[f"{k}_v"] - m[f"{k}_b"]).to_numpy(dtype=float)
@@ -738,26 +1077,221 @@ def _boot(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
         den = np.maximum(nn[idx].sum(1), 1e-9)
         bs = np.sqrt(sv[idx].sum(1) / den) - np.sqrt(sb[idx].sum(1) / den)
         out[c] = (float(full), float(np.percentile(bs, 2.5)), float(np.percentile(bs, 97.5)))
+    for p in opt.POSITIONS:
+        if f"pn_{p}_b" not in m or f"perr_{p}_v" not in m or m[f"pn_{p}_b"].sum() == 0:
+            continue
+        eb, ev, nn = m[f"perr_{p}_b"].to_numpy(), m[f"perr_{p}_v"].to_numpy(), m[f"pn_{p}_b"].to_numpy()
+        bs = (ev[idx].sum(1) - eb[idx].sum(1)) / np.maximum(nn[idx].sum(1), 1e-9)
+        out[f"bias_{p}"] = (float((ev.sum() - eb.sum()) / nn.sum()), float(np.percentile(bs, 2.5)),
+                            float(np.percentile(bs, 97.5)))
     return out
+
+
+SINGLE_METRICS = ["rmse", "top20", "capt", "capt_fpl", "sq_xi", "sq_fpl", "sq_dnp"]
+SINGLE_POS_METRICS = POS_METRICS + [f"bias_{p}" for p in opt.POSITIONS]
+RATIOS = {"rmse": ("se", "rows", np.sqrt), **{f"bias_{p}": (f"perr_{p}", f"pn_{p}", None) for p in opt.POSITIONS}}
+
+
+def _seed_matrix(t: pd.DataFrame, gws: pd.MultiIndex, col: str) -> np.ndarray:
+    """Gameweeks x seeds of one column of per-seed tables."""
+    return t.set_index(["season", "GW", "seed"])[col].unstack("seed").reindex(gws).to_numpy(dtype=float)
+
+
+def _common_gws(*tables) -> pd.MultiIndex:
+    keys = [t[["season", "GW"]].drop_duplicates() for t in tables]
+    common = keys[0]
+    for k in keys[1:]:
+        common = common.merge(k)
+    return pd.MultiIndex.from_frame(common.sort_values(["season", "GW"]))
+
+
+def _per_seed(t: pd.DataFrame, gws: pd.MultiIndex, k: str) -> tuple:
+    """(each seed's metric over the gameweeks, the seed-mean per gameweek or None for ratios)."""
+    if k in RATIOS:
+        num, den, f = RATIOS[k]
+        v = _seed_matrix(t, gws, num).sum(0) / _seed_matrix(t, gws, den).sum(0)
+        return (f(v) if f else v), None
+    m = _seed_matrix(t, gws, k)
+    m = m[~np.isnan(m).any(1)]
+    return m.mean(0), m.mean(1)
+
+
+def _boot2(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
+    """Single models, variant minus reference, from per-seed per-gameweek tables: a two-level
+    bootstrap that resamples gameweeks (iid, the same draw for both) and, independently on each
+    side, seeds. The estimate is the difference of the seed means, so the CI covers both the
+    gameweek sample and the seed lottery."""
+    gws = _common_gws(base, var)
+    rng = np.random.default_rng(seed)
+    g = len(gws)
+    counts = rng.multinomial(g, np.full(g, 1.0 / g), size=n).astype(float)        # replicates x gameweeks
+
+    def seed_weights(t):
+        s = t["seed"].nunique()
+        return rng.multinomial(s, np.full(s, 1.0 / s), size=n) / s                 # replicates x seeds
+
+    wb, wv = seed_weights(base), seed_weights(var)
+    out = {}
+    for k in SINGLE_METRICS + SINGLE_POS_METRICS:
+        if k in RATIOS:
+            num, den, f = RATIOS[k]
+            if num not in base or num not in var:
+                continue
+            f = f or (lambda x: x)
+            reps = []
+            for t, w in ((base, wb), (var, wv)):
+                ratio = (counts @ _seed_matrix(t, gws, num)) / np.maximum(counts @ _seed_matrix(t, gws, den), 1e-9)
+                reps.append((f(ratio) * w).sum(1))
+            bs = reps[1] - reps[0]
+            point = _per_seed(var, gws, k)[0].mean() - _per_seed(base, gws, k)[0].mean()
+        else:
+            if k not in base or k not in var:
+                continue
+            mb, mv = _seed_matrix(base, gws, k), _seed_matrix(var, gws, k)
+            ok = ~(np.isnan(mb).any(1) | np.isnan(mv).any(1))     # NaN: no squad, too few players
+            if not ok.any():
+                continue
+            d = mv[ok] @ wv.T - mb[ok] @ wb.T                     # gameweeks x replicates
+            c = counts[:, ok]
+            total = c.sum(1)
+            bs = np.where(total > 0, (c * d.T).sum(1) / np.maximum(total, 1), np.nan)
+            point = float(np.mean(mv[ok].mean(1) - mb[ok].mean(1)))
+        out[k] = (float(point), float(np.nanpercentile(bs, 2.5)), float(np.nanpercentile(bs, 97.5)))
+    return out
+
+
+def _seed_spread(t: pd.DataFrame, k: str) -> tuple:
+    """(mean over seeds, SD between seeds, SE over gameweeks of the seed mean) of a metric."""
+    gws = _common_gws(t)
+    if k in RATIOS:
+        if RATIOS[k][0] not in t:
+            return None
+    elif k not in t:
+        return None
+    per_seed, per_gw = _per_seed(t, gws, k)
+    if not len(per_seed):
+        return None
+    sd = float(np.std(per_seed, ddof=1)) if len(per_seed) > 1 else float("nan")
+    se = float(np.std(per_gw, ddof=1) / np.sqrt(len(per_gw))) if per_gw is not None and len(per_gw) > 1 else float("nan")
+    return float(np.mean(per_seed)), sd, se
 
 
 def _fmt(t, digits=3):
     return f"{t[0]:+.{digits}f} [{t[1]:+.{digits}f}, {t[2]:+.{digits}f}]"
 
 
-def cmd_report(args) -> None:
-    results = {}
-    for path in args.paths:
-        for pattern in glob.glob(path):
+def _digits(k: str) -> int:
+    return 4 if k == "rmse" else 2 if k.startswith(("sq_", "capt")) else 3
+
+
+def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
+    """Report sections on the squad, captaincy, position picks and position bias of one protocol."""
+    nan = float("nan")
+    base = units(results[ref], proto)
+
+    def cell(sm, k, d=None):
+        return f"{sm[k]:.{d or _digits(k)}f}" if k in sm else "-"
+
+    if any("sq_xi" in u["summary"] or "top_DEF" in u["summary"] for u in base.values()):
+        lines.append(f"\n### {ref}: the optimiser's squad, captaincy and position picks (seed-averaged)\n")
+        lines.append("Actual points, predicted in brackets. sq_xi: the squad's XI after FPL auto-subs, captain "
+                     "counted once; sq_fpl: its FPL score (captain doubled, the vice if he didn't play); sq_dnp: "
+                     "picked starters who didn't play; capt_fpl: the top prediction as captain, the second as vice. "
+                     "Position picks: mean of the top 4 GK, 10 DEF, 10 MID and 6 FWD by prediction.\n")
+        lines.append("| fold | seeds | sq_xi | sq_fpl (pred) | sq_dnp | capt (pred) | capt_fpl | top20 (pred) | "
+                     "GK top4 | DEF top10 | MID top10 | FWD top6 |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|")
+        for s, u in base.items():
+            sm = u["summary"]
+            pos = " | ".join(f"{cell(sm, f'top_{p}')} ({cell(sm, f'pred_{p}', 3)})" for p in POS_TOPK)
+            lines.append(f"| {s} | {len(u.get('seed_list', [])) or '-'} | {cell(sm, 'sq_xi')} | {cell(sm, 'sq_fpl')} "
+                         f"({cell(sm, 'sq_pred')}) | {cell(sm, 'sq_dnp')} | {cell(sm, 'capt')} "
+                         f"({cell(sm, 'pred_capt', 2)}) | {cell(sm, 'capt_fpl')} | {cell(sm, 'top20')} "
+                         f"({cell(sm, 'pred20', 3)}) | {pos} |")
+    squad_keys = ["sq_xi", "sq_fpl", "sq_dnp", "capt_fpl"] + POS_METRICS
+    rows = [f"| {name} | " + " | ".join(_fmt(b[k], _digits(k)) if k in b else "-" for k in squad_keys) + " |"
+            for name, b in boots.items() if any(k in b for k in squad_keys)]
+    if rows:
+        lines.append("\n#### Squad, captaincy and position picks, variant minus reference (seed-averaged; "
+                     "gameweek bootstrap) [95% CI]\n")
+        lines.append("| variant | Δsq_xi | Δsq_fpl | Δsq_dnp | Δcapt_fpl | Δtop4 GK | Δtop10 DEF | Δtop10 MID | Δtop6 FWD |")
+        lines.append("|---|---|---|---|---|---|---|---|---|")
+        lines += rows
+
+    lines.append("\n#### Bias by position (pred - actual), every variant, seed-averaged: pooled over folds, "
+                 "difference from the reference [95% CI], per fold GK/DEF/MID/FWD\n")
+    lines.append("| variant | GK | DEF | MID | FWD | ΔGK | ΔDEF | ΔMID | ΔFWD | per fold |")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|")
+    for name, r in results.items():
+        ru = units(r, proto)
+        if not ru:
+            continue
+        per_gw = pd.concat([pd.DataFrame(u["per_gw"]) for u in ru.values()])
+        pooled = [f"{per_gw[f'perr_{p}'].sum() / per_gw[f'pn_{p}'].sum():+.3f}"
+                  if f"pn_{p}" in per_gw and per_gw[f"pn_{p}"].sum() > 0 else "-" for p in opt.POSITIONS]
+        b = boots.get(name, {})
+        delta = [_fmt(b[f"bias_{p}"]) if f"bias_{p}" in b else "-" for p in opt.POSITIONS]
+        per_fold = "; ".join(f"{s[2:]}: " + "/".join(f"{u['position_bias'].get(p, nan):+.3f}" for p in opt.POSITIONS)
+                             for s, u in ru.items())
+        lines.append(f"| {name} | " + " | ".join(pooled + delta) + f" | {per_fold} |")
+
+    tb = tables.get(ref)
+    tb = tb[tb["proto"] == proto] if tb is not None else None
+    if tb is None or tb.empty:
+        return
+    main_rows, pos_rows = [], []
+    for name in results:
+        tv = tables.get(name)
+        if name == ref or tv is None:
+            continue
+        tv = tv[tv["proto"] == proto]
+        common = sorted(set(tb["fold"]) & set(tv["fold"]))
+        if not common:
+            continue
+        b2 = _boot2(tb[tb["fold"].isin(common)], tv[tv["fold"].isin(common)])
+        seeds = f"{tv['seed'].nunique()}/{tb[tb['fold'].isin(common)]['seed'].nunique()}"
+        main_rows.append(f"| {name} | {seeds} | " + " | ".join(_fmt(b2[k], _digits(k)) if k in b2 else "-"
+                                                             for k in SINGLE_METRICS) + " |")
+        pos_rows.append(f"| {name} | " + " | ".join(_fmt(b2[k]) if k in b2 else "-" for k in SINGLE_POS_METRICS) + " |")
+    if main_rows:
+        lines.append("\n#### Single models (what production ships): per-seed metrics, variant minus reference, "
+                     "two-level bootstrap (gameweeks and seeds resampled) [95% CI]\n")
+        lines.append("| variant | seeds (variant/ref) | Δrmse | Δtop20 | Δcapt | Δcapt_fpl | Δsq_xi | Δsq_fpl | Δsq_dnp |")
+        lines.append("|---|---|---|---|---|---|---|---|---|")
+        lines += main_rows
+        lines.append("\n| variant | Δtop4 GK | Δtop10 DEF | Δtop10 MID | Δtop6 FWD | Δbias GK | Δbias DEF | Δbias MID "
+                     "| Δbias FWD |")
+        lines.append("|---|---|---|---|---|---|---|---|---|")
+        lines += pos_rows
+
+
+def _load_results(paths) -> tuple:
+    """Results by variant from JSON files, and each variant's per-gameweek tables from the
+    .gw.parquet beside a JSON (seed-averaged tables dropped), when there is one."""
+    results, tables, solves = {}, {}, {}
+    for path in paths:
+        for pattern in sorted(glob.glob(path)):
             for r in json.load(open(pattern, encoding="utf-8")):
                 results[r["variant"]] = r
+            gw = _stem(pattern) + ".gw.parquet"
+            if os.path.exists(gw):
+                t = pd.read_parquet(gw)
+                for v, g in t.groupby("variant"):
+                    tables[v] = g[g["seed"] != ENS]
+                    if "sq_secs" in g:
+                        solves[v] = g["sq_secs"].to_numpy(), int(g["sq_xi"].isna().sum())
+    return results, tables, solves
+
+
+def cmd_report(args) -> None:
+    results, tables, solves = _load_results(args.paths)
     lines = []
     base = results[args.ref]
 
     def units(r, proto):
         if proto == "inseason":
             return r.get("inseason", {})
-        return {s: f[proto] for s, f in r.get("folds", {}).items()}
+        return {s: f[proto] for s, f in r.get("folds", {}).items() if proto in f}
 
     for proto in ("refit", "es", "inseason"):
         if not units(base, proto):
@@ -778,14 +1312,15 @@ def cmd_report(args) -> None:
         lines.append("\n### Variant minus reference (pooled: mean [95% CI]; per fold: Δtop20 / Δrmse×1000)\n")
         lines.append("| variant | Δrmse pooled | Δtop20 pooled | Δtop50 pooled | Δcapt pooled | per fold |")
         lines.append("|---|---|---|---|---|---|")
-        subset_rows, pick_rows = [], []
+        subset_rows, pick_rows, boots, seed_counts = [], [], {}, {}
         for name, r in results.items():
             ru, bu = units(r, proto), units(base, proto)
             common = [s_ for s_ in ru if s_ in bu]
+            seed_counts[name] = sorted({len(ru[s_].get("seed_list", [])) for s_ in common})
             if name == args.ref or not common:
                 continue
-            b = _boot(pd.concat([pd.DataFrame(bu[s_]["per_gw"]) for s_ in common]),
-                      pd.concat([pd.DataFrame(ru[s_]["per_gw"]) for s_ in common]))
+            b = boots[name] = _boot(pd.concat([pd.DataFrame(bu[s_]["per_gw"]) for s_ in common]),
+                                    pd.concat([pd.DataFrame(ru[s_]["per_gw"]) for s_ in common]))
             per = []
             for s_ in common:
                 bs, vs = bu[s_]["summary"], ru[s_]["summary"]
@@ -794,6 +1329,11 @@ def cmd_report(args) -> None:
                          f"{_fmt(b['capt'], 2)} | {'; '.join(per)} |")
             subset_rows.append(f"| {name} | " + " | ".join(_fmt(b[c], 4) if c in b else "-" for c in SUBSETS) + " |")
             pick_rows.append(f"| {name} | " + " | ".join(_fmt(b[k]) if k in b else "-" for k in PICK_METRICS) + " |")
+        counts = {n_: c for n_, c in seed_counts.items() if c and c != [0]}
+        if len({tuple(c) for c in counts.values()}) > 1:
+            lines.append("\nSeeds averaged: " + ", ".join(f"{n_} {'/'.join(map(str, c))}" for n_, c in counts.items())
+                         + ". An average of more seeds predicts better, so the seed-averaged comparisons favour the "
+                         "side with more seeds; compare single models below.")
         if pick_rows:
             lines.append("\n#### Pick subsets: share of the top 20 who didn't play (lower is better), top-20 points "
                          "among players of clubs in Europe and among GK/DEF, and the clean-sheet points of those "
@@ -814,17 +1354,41 @@ def cmd_report(args) -> None:
             lines.append("| variant | " + " | ".join(SUBSETS) + " |")
             lines.append("|---|" + "---|" * len(SUBSETS))
             lines += subset_rows
+        _squad_sections(lines, results, args.ref, proto, units, boots, tables)
+    spread_keys = ["top20", "capt", "capt_fpl", "sq_xi", "sq_fpl", "rmse"]
+    spread_rows = []
+    for name, t in tables.items():
+        for proto, tp in t.groupby("proto", sort=False):
+            cells = []
+            for k in spread_keys:
+                s = _seed_spread(tp, k)
+                d = _digits(k)
+                cells.append(f"{s[0]:.{d}f} ± {s[1]:.{d}f} / {s[2]:.{d}f}" if s else "-")
+            spread_rows.append(f"| {name} | {proto} | {tp['seed'].nunique()} | " + " | ".join(cells) + " |")
+    if spread_rows:
+        lines.append("\n## Seed variance of single models (pooled over folds): mean over seeds ± SD between seeds / "
+                     "SE over gameweeks of the seed mean\n")
+        lines.append("| variant | protocol | seeds | " + " | ".join(spread_keys) + " |")
+        lines.append("|---|---|---|" + "---|" * len(spread_keys))
+        lines += spread_rows
+    if solves:
+        lines.append(f"\n## Squad solves (time limit {SQ_TIME_LIMIT:.0f}s each)\n")
+        for name, (secs, failed) in solves.items():
+            lines.append(f"- **{name}**: {len(secs)} squads, {failed} infeasible, mean {np.nanmean(secs):.2f}s, "
+                         f"max {np.nanmax(secs):.1f}s, {int((secs >= 0.98 * SQ_TIME_LIMIT).sum())} at the limit")
     lines.append("\n## Seed spread (refit top20 / rmse per seed)\n")
     for name, r in results.items():
         cells = []
         for s, f in r.get("folds", {}).items():
             cells.append(f"{s[2:]}: " + ", ".join(f"{v['refit']['top20']:.3f}/{v['refit']['rmse']:.4f}"
-                                                for v in f["seeds"].values()))
+                                                for v in f.get("seeds", {}).values() if "refit" in v))
         lines.append(f"- **{name}**: " + "; ".join(cells))
     lines.append("\n## Test curve of the early-stopping fit (seed 0): trees -> valid rmse | test top20 | test rmse\n")
     for name, r in results.items():
         for s, f in r.get("folds", {}).items():
-            seed0 = next(iter(f["seeds"].values()))
+            seed0 = next(iter(f.get("seeds", {}).values()), {})
+            if "best_iter" not in seed0:      # scored without its training info
+                continue
             pts = seed0.get("test_curve", {})
             cell = "; ".join(f"{k}: {v['valid_rmse']:.4f}|{v['top20']:.3f}|{v['rmse']:.4f}" for k, v in pts.items())
             lines.append(f"- {name} {s} (best {seed0['best_iter']}, argmin {seed0['argmin_valid']}): {cell}")
@@ -833,7 +1397,7 @@ def cmd_report(args) -> None:
         if not r.get("folds"):
             continue
         last = list(r["folds"].values())[-1]
-        seed0 = next(iter(last["seeds"].values()))
+        seed0 = next(iter(last.get("seeds", {}).values()), {})
         lines.append(f"- **{name}**: " + ", ".join(k for k, _ in seed0.get("top_gain", [])[:20]))
     text = "\n".join(lines)
     if args.out:
@@ -854,13 +1418,28 @@ def main() -> int:
     r.add_argument("--out", required=True)
     r.add_argument("--inseason", default="", help="seasons to replay with in-season retraining, e.g. 2025-26")
     r.add_argument("--folds", default=None, help="test seasons for the es/refit folds (default: all)")
-    r.add_argument("--seeds", default="", help="training seeds, e.g. 3,4,5 to replicate a run (default: 0,1,2)")
+    r.add_argument("--seeds", default="", help="training seeds, e.g. 3,4,5 or 0-19 (default: 0,1,2)")
+    r.add_argument("--no-squads", action="store_true", help="skip the squad solves")
+    sc = sub.add_parser("score", help="score saved predictions without retraining")
+    sc.add_argument("preds", nargs="+", help=".preds.parquet files written by run (globs allowed)")
+    sc.add_argument("--out", required=True)
+    sc.add_argument("--pool", action="store_true", help="merge files of the same variant with different seeds")
+    sc.add_argument("--reuse", action="store_true",
+                    help="keep the tables in the .gw.parquet beside each file whose predictions are unchanged")
+    sc.add_argument("--no-squads", action="store_true", help="skip the squad solves")
+    mx = sub.add_parser("matrix", help="the workflow's run jobs: variants x chunks of seeds")
+    mx.add_argument("--variants", required=True)
+    mx.add_argument("--seeds", default="")
+    mx.add_argument("--ref", default="current")
+    mx.add_argument("--ref-seeds", default="", help="seeds for the reference variant, e.g. 0-19")
+    mx.add_argument("--chunk", type=int, default=5, help="seeds per job")
     rep = sub.add_parser("report")
     rep.add_argument("paths", nargs="+")
     rep.add_argument("--out")
     rep.add_argument("--ref", default="current", help="variant the others are compared against")
     args = parser.parse_args()
-    {"features": cmd_features, "run": cmd_run, "report": cmd_report}[args.cmd](args)
+    {"features": cmd_features, "run": cmd_run, "score": cmd_score, "matrix": cmd_matrix,
+     "report": cmd_report}[args.cmd](args)
     return 0
 
 
