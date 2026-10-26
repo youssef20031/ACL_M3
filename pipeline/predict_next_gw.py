@@ -44,6 +44,7 @@ import pandas as pd
 from ml import points_model as pm
 from pipeline.current_season import LIVE_DATA_DIR, next_event, season_file_stem, season_label
 from pipeline.team_names import graph_team_name
+from services.season_service import chance_of_playing
 
 logger = logging.getLogger(__name__)
 
@@ -104,16 +105,10 @@ def availability_factor(status: Any, chance_next: Any) -> float:
 
     u (left / unavailable) and n (not in squad) -> 0. Otherwise FPL's
     chance_of_playing_next_round / 100 when set (0 for ruled out); injured or
-    suspended players without a chance value are treated as out; else 1.
+    suspended players without a chance value are treated as out; else 1. The rule
+    lives in season_service, whose captain pick uses it as the chance of playing.
     """
-    status = str(status or "a").lower()
-    if status in ("u", "n"):
-        return 0.0
-    if chance_next is not None and not pd.isna(chance_next):
-        return float(np.clip(float(chance_next) / 100.0, 0.0, 1.0))
-    if status in ("i", "s"):
-        return 0.0
-    return 1.0
+    return chance_of_playing(status, chance_next)
 
 
 def describe_fixtures(entries: List[Dict[str, Any]]) -> Tuple[str, bool, str]:
