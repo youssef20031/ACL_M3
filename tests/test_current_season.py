@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 
 from pipeline.current_season import (
-    CSV_COLUMNS, build_season_rows, build_status, season_file_stem, season_label, update_xp_snapshots,
+    CSV_COLUMNS, ELEMENT_SNAPSHOT_COLUMNS, build_season_rows, build_status, element_snapshot_path, run,
+    season_file_stem, season_label, update_element_snapshots, update_xp_snapshots,
 )
 
 
@@ -18,7 +19,9 @@ def _bootstrap(next_deadline: datetime):
         "elements": [
             # Transferred from Ipswich (team 2) to Arsenal (team 1) after GW1
             {"id": 10, "code": 100, "first_name": "Test", "second_name": "Mover", "web_name": "Mover",
-             "team": 1, "element_type": 3, "status": "a", "news": "", "now_cost": 55, "ep_next": "4.5"},
+             "team": 1, "element_type": 3, "status": "a", "news": "", "now_cost": 55, "ep_next": "4.5",
+             "transfers_in_event": 12000, "transfers_out_event": 3400, "cost_change_event": 1,
+             "penalties_order": 1, "corners_and_indirect_freekicks_order": None, "direct_freekicks_order": 2},
             {"id": 11, "code": 101, "first_name": "Injured", "second_name": "Keeper", "web_name": "Keeper",
              "team": 3, "element_type": 1, "status": "i", "news": "Knee injury",
              "chance_of_playing_next_round": 0, "now_cost": 45, "ep_next": "0.0"},
@@ -81,3 +84,53 @@ def test_status_includes_news_and_skips_assistant_managers():
     assert set(status["element"]) == {10, 11}
     keeper = status[status.element == 11].iloc[0]
     assert keeper["status"] == "i" and keeper["news"] == "Knee injury" and keeper["position"] == "GK"
+
+
+def test_status_includes_transfers_price_change_and_set_piece_orders():
+    status = build_status(_bootstrap(datetime.now(timezone.utc)))
+    mover = status[status.element == 10].iloc[0]
+    assert (mover["transfers_in_event"], mover["transfers_out_event"], mover["cost_change_event"]) == (12000, 3400, 1)
+    assert mover["penalties_order"] == 1 and mover["direct_freekicks_order"] == 2
+    assert pd.isna(mover["corners_and_indirect_freekicks_order"])
+    keeper = status[status.element == 11].iloc[0]
+    assert pd.isna(keeper["transfers_in_event"]) and pd.isna(keeper["penalties_order"])  # fields absent
+
+
+def test_element_snapshots_keep_every_capture_before_the_deadline(tmp_path):
+    bootstrap = _bootstrap(datetime.now(timezone.utc) + timedelta(days=2))
+    path = update_element_snapshots(bootstrap, str(tmp_path), "2026-27")
+    assert path == element_snapshot_path(str(tmp_path), "2026-27", 2)
+    assert path.endswith("gw02.csv")
+    bootstrap["elements"][0]["transfers_in_event"] = 15000  # more transfers by the next run
+    update_element_snapshots(bootstrap, str(tmp_path), "2026-27")
+
+    snaps = pd.read_csv(path)
+    assert list(snaps.columns) == ELEMENT_SNAPSHOT_COLUMNS
+    assert set(snaps["GW"]) == {2} and set(snaps["element"]) == {10, 11}  # assistant manager skipped
+    assert snaps.groupby("element").size().tolist() == [2, 2]
+    assert snaps[snaps.element == 10]["transfers_in_event"].tolist() == [12000, 15000]
+    keeper = snaps[snaps.element == 11].iloc[-1]
+    assert keeper["status"] == "i" and keeper["news"] == "Knee injury" and keeper["chance_of_playing_next_round"] == 0
+
+
+def test_element_snapshots_stop_at_the_deadline(tmp_path):
+    bootstrap = _bootstrap(datetime.now(timezone.utc) - timedelta(minutes=1))
+    assert update_element_snapshots(bootstrap, str(tmp_path), "2026-27") is None
+    assert not (tmp_path / "element_snapshots").exists()
+
+
+class _StatusOnlyClient:
+    def __init__(self, bootstrap):
+        self._bootstrap = bootstrap
+
+    def bootstrap(self):
+        return self._bootstrap
+
+
+def test_status_only_run_writes_the_status_file_and_a_snapshot(tmp_path):
+    bootstrap = _bootstrap(datetime.now(timezone.utc) + timedelta(days=1))
+    run(str(tmp_path), status_only=True, client=_StatusOnlyClient(bootstrap))
+    status = pd.read_csv(tmp_path / "player_status_2026_27.csv")
+    assert {"transfers_in_event", "cost_change_event", "penalties_order"} <= set(status.columns)
+    snaps = pd.read_csv(tmp_path / "element_snapshots" / "2026-27" / "gw02.csv")
+    assert len(snaps) == 2
