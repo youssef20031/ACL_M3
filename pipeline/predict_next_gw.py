@@ -14,7 +14,9 @@ Output: LIVE_DATA_DIR/next_gw_predictions.csv (+ .json), same schema as the old
 ml/predictions/next_gw_predictions.csv plus a few transparency columns, written
 atomically. services/predictions.py prefers this file over the bundled one. Before the
 deadline it also saves the gameweek's squad pick (services/model_review.save_picks) for
-the Team of the Week page's "Model vs actual" review.
+the Team of the Week page's "Model vs actual" review, and every run writes the model's
+inputs for each upcoming row (next_gw_features.csv), which services/explain.py turns into
+SHAP and LIME explanations for the /model page.
 
 How a prediction is built: each player gets one row per fixture of the predicted
 gameweek and goes through ml.points_model.build_features together with his real
@@ -42,11 +44,14 @@ import pandas as pd
 from ml import points_model as pm
 from pipeline.current_season import LIVE_DATA_DIR, next_event, season_file_stem, season_label
 from pipeline.team_names import graph_team_name
+from services.season_service import chance_of_playing
 
 logger = logging.getLogger(__name__)
 
 HISTORY_CSV = pm.HISTORY_CSV
 OUTPUT_NAME = "next_gw_predictions.csv"
+FEATURES_NAME = "next_gw_features.csv"   # model inputs per upcoming row, for services/explain.py
+FEATURE_ID_COLUMNS = ["element", "name", "position", "team", "opponent", "fixture", "kickoff_time", "GW", "season"]
 POSITIONS = ("GK", "DEF", "MID", "FWD")
 MODEL_METHOD = "xgboost_v3"
 NO_FIXTURE_METHOD = "no_fixture"
@@ -100,16 +105,10 @@ def availability_factor(status: Any, chance_next: Any) -> float:
 
     u (left / unavailable) and n (not in squad) -> 0. Otherwise FPL's
     chance_of_playing_next_round / 100 when set (0 for ruled out); injured or
-    suspended players without a chance value are treated as out; else 1.
+    suspended players without a chance value are treated as out; else 1. The rule
+    lives in season_service, whose captain pick uses it as the chance of playing.
     """
-    status = str(status or "a").lower()
-    if status in ("u", "n"):
-        return 0.0
-    if chance_next is not None and not pd.isna(chance_next):
-        return float(np.clip(float(chance_next) / 100.0, 0.0, 1.0))
-    if status in ("i", "s"):
-        return 0.0
-    return 1.0
+    return chance_of_playing(status, chance_next)
 
 
 def describe_fixtures(entries: List[Dict[str, Any]]) -> Tuple[str, bool, str]:
@@ -210,15 +209,28 @@ def upcoming_rows(players: pd.DataFrame, fixtures_by_team: Dict[str, List[Dict[s
     return pd.DataFrame(rows)
 
 
+def save_model_inputs(rows: pd.DataFrame, path: str) -> None:
+    """Write the model's input row for every upcoming fixture, plus its raw output
+    (model_points, before the floor at 0), atomically. Feature columns are
+    ml.points_model.feature_columns(); services/explain.py checks them against the served model.
+    Full precision on purpose: tree splits sit exactly on training values such as 1/3 (a
+    3-match mean), and rounding to 6 digits moved 30% of players' predictions by up to 0.6."""
+    cols = FEATURE_ID_COLUMNS + ["model_points"] + pm.feature_columns()
+    out = rows[cols].sort_values(["element", "kickoff_time", "fixture"])
+    _atomic_write(path, lambda p: out.to_csv(p, index=False))
+
+
 def predict_players(players: pd.DataFrame, history: pd.DataFrame,
                     fixtures_by_team: Dict[str, List[Dict[str, Any]]], season: str, gameweek: int,
-                    predict_fn: Callable[[pd.DataFrame], np.ndarray]) -> Dict[str, Dict[str, Any]]:
+                    predict_fn: Callable[[pd.DataFrame], np.ndarray],
+                    features_path: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
     """element (str) -> {'points': model points summed over the gameweek's fixtures, 'method'}.
 
     Features come from ml.points_model.build_features, the same code used in training;
     the upcoming rows have no outcomes, so their features only see earlier matches.
     Players without any earlier matches still get a prediction from price, position,
-    ownership and their team/opponent strength.
+    ownership and their team/opponent strength. With `features_path`, the model's inputs
+    are saved there too (save_model_inputs); a failure to save is logged, not raised.
     """
     upcoming = upcoming_rows(players, fixtures_by_team, season, gameweek)
     if upcoming.empty:
@@ -227,7 +239,13 @@ def predict_players(players: pd.DataFrame, history: pd.DataFrame,
     rows = feats[feats["is_upcoming"]].copy()
     # build_features re-sorts; map rows back to players by (name, fixture)
     rows = rows.merge(upcoming[["name", "fixture", "element"]], on=["name", "fixture"], how="left")
-    rows["points"] = np.clip(predict_fn(rows), 0.0, None)
+    rows["model_points"] = predict_fn(rows)
+    rows["points"] = np.clip(rows["model_points"], 0.0, None)
+    if features_path:
+        try:
+            save_model_inputs(rows, features_path)
+        except Exception:
+            logger.exception("Couldn't save the model inputs for GW%s", gameweek)
     totals = rows.groupby("element")["points"].sum()
     return {str(int(k)): {"points": float(v), "method": MODEL_METHOD} for k, v in totals.items()}
 
@@ -322,12 +340,13 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
     # Leakage guard: nothing from the predicted gameweek or later feeds the features.
     history = load_history(live_csv, season, before_gw=gameweek, before_time=first_kickoff,
                            history_csv=history_csv)
+    os.makedirs(live_dir, exist_ok=True)
+    features_path = os.path.join(live_dir, FEATURES_NAME)
     predictions = predict_players(players, history, fixtures_by_team, season, gameweek,
-                                  predict_fn or _v3_predict_fn())
+                                  predict_fn or _v3_predict_fn(), features_path=features_path)
     promoted = promoted_teams(previous_season_teams(history, season), players["team"])
     out = assemble_output(players, predictions, fixtures_by_team, gameweek, event["deadline_time"], promoted)
 
-    os.makedirs(live_dir, exist_ok=True)
     csv_path = os.path.join(live_dir, OUTPUT_NAME)
     json_path = csv_path[:-4] + ".json"
     _atomic_write(json_path, lambda p: out.to_json(p, orient="records", indent=2))
@@ -358,6 +377,7 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
         "history_last_kickoff": str(history["kickoff_time"].max()) if len(history) else None,
         "output": csv_path,
         "output_json": json_path,
+        "model_inputs": features_path if os.path.exists(features_path) else None,
         "model_pick": picks_path,
         "seconds": round(time.perf_counter() - started, 1),
         "peak_memory_mb": (round(peak_memory_mb(), 1) if peak_memory_mb() is not None else None),

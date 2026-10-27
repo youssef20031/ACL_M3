@@ -17,6 +17,7 @@ const loadHome = () => import('./pages/Home').then((m) => ({ default: m.Home }))
 const loadFixtures = () => import('./pages/Fixtures').then((m) => ({ default: m.Fixtures }));
 const loadLeagueTable = () => import('./pages/LeagueTable').then((m) => ({ default: m.LeagueTable }));
 const loadTeamOfTheWeek = () => import('./pages/TeamOfTheWeek').then((m) => ({ default: m.TeamOfTheWeek }));
+const loadModelInsights = () => import('./pages/ModelInsights').then((m) => ({ default: m.ModelInsights }));
 const loadPrivacy = () => import('./pages/Privacy').then((m) => ({ default: m.Privacy }));
 const loadTerms = () => import('./pages/Terms').then((m) => ({ default: m.Terms }));
 const loadContact = () => import('./pages/Contact').then((m) => ({ default: m.Contact }));
@@ -32,6 +33,7 @@ const Home = lazy(loadHome);
 const Fixtures = lazy(loadFixtures);
 const LeagueTable = lazy(loadLeagueTable);
 const TeamOfTheWeek = lazy(loadTeamOfTheWeek);
+const ModelInsights = lazy(loadModelInsights);
 const Privacy = lazy(loadPrivacy);
 const Terms = lazy(loadTerms);
 const Contact = lazy(loadContact);
@@ -62,7 +64,7 @@ function App() {
   // Warm the remaining route chunks once the browser is idle so later navigation is instant.
   useEffect(() => {
     const preload = () => {
-      [loadHome, loadFixtures, loadLeagueTable, loadTeamOfTheWeek, loadQAAssistant, loadPredictions, loadPlayerSearch, loadPlayerComparison, loadTrivia, loadSettings].forEach((load) => {
+      [loadHome, loadFixtures, loadLeagueTable, loadTeamOfTheWeek, loadQAAssistant, loadPredictions, loadModelInsights, loadPlayerSearch, loadPlayerComparison, loadTrivia, loadSettings].forEach((load) => {
         void load().catch(() => undefined);
       });
     };
@@ -92,6 +94,7 @@ function App() {
             <Route path="assistant" element={<Page><QAAssistant /></Page>} />
             <Route path="players" element={<Page><PlayerSearch /></Page>} />
             <Route path="predictions" element={<Page><Predictions /></Page>} />
+            <Route path="model" element={<Page><ModelInsights /></Page>} />
             <Route path="compare" element={<Page><PlayerComparison /></Page>} />
             <Route path="trivia" element={<Page><Trivia /></Page>} />
             <Route path="settings" element={<Page><Settings /></Page>} />

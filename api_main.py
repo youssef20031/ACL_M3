@@ -58,6 +58,7 @@ from services import season_service
 from services import model_review
 from services import answer_cards
 from services import analytics
+from services import explain
 from services.security import RateLimiter, limits_from_env, require_admin
 from trivia.trivia_generator import TriviaGenerator, TriviaQuestion as GeneratedTriviaQuestion, TriviaCategory, Difficulty
 from llm.llm_manager import LLMManager, PromptBuilder
@@ -2555,6 +2556,64 @@ def player_leaders(
     (status/news) is only filled for the current season. Unknown season -> 404."""
     return _season_call(season_service.get_player_leaders, conn, season, position, sort, limit,
                         photo_for=_photo_for)
+
+
+# ============================================================================
+# Model explainability (SHAP + LIME over the saved model inputs; logic in services/explain.py)
+# ============================================================================
+
+def _explain_call(fn, *args):
+    try:
+        return fn(*args)
+    except explain.ExplainUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@app.get("/api/ml/explain/summary")
+def ml_explain_summary():
+    """Global SHAP view of the next gameweek's predictions: mean |SHAP| per feature and group,
+    a beeswarm sample of the top features, the model's facts and test metrics. 503 until the
+    pipeline has written the model inputs."""
+    return _explain_call(explain.summary)
+
+
+@app.get("/api/ml/explain/player")
+def ml_explain_player(element: Optional[int] = Query(None, ge=1),
+                      name: Optional[str] = Query(None, min_length=2, max_length=100)):
+    """SHAP waterfall and LIME surrogate for each of one player's fixtures, plus the steps from
+    the model's output to the site's predicted points. By FPL element id, or by name."""
+    if element is None:
+        if not name:
+            raise HTTPException(status_code=422, detail="Pass element or name")
+        element = _explain_call(explain.find_element, name)
+        index = app_state.get("player_index")
+        if element is None and index is not None:
+            resolved = index.resolve(name)
+            element = _explain_call(explain.find_element, resolved) if resolved else None
+        if element is None:  # e.g. a surname, when it names one player only
+            hits = _explain_call(explain.search, name, 2)
+            element = hits[0]["element"] if len(hits) == 1 else None
+        if element is None:
+            raise HTTPException(status_code=404, detail=f"{name} isn't in this gameweek's predictions")
+    try:
+        return _explain_call(explain.player, element)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="That player isn't in this gameweek's predictions")
+
+
+@app.get("/api/ml/explain/dependence")
+def ml_explain_dependence(feature: str = Query(..., max_length=64)):
+    """Every upcoming row's value of one feature against its SHAP value."""
+    try:
+        return _explain_call(explain.dependence, feature)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Unknown feature: {feature}")
+
+
+@app.get("/api/ml/explain/players")
+def ml_explain_players(q: str = Query("", max_length=100), limit: int = Query(20, ge=1, le=50)):
+    """Players in this gameweek's model inputs whose name contains q, by predicted points."""
+    return {"players": _explain_call(explain.search, q, limit)}
 
 
 # ============================================================================

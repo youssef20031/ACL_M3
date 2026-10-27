@@ -10,6 +10,9 @@ Team-of-the-week selection: pure functions, no Neo4j or file IO.
                       and each bench player's points weighted by how often that bench slot
                       comes on (BENCH_WEIGHTS). So spare cash buys a bench that plays, and
                       a little XI value is traded for a much better first substitute.
+  pick_captains(xi)   captain and vice-captain by expected captain bonus. FPL doubles the
+                      vice when the captain doesn't play, so a flagged player can be the
+                      better captain if a nailed one backs him up (see the function).
   apply_auto_subs()   FPL's automatic substitutions, for scoring a squad after the gameweek
                       (services/model_review, scripts/analysis/ml_backtest).
 
@@ -45,8 +48,10 @@ class Candidate:
     id: str            # unique key (player name)
     position: str      # GK / DEF / MID / FWD
     team: str
-    points: float
+    points: float      # expected points, already scaled by p_play
     cost: int = 0      # FPL tenths
+    p_play: float = 1.0                # chance he plays (FPL's flag); only used for the captaincy
+    opponents: Tuple[str, ...] = ()    # clubs he faces this gameweek, to tell fixtures apart
 
 
 @dataclass
@@ -83,11 +88,39 @@ def formation(starters: Sequence[Candidate]) -> str:
     return "-".join(str(counts[p]) for p in ("DEF", "MID", "FWD"))
 
 
+def same_fixture(a: Candidate, b: Candidate) -> bool:
+    return a.team == b.team or b.team in a.opponents or a.team in b.opponents
+
+
+def captain_bonus(captain: Candidate, vice: Optional[Candidate]) -> float:
+    """Expected extra points from the armband: the captain's points count twice, and when
+    he doesn't play (chance 1 - p_play) the vice-captain's do instead. `points` already
+    include each player's chance of playing, so this is E_c + (1 - p_c) * E_v."""
+    return captain.points + (1.0 - captain.p_play) * (vice.points if vice is not None else 0.0)
+
+
 def pick_captains(starters: Sequence[Candidate]) -> Tuple[Candidate, Optional[Candidate]]:
+    """The (captain, vice) pair with the highest captain_bonus, over every ordered pair
+    of starters (110 for an XI).
+
+    A flagged star can beat a nailed player: at 75% to play with 8.0 points when he
+    plays (6.0 expected), backed by a nailed 6.5, he's worth 6.0 + 0.25 * 6.5 = 7.63
+    against the nailed player's 6.5. Ties go to a vice from another fixture (when the
+    vice can matter), then to the usual order: points desc, then id. With every p_play
+    1.0 the vice adds nothing, so this is the top two by points.
+    """
     ranked = sorted(starters, key=_rank_key)
     if not ranked:
         raise InfeasibleError("No starters to captain")
-    return ranked[0], (ranked[1] if len(ranked) > 1 else None)
+    if len(ranked) == 1:
+        return ranked[0], None
+
+    def key(pair: Tuple[Candidate, Candidate]):
+        c, v = pair
+        return (-round(captain_bonus(c, v), 9), c.p_play < 1.0 and same_fixture(c, v),
+                _rank_key(c), _rank_key(v))
+
+    return min(((c, v) for c in ranked for v in ranked if v.id != c.id), key=key)
 
 
 def _check_positions(pool: Sequence[Candidate]) -> None:
@@ -138,6 +171,10 @@ def best_squad(pool: Iterable[Candidate], budget: int = DEFAULT_BUDGET,
                time_limit: float = 20.0) -> Selection:
     """Best 15-man squad within budget/club limits, by expected points: XI + captain
     + bench weighted by BENCH_WEIGHTS / BENCH_GK_WEIGHT.
+
+    The solver counts the best starter's points once more for the captain. pick_captains
+    then chooses the armband over the chosen XI, including the vice-captain cover when
+    the captain may not play, so its bonus is never below what the solver assumed.
 
     Raises InfeasibleError when no valid squad exists.
     """

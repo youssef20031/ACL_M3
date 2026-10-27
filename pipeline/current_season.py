@@ -8,9 +8,15 @@ Build the current season's per-match player file from the FPL API.
 Writes to LIVE_DATA_DIR (default data/live):
   FPL_YYYY_YYYY.csv           one row per player per finished fixture, same 46 columns and
                               conventions as the historical FPL_2025_2026.csv
-  player_status_YYYY_YY.csv   current availability: status, news, chance of playing, price, form
+  player_status_YYYY_YY.csv   current availability: status, news, chance of playing, price, form,
+                              this gameweek's transfers in/out and price change, set-piece orders
   xp_snapshots.csv            FPL's expected points per player per gameweek, captured before
                               each deadline (the API only exposes the upcoming gameweek's value)
+  element_snapshots/<season>/gwNN.csv
+                              every capture before gameweek NN's deadline of each player's
+                              availability, transfer, price and set-piece state; the API only
+                              shows current values, so this is the only record of what was
+                              known before past deadlines
   meta.json                   season, finished fixtures included, timestamps, and per gameweek
                               its deadline, whether it's finished and FPL's average and
                               highest manager score (`events`)
@@ -48,10 +54,23 @@ CSV_COLUMNS = [
 
 POSITIONS = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}  # 5 = assistant-manager chip, skipped
 
+# Transfers in/out and price change since the last deadline, i.e. for the upcoming gameweek
+MARKET_COLUMNS = ["transfers_in_event", "transfers_out_event", "cost_change_event"]
+# 1 = first choice; empty when FPL lists no order for the player
+SET_PIECE_COLUMNS = ["penalties_order", "corners_and_indirect_freekicks_order", "direct_freekicks_order"]
+
 STATUS_COLUMNS = [
     "element", "code", "name", "web_name", "team", "position", "status",
     "chance_of_playing_this_round", "chance_of_playing_next_round", "news", "news_added",
-    "now_cost", "selected_by_percent", "form", "ep_next", "fetched_at",
+    "now_cost", "selected_by_percent", "form", "ep_next", *MARKET_COLUMNS, *SET_PIECE_COLUMNS,
+    "fetched_at",
+]
+
+ELEMENT_SNAPSHOT_DIR = "element_snapshots"
+ELEMENT_SNAPSHOT_COLUMNS = [
+    "element", "code", "GW", "captured_at", "team", "position", "status",
+    "chance_of_playing_this_round", "chance_of_playing_next_round", "news", "news_added",
+    "now_cost", "selected_by_percent", "ep_next", *MARKET_COLUMNS, *SET_PIECE_COLUMNS,
 ]
 
 
@@ -80,6 +99,11 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _deadline_passed(event: Dict[str, Any]) -> bool:
+    deadline = datetime.fromisoformat(event["deadline_time"].replace("Z", "+00:00"))
+    return datetime.now(timezone.utc) >= deadline
+
+
 EVENT_FIELDS = ("id", "deadline_time", "finished", "data_checked", "average_entry_score", "highest_score")
 
 
@@ -97,23 +121,53 @@ def event_summaries(bootstrap: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 # ------------------------------------------------------------------ builders
 
+def _element_state(el: Dict[str, Any], teams: Dict[int, str]) -> Dict[str, Any]:
+    """One player's availability, price, transfer and set-piece fields from the bootstrap."""
+    return {
+        "element": el["id"], "code": el["code"], "team": teams.get(el["team"]),
+        "position": POSITIONS[el["element_type"]], "status": el["status"],
+        "chance_of_playing_this_round": el.get("chance_of_playing_this_round"),
+        "chance_of_playing_next_round": el.get("chance_of_playing_next_round"),
+        "news": el.get("news") or "", "news_added": el.get("news_added"),
+        "now_cost": el["now_cost"], "selected_by_percent": el.get("selected_by_percent"),
+        "ep_next": el.get("ep_next"),
+        **{col: el.get(col) for col in MARKET_COLUMNS + SET_PIECE_COLUMNS},
+    }
+
+
 def build_status(bootstrap: Dict[str, Any]) -> pd.DataFrame:
     teams = {t["id"]: graph_team_name(t["name"]) for t in bootstrap["teams"]}
     fetched_at = _now()
     rows = [
-        {
-            "element": el["id"], "code": el["code"], "name": player_name(el),
-            "web_name": el["web_name"], "team": teams.get(el["team"]),
-            "position": POSITIONS[el["element_type"]], "status": el["status"],
-            "chance_of_playing_this_round": el.get("chance_of_playing_this_round"),
-            "chance_of_playing_next_round": el.get("chance_of_playing_next_round"),
-            "news": el.get("news") or "", "news_added": el.get("news_added"),
-            "now_cost": el["now_cost"], "selected_by_percent": el.get("selected_by_percent"),
-            "form": el.get("form"), "ep_next": el.get("ep_next"), "fetched_at": fetched_at,
-        }
+        {**_element_state(el, teams), "name": player_name(el), "web_name": el["web_name"],
+         "form": el.get("form"), "fetched_at": fetched_at}
         for el in bootstrap["elements"] if el["element_type"] in POSITIONS
     ]
     return pd.DataFrame(rows, columns=STATUS_COLUMNS).sort_values(["team", "position", "name"])
+
+
+def element_snapshot_path(out_dir: str, season: str, gameweek: int) -> str:
+    return os.path.join(out_dir, ELEMENT_SNAPSHOT_DIR, season, f"gw{gameweek:02d}.csv")
+
+
+def update_element_snapshots(bootstrap: Dict[str, Any], out_dir: str, season: str) -> Optional[str]:
+    """Append this run's capture of every player's state to the upcoming gameweek's snapshot
+    file. Every capture is kept, so the state at any time before the deadline (such as the last
+    prediction run's) can be recovered. Returns the file's path, or None after the deadline."""
+    event = next_event(bootstrap)
+    if event is None or _deadline_passed(event):
+        return None
+    teams = {t["id"]: graph_team_name(t["name"]) for t in bootstrap["teams"]}
+    captured_at = _now()
+    fresh = pd.DataFrame([
+        {**_element_state(el, teams), "GW": event["id"], "captured_at": captured_at}
+        for el in bootstrap["elements"] if el["element_type"] in POSITIONS
+    ], columns=ELEMENT_SNAPSHOT_COLUMNS)
+    path = element_snapshot_path(out_dir, season, event["id"])
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    existing = _read_csv(path)
+    _write_csv(fresh if existing is None else pd.concat([existing, fresh], ignore_index=True), path)
+    return path
 
 
 def update_xp_snapshots(bootstrap: Dict[str, Any], existing: Optional[pd.DataFrame]) -> pd.DataFrame:
@@ -123,8 +177,7 @@ def update_xp_snapshots(bootstrap: Dict[str, Any], existing: Optional[pd.DataFra
     event = next_event(bootstrap)
     if event is None:
         return snapshots
-    deadline = datetime.fromisoformat(event["deadline_time"].replace("Z", "+00:00"))
-    if datetime.now(timezone.utc) >= deadline:
+    if _deadline_passed(event):
         return snapshots  # too late: this gameweek's value is already frozen
     fresh = pd.DataFrame([
         {"element": el["id"], "GW": event["id"], "xP": float(el.get("ep_next") or 0.0), "captured_at": _now()}
@@ -204,6 +257,7 @@ def run(out_dir: str = LIVE_DATA_DIR, full: bool = False, status_only: bool = Fa
         _write_csv(build_status(bootstrap), status_csv)
         xp = update_xp_snapshots(bootstrap, _read_csv(xp_csv))
         _write_csv(xp, xp_csv)
+        update_element_snapshots(bootstrap, out_dir, season)
 
         refreshed = False
         if not status_only:

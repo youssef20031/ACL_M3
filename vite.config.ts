@@ -34,6 +34,7 @@ const SITEMAP_ROUTES: { path: string; changefreq: 'daily' | 'weekly' | 'monthly'
   { path: '/players', changefreq: 'daily', priority: 0.8 },
   { path: '/assistant', changefreq: 'weekly', priority: 0.7 },
   { path: '/compare', changefreq: 'weekly', priority: 0.6 },
+  { path: '/model', changefreq: 'daily', priority: 0.6 },
   { path: '/trivia', changefreq: 'weekly', priority: 0.5 },
   { path: '/contact', changefreq: 'monthly', priority: 0.3 },
   { path: '/privacy', changefreq: 'monthly', priority: 0.2 },

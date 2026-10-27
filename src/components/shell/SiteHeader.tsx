@@ -21,6 +21,7 @@ export const PRIMARY_NAV: NavItem[] = [
 
 export const MORE_NAV: NavItem[] = [
   { to: '/compare', label: 'Compare players' },
+  { to: '/model', label: 'Model insights' },
   { to: '/trivia', label: 'Trivia' },
   { to: '/settings', label: 'Settings' },
 ];
