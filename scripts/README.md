@@ -11,7 +11,7 @@ so project imports (`config`, `graph`, …) and data paths (`data/…`) resolve:
 | Folder | Contents |
 |---|---|
 | `checks/` | Database and API checks, plus old ad-hoc `test_*.py` scripts (the real suite is `tests/`) |
-| `data/` | Fixture and season data preparation (fetch, scrape, fix team names, process); `fetch_manager_changes.py` rebuilds `data/manager_changes.csv` from Wikipedia; `fetch_transfermarkt_non_pl.py` rebuilds `data/non_pl_matches.csv` and `data/non_pl_appearances.csv` (cup and European matches, backtest only) from the CC0 transfermarkt-datasets dump; `fetch_odds.py` downloads football-data.co.uk's Premier League odds into gitignored `data/odds/` (backtest only, not for redistribution) |
+| `data/` | Fixture and season data preparation (fetch, scrape, fix team names, process); `fetch_manager_changes.py` rebuilds `data/manager_changes.csv` from Wikipedia; `fetch_transfermarkt_non_pl.py` rebuilds `data/non_pl_matches.csv` and `data/non_pl_appearances.csv` (cup and European matches, backtest only) from the CC0 transfermarkt-datasets dump; `fetch_odds.py` downloads football-data.co.uk's Premier League odds into gitignored `data/odds/` (backtest only, not for redistribution); `fetch_player_codes.py` rebuilds `data/player_codes.csv` (each season's FPL element mapped to the player's stable `code`, from vaastav's `players_raw.csv`; backtest only) |
 | `efl/` | Championship (EFL) data ingestion and validation for promoted teams |
 | `embeddings/` | `build_embeddings_from_csv.py` rebuilds `embeddings/prebuilt/` (run by the `build-embeddings` workflow) |
 | `analysis/` | LLM evaluation (writes `docs/reports/evaluation_results/`), prediction plots, and `ml_backtest.py`, the points-model backtest run by the **ML backtest** workflow |

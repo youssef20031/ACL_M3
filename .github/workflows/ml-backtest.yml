@@ -1,8 +1,14 @@
 name: ML backtest
 
 # Rolling-origin backtest of points-model variants (scripts/analysis/ml_backtest.py): each
-# variant is trained on earlier seasons and scored on 2023-24 .. the current season. Run it from
-# the Actions tab before changing the model; it is too heavy for a laptop.
+# variant is trained on earlier seasons and scored on 2023-24 .. the current season, including the
+# 15-man squad the Team of the Week optimiser would pick each gameweek. Run it from the Actions tab
+# before changing the model; it is too heavy for a laptop.
+#
+# Each variant's seeds run in jobs of up to 5 (a 20-seed reference is four jobs); the report job
+# pools them with `score --pool` before reporting. Artifacts: report (report.md, res.json and
+# res.gw.parquet, every per-gameweek table per seed) and chunk-* (each job's results and its
+# row-level predictions, chunk_*.preds.parquet, which `score` can rescore without retraining).
 on:
   workflow_dispatch:
     inputs:
@@ -19,7 +25,10 @@ on:
         description: 'Test seasons for the es/refit folds, comma-separated (blank for all)'
         default: ''
       seeds:
-        description: 'Training seeds, comma-separated (blank for 0,1,2; e.g. 3,4,5 to replicate a run)'
+        description: 'Training seeds, e.g. 3,4,5 or 0-5 (blank for 0,1,2)'
+        default: ''
+      ref_seeds:
+        description: 'Seeds for the reference variant only, e.g. 0-19 (blank: the same as seeds)'
         default: ''
 
 env:
@@ -28,6 +37,7 @@ env:
   REF: ${{ inputs.ref }}
   FOLDS: ${{ inputs.folds }}
   SEEDS: ${{ inputs.seeds }}
+  REF_SEEDS: ${{ inputs.ref_seeds }}
 
 jobs:
   features:
@@ -41,9 +51,9 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install pandas numpy xgboost-cpu scikit-learn httpx
+      - run: pip install pandas numpy xgboost-cpu scikit-learn httpx pyarrow
       - id: matrix
-        run: python -c 'import json, os; print("matrix=" + json.dumps(os.environ["VARIANTS"].split(",")))' >> "$GITHUB_OUTPUT"
+        run: python -m scripts.analysis.ml_backtest matrix --variants "$VARIANTS" --seeds "$SEEDS" --ref "$REF" --ref-seeds "$REF_SEEDS" >> "$GITHUB_OUTPUT"
       - name: Fetch the current season from the FPL API
         run: python -m pipeline.current_season --out-dir data/live || echo "::warning::live fetch failed; current-season fold skipped"
       # football-data.co.uk's files aren't committed (free for private use, not for redistribution).
@@ -61,50 +71,56 @@ jobs:
 
   run:
     needs: features
+    name: run (${{ matrix.tag }})
     runs-on: ubuntu-latest
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        variant: ${{ fromJSON(needs.features.outputs.matrix) }}
+        include: ${{ fromJSON(needs.features.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install pandas numpy xgboost-cpu scikit-learn httpx
+      - run: pip install pandas numpy xgboost-cpu scikit-learn httpx pyarrow
       - uses: actions/download-artifact@v4
         with:
           name: feats
-      - run: python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.variant }}' --inseason "$INSEASON" ${FOLDS:+--folds "$FOLDS"} ${SEEDS:+--seeds "$SEEDS"} --out 'res_${{ matrix.variant }}.json'
+      - run: python -m scripts.analysis.ml_backtest run --feats feats.pkl.gz --variants '${{ matrix.variant }}' --seeds '${{ matrix.seeds }}' --inseason "$INSEASON" ${FOLDS:+--folds "$FOLDS"} --out 'chunk_${{ matrix.tag }}.json'
       - uses: actions/upload-artifact@v4
         with:
-          name: res-${{ matrix.variant }}
-          path: res_${{ matrix.variant }}.json
+          name: chunk-${{ matrix.tag }}
+          path: chunk_${{ matrix.tag }}.*
           retention-days: 14
 
   report:
     needs: run
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-      - run: pip install pandas numpy xgboost-cpu scikit-learn
+      - run: pip install pandas numpy xgboost-cpu scikit-learn pyarrow
       - uses: actions/download-artifact@v4
         with:
-          pattern: res-*
+          pattern: chunk-*
           merge-multiple: true
-      - run: python -m scripts.analysis.ml_backtest report 'res_*.json' --ref "$REF" --out report.md
+      # Merges each variant's seed chunks. Tables whose predictions are unchanged are reused, so only
+      # the seed-averaged squads of variants split over several jobs are solved again.
+      - run: python -m scripts.analysis.ml_backtest score 'chunk_*.preds.parquet' --pool --reuse --out res.json
+      - run: python -m scripts.analysis.ml_backtest report res.json --ref "$REF" --out report.md
       - run: cat report.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: report
           path: |
             report.md
-            res_*.json
+            res.json
+            res.gw.parquet
           retention-days: 14

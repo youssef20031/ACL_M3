@@ -13,12 +13,14 @@ Team-of-the-week selection: pure functions, no Neo4j or file IO.
   pick_captains(xi)   captain and vice-captain by expected captain bonus. FPL doubles the
                       vice when the captain doesn't play, so a flagged player can be the
                       better captain if a nailed one backs him up (see the function).
+  apply_auto_subs()   FPL's automatic substitutions, for scoring a squad after the gameweek
+                      (services/model_review, scripts/analysis/ml_backtest).
 
 Costs are integers in FPL tenths (156 = 15.6m). Ties are deterministic: the pool is
 sorted before solving and every ordering ends on the candidate id.
 """
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 POSITIONS: Tuple[str, ...] = ("GK", "DEF", "MID", "FWD")
 SQUAD_SIZE: Dict[str, int] = {"GK": 2, "DEF": 5, "MID": 5, "FWD": 3}
@@ -280,3 +282,48 @@ def validate_squad(sel: Selection, budget: Optional[int] = DEFAULT_BUDGET,
     if sel.captain not in xi or (sel.vice_captain is not None and sel.vice_captain not in xi):
         problems.append("Captain/vice not in the XI")
     return problems
+
+
+# ------------------------------------------------------------------ scoring: auto-subs
+
+FORMATION_MIN: Dict[str, int] = {"DEF": 3, "MID": 2, "FWD": 1}
+
+
+def _counts(players: Iterable[Dict[str, Any]]) -> Dict[str, int]:
+    counts = {p: 0 for p in POSITIONS}
+    for pl in players:
+        counts[pl["position"]] += 1
+    return counts
+
+
+def apply_auto_subs(starters: List[Dict[str, Any]], bench: List[Dict[str, Any]]
+                    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Tuple[str, str]]]:
+    """FPL automatic substitutions. Each player is a dict with `name`, `position` and
+    `played`: True, False (his matches are over and he got no minutes) or None
+    (undecided). A starter who didn't play is replaced by the first bench player in
+    order (goalkeeper for goalkeeper) who played and keeps 3+ DEF, 2+ MID and 1+ FWD;
+    an undecided bench player blocks the ones behind him. Returns (final XI, final bench
+    in priority order, [(out, in) names]). A replaced starter takes his replacement's
+    bench slot, as the FPL app shows it."""
+    xi, slots = list(starters), list(bench)
+    subs: List[Tuple[str, str]] = []
+    used = set()
+    for out in [p for p in starters if p["played"] is False]:
+        for i, cand in enumerate(slots):
+            if i in used or (cand["position"] == "GK") != (out["position"] == "GK"):
+                continue
+            counts = _counts(xi)
+            counts[out["position"]] -= 1
+            counts[cand["position"]] += 1
+            if any(counts[p] < n for p, n in FORMATION_MIN.items()):
+                continue
+            if cand["played"] is None:
+                break                      # may still play: no sub until he's decided
+            if cand["played"] is False:
+                continue
+            xi[xi.index(out)] = cand
+            slots[i] = out
+            used.add(i)
+            subs.append((out["name"], cand["name"]))
+            break
+    return xi, slots, subs
