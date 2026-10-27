@@ -50,6 +50,14 @@ transfermarkt-datasets dump, which has no 2026-27 season: compare those variants
 Bookmaker odds (ml/odds.py, variants odds and odds_close) come from football-data.co.uk, whose
 files aren't committed: run `python -m scripts.data.fetch_odds` first (the workflow does).
 
+Round of 2026-10-27 (snapshots): FPL's own availability and set-piece orders before each deadline
+(ml/snapshots.py, from the git history of vaastav's players_raw.csv; data/fpl_snapshots.csv isn't
+committed, so run `python -m scripts.data.fetch_fpl_snapshots` first, as the workflow does for these
+variants). cop multiplies the current model's predictions by the snapshot's chance of playing, as
+production does (a post-prediction hook, applied in every protocol and to the saved predictions);
+avail, sp and snap_cop add the availability and set-piece features. 2025-26 has only 12 snapshots
+and 2026-27 four, so compare them on `--folds 2022-23,2023-24,2024-25`.
+
 Round of 2026-10-27: player identity by FPL code (code_id). The history keys players by name, and
 173 of 1,980 players appear under several spellings, which restarts their form, while four names
 belong to two players. data/player_codes.csv (scripts.data.fetch_player_codes) and the live status
@@ -84,6 +92,7 @@ from ml import market as mk  # noqa: E402
 from ml import odds as od  # noqa: E402
 from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
+from ml import snapshots as sn  # noqa: E402
 from utils.text import normalize_name  # noqa: E402
 
 
@@ -483,6 +492,8 @@ G_ODDS_CLOSE = od.CLOSING_FEATURES
 G_MATCHUP = fs.MATCHUP_FEATURES
 G_RATINGS = fs.RATING_FEATURES
 G_TRANSFERS = mk.FEATURES
+G_SNAP_AVAIL = sn.AVAIL_FEATURES
+G_SP = sn.SP_FEATURES
 SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS + ["sub_after_absence",
                                                                                             "sub_gkdef"]
 PICK_SUBSETS = ["sub_euro_club", "sub_gkdef"]   # top-20 picks among these players only
@@ -499,6 +510,7 @@ SQUADS = True             # run/score --no-squads skips the squad solves
 ENS = -1                  # `seed` of a seed-averaged table in the .gw.parquet files
 EXTRA =G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
 EXTRA += G_ABS_FORM + G_ABS_FLAGS + G_ODDS + G_ODDS_CLOSE + G_MATCHUP + G_RATINGS + G_TRANSFERS
+EXTRA += G_SNAP_AVAIL + G_SP + [sn.COP]
 CURRENT_C = [f"{c}__c" for c in CURRENT]     # players keyed by FPL code
 CURRENT_D = [f"{c}__d" for c in CURRENT]     # ... and built from points without DC points
 CODE_COLS = CURRENT_C + CURRENT_D + ["total_points_d", "dc_pts", "dc_hat"]
@@ -524,6 +536,16 @@ def cmd_features(args) -> None:
     n = len(feats)
     feats = add_extra_features(feats, mk.load_transfers(live_csv=live_csv, live_season=live_season))
     feats = feats.join(code_keyed_features(history, identity), on="row_id")
+    # FPL's availability and set-piece orders before each deadline, by the season's element
+    snaps = sn.load_snapshots()
+    snap = sn.snapshot_features(feats, snaps, with_status=True)
+    print(f"FPL snapshots: {len(snaps)} rows, coverage by season {sn.coverage(feats, snaps, snap)}", flush=True)
+    if len(snaps):
+        # If the snapshots were taken after the deadline, or described the previous gameweek,
+        # players they list as out would often play
+        print(f"share who played by pre-deadline status, (player-gameweeks, share): "
+              f"{sn.timing_check(feats, snap)}", flush=True)
+    feats = feats.join(snap.drop(columns="snap_status"))
     assert len(feats) == n, "a merge duplicated rows"
     renamed = history.assign(identity=identity.to_numpy()).groupby("identity")["name"].nunique()
     print(f"code-keyed features in {time.time() - t0:.0f}s: {history['element'].notna().mean():.3f} of rows "
@@ -603,7 +625,20 @@ VARIANTS = {
     # and the 1X2 part alone, which is all a free odds feed serves for the Premier League
     "odds_rt": {"features": CURRENT + G_RATINGS + G_TRANSFERS + G_ODDS},
     "odds_1x2_rt": {"features": CURRENT + G_RATINGS + G_TRANSFERS + G_ODDS[:2]},
+    # 2026-10-27: FPL's availability and set-piece orders before each deadline (ml/snapshots.py,
+    # vaastav's players_raw.csv history). cop is the current model times the snapshot's chance of
+    # playing, as production scales its predictions: the reference the availability features
+    # (avail, avail_cop) have to beat. sp adds the penalty, corner and free-kick takers.
+    "cop": {"features": CURRENT, "post": "cop"},
+    "avail": {"features": CURRENT + G_SNAP_AVAIL},
+    "avail_cop": {"features": CURRENT + G_SNAP_AVAIL, "post": "cop"},
+    "sp": {"features": CURRENT + G_SP},
+    "sp_cop": {"features": CURRENT + G_SP, "post": "cop"},
+    "snap_cop": {"features": CURRENT + G_SNAP_AVAIL + G_SP, "post": "cop"},
 }
+
+# Columns a post-prediction hook needs values in (cmd_run checks them like a variant's features)
+POST_NEEDS = {"cop": ["snap_age_days"]}
 
 
 def _target(frame: pd.DataFrame, spec: dict) -> pd.Series:
@@ -614,6 +649,19 @@ def _target(frame: pd.DataFrame, spec: dict) -> pd.Series:
 def _eval_target(frame: pd.DataFrame, spec: dict) -> pd.Series:
     """Early stopping's target: the model's own, not clipped."""
     return frame[spec.get("target", "total_points")]
+
+
+def _post(frame: pd.DataFrame, pred, spec: dict) -> np.ndarray:
+    """The variant's post-prediction hook, applied to every protocol's test predictions: "cop"
+    multiplies them by the snapshot's chance of playing (ml/snapshots.cop_factor, which is
+    pipeline.predict_next_gw.availability_factor; 1 without a snapshot), as production does."""
+    pred = np.asarray(pred, dtype=float)
+    post = spec.get("post")
+    if not post:
+        return pred
+    if post == "cop":
+        return pred * frame[sn.COP].to_numpy(dtype=float)
+    raise ValueError(f"unknown post hook {post!r}")
 
 
 def _dc_add(frame: pd.DataFrame, train: pd.DataFrame, spec: dict) -> tuple:
@@ -692,7 +740,7 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool) -> tuple:
         curve_metrics = {}
         for k in CURVE_POINTS:
             if k <= len(valid):
-                t = gw_table(te, m.predict(te[cols], iteration_range=(0, k)) + dc_es, squads=False)
+                t = gw_table(te, _post(te, m.predict(te[cols], iteration_range=(0, k)) + dc_es, spec), squads=False)
                 curve_metrics[k] = {**summarize(t), "valid_rmse": float(valid[k - 1])}
         info["test_curve"] = curve_metrics
         gain = m2.get_booster().get_score(importance_type="gain")
@@ -967,7 +1015,7 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -
             else:
                 pe, pr, info = _xgb_fold(tr, va, te, both, cols, p, spec, curve=seed == SEEDS[0])
             info["secs"] = round(time.time() - t0, 1)
-            preds["es"][seed], preds["refit"][seed] = pe, pr
+            preds["es"][seed], preds["refit"][seed] = _post(te, pe, spec), _post(te, pr, spec)
             fold["seeds"][seed] = info
         for proto in ("es", "refit"):
             fold[proto], per_seed = score_unit(te, preds[proto], (name, proto, test_season), sink)
@@ -1015,7 +1063,7 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None)
                 scale = len(seen) / len(tr)
                 cls, reg = _hurdle_fit(seen, cols, p, min(int(n_cls * scale), 4000), min(int(n_reg * scale), 4000))
                 out.loc[block.index] = _hurdle_predict(cls, reg, block, cols)
-            preds[seed] = out.to_numpy()
+            preds[seed] = _post(cur, out.to_numpy(), spec)
             print(f"  inseason {season} seed {seed}: best {n_reg}/{n_cls}", flush=True)
             continue
         m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
@@ -1032,7 +1080,7 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None)
             m2 = xgb.XGBRegressor(n_estimators=n, **p)
             m2.fit(seen[cols], _target(seen, spec), sample_weight=_weights(seen, spec.get("halflife")), verbose=False)
             out.loc[block.index] = m2.predict(block[cols]) + _dc_add(block, seen, spec)[0]
-        preds[seed] = out.to_numpy()
+        preds[seed] = _post(cur, out.to_numpy(), spec)
         print(f"  inseason {season} seed {seed}: best {best}", flush=True)
     unit, per_seed = score_unit(cur, preds, (name, "inseason", season), sink)
     return {**unit, "seeds": [per_seed[s] for s in unit["seed_list"]]}
@@ -1065,7 +1113,9 @@ def cmd_run(args) -> None:
     names = args.variants.split(",")
     for name in names:
         # e.g. odds features when the odds weren't fetched (the workflow fetches them only for odds* variants)
-        empty = [c for c in VARIANTS[name].get("features", CURRENT) if not feats[c].notna().any()]
+        spec = VARIANTS[name]
+        needs = spec.get("features", CURRENT) + POST_NEEDS.get(spec.get("post"), [])
+        empty = [c for c in dict.fromkeys(needs) if not feats[c].notna().any()]
         if empty:
             raise SystemExit(f"variant {name}: no values in {', '.join(empty)}; was its data fetched?")
     out, sink = [], Sink()

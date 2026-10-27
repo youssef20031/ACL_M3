@@ -41,5 +41,8 @@ data/live/
 # not for redistribution
 data/odds/
 
+# FPL availability and set-piece snapshots (scripts/data/fetch_fpl_snapshots.py): MIT, but 8 MB
+data/fpl_snapshots.csv
+
 # TypeScript incremental build info
 *.tsbuildinfo

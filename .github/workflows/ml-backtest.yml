@@ -62,6 +62,14 @@ jobs:
       - name: Fetch bookmaker odds from football-data.co.uk
         if: contains(inputs.variants, 'odds')
         run: python -m scripts.data.fetch_odds || echo "::warning::odds fetch incomplete; see the odds coverage in the features step"
+      # FPL availability and set-piece snapshots from vaastav's players_raw.csv history (MIT, but
+      # 8 MB, so not committed). Fetched only for the variants that use them (cop, avail*, sp*,
+      # snap_cop); a cop variant without them fails in the run step.
+      - name: Fetch FPL availability snapshots
+        if: contains(inputs.variants, 'cop') || contains(inputs.variants, 'avail') || contains(inputs.variants, 'sp')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m scripts.data.fetch_fpl_snapshots || echo "::warning::snapshot fetch failed; see the snapshot coverage in the features step"
       - run: python -m scripts.analysis.ml_backtest features --out feats.pkl.gz
       - uses: actions/upload-artifact@v4
         with:
