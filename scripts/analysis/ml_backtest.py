@@ -599,6 +599,10 @@ VARIANTS = {
     # is added back
     "code_id": {"features": CURRENT_C},
     "code_dc": {"features": CURRENT_D, "target": "total_points_d", "dc_term": True},
+    # 2026-10-27: odds on top of the ratings and transfer features (compare with ratings_transfers),
+    # and the 1X2 part alone, which is all a free odds feed serves for the Premier League
+    "odds_rt": {"features": CURRENT + G_RATINGS + G_TRANSFERS + G_ODDS},
+    "odds_1x2_rt": {"features": CURRENT + G_RATINGS + G_TRANSFERS + G_ODDS[:2]},
 }
 
 
