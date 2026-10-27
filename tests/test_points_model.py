@@ -477,3 +477,88 @@ def test_transfer_features_rank_within_the_gameweek(history):
     assert out.loc[("Cara", 3), "tr_bal_rank"] == pytest.approx(2 / 3)  # ranked among Alice, Bob, Cara
     assert np.isnan(out.loc[("Alice", 1), "price_change_1"])           # no earlier match this season
     assert out.loc[("Alice", 2), "price_change_1"] == 0.0
+
+
+# --------------------------------------------------------------------------- code identity, DC term (backtest candidates)
+
+def _dc_history(dan_dc, eve_dc=None, names=("Dan", "Dan")):
+    """Arsenal v Chelsea once a week: two 2024-25 gameweeks without DC counts, then 2025-26 with
+    the DC counts of Dan (DEF, Arsenal; called names[0] in 2024-25, names[1] after) and Eve (DEF,
+    Chelsea). Points are 2 plus the DC points."""
+    rows, k = [], 0
+    for season, n in (("2024-25", 2), ("2025-26", len(dan_dc))):
+        dan = (names[0] if season == "2024-25" else names[1], "Arsenal", "DEF")
+        for gw in range(1, n + 1):
+            k += 1
+            kickoff = (pd.Timestamp("2024-08-01T14:00:00Z") + pd.Timedelta(days=7 * k)).isoformat()
+            rows += _match_rows(season, gw, k, kickoff, "Arsenal", "Chelsea", 0, 0, {dan: 2, ("Eve", "Chelsea", "DEF"): 2})
+    df = pd.DataFrame(rows)
+    for col in pm.HISTORY_COLUMNS:
+        if col not in df.columns:
+            df[col] = np.nan
+    df["kickoff_time"] = pd.to_datetime(df["kickoff_time"], utc=True)
+    dc = df["season"] == "2025-26"
+    df.loc[dc & (df["team"] == "Arsenal"), "defensive_contribution"] = list(dan_dc)
+    df.loc[dc & (df["team"] == "Chelsea"), "defensive_contribution"] = list(eve_dc or [0] * len(dan_dc))
+    df["total_points"] = 2 + 2 * (df["defensive_contribution"] >= 10)
+    df = df[pm.HISTORY_COLUMNS].copy()
+    df["row_id"] = np.arange(len(df))
+    return df
+
+
+def test_dc_points_follow_the_2025_26_rule():
+    df = pd.DataFrame({"position": ["DEF", "DEF", "MID", "MID", "FWD", "GK", "DEF"],
+                       "defensive_contribution": [10, 9, 11, 12, 12, 30, np.nan]})
+    assert bt.dc_points_raw(df).tolist()[:6] == [2, 0, 0, 2, 2, 0]
+    assert np.isnan(bt.dc_points_raw(df).iloc[6])
+
+
+def test_dc_term_uses_only_earlier_gameweeks():
+    f = pm.build_features(_dc_history([12, 3, 15, 11]))
+    d = bt.dc_term_features(f).join(f[["name", "season", "GW"]]).set_index(["name", "season", "GW"])
+    assert (d.xs("2024-25", level="season")["dc_hat"] == 0).all()    # no DC points that season
+    assert d.loc[("Dan", "2025-26", 1), "dc_hat"] == 0                 # nothing earlier to go on
+    # GW2: Dan's own 2 points in 1 match, shrunk toward the DEF rate in GW1 (Dan 2, Eve 0 -> 1.0)
+    assert d.loc[("Dan", "2025-26", 2), "dc_hat"] == pytest.approx((2 + 3 * 1.0) / (1 + 3))
+    assert d.loc[("Eve", "2025-26", 2), "dc_hat"] == pytest.approx((0 + 3 * 1.0) / (1 + 3))
+    # GW3: Dan 2 of 4 points in 2 matches; DEF rate over GW1-2 is 2 / 4 appearances
+    assert d.loc[("Dan", "2025-26", 3), "dc_hat"] == pytest.approx((2 + 3 * 0.5) / (2 + 3))
+    assert d.loc[("Dan", "2025-26", 3), "dc_pts"] == 2
+    later = pm.build_features(_dc_history([12, 3, 0, 0]))
+    d2 = bt.dc_term_features(later).join(later[["name", "season", "GW"]]).set_index(["name", "season", "GW"])
+    pd.testing.assert_series_equal(d2["dc_hat"].xs(3, level="GW"), d["dc_hat"].xs(3, level="GW"))
+
+
+def test_dc_alpha_is_least_squares_through_zero():
+    hat = np.linspace(0.1, 1.0, bt.DC_ALPHA_MIN_ROWS)
+    train = pd.DataFrame({"season": "2025-26", "dc_hat": hat, "dc_pts": 0.5 * hat})
+    assert bt.dc_alpha(train) == pytest.approx(0.5)
+    assert bt.dc_alpha(train.iloc[:10]) == 1.0                          # too few rows to fit
+    assert bt.dc_alpha(train.assign(season="2024-25")) == 1.0
+
+
+def test_player_identity_follows_the_code():
+    rows = pd.DataFrame({"season": ["2024-25", "2025-26", "2025-26", "2025-26", "2025-26"],
+                         "element": [7, 9, 1, 2, 3],
+                         "name": ["Lukasz F", "Łukasz F", "Ben Davies", "Ben Davies", "No Code"]})
+    codes = pd.DataFrame({"season": ["2024-25", "2025-26", "2025-26", "2025-26"], "element": [7, 9, 1, 2],
+                          "code": [100, 100, 200, 300]})
+    assert bt.player_identity(rows, codes).tolist() == ["Łukasz F", "Łukasz F", "Ben Davies #200",
+                                                        "Ben Davies #300", "No Code"]
+
+
+def test_code_keyed_features_join_a_renamed_history():
+    h = _dc_history([12, 3, 15], names=("Lukasz F", "Łukasz F"))
+    identity = h["name"].replace({"Lukasz F": "Łukasz F"})
+    by_name = pm.build_features(h).set_index("row_id")
+    out = bt.code_keyed_features(h, identity)
+    first = h.index[(h["name"] == "Łukasz F") & (h["GW"] == 1)][0]
+    assert by_name.loc[first, "career_matches_before"] == 0              # the name-keyed history restarts
+    assert out.loc[first, "career_matches_before__c"] == 2
+    assert out.loc[first, "total_points_r3__c"] == pytest.approx(2)
+    # Without DC points: the target, and the form built from it
+    dc_rows = h.index[h["season"] == "2025-26"]
+    assert (out.loc[dc_rows, "total_points_d"] == 2).all()
+    third = h.index[(h["name"] == "Łukasz F") & (h["GW"] == 3)][0]
+    assert out.loc[third, "total_points_r3__c"] == pytest.approx((2 + 4 + 2) / 3)
+    assert out.loc[third, "total_points_r3__d"] == pytest.approx(2)

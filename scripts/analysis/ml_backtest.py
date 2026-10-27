@@ -50,6 +50,15 @@ transfermarkt-datasets dump, which has no 2026-27 season: compare those variants
 Bookmaker odds (ml/odds.py, variants odds and odds_close) come from football-data.co.uk, whose
 files aren't committed: run `python -m scripts.data.fetch_odds` first (the workflow does).
 
+Round of 2026-10-27: player identity by FPL code (code_id). The history keys players by name, and
+173 of 1,980 players appear under several spellings, which restarts their form, while four names
+belong to two players. data/player_codes.csv (scripts.data.fetch_player_codes) and the live status
+file map each row's element to its code, and every table's `name` is then one per player. code_dc
+adds an additive defensive-contribution term: the model learns points without DC points (target
+and features), and dc_alpha x dc_hat (the player's recent DC points shrunk to his position's rate,
+scaled by least squares on the training rows) is added back, so the 2025-26 rule change doesn't
+leave defenders under-predicted.
+
 Round of 2026-10-22: fixture-strength products and opponent-adjusted team ratings
 (ml/fixture_strength.py, variants matchup and ratings), transfer-market ranks and price changes
 (ml/market.py, variant transfers), a Tweedie objective (tweedie) and a two-stage model that
@@ -285,6 +294,112 @@ def _efl_player_table() -> pd.DataFrame:
     return out.reset_index()
 
 
+def dc_points_raw(df: pd.DataFrame) -> pd.Series:
+    """FPL's defensive-contribution points (2025-26 rule): 2 points for 10+ CBIT (DEF) or 12+
+    CBIRT (MID/FWD); GKs are not eligible. NaN where the action count isn't recorded (before
+    2025-26)."""
+    dc = df["defensive_contribution"]
+    points = (2.0 * (dc >= df["position"].map(DC_THRESHOLD))).where(dc.notna())
+    return points.where(df["position"] != "GK", 0.0).where(dc.notna())
+
+
+# ----------------------------------------------------------------------------- player identity by FPL code
+
+PLAYER_CODES_CSV = os.path.join(ROOT, "data", "player_codes.csv")
+
+
+def load_player_codes(status_csv: str = None, live_season: str = None) -> pd.DataFrame:
+    """(season, element, code): data/player_codes.csv (scripts.data.fetch_player_codes) plus the
+    current season's live status file."""
+    frames = [pd.read_csv(PLAYER_CODES_CSV, usecols=["season", "element", "code"])]
+    if status_csv and os.path.exists(status_csv):
+        frames.append(pd.read_csv(status_csv, usecols=["element", "code"]).assign(season=live_season))
+    return pd.concat(frames, ignore_index=True).drop_duplicates(["season", "element"])
+
+
+def _row_elements(history: pd.DataFrame, live_csv: str = None, live_season: str = None) -> pd.Series:
+    """Each history row's FPL element (pm.load_history drops it), matched on season, name, team
+    and fixture."""
+    keys = ["season", "name", "team", "fixture"]
+    frames = [pd.read_csv(pm.HISTORY_CSV, usecols=["season_x", "name", "team_x", "fixture", "element"],
+                          low_memory=False).rename(columns={"season_x": "season", "team_x": "team"})]
+    if live_csv and os.path.exists(live_csv):
+        frames.append(pd.read_csv(live_csv, usecols=["name", "team", "fixture", "element"]).assign(season=live_season))
+    lookup = pd.concat(frames, ignore_index=True).drop_duplicates(keys)
+    return history[keys].merge(lookup, on=keys, how="left")["element"].set_axis(history.index)
+
+
+def player_identity(rows: pd.DataFrame, codes: pd.DataFrame) -> pd.Series:
+    """One name per player for every row (season, element, name): his name in the latest season
+    with an FPL code, plus " #code" when two players share it. Rows without a code keep theirs."""
+    keyed = rows[["season", "element", "name"]].merge(codes[["season", "element", "code"]],
+                                                       on=["season", "element"], how="left")
+    keyed.index = rows.index
+    has = keyed["code"].notna()
+    latest = keyed[has].sort_values("season", kind="mergesort").groupby("code")["name"].last()
+    shared = latest.duplicated(keep=False).to_numpy()
+    latest[shared] = latest[shared] + " #" + latest.index[shared].astype(int).astype(str)
+    out = keyed["name"].copy()
+    out[has] = keyed.loc[has, "code"].map(latest)
+    return out
+
+
+# ----------------------------------------------------------------------------- additive DC term
+
+DC_START = "2025-26"          # the first season with defensive-contribution points
+DC_WINDOW = 10                # the player's matches with a DC count behind his own rate
+DC_PRIOR_MATCHES = 3.0        # ... shrunk toward his position's rate with this many matches' weight
+DC_ALPHA_MIN_ROWS = 1000      # training rows with a DC term before its scale is fitted
+
+
+def dc_term_features(f: pd.DataFrame) -> pd.DataFrame:
+    """dc_pts (the row's DC points, 0 before DC_START) and dc_hat (its expected DC points from
+    earlier gameweeks only): the player's DC points over his last DC_WINDOW matches with a count
+    (0-minute matches count as 0), shrunk toward his position's DC points per appearance in all
+    earlier gameweeks times his share of the last 6 matches played. 0 for GKs and before DC_START."""
+    pts = dc_points_raw(f)
+    tmp = f[["name", "kickoff_time", "season", "GW"]].assign(_s=pts.fillna(0.0), _n=pts.notna().astype(float))
+    sums = _rolling_sum_before_gameweek(tmp, "name", ["_s", "_n"], (DC_WINDOW,)).reindex(f.index)
+    s, n = sums[f"_s_s{DC_WINDOW}"].fillna(0.0), sums[f"_n_s{DC_WINDOW}"].fillna(0.0)
+
+    app = pts.notna() & (f["minutes"] > 0)
+    per = (pd.DataFrame({"position": f["position"], "season": f["season"], "GW": f["GW"],
+                         "s": pts.where(app, 0.0).fillna(0.0), "n": app.astype(float)})
+           .groupby(["position", "season", "GW"]).sum().sort_index())
+    before = per.groupby(level="position").cumsum() - per       # earlier gameweeks only
+    rate = (before["s"] / before["n"].replace(0, np.nan)).reindex(
+        pd.MultiIndex.from_frame(f[["position", "season", "GW"]])).to_numpy()
+    prior = np.nan_to_num(rate) * f["played_r6"].fillna(0.0).to_numpy()
+
+    hat = (s + DC_PRIOR_MATCHES * prior) / (n + DC_PRIOR_MATCHES)
+    hat = hat.where((f["season"] >= DC_START) & (f["position"] != "GK"), 0.0)
+    return pd.DataFrame({"dc_pts": pts.fillna(0.0), "dc_hat": hat}, index=f.index)
+
+
+def dc_alpha(train: pd.DataFrame) -> float:
+    """Scale of the DC term: least squares through 0 of dc_pts on dc_hat over the training rows
+    with a term; 1 when there are fewer than DC_ALPHA_MIN_ROWS (e.g. before any DC season)."""
+    m = ((train["season"] >= DC_START) & (train["dc_hat"] > 0)).to_numpy()
+    if m.sum() < DC_ALPHA_MIN_ROWS:
+        return 1.0
+    h = train["dc_hat"].to_numpy(dtype=float)[m]
+    y = train["dc_pts"].to_numpy(dtype=float)[m]
+    return float(np.clip(h @ y / (h @ h), 0.0, 2.0))
+
+
+def code_keyed_features(history: pd.DataFrame, identity: pd.Series) -> pd.DataFrame:
+    """By history row_id: the model's features with players keyed by code (*__c), the same built
+    from points without DC points (*__d, with that target as total_points_d), and the DC term."""
+    h = history.assign(name=identity.to_numpy())
+    f = pm.build_features(h)
+    out = f[["row_id"] + CURRENT].rename(columns={c: f"{c}__c" for c in CURRENT}).join(dc_term_features(f))
+    h["total_points"] = h["total_points"] - dc_points_raw(h).fillna(0.0)
+    f = pm.build_features(h)
+    free = f[["row_id", "total_points"] + CURRENT].rename(columns={"total_points": "total_points_d",
+                                                                    **{c: f"{c}__d" for c in CURRENT}})
+    return out.merge(free, on="row_id").set_index("row_id")
+
+
 def add_extra_features(df: pd.DataFrame, transfers: pd.DataFrame = None) -> pd.DataFrame:
     df = df.reset_index(drop=True).copy()
     known = df["minutes"].notna()
@@ -310,11 +425,7 @@ def add_extra_features(df: pd.DataFrame, transfers: pd.DataFrame = None) -> pd.D
     # A longer 10-match window
     df = df.join(pm._rolling_before_gameweek(df, "name", ["minutes", "started", "total_points", "bps", "ict_index"], (10,)))
 
-    # FPL's defensive-contribution points (2025-26 rule): 2 points for 10+ CBIT (DEF) or 12+ CBIRT
-    # (MID/FWD); GKs are not eligible. NaN where the action count isn't recorded (before 2025-26).
-    dc = df["defensive_contribution"]
-    dcp = (2.0 * (dc >= df["position"].map(DC_THRESHOLD))).where(dc.notna())
-    df["dc_points"] = dcp.where(df["position"] != "GK", 0.0).where(dc.notna())
+    df["dc_points"] = dc_points_raw(df)
     df = df.join(pm._rolling_before_gameweek(df, "name", ["dc_points"], (3, 6, 10)))
 
     # Manager changes (data/manager_changes.csv, from Wikipedia) and lineup rotation
@@ -388,25 +499,39 @@ SQUADS = True             # run/score --no-squads skips the squad solves
 ENS = -1                  # `seed` of a seed-averaged table in the .gw.parquet files
 EXTRA =G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
 EXTRA += G_ABS_FORM + G_ABS_FLAGS + G_ODDS + G_ODDS_CLOSE + G_MATCHUP + G_RATINGS + G_TRANSFERS
-KEEP = ["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
+CURRENT_C = [f"{c}__c" for c in CURRENT]     # players keyed by FPL code
+CURRENT_D = [f"{c}__d" for c in CURRENT]     # ... and built from points without DC points
+CODE_COLS = CURRENT_C + CURRENT_D + ["total_points_d", "dc_pts", "dc_hat"]
+KEEP =["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
         "clean_sheets"]
 
 
 def cmd_features(args) -> None:
     t0 = time.time()
-    live_csv, live_season = None, None
+    live_csv, live_season, status_csv = None, None, None
     meta_path = os.path.join("data", "live", "meta.json")
     if os.path.exists(meta_path):
         meta = json.load(open(meta_path, encoding="utf-8"))
         live_csv, live_season = os.path.join("data", "live", meta["files"]["season"]), meta["season"]
+        if meta["files"].get("status"):
+            status_csv = os.path.join("data", "live", meta["files"]["status"])
     history = pm.load_history(live_csv=live_csv, live_season=live_season)
+    history["row_id"] = np.arange(len(history))
+    history["element"] = _row_elements(history, live_csv, live_season)
+    identity = player_identity(history, load_player_codes(status_csv, live_season))
     feats = pm.build_features(history)
     print(f"model features: {len(feats)} rows in {time.time() - t0:.0f}s", flush=True)
     n = len(feats)
     feats = add_extra_features(feats, mk.load_transfers(live_csv=live_csv, live_season=live_season))
+    feats = feats.join(code_keyed_features(history, identity), on="row_id")
     assert len(feats) == n, "a merge duplicated rows"
+    renamed = history.assign(identity=identity.to_numpy()).groupby("identity")["name"].nunique()
+    print(f"code-keyed features in {time.time() - t0:.0f}s: {history['element'].notna().mean():.3f} of rows "
+          f"with an element, {(identity != history['name']).mean():.3f} renamed, {(renamed > 1).sum()} players "
+          f"whose history had several names", flush=True)
+    feats["name"] = identity.reindex(feats["row_id"]).to_numpy()   # one name per player in every table
     feats = feats[feats["total_points"].notna()]
-    feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS))].copy()
+    feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS + CODE_COLS))].copy()
     for c in feats.columns:
         if feats[c].dtype == "float64":
             feats[c] = feats[c].astype("float32")
@@ -468,12 +593,31 @@ VARIANTS = {
     # price changes (known exactly at the deadline)
     "tr_ranks": {"features": CURRENT + G_TRANSFERS[:3]},
     "tr_price": {"features": CURRENT + G_TRANSFERS[3:]},
+    # 2026-10-27: players keyed by FPL code instead of name (data/player_codes.csv), and an additive
+    # defensive-contribution term on top: the model learns points without DC points (features and
+    # target), and dc_alpha x dc_hat (the player's recent DC points, shrunk to his position's rate)
+    # is added back
+    "code_id": {"features": CURRENT_C},
+    "code_dc": {"features": CURRENT_D, "target": "total_points_d", "dc_term": True},
 }
 
 
 def _target(frame: pd.DataFrame, spec: dict) -> pd.Series:
-    y = frame["total_points"]
+    y = frame[spec.get("target", "total_points")]
     return y.clip(lower=spec["clip_target"]) if "clip_target" in spec else y
+
+
+def _eval_target(frame: pd.DataFrame, spec: dict) -> pd.Series:
+    """Early stopping's target: the model's own, not clipped."""
+    return frame[spec.get("target", "total_points")]
+
+
+def _dc_add(frame: pd.DataFrame, train: pd.DataFrame, spec: dict) -> tuple:
+    """(the DC term to add to the model's predictions for `frame`, its scale fitted on `train`)."""
+    if not spec.get("dc_term"):
+        return 0.0, None
+    alpha = dc_alpha(train)
+    return alpha * frame["dc_hat"].to_numpy(dtype=float), alpha
 
 
 def _hurdle_es(train, valid, cols, p):
@@ -525,22 +669,26 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool) -> tuple:
     import xgboost as xgb
     m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE_FIT, **p)
     m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
-          eval_set=[(va[cols], va["total_points"])], verbose=False)
+          eval_set=[(va[cols], _eval_target(va, spec))], verbose=False)
     valid = m.evals_result()["validation_0"]["rmse"]
     best = _patience_stop(valid, PATIENCE)
-    pe = m.predict(te[cols], iteration_range=(0, best + 1))
+    dc_es, alpha_es = _dc_add(te, tr, spec)
+    pe = m.predict(te[cols], iteration_range=(0, best + 1)) + dc_es
     n_refit = min(int((best + 1) * len(both) / len(tr)), 4000)
     m2 = xgb.XGBRegressor(n_estimators=n_refit, **p)
     m2.fit(both[cols], _target(both, spec), sample_weight=_weights(both, spec.get("halflife")), verbose=False)
-    pr = m2.predict(te[cols])
+    dc_rf, alpha_rf = _dc_add(te, both, spec)
+    pr = m2.predict(te[cols]) + dc_rf
     info = {"best_iter": best + 1, "trained": len(valid), "n_refit": n_refit,
             "valid_rmse_at_best": float(valid[best]), "valid_rmse_min": float(min(valid)),
             "argmin_valid": int(np.argmin(valid)) + 1}
+    if spec.get("dc_term"):
+        info["dc_alpha"] = {"es": alpha_es, "refit": alpha_rf}
     if curve:
         curve_metrics = {}
         for k in CURVE_POINTS:
             if k <= len(valid):
-                t = gw_table(te, m.predict(te[cols], iteration_range=(0, k)), squads=False)
+                t = gw_table(te, m.predict(te[cols], iteration_range=(0, k)) + dc_es, squads=False)
                 curve_metrics[k] = {**summarize(t), "valid_rmse": float(valid[k - 1])}
         info["test_curve"] = curve_metrics
         gain = m2.get_booster().get_score(importance_type="gain")
@@ -868,7 +1016,7 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None)
             continue
         m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
         m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
-              eval_set=[(va[cols], va["total_points"])], verbose=False)
+              eval_set=[(va[cols], _eval_target(va, spec))], verbose=False)
         best = int(m.best_iteration) + 1
         out = pd.Series(np.nan, index=cur.index)
         for start in range(int(gws[0]), int(gws[-1]) + 1, INSEASON_EVERY):
@@ -879,7 +1027,7 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None)
             n = min(int(best * len(seen) / len(tr)), 4000)
             m2 = xgb.XGBRegressor(n_estimators=n, **p)
             m2.fit(seen[cols], _target(seen, spec), sample_weight=_weights(seen, spec.get("halflife")), verbose=False)
-            out.loc[block.index] = m2.predict(block[cols])
+            out.loc[block.index] = m2.predict(block[cols]) + _dc_add(block, seen, spec)[0]
         preds[seed] = out.to_numpy()
         print(f"  inseason {season} seed {seed}: best {best}", flush=True)
     unit, per_seed = score_unit(cur, preds, (name, "inseason", season), sink)
