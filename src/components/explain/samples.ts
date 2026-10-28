@@ -14,7 +14,7 @@ import type {
 /*
  * SAMPLE DATA for the hidden /design page only: made-up players and numbers in the exact shape of
  * the /api/ml/explain/* endpoints, so the model-insights components can be checked without the
- * backend. The feature list mirrors the v3 model's (ml/points_model.feature_columns); importances,
+ * backend. The feature list mirrors the v3 model's (ml/points_model.V3_FEATURES); importances,
  * SHAP and LIME values are plausible but invented. Nothing in the app reads these.
  */
 

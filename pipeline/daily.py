@@ -9,14 +9,20 @@ Steps:
      history only when FPL has finalized new results
   2. pipeline.load_current: apply new results, squads and availability to the graph
      (skipped when nothing new was fetched, unless --force)
-  3. pipeline.retrain (Mondays): retrain the v3 points model on everything up to the weekend;
+  3. pipeline.retrain (Mondays): retrain the v4 points model on everything up to the weekend;
      the new model is only used if it passes the guardrail in pipeline/retrain.py
-  4. pipeline.predict_next_gw: regenerate next-gameweek predictions (availability changes daily)
+  4. pipeline.predict_next_gw: refresh the bookmaker odds (LIVE_DATA_DIR/odds), regenerate
+     next-gameweek predictions (availability changes daily) and, before the deadline, save the
+     live model's and the shadow model's (v3) squad picks
   5. POST /api/admin/reload so the running API rebuilds its caches without a restart
   6. Ping HEALTHCHECK_URL (e.g. healthchecks.io) on success, HEALTHCHECK_URL/fail on failure,
      so a silent failure turns into an email
 
-Environment: LIVE_DATA_DIR, BACKEND_URL (default http://backend:8000), ADMIN_TOKEN,
+The timer (06:00 and 18:00 UTC, plus Fridays at 17:15 and Tuesdays at 16:00 UK time, so an evening
+deadline gets that day's odds and team news) runs it under one flock with every other pipeline run,
+so two runs never overlap (deploy/install-daily-job.sh).
+
+Environment: LIVE_DATA_DIR, ODDS_DIR (optional, default LIVE_DATA_DIR/odds), BACKEND_URL (default http://backend:8000), ADMIN_TOKEN,
 HEALTHCHECK_URL (optional), plus the usual NEO4J_* settings.
 """
 import argparse

@@ -1,17 +1,26 @@
 name: ML train
 
-# Retrains the bundled v3 points model (ml/models/points_v3*.json) and regenerates its evaluation
+# Retrains a bundled points model (ml/models/points_{version}*.json) and regenerates the evaluation
 # report (docs/ml_evaluation/) on GitHub's runners, with the current season fetched from the FPL
-# API; download the "model" artifact and commit its files. Use it when a code change needs a new
-# bundled model: training is too heavy for a laptop, and the VM's weekly retrain
-# (pipeline/retrain.py) only updates the copy on the VM.
+# API; download the "model-{version}" artifact and commit its files. v4 is the production model, v3
+# the shadow every prediction run also scores. Use it when a code change needs a new bundled model:
+# training is too heavy for a laptop, and the VM's weekly retrain (pipeline/retrain.py) only updates
+# the copy on the VM.
 on:
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Model to train: v4 (production) or v3 (the shadow)'
+        type: choice
+        options: [v4, v3]
+        default: v4
       evaluate:
-        description: 'Also regenerate docs/ml_evaluation (a few minutes)'
+        description: 'Also regenerate docs/ml_evaluation for v4 (a few minutes)'
         type: boolean
         default: true
+
+env:
+  VERSION: ${{ inputs.version }}
 
 jobs:
   train:
@@ -24,19 +33,27 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
       - run: pip install pandas numpy xgboost-cpu scikit-learn scipy matplotlib httpx
+      # Also writes the status file, whose FPL codes and pre-deadline availability v4 reads
       - name: Fetch the current season from the FPL API
         run: python -m pipeline.current_season --out-dir data/live
+      # v4's odds features: football-data.co.uk's season files, which aren't committed (free for
+      # private, non-commercial use, not for redistribution). Training fails if under half its rows
+      # have odds. The FPL availability snapshots (data/fpl_snapshots.csv) are committed.
+      - name: Fetch bookmaker odds from football-data.co.uk
+        if: inputs.version == 'v4'
+        run: python -m scripts.data.fetch_odds --no-fixtures
       - name: Train and save the bundled model
-        run: python -m ml.train_points_v3
+        run: python -m "ml.train_points_${VERSION}"
+      # The report describes the production model, so the shadow doesn't overwrite it
       - name: Regenerate the evaluation report
-        if: ${{ inputs.evaluate }}
-        run: python -m ml.evaluate_points_v3
+        if: inputs.evaluate && inputs.version == 'v4'
+        run: python -m ml.evaluate_points_v3 --version "$VERSION"
       - uses: actions/upload-artifact@v4
         with:
-          name: model
+          name: model-${{ inputs.version }}
           path: |
-            ml/models/points_v3.json
-            ml/models/points_v3_meta.json
-            ml/models/points_v3_report.json
+            ml/models/points_${{ inputs.version }}.json
+            ml/models/points_${{ inputs.version }}_meta.json
+            ml/models/points_${{ inputs.version }}_report.json
             docs/ml_evaluation/
           retention-days: 14

@@ -1,5 +1,5 @@
 """
-Points model v3: predicts a player's FPL points for one fixture.
+Points model (v3 and v4): predicts a player's FPL points for one fixture.
 
 Replaces the v2 pipeline (ml/retrain_and_predict_csv.py + FeatureEngineer), whose
 opponent-strength merges duplicated rows ~20x so the shifted target mostly landed on
@@ -19,6 +19,16 @@ Design:
 
 Model: one XGBoost regressor with position as a feature, saved in XGBoost's native
 JSON format (no pickle/scikit-learn version coupling). See train_points_model().
+
+v4 (2026-10-28, the served model; v3 is kept as a shadow scored on every prediction run): the
+same rows and code with ExtraInputs (load_extra_inputs), which
+  * groups a player's matches by his FPL code instead of the name string (player_identity), so a
+    renamed player keeps his form and career; the `name` column stays the display name;
+  * adds opponent-adjusted team ratings (ml/fixture_strength.RATING_FEATURES), transfer-market
+    ranks and price changes (ml/market.FEATURES), pre-deadline bookmaker odds (ml/odds.FEATURES)
+    and FPL's availability before the deadline (ml/snapshots.AVAIL_FEATURES), plus cop_factor
+    (FPL's chance of playing as a multiplier; not a feature, production applies it on top).
+Without ExtraInputs build_features is exactly v3's. feature_columns("v3") is V3_FEATURES.
 """
 import json
 import logging
@@ -31,22 +41,53 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-HISTORY_CSV = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                           "data", "cleaned_merged_seasons_cleaned.csv")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HISTORY_CSV = os.path.join(ROOT, "data", "cleaned_merged_seasons_cleaned.csv")
+# (season, element) -> FPL code, the player's id across seasons (scripts/data/fetch_player_codes.py)
+PLAYER_CODES_CSV = os.path.join(ROOT, "data", "player_codes.csv")
+
+MODEL_VERSION = "v4"    # the served model
+SHADOW_VERSION = "v3"   # scored alongside it on every prediction run, for comparison
 # Bundled with the code; the weekly retrain (pipeline/retrain.py) writes newer copies to the
 # live data volume, which take precedence (see active_model_paths)
-MODEL_PATH = os.path.join("ml", "models", "points_v3.json")
-META_PATH = os.path.join("ml", "models", "points_v3_meta.json")
+MODEL_DIR = os.path.join("ml", "models")
+
+
+def bundled_model_paths(version: str = MODEL_VERSION):
+    """(model, meta) shipped with the code: ml/models/points_{version}.json and _meta.json."""
+    return (os.path.join(MODEL_DIR, f"points_{version}.json"), os.path.join(MODEL_DIR, f"points_{version}_meta.json"))
+
+
+# The v3 model's bundled files (train_points_v3's defaults); use bundled_model_paths(version)
+MODEL_PATH, META_PATH = bundled_model_paths("v3")
 
 
 def live_model_dir() -> str:
     return os.path.join(os.getenv("LIVE_DATA_DIR", os.path.join("data", "live")), "models")
 
 
-def active_model_paths():
-    """(model, meta) to serve: the retrained copy in LIVE_DATA_DIR/models if present, else bundled."""
-    live = (os.path.join(live_model_dir(), "points_v3.json"), os.path.join(live_model_dir(), "points_v3_meta.json"))
-    return live if all(os.path.exists(p) for p in live) else (MODEL_PATH, META_PATH)
+def live_model_paths(version: str = MODEL_VERSION):
+    """(model, meta) of a retrained copy in LIVE_DATA_DIR/models (they may not exist)."""
+    d = live_model_dir()
+    return os.path.join(d, f"points_{version}.json"), os.path.join(d, f"points_{version}_meta.json")
+
+
+def _have(paths) -> bool:
+    return all(os.path.exists(p) for p in paths)
+
+
+def active_model_paths(version: Optional[str] = None):
+    """(model, meta) of `version` to serve: the retrained copy in LIVE_DATA_DIR/models if present,
+    else the bundled one. Without a version, the production model (MODEL_VERSION), or the shadow
+    until a v4 model exists at all (it's trained in CI; the shadow's features are a subset of v4's,
+    so it predicts from the same feature table)."""
+    if version is None:
+        version = MODEL_VERSION
+        if not (_have(live_model_paths(version)) or _have(bundled_model_paths(version))):
+            version = SHADOW_VERSION
+    live = live_model_paths(version)
+    return live if _have(live) else bundled_model_paths(version)
+
 
 POSITIONS = ["GK", "DEF", "MID", "FWD"]
 
@@ -74,6 +115,8 @@ HISTORY_COLUMNS = [
     "assists", "bonus", "bps", "ict_index", "influence", "creativity", "threat", "clean_sheets",
     "goals_conceded", "saves", "expected_goals", "expected_assists", "expected_goal_involvements",
     "expected_goals_conceded", "defensive_contribution", "value", "selected", "xP",
+    # v4: the season's FPL element (player identity, snapshots) and the gameweek's transfers
+    "element", "transfers_balance", "transfers_in", "transfers_out",
 ]
 
 
@@ -103,6 +146,77 @@ def load_history(history_csv: str = HISTORY_CSV, live_csv: Optional[str] = None,
         frames.append(_normalize(pd.read_csv(live_csv, usecols=usecols), season=live_season))
     df = pd.concat(frames, ignore_index=True)
     return df.sort_values(["kickoff_time", "fixture", "name"]).reset_index(drop=True)
+
+
+def load_player_codes(status_csv: Optional[str] = None, live_season: Optional[str] = None,
+                      codes_csv: str = PLAYER_CODES_CSV) -> pd.DataFrame:
+    """(season, element, code): data/player_codes.csv plus the current season's live status file."""
+    frames = []
+    if os.path.exists(codes_csv):
+        frames.append(pd.read_csv(codes_csv, usecols=["season", "element", "code"]))
+    if status_csv and os.path.exists(status_csv):
+        frames.append(pd.read_csv(status_csv, usecols=["element", "code"]).assign(season=live_season))
+    if not frames:
+        return pd.DataFrame(columns=["season", "element", "code"])
+    return pd.concat(frames, ignore_index=True).drop_duplicates(["season", "element"])
+
+
+def player_identity(rows: pd.DataFrame, codes: pd.DataFrame) -> pd.Series:
+    """One key per player for every row (season, element, name): his name in the latest season
+    with an FPL code, plus " #code" when two players share it. Rows without a code keep their
+    name. 173 of 1,980 players appear under several spellings in the history, and four names
+    belong to two players (2026-10-27)."""
+    left = rows[["season", "element", "name"]].assign(element=pd.to_numeric(rows["element"], errors="coerce"))
+    right = codes[["season", "element", "code"]].assign(element=pd.to_numeric(codes["element"], errors="coerce"))
+    keyed = left.merge(right.dropna(subset=["element"]), on=["season", "element"], how="left")
+    keyed.index = rows.index
+    has = keyed["code"].notna()
+    latest = keyed[has].sort_values("season", kind="mergesort").groupby("code")["name"].last()
+    shared = latest.duplicated(keep=False).to_numpy()
+    latest[shared] = latest[shared] + " #" + latest.index[shared].astype(int).astype(str)
+    out = keyed["name"].copy()
+    out[has] = keyed.loc[has, "code"].map(latest)
+    return out
+
+
+@dataclass
+class ExtraInputs:
+    """What v4's features need beyond the match rows; load_extra_inputs builds it. Any part left
+    None gives NaN features (or name identity, for codes)."""
+    codes: Optional[pd.DataFrame] = None          # (season, element, code), load_player_codes
+    odds: Optional[pd.DataFrame] = None           # ml.odds.load_odds: season files + fixtures.csv
+    snapshots: Optional[pd.DataFrame] = None      # ml.snapshots.load_all_snapshots
+    # Team-match table of the seasons before the rows' first one (ml.fixture_strength.team_match_history),
+    # so a build from the last few seasons rates teams like one from the full history
+    ratings_prior: Optional[pd.DataFrame] = None
+
+
+def load_extra_inputs(live_dir: Optional[str] = None, season: Optional[str] = None,
+                      status_csv: Optional[str] = None, history_csv: str = HISTORY_CSV,
+                      ratings_prior: bool = True, odds_dir: Optional[str] = None,
+                      snapshots_csv: Optional[str] = None) -> ExtraInputs:
+    """ExtraInputs for training and serving alike.
+
+    codes      data/player_codes.csv + the status file's codes for `season`
+    odds       every football-data.co.uk file in `odds_dir` (default ml.odds.ODDS_DIR, env ODDS_DIR):
+               season files and the upcoming fixtures.csv
+    snapshots  data/fpl_snapshots.csv + `live_dir`/element_snapshots/<season>/gwNN.csv + the status
+               file itself (captured at its fetched_at), which is what upcoming rows use
+    ratings_prior  the history CSV's team-match table; training passes False (its rows start at
+               the first season anyway)
+    """
+    from ml import fixture_strength as fs
+    from ml import odds as od
+    from ml import snapshots as sn
+
+    status = pd.read_csv(status_csv) if status_csv and os.path.exists(status_csv) else None
+    return ExtraInputs(
+        codes=load_player_codes(status_csv, season),
+        odds=od.load_odds(odds_dir or od.ODDS_DIR),
+        snapshots=sn.load_all_snapshots(snapshots_csv or sn.SNAPSHOTS_CSV, live_dir,
+                                        status=status, season=season),
+        ratings_prior=fs.team_match_history(history_csv=history_csv) if ratings_prior else None,
+    )
 
 
 # --------------------------------------------------------------------------- features
@@ -152,11 +266,18 @@ def _rolling_before_gameweek(frame: pd.DataFrame, key: str, cols: List[str], win
     return out
 
 
-def build_features(history: pd.DataFrame, upcoming: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+PLAYER_KEY = "player_key"   # groups a player's matches: the name, or with ExtraInputs.codes his FPL code
+
+
+def build_features(history: pd.DataFrame, upcoming: Optional[pd.DataFrame] = None,
+                   extras: Optional[ExtraInputs] = None) -> pd.DataFrame:
     """Feature table for every history row (+ upcoming rows, whose outcomes are unknown).
 
     `upcoming` needs: season, name, position, team, opponent, fixture, kickoff_time, GW,
-    was_home, value, and optionally selected_rank (0-1) and xP.
+    was_home, value, and optionally selected_rank (0-1) and xP. With `extras` (v4) it also needs
+    element and the gameweek's transfers_in / transfers_out so far (FPL's transfers_in_event /
+    transfers_out_event; transfers_balance defaults to in - out), and the history needs element
+    (load_history keeps it). Without `extras` the feature values are v3's.
     """
     df = history.copy()
     df["opponent"] = df.merge(_opponents(df), on=["season", "fixture", "team"], how="left")["opponent"].to_numpy()
@@ -167,32 +288,38 @@ def build_features(history: pd.DataFrame, upcoming: Optional[pd.DataFrame] = Non
         up["kickoff_time"] = pd.to_datetime(up["kickoff_time"], utc=True)
         df = pd.concat([df, up], ignore_index=True)
     df = df.reset_index(drop=True)
+    key = PLAYER_KEY
+    codes = extras.codes if extras is not None else None
+    if codes is not None and "element" in df.columns:
+        df[key] = player_identity(df, codes).to_numpy()
+    else:
+        df[key] = df["name"]
 
     df["played"] = (df["minutes"] > 0).astype(float).where(df["minutes"].notna())
     started = df["starts"].where(df["starts"].notna(), (df["minutes"] >= 60).astype(float))
     df["started"] = started.where(df["minutes"].notna())
 
     # ---- player form, earlier gameweeks only
-    form = _rolling_before_gameweek(df, "name", FORM_STATS, WINDOWS)
-    last_match = _rolling_before_gameweek(df, "name", LAST_MATCH_STATS, (1,))
+    form = _rolling_before_gameweek(df, key, FORM_STATS, WINDOWS)
+    last_match = _rolling_before_gameweek(df, key, LAST_MATCH_STATS, (1,))
     df = df.join(form).join(last_match)
 
     # Season to date: points per match played, appearances, minutes share
-    df = df.sort_values(["name", "kickoff_time"])
-    g = df.groupby(["name", "season"], sort=False)
+    df = df.sort_values([key, "kickoff_time"])
+    g = df.groupby([key, "season"], sort=False)
     df["season_matches_before"] = g.cumcount()
     df["season_points_before"] = g["total_points"].transform(lambda s: s.shift(1).cumsum()).fillna(0)
     df["season_minutes_before"] = g["minutes"].transform(lambda s: s.shift(1).cumsum()).fillna(0)
     df["season_ppg"] = df["season_points_before"] / df["season_matches_before"].replace(0, np.nan)
     df["season_minutes_share"] = df["season_minutes_before"] / (90 * df["season_matches_before"].replace(0, np.nan))
-    df["career_matches_before"] = df.groupby("name", sort=False).cumcount()
-    df["days_rest"] = df.groupby("name", sort=False)["kickoff_time"].diff().dt.total_seconds() / 86400
+    df["career_matches_before"] = df.groupby(key, sort=False).cumcount()
+    df["days_rest"] = df.groupby(key, sort=False)["kickoff_time"].diff().dt.total_seconds() / 86400
     df["days_rest"] = df["days_rest"].clip(upper=30)
     # Freeze season-to-date at the gameweek's first fixture too
-    first_in_gw = df.groupby(["name", "season", "GW"], sort=False).cumcount() == 0
+    first_in_gw = df.groupby([key, "season", "GW"], sort=False).cumcount() == 0
     for col in ["season_matches_before", "season_ppg", "season_minutes_share", "career_matches_before"]:
         df[col] = df[col].where(first_in_gw)
-        df[col] = df.groupby(["name", "season", "GW"], sort=False)[col].transform("first")
+        df[col] = df.groupby([key, "season", "GW"], sort=False)[col].transform("first")
 
     # ---- team strength (own team and opponent), earlier gameweeks only
     tm = _team_match_table(df[~df["is_upcoming"]])
@@ -236,7 +363,33 @@ def build_features(history: pd.DataFrame, upcoming: Optional[pd.DataFrame] = Non
     for pos in POSITIONS:
         df[f"pos_{pos}"] = (df["position"] == pos).astype(float)
 
+    if extras is not None:
+        df = _add_extra_features(df, extras)
     return df.sort_values(["kickoff_time", "fixture", "name"]).reset_index(drop=True)
+
+
+def _add_extra_features(df: pd.DataFrame, extras: ExtraInputs) -> pd.DataFrame:
+    """v4's columns on top of v3's (v4_extra_features, plus cop_factor), for history and upcoming
+    rows alike: each module only reads earlier gameweeks or information from before the deadline."""
+    from ml import fixture_strength as fs
+    from ml import market as mk
+    from ml import odds as od
+    from ml import snapshots as sn
+
+    for col in mk.TRANSFER_COLUMNS + ["element"]:
+        if col not in df.columns:
+            df[col] = np.nan
+    # Upcoming rows carry FPL's transfers in and out since the last deadline
+    df["transfers_balance"] = df["transfers_balance"].fillna(df["transfers_in"] - df["transfers_out"])
+    odds = extras.odds if extras.odds is not None else od.empty_odds()
+    snaps = extras.snapshots if extras.snapshots is not None else sn.empty_snapshots()
+    snap = sn.snapshot_features(df, snaps)
+    return df.join([
+        fs.ratings_features(df, prior=extras.ratings_prior),
+        mk.transfer_features(df, key=PLAYER_KEY),
+        od.odds_features(df, odds)[od.FEATURES],
+        snap[sn.AVAIL_FEATURES + [sn.COP]],
+    ])
 
 
 def _team_feature(prefix: str, stat: str, window: int) -> str:
@@ -244,7 +397,7 @@ def _team_feature(prefix: str, stat: str, window: int) -> str:
     return f"{prefix}_{stat}" if window == 6 else f"{prefix}_{stat}{window}"
 
 
-def feature_columns() -> List[str]:
+def _v3_feature_columns() -> List[str]:
     cols = [f"{c}_r{w}" for w in WINDOWS for c in FORM_STATS]
     cols += ["season_matches_before", "season_ppg", "season_minutes_share", "career_matches_before", "days_rest"]
     cols += [_team_feature(p, c, 6) for p in ("team", "opp") for c in TEAM_STATS]
@@ -261,6 +414,32 @@ def feature_columns() -> List[str]:
     cols += [f"{c}_r1" for c in LAST_MATCH_STATS]
     cols += [_team_feature(p, c, 20) for p in ("team", "opp") for c in TEAM_STATS]
     return cols
+
+
+V3_FEATURES = _v3_feature_columns()   # the shadow model's, and the backtest's "current"
+
+
+def v4_extra_features() -> List[str]:
+    """What v4 adds to V3_FEATURES, in order (the backtest's odds_rt plus availability): team
+    ratings, transfer ranks and price changes, pre-deadline odds, FPL availability. Not the
+    set-piece flags (ml/snapshots.SP_FEATURES). In the backtest (2026-10-27) odds_rt beat v3 on
+    top-20 under all three protocols on 2023-24 .. 2026-27 but not on the untouched 2022-23;
+    availability was neutral on top of the chance-of-playing multiplier, and code identity changed
+    no metric."""
+    from ml import fixture_strength as fs
+    from ml import market as mk
+    from ml import odds as od
+    from ml import snapshots as sn
+    return fs.RATING_FEATURES + mk.FEATURES + od.FEATURES + sn.AVAIL_FEATURES
+
+
+def feature_columns(version: str = MODEL_VERSION) -> List[str]:
+    """The model's input columns: "v3" = V3_FEATURES, "v4" = V3_FEATURES + v4_extra_features()."""
+    if version == "v3":
+        return list(V3_FEATURES)
+    if version == "v4":
+        return list(V3_FEATURES) + v4_extra_features()
+    raise ValueError(f"unknown model version {version!r}")
 
 
 # --------------------------------------------------------------------------- evaluation
@@ -311,9 +490,10 @@ def _xgb():
 
 
 def fit(train: pd.DataFrame, valid: Optional[pd.DataFrame] = None, n_estimators: int = 3000,
-        params: Optional[dict] = None):
+        params: Optional[dict] = None, cols: Optional[List[str]] = None):
+    """XGBoost on `cols` (default: the production model's feature_columns())."""
     xgb = _xgb()
-    cols = feature_columns()
+    cols = cols or feature_columns()
     model = xgb.XGBRegressor(n_estimators=n_estimators, early_stopping_rounds=100 if valid is not None else None,
                              **(params or XGB_PARAMS))
     eval_set = [(valid[cols], valid["total_points"])] if valid is not None else None
@@ -321,15 +501,21 @@ def fit(train: pd.DataFrame, valid: Optional[pd.DataFrame] = None, n_estimators:
     return model
 
 
-def save_model(model, meta: dict, model_path: str = MODEL_PATH, meta_path: str = META_PATH) -> None:
+def save_model(model, meta: dict, model_path: str = MODEL_PATH, meta_path: str = META_PATH,
+               features: Optional[List[str]] = None) -> None:
+    """Booster plus meta, whose "features" (default feature_columns(meta["version"])) predict reads."""
     model.get_booster().save_model(model_path)
+    features = features or feature_columns(meta.get("version", MODEL_VERSION))
     with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump({**meta, "features": feature_columns()}, f, indent=2)
+        json.dump({**meta, "features": features}, f, indent=2)
 
 
-def load_model(model_path: Optional[str] = None, meta_path: Optional[str] = None):
+def load_model(model_path: Optional[str] = None, meta_path: Optional[str] = None,
+               version: Optional[str] = None):
+    """(booster, meta) from the given paths, else active_model_paths(version): load_model(version="v3")
+    is the shadow, load_model() the production model."""
     if model_path is None or meta_path is None:
-        model_path, meta_path = active_model_paths()
+        model_path, meta_path = active_model_paths(version)
     xgb = _xgb()
     booster = xgb.Booster()
     booster.load_model(model_path)

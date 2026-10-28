@@ -105,14 +105,31 @@ Open `https://<SITE_ADDRESS>` (shown in `deploy/.env`). Caddy gets the certifica
 `pipeline/daily.py` keeps the current season up to date from the official FPL API:
 - new results once FPL finalizes them (bonus confirmed)
 - team news and availability (injuries, suspensions, transfers)
-- the graph and next-gameweek predictions
-- on Mondays, a retrain of the points model on everything up to the weekend. The new model is kept only if it still beats the simple baselines on held-out seasons and isn't more than 10% worse than the current one; otherwise the current model stays. Each attempt is logged in the `live_data` volume at `models/retrain_history.json`. To force one now: `docker compose -f deploy/docker-compose.yml run --rm backend python -m pipeline.retrain --force`
+- bookmaker odds from football-data.co.uk (an input of the v4 points model), kept in the `live_data` volume at `odds/` (override with `ODDS_DIR`): this season's file and the upcoming `fixtures.csv` on every run, past seasons once. A failed download only leaves the odds features empty for that run.
+- the graph and next-gameweek predictions (model v4), plus, before each deadline, the squad picks of the live model and of the shadow model (v3, the previous production model, no longer retrained) in `model_picks/<season>/` and `model_picks/<season>/shadow/`
+- on Mondays, a retrain of the v4 points model on everything up to the weekend. The new model is kept only if it still beats the simple baselines on held-out seasons and isn't more than 10% worse than the current one; otherwise the current model stays. Each attempt is logged in the `live_data` volume at `models/retrain_history.json`, with its peak memory. To force one now: `fpl-pipeline pipeline.retrain --force`
 
-When it finishes it tells the API to reload, so there's no restart. Install the timer once; it runs at 06:00 and 18:00 UTC:
+When it finishes it tells the API to reload, so there's no restart. Install the timer once, and again whenever `deploy/install-daily-job.sh` changes (it's safe to re-run). It runs at 06:00 and 18:00 UTC, plus Fridays at 17:15 and Tuesdays at 16:00 UK time so evening deadlines get that day's team news and odds:
 
 ```bash
 bash deploy/install-daily-job.sh
 sudo systemctl start fpl-daily.service   # optional: run it right away
+```
+
+Every run goes through `fpl-pipeline` (installed in `/usr/local/bin` by the script), which takes one lock (`flock /run/lock/fpl-pipeline.lock`) for the whole run, so the timer's runs, `deploy.sh`'s jobs (`--run-daily`, `--load-data`, `--load-fixtures`) and manual runs never overlap: a second run waits for the first. Use it for manual runs too, e.g. `fpl-pipeline pipeline.daily` or `fpl-pipeline pipeline.retrain --force`, and run it as yourself, not with `sudo` (the lock file belongs to the timer's user).
+
+The odds for Friday-Monday matches are collected on Friday afternoon (by 17:00 UK time) and for Tuesday-Thursday matches on Tuesday (by 13:00). A prediction run between then and the deadline uses them; an earlier one predicts with empty odds features, and each run's summary shows the share of upcoming player-fixtures with odds (`predictions.input_coverage.odds`). The 06:00/18:00 UTC runs alone would miss Tuesday-evening deadlines, hence the extra runs; `FPL_FRIDAY_SCHEDULE` and `FPL_TUESDAY_SCHEDULE` (systemd `OnCalendar` values) move them, e.g. `FPL_TUESDAY_SCHEDULE="Tue *-*-* 15:30:00 Europe/London" bash deploy/install-daily-job.sh`.
+
+**After updating to the v4 points model** (the deploy itself is automatic):
+1. `bash deploy/install-daily-job.sh`: the extra Friday and Tuesday runs, the lock, and a 90-minute limit instead of 45 (it now includes up to 40 minutes' wait for the lock). Until then the old timer still runs the daily job, without them.
+2. `fpl-pipeline pipeline.daily`: the first run downloads every odds file since 2020-21 into the `live_data` volume (`odds/`). Check `"odds"` (each file `fetched` or `fresh`) and `input_coverage` in its summary.
+3. Until a bundled `ml/models/points_v4.json` is committed (the **ML train** workflow), the site serves v3 and there's no shadow pick; the first Monday retrain (or `fpl-pipeline pipeline.retrain --force`, after step 2) trains v4 on the VM and keeps it if it beats the baselines and is within 10% of v3's recorded top-20 result.
+
+**Live vs shadow model.** The ledger compares the two models' saved picks gameweek by gameweek (points under FPL's rules, the difference, its running total and a bootstrap confidence interval). `scripts/` isn't in the backend image, so mount it into a one-off container:
+
+```bash
+docker compose -f deploy/docker-compose.yml run --rm --no-deps \
+  -v "$PWD/scripts:/app/scripts:ro" backend python -m scripts.analysis.shadow_ledger
 ```
 
 Optional failure alerts:
@@ -130,6 +147,8 @@ You get an email if a run fails or doesn't happen.
 | Reload only promoted teams + 2026-27 fixtures (after editing the fixtures CSV) | `bash deploy/deploy.sh --load-fixtures` |
 | Refresh the current season now (results, team news, predictions) | `bash deploy/deploy.sh --run-daily` |
 | Daily job status / logs | `systemctl list-timers fpl-daily.timer`, `journalctl -u fpl-daily.service --no-pager \| tail -50` |
+| Run a pipeline step without overlapping the timer | `fpl-pipeline pipeline.daily`, `fpl-pipeline pipeline.retrain --force` |
+| Live vs shadow model ledger | see "Live vs shadow model" above |
 | Tail backend logs | `docker compose -f deploy/docker-compose.yml logs -f backend` |
 | Status | `docker compose -f deploy/docker-compose.yml ps` |
 | Neo4j Browser | `ssh -L 7474:localhost:7474 -L 7687:localhost:7687 azureuser@<vm-ip>` (`ubuntu@` on Oracle), then open http://localhost:7474 (user `neo4j`, password from `deploy/.env`) |

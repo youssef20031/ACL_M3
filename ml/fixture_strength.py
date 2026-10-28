@@ -1,6 +1,7 @@
 """
-Candidate fixture-strength features for the v3 points model (backtest only, 2026-10;
-scripts/analysis/ml_backtest.py variants matchup and ratings).
+Fixture-strength features: the ratings are part of the v4 points model (ml/points_model.py, since
+2026-10-28); matchup stays a backtest candidate (scripts/analysis/ml_backtest.py variants matchup
+and ratings).
 
   matchup  multiplicative expectations for the predicted fixture, built from the model's own
            rolling team stats: expected xG for and against (own attack x opponent defence, with a
@@ -18,8 +19,13 @@ scripts/analysis/ml_backtest.py variants matchup and ratings).
 Both use only matches from earlier gameweeks: matchup is a function of features that already
 satisfy that (ml.points_model), and the ratings for a gameweek are recorded before its matches are
 added (tests/test_points_model.py).
+
+The ratings are recursive from the first season they see, so serving, which builds features from
+the last few seasons only (pipeline/predict_next_gw.HISTORY_SEASONS), passes the earlier seasons'
+team-match table as `prior` (team_match_history): the ratings then equal a full-history build's
+(tests/test_points_model_v4.py).
 """
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -75,15 +81,40 @@ def matchup_features(df: pd.DataFrame) -> pd.DataFrame:
     }, index=df.index)
 
 
-def team_ratings(history: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Tuple[float, float]], str]:
+# Columns of the history CSV that pm._team_match_table reads (plus position, for load_history's filter)
+TEAM_MATCH_COLUMNS = ["season", "team", "fixture", "kickoff_time", "GW", "was_home", "team_h_score",
+                      "team_a_score", "expected_goals"]
+
+
+def team_match_history(history: Optional[pd.DataFrame] = None, history_csv: str = pm.HISTORY_CSV) -> pd.DataFrame:
+    """pm._team_match_table of `history`, or of the history CSV read with only the columns it needs
+    (rows filtered like pm.load_history), for team_ratings' `prior`."""
+    if history is None:
+        wanted = {"season_x", "team_x", "position"} | set(TEAM_MATCH_COLUMNS)
+        raw = pd.read_csv(history_csv, usecols=lambda c: c in wanted, low_memory=False)
+        raw = raw.rename(columns={"season_x": "season", "team_x": "team"})
+        history = raw[raw["position"].replace({"GKP": "GK"}).isin(pm.POSITIONS)].copy()
+        history["kickoff_time"] = pd.to_datetime(history["kickoff_time"], utc=True)
+        history["was_home"] = history["was_home"].astype(bool)
+    return pm._team_match_table(history[TEAM_MATCH_COLUMNS])
+
+
+def team_ratings(history: pd.DataFrame, prior: Optional[pd.DataFrame] = None
+                 ) -> Tuple[pd.DataFrame, Dict[str, Tuple[float, float]], str]:
     """Pre-gameweek attack/defence ratings of both teams for every (season, fixture, team).
 
     Returns (table with columns season, fixture, team, att, dfn, opp_att, opp_dfn; the ratings
     after the last gameweek {team: (att, dfn)}; the last season seen). Gameweeks are processed in
     order of their first kickoff; every match of a gameweek is rated with the ratings from before
     it, and only then are the gameweek's results added (a double gameweek adds two updates).
+    `prior` (team_match_history) adds the seasons before `history`'s first one, which only
+    move the starting ratings; the table keeps them too.
     """
     tm = pm._team_match_table(history)
+    if prior is not None and len(prior):
+        first = tm["season"].min() if len(tm) else None
+        earlier = prior if first is None else prior[prior["season"] < first]
+        tm = pd.concat([earlier[tm.columns], tm], ignore_index=True)
     y = (RATING_XG_WEIGHT * tm["xgf"] + (1 - RATING_XG_WEIGHT) * tm["gf"]).fillna(tm["gf"])
     tm = tm.assign(y=y)
     opp = pm._opponents(tm[["season", "fixture", "team"]])
@@ -125,11 +156,12 @@ def team_ratings(history: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, Tuple[f
     return table, {t: (att[t], dfn[t]) for t in att}, season
 
 
-def ratings_features(df: pd.DataFrame) -> pd.DataFrame:
+def ratings_features(df: pd.DataFrame, prior: Optional[pd.DataFrame] = None) -> pd.DataFrame:
     """RATING_FEATURES for every row of a pm.build_features table (upcoming rows get the ratings
-    after the last finished gameweek, regressed if their season is a new one)."""
+    after the last finished gameweek, regressed if their season is a new one). `prior`: see
+    team_ratings."""
     upcoming = df["is_upcoming"].to_numpy(dtype=bool) if "is_upcoming" in df else np.zeros(len(df), bool)
-    table, latest, last_season = team_ratings(df[~upcoming])
+    table, latest, last_season = team_ratings(df[~upcoming], prior)
     keyed = table.drop_duplicates(["season", "fixture", "team"]).set_index(["season", "fixture", "team"])
     idx = pd.MultiIndex.from_frame(df[["season", "fixture", "team"]])
     vals = keyed.reindex(idx)[["att", "dfn", "opp_att", "opp_dfn"]].to_numpy()
@@ -137,11 +169,19 @@ def ratings_features(df: pd.DataFrame) -> pd.DataFrame:
     if upcoming.any():
         up = df[upcoming]
         shrink = np.where(up["season"].to_numpy() == last_season, 1.0, RATING_SEASON_SHRINK)
-        get = lambda team, k: latest.get(team, (RATING_NEW_TEAM, RATING_NEW_TEAM))[k]
-        out.loc[upcoming, "rt_att"] = shrink * up["team"].map(lambda t: get(t, 0)).to_numpy()
-        out.loc[upcoming, "rt_def"] = shrink * up["team"].map(lambda t: get(t, 1)).to_numpy()
-        out.loc[upcoming, "rt_opp_att"] = shrink * up["opponent"].map(lambda t: get(t, 0)).to_numpy()
-        out.loc[upcoming, "rt_opp_def"] = shrink * up["opponent"].map(lambda t: get(t, 1)).to_numpy()
+
+        def rating(team_col: str, k: int) -> np.ndarray:
+            # A club without a rated match (promoted) starts at RATING_NEW_TEAM, which team_ratings
+            # gives it after the summer's regression, so it isn't shrunk
+            teams = up[team_col]
+            known = teams.map(lambda t: t in latest).to_numpy(dtype=bool)
+            vals = teams.map(lambda t: latest.get(t, (RATING_NEW_TEAM, RATING_NEW_TEAM))[k]).to_numpy(dtype=float)
+            return np.where(known, shrink * vals, vals)
+
+        out.loc[upcoming, "rt_att"] = rating("team", 0)
+        out.loc[upcoming, "rt_def"] = rating("team", 1)
+        out.loc[upcoming, "rt_opp_att"] = rating("opponent", 0)
+        out.loc[upcoming, "rt_opp_def"] = rating("opponent", 1)
     home = np.where(df["was_home"].astype(float).to_numpy() > 0, HOME_LOG, -HOME_LOG)
     out["rt_xgf"] = LEAGUE_XG * np.exp(out["rt_att"] - out["rt_opp_def"] + home)
     out["rt_xga"] = LEAGUE_XG * np.exp(out["rt_opp_att"] - out["rt_def"] - home)

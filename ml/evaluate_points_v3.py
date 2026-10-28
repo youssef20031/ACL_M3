@@ -1,13 +1,15 @@
 """
-Evaluation of the v3 points model (ml/points_model.py) for the project report.
+Evaluation of the points model (ml/points_model.py) for the project report: the production v4
+by default, or the v3 shadow with --version v3 (same protocol, same baselines).
 
     python -m ml.evaluate_points_v3                 # full run, a few minutes
     python -m ml.evaluate_points_v3 --n-boot 500    # quicker bootstrap
+    python -m ml.evaluate_points_v3 --version v3    # the shadow model
 
 Regenerates everything in docs/ml_evaluation/: metrics.json, the PNG figures and README.md
 (the written report, filled from metrics.json so its numbers can't drift).
 
-Protocol (identical to ml/train_points_v3.py):
+Protocol (identical to ml/train_points_v3.py, which train_points_v4 calls):
   train 2020-21 .. 2023-24, early stopping on 2024-25, test on 2025-26 and the current
   season so far. Ablations and seed repeats are retrained under the same protocol. The
   2026-10 features (last match, 20-match team strength) were chosen with a rolling-origin
@@ -22,6 +24,8 @@ Conventions:
   - Every method is scored on the same rows. Baselines without history fall back to 0
     (season pts/game falls back to the last-6 average first).
   - Uncertainty: bootstrap over gameweeks (stratified by season), fixed seed.
+  - metrics.json keys the evaluated model as "model" (protocol.version says which); players are
+    keyed by player_key (v4: the FPL code), as in training.
 """
 import argparse
 import json
@@ -38,6 +42,7 @@ import numpy as np
 import pandas as pd
 
 from ml import points_model as pm
+from ml import train_points_v3 as tp
 from ml.train_points_v3 import TRAIN_SEASONS, VALID_SEASONS
 
 logger = logging.getLogger(__name__)
@@ -48,19 +53,19 @@ KS = (1, 10, 20, 50)
 TARGET = "total_points"
 
 METHOD_COLS = {
-    "v3": "pred_v3", "season_ppg": "b_ppg", "last6": "b_last6", "last3": "b_last3",
+    "model": "pred_model", "season_ppg": "b_ppg", "last6": "b_last6", "last3": "b_last3",
     "pos_mean": "b_pos_mean", "zero": "b_zero",
 }
 HONEST_BASELINES = ["season_ppg", "last6", "last3", "pos_mean"]
 LABELS = {
-    "v3": "v3 (XGBoost)", "season_ppg": "Season pts/game", "last6": "Last-6 avg", "last3": "Last-3 avg",
+    "model": "v4 (XGBoost)", "season_ppg": "Season pts/game", "last6": "Last-6 avg", "last3": "Last-3 avg",
     "pos_mean": "Position mean", "zero": "Zero / random pick", "fpl_xP": "FPL xP (leaky)",
     "oracle": "Oracle (hindsight)", "live": "Production model (in-sample)",
 }
 # Reference palette (dataviz skill), fixed per method across every figure
 SURFACE, TEXT, TEXT2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
 COLORS = {
-    "v3": "#2a78d6", "season_ppg": "#eb6834", "last3": "#1baf7a", "last6": "#eda100",
+    "model": "#2a78d6", "season_ppg": "#eb6834", "last3": "#1baf7a", "last6": "#eda100",
     "pos_mean": "#9b9a96", "zero": "#c3c2b7", "fpl_xP": "#e34948", "oracle": "#0b0b0b", "live": "#4a3aa7",
 }
 SCOPE_COLORS = {"2025-26": "#2a78d6", "2026-27": "#eb6834", "all": "#0b0b0b"}
@@ -70,7 +75,10 @@ GROUP_LABELS = {
     "form": "Form (last match, rolling 3/6)", "season_to_date": "Season to date",
     "team_opponent_strength": "Team / opponent strength", "context": "Fixture context",
     "price_ownership": "Price & ownership", "position": "Position",
+    "ratings": "Team ratings (v4)", "market": "Transfers & price changes (v4)", "odds": "Bookmaker prices (v4)",
+    "availability": "FPL availability (v4)",
 }
+VERSION = pm.MODEL_VERSION   # the evaluated model; set by _use_version
 OUTCOME_COLS = [
     "total_points", "minutes", "starts", "goals_scored", "assists", "bonus", "bps", "ict_index",
     "influence", "creativity", "threat", "clean_sheets", "goals_conceded", "saves", "expected_goals",
@@ -86,15 +94,11 @@ def _rng(key: str) -> np.random.Generator:
     return np.random.default_rng([SEED, zlib.crc32(key.encode())])
 
 
-def _live_csv():
-    """Same lookup as ml/train_points_v3.py."""
-    from pipeline.current_season import LIVE_DATA_DIR
-    meta_path = os.path.join(LIVE_DATA_DIR, "meta.json")
-    if not os.path.exists(meta_path):
-        return None, None
-    with open(meta_path, encoding="utf-8") as f:
-        meta = json.load(f)
-    return os.path.join(LIVE_DATA_DIR, meta["files"]["season"]), meta["season"]
+def _use_version(version: str) -> None:
+    """Name the evaluated model in the figures and the README."""
+    global VERSION
+    VERSION = version
+    LABELS["model"] = f"{version} (XGBoost)"
 
 
 def _clean(obj):
@@ -256,9 +260,13 @@ def feature_groups(cols: List[str]) -> Dict[str, List[str]]:
         "context": [c for c in cols if c in ("fixtures_in_gw", "was_home", "days_rest")],
         "price_ownership": [c for c in cols if c in ("price", "selected_rank")],
         "position": [c for c in cols if c.startswith("pos_")],
+        "ratings": [c for c in cols if c.startswith("rt_")],
+        "market": [c for c in cols if c.startswith(("tr_", "price_change_"))],
+        "odds": [c for c in cols if c.startswith("odds_")],
+        "availability": [c for c in cols if c.startswith("snap_")],
     }
     assert sorted(sum(groups.values(), [])) == sorted(cols), "every feature belongs to exactly one group"
-    return groups
+    return {g: gc for g, gc in groups.items() if gc}
 
 
 def fit_cols(train: pd.DataFrame, valid: pd.DataFrame, cols: List[str], seed: int = 0):
@@ -320,21 +328,21 @@ def evaluate_scopes(test: pd.DataFrame, ranker: Ranker, method_cols: Dict[str, s
 
 def significance(tables, best: str, seasons: List[str], n_boot: int) -> dict:
     out = {"best_baseline": best, "n_boot": n_boot, "method": "bootstrap over gameweeks, stratified by season",
-           "v3": {}, "baselines": {}, "v3_minus_best": {}, "v3_minus_each_top20": {}, "gameweeks_won": {}}
+           "model": {}, "baselines": {}, "model_minus_best": {}, "model_minus_each_top20": {}, "gameweeks_won": {}}
     from scipy.stats import binomtest
     for scope in seasons + ["all"]:
         sel = (lambda t: t) if scope == "all" else (lambda t, s=scope: t[t["season"] == s].reset_index(drop=True))
-        v3 = sel(tables["v3"])
-        out["v3"][scope] = {m: ci_summary(v3, m, f"v3-{scope}-{m}", n_boot) for m in ["top1", "top10", "top20", "top50", "spearman", "hit20"]}
-        out["v3"][scope]["mae"] = ci_summary(v3, "mae", f"v3-{scope}-mae", n_boot, weight="rows")
+        mod = sel(tables["model"])
+        out["model"][scope] = {m: ci_summary(mod, m, f"model-{scope}-{m}", n_boot) for m in ["top1", "top10", "top20", "top50", "spearman", "hit20"]}
+        out["model"][scope]["mae"] = ci_summary(mod, "mae", f"model-{scope}-mae", n_boot, weight="rows")
         out["baselines"][scope] = {b: {"top20": ci_summary(sel(tables[b]), "top20", f"{b}-{scope}", n_boot)}
                                    for b in HONEST_BASELINES}
-        d = paired(v3, sel(tables[best]), ["top1", "top10", "top20", "top50", "spearman", "hit20", "mae"])
-        out["v3_minus_best"][scope] = {m: ci_summary(d, m, f"diff-{scope}-{m}", n_boot, diff=True,
-                                                     weight="rows" if m == "mae" else None)
-                                       for m in ["top1", "top10", "top20", "top50", "spearman", "hit20", "mae"]}
-        out["v3_minus_each_top20"][scope] = {
-            b: ci_summary(paired(v3, sel(tables[b]), ["top20"]), "top20", f"diff-{scope}-{b}", n_boot, diff=True)
+        d = paired(mod, sel(tables[best]), ["top1", "top10", "top20", "top50", "spearman", "hit20", "mae"])
+        out["model_minus_best"][scope] = {m: ci_summary(d, m, f"diff-{scope}-{m}", n_boot, diff=True,
+                                                        weight="rows" if m == "mae" else None)
+                                          for m in ["top1", "top10", "top20", "top50", "spearman", "hit20", "mae"]}
+        out["model_minus_each_top20"][scope] = {
+            b: ci_summary(paired(mod, sel(tables[b]), ["top20"]), "top20", f"diff-{scope}-{b}", n_boot, diff=True)
             for b in HONEST_BASELINES}
         wins = int((d["top20"] > 0).sum())
         losses = int((d["top20"] < 0).sum())
@@ -404,7 +412,8 @@ def permutation_importance(model, X: pd.DataFrame, ranker: Ranker, groups: Dict[
     return {"base_mae": base_mae, "base_top20": base_top20, "repeats": repeats, "features": feat, "groups": grp}
 
 
-def lookahead_audit(history: pd.DataFrame, feats_all: pd.DataFrame, cols: List[str], season: str, gw: int) -> dict:
+def lookahead_audit(history: pd.DataFrame, feats_all: pd.DataFrame, cols: List[str], season: str, gw: int,
+                    extras=None) -> dict:
     """Scramble every outcome of `season` GW >= gw, rebuild features, and check that no feature
     of any row up to that gameweek changed (rows of the next gameweek must change: power check)."""
     h2 = history.copy()
@@ -413,7 +422,7 @@ def lookahead_audit(history: pd.DataFrame, feats_all: pd.DataFrame, cols: List[s
     for c in OUTCOME_COLS:
         vals = h2.loc[mask, c].to_numpy()
         h2.loc[mask, c] = vals[rng.permutation(len(vals))]
-    f2 = pm.build_features(h2)
+    f2 = pm.build_features(h2, extras=extras)
     a = feats_all.set_index("_rid")
     b = f2.set_index("_rid").reindex(a.index)
     va, vb = a[cols].to_numpy(float), b[cols].to_numpy(float)
@@ -429,7 +438,7 @@ def lookahead_audit(history: pd.DataFrame, feats_all: pd.DataFrame, cols: List[s
 
 
 def single_feature_ranking(feats: pd.DataFrame, cols: List[str], train_mask, seasons: List[str],
-                           v3_preds: Dict[str, pd.Series]) -> dict:
+                           model_preds: Dict[str, pd.Series]) -> dict:
     """Rank players by one column alone (sign chosen on the training seasons) and score the top 20."""
     tr = feats[train_mask]
     signs = {c: (1.0 if np.nan_to_num(tr[c].corr(tr[TARGET])) >= 0 else -1.0) for c in cols}
@@ -452,8 +461,8 @@ def single_feature_ranking(feats: pd.DataFrame, cols: List[str], train_mask, sea
                   "top5_honest": best[:5],
                   "oracle_top20": float(r.per_gw(rows[TARGET].to_numpy(), spearman=False)["top20"].mean()),
                   "xP_corr": float(rows["xP"].corr(rows[TARGET])) if rows["xP"].notna().mean() > 0.5 else None}
-        if s in v3_preds:
-            out[s]["v3_top20"] = float(r.per_gw(v3_preds[s].to_numpy(), spearman=False)["top20"].mean())
+        if s in model_preds:
+            out[s]["model_top20"] = float(r.per_gw(model_preds[s].to_numpy(), spearman=False)["top20"].mean())
     return out
 
 
@@ -510,44 +519,44 @@ def noise_ceiling(test: pd.DataFrame, train_rows: pd.DataFrame, valid_rows: pd.D
 
 def error_analysis(test: pd.DataFrame, ranker: Ranker, history: pd.DataFrame, best: str) -> dict:
     t = test.copy()
-    t["resid"] = t[TARGET] - t["pred_v3"]
-    show = ["season", "GW", "name", "position", "team", "opponent", "price", "pred_v3", TARGET, "minutes",
+    t["resid"] = t[TARGET] - t["pred_model"]
+    show = ["season", "GW", "name", "position", "team", "opponent", "price", "pred_model", TARGET, "minutes",
             "goals_scored", "assists", "clean_sheets", "bonus", "minutes_r3"]
     under = t.sort_values("resid", ascending=False).head(15)[show]
     over = t.sort_values("resid").head(15)[show]
     out = {"largest_under_predictions": under.to_dict("records"), "largest_over_predictions": over.to_dict("records")}
 
     # Hauls (player-gameweek >= 10 points): were they on our radar?
-    pg = ranker.pg_frame(t["pred_v3"].to_numpy())
+    pg = ranker.pg_frame(t["pred_model"].to_numpy())
     pgb = ranker.pg_frame(t[METHOD_COLS[best]].to_numpy())
     pos = t.groupby(["season", "GW", "name"])["position"].first()
     pg["position"] = pos.reindex(pd.MultiIndex.from_frame(pg[["season", "GW", "name"]])).to_numpy()
     hauls = pg["actual"] >= 10
     out["hauls"] = {
         "count": int(hauls.sum()), "share_of_player_gameweeks": float(hauls.mean()),
-        "v3_in_top20": float((pg.loc[hauls, "rank"] <= 20).mean()),
-        "v3_in_top50": float((pg.loc[hauls, "rank"] <= 50).mean()),
+        "model_in_top20": float((pg.loc[hauls, "rank"] <= 20).mean()),
+        "model_in_top50": float((pg.loc[hauls, "rank"] <= 50).mean()),
         f"{best}_in_top20": float((pgb.loc[hauls, "rank"] <= 20).mean()),
         f"{best}_in_top50": float((pgb.loc[hauls, "rank"] <= 50).mean()),
-        "v3_median_rank_percentile": float((pg.loc[hauls, "rank"] / pg.loc[hauls, "players"]).median()),
+        "model_median_rank_percentile": float((pg.loc[hauls, "rank"] / pg.loc[hauls, "players"]).median()),
         "mean_pred": float(pg.loc[hauls, "pred"].mean()),
         "by_position": {p: {"hauls": int((hauls & (pg["position"] == p)).sum()),
                             "share_of_hauls": float((pg.loc[hauls, "position"] == p).mean()),
-                            "share_of_v3_top20_picks": float((pg.loc[pg["rank"] <= 20, "position"] == p).mean()),
-                            "v3_in_top50": float((pg.loc[hauls & (pg["position"] == p), "rank"] <= 50).mean())}
+                            "share_of_model_top20_picks": float((pg.loc[pg["rank"] <= 20, "position"] == p).mean()),
+                            "model_in_top50": float((pg.loc[hauls & (pg["position"] == p), "rank"] <= 50).mean())}
                         for p in pm.POSITIONS},
     }
 
-    abs_err = (t["pred_v3"] - t[TARGET]).abs()
+    abs_err = (t["pred_model"] - t[TARGET]).abs()
     total = abs_err.sum()
     zero = t["minutes"] == 0
     regular_out = zero & (t["minutes_r3"] >= 60)
     out["availability"] = {
-        "zero_minute_rows_share": float(zero.mean()), "zero_minute_mean_pred": float(t.loc[zero, "pred_v3"].mean()),
+        "zero_minute_rows_share": float(zero.mean()), "zero_minute_mean_pred": float(t.loc[zero, "pred_model"].mean()),
         "zero_minute_share_of_abs_error": float(abs_err[zero].sum() / total),
         "regulars_who_missed_rows": int(regular_out.sum()),
         "regulars_who_missed_share_of_rows": float(regular_out.mean()),
-        "regulars_who_missed_mean_pred": float(t.loc[regular_out, "pred_v3"].mean()),
+        "regulars_who_missed_mean_pred": float(t.loc[regular_out, "pred_model"].mean()),
         "regulars_who_missed_share_of_abs_error": float(abs_err[regular_out].sum() / total),
     }
 
@@ -557,7 +566,7 @@ def error_analysis(test: pd.DataFrame, ranker: Ranker, history: pd.DataFrame, be
             mk = (groups == lvl).to_numpy()
             if mk.sum() == 0:
                 continue
-            res[lvl] = {**reg_metrics(t.loc[mk, TARGET], t.loc[mk, "pred_v3"]),
+            res[lvl] = {**reg_metrics(t.loc[mk, TARGET], t.loc[mk, "pred_model"]),
                         "played_share": float((t.loc[mk, "minutes"] > 0).mean())}
         return res
 
@@ -592,9 +601,9 @@ def dgw_analysis(test: pd.DataFrame, ranker: Ranker, tables, best: str) -> dict:
         return {"double_gameweeks": []}
     rows_dgw = test["fixtures_in_gw"] > 1
     res = {"double_gameweeks": [f"{s} GW{g} ({n} teams)" for (s, g), n in dgws.items()],
-           "rows_double": reg_metrics(test.loc[rows_dgw, TARGET], test.loc[rows_dgw, "pred_v3"]),
-           "rows_single": reg_metrics(test.loc[~rows_dgw, TARGET], test.loc[~rows_dgw, "pred_v3"])}
-    pg = ranker.pg_frame(test["pred_v3"].to_numpy())
+           "rows_double": reg_metrics(test.loc[rows_dgw, TARGET], test.loc[rows_dgw, "pred_model"]),
+           "rows_single": reg_metrics(test.loc[~rows_dgw, TARGET], test.loc[~rows_dgw, "pred_model"])}
+    pg = ranker.pg_frame(test["pred_model"].to_numpy())
     pg_best = ranker.pg_frame(test[METHOD_COLS[best]].to_numpy())
     nfix = test.groupby(["season", "GW", "name"])["fixtures_in_gw"].max()
     pg["dgw_player"] = nfix.reindex(pd.MultiIndex.from_frame(pg[["season", "GW", "name"]])).to_numpy() > 1
@@ -602,12 +611,12 @@ def dgw_analysis(test: pd.DataFrame, ranker: Ranker, tables, best: str) -> dict:
     sub, subb = pg[in_dgw], pg_best[in_dgw]
     act_rank = sub.groupby(["season", "GW"])["actual"].rank(ascending=False, method="first")
     res["share_dgw_players_all"] = float(sub["dgw_player"].mean())
-    res["share_dgw_players_v3_top20"] = float(sub.loc[sub["rank"] <= 20, "dgw_player"].mean())
+    res["share_dgw_players_model_top20"] = float(sub.loc[sub["rank"] <= 20, "dgw_player"].mean())
     res["share_dgw_players_best_baseline_top20"] = float(sub.loc[(subb["rank"] <= 20).to_numpy(), "dgw_player"].mean())
     res["share_dgw_players_actual_top20"] = float(sub.loc[act_rank <= 20, "dgw_player"].mean())
-    key = pd.MultiIndex.from_frame(tables["v3"][["season", "GW"]]).isin(dgws.index)
-    res["top20_in_dgws"] = {m: float(tables[m].loc[key, "top20"].mean()) for m in ["v3", best, "last3", "oracle"]}
-    res["top20_in_other_gws"] = {m: float(tables[m].loc[~key, "top20"].mean()) for m in ["v3", best, "last3", "oracle"]}
+    key = pd.MultiIndex.from_frame(tables["model"][["season", "GW"]]).isin(dgws.index)
+    res["top20_in_dgws"] = {m: float(tables[m].loc[key, "top20"].mean()) for m in ["model", best, "last3", "oracle"]}
+    res["top20_in_other_gws"] = {m: float(tables[m].loc[~key, "top20"].mean()) for m in ["model", best, "last3", "oracle"]}
     return res
 
 
@@ -656,7 +665,7 @@ def _save(fig, out_dir, name):
 def fig_topk(m, out_dir):
     plt = _plt()
     res = m["results"]["all"]
-    methods = ["v3", "season_ppg", "last6", "last3", "pos_mean", "zero"]
+    methods = ["model", "season_ppg", "last6", "last3", "pos_mean", "zero"]
     fig, axes = plt.subplots(1, 4, figsize=(12.5, 3.4), sharey=True)
     y = np.arange(len(methods))
     for ax, k in zip(axes, KS):
@@ -682,16 +691,16 @@ def fig_topk(m, out_dir):
 
 def fig_timeseries(tables, best, seasons, out_dir):
     plt = _plt()
-    sizes = [max(len(tables["v3"][tables["v3"]["season"] == s]), 1) for s in seasons]
+    sizes = [max(len(tables["model"][tables["model"]["season"] == s]), 1) for s in seasons]
     fig, axes = plt.subplots(1, len(seasons), figsize=(12.5, 3.6), sharey=True,
                              gridspec_kw={"width_ratios": [max(s, 4) for s in sizes]})
     axes = np.atleast_1d(axes)
-    methods = ["v3", best] + [b for b in ["last3"] if b != best]
+    methods = ["model", best] + [b for b in ["last3"] if b != best]
     for ax, s in zip(axes, seasons):
         for mm in methods:
             t = tables[mm][tables[mm]["season"] == s]
             ax.plot(t["GW"], t["top20"], color=COLORS[mm], marker="o", ms=3.5, label=LABELS[mm],
-                    lw=2 if mm == "v3" else 1.4, alpha=1 if mm == "v3" else 0.9)
+                    lw=2 if mm == "model" else 1.4, alpha=1 if mm == "model" else 0.9)
         ax.set_title(s)
         ax.set_xlabel("Gameweek")
     axes[0].set_ylabel("Mean actual points of top-20 picks")
@@ -709,7 +718,7 @@ def fig_significance(sig, seasons, out_dir, tables, best):
     for a, metrics, title in [(axc, ["top1"], "Captain pick"), (ax, ["top10", "top20", "top50"], "Top-k picks")]:
         for j, scope in enumerate(scopes):
             for i, mt in enumerate(metrics):
-                r = sig["v3_minus_best"][scope][mt]
+                r = sig["model_minus_best"][scope][mt]
                 yy = i + (j - (len(scopes) - 1) / 2) * 0.22
                 a.plot(r["ci95"], [yy, yy], color=SCOPE_COLORS[scope], lw=2)
                 a.plot(r["estimate"], yy, "o", color=SCOPE_COLORS[scope], ms=6, mec=SURFACE, mew=1.5,
@@ -718,18 +727,18 @@ def fig_significance(sig, seasons, out_dir, tables, best):
         a.set_yticks(range(len(metrics)))
         a.set_yticklabels([names[mt] for mt in metrics])
         a.set_ylim(len(metrics) - 0.5, -0.5)
-        a.set_xlabel(f"v3 minus {LABELS[best]} (points per pick)")
+        a.set_xlabel(f"{VERSION} minus {LABELS[best]} (points per pick)")
         a.set_title(f"{title}: difference, 95% CI")
         a.grid(axis="y", visible=False)
     ax.legend(loc="lower right")
-    d = paired(tables["v3"], tables[best], ["top20"])
+    d = paired(tables["model"], tables[best], ["top20"])
     dist = boot_dist(d, "top20", "diff-all-top20", sig["n_boot"])
-    ax2.hist(dist, bins=50, color=COLORS["v3"], edgecolor=SURFACE, linewidth=0.5)
-    lo, hi = sig["v3_minus_best"]["all"]["top20"]["ci95"]
+    ax2.hist(dist, bins=50, color=COLORS["model"], edgecolor=SURFACE, linewidth=0.5)
+    lo, hi = sig["model_minus_best"]["all"]["top20"]["ci95"]
     for v in (lo, hi):
         ax2.axvline(v, color=TEXT, ls="--", lw=1)
     ax2.axvline(0, color=TEXT2, lw=1)
-    ax2.set_xlabel("Bootstrap mean of v3 minus best baseline, top-20 (combined)")
+    ax2.set_xlabel(f"Bootstrap mean of {VERSION} minus best baseline, top-20 (combined)")
     ax2.set_ylabel("Bootstrap replicates")
     ax2.set_title(f"Top-20 difference: 95% CI [{lo:.2f}, {hi:.2f}]")
     fig.tight_layout()
@@ -740,7 +749,7 @@ def fig_breakdowns(bd, best, out_dir):
     plt = _plt()
     fig, axes = plt.subplots(1, 3, figsize=(12.5, 3.6), gridspec_kw={"width_ratios": [4, 4, 2]})
     titles = {"position": "By position", "price_band": "By price band (£m)", "home_away": "Home vs away"}
-    methods = ["v3", best, "last3"] if best != "last3" else ["v3", best]
+    methods = ["model", best, "last3"] if best != "last3" else ["model", best]
     for ax, key in zip(axes, ["position", "price_band", "home_away"]):
         levels = list(bd[key].keys())
         x = np.arange(len(levels))
@@ -766,7 +775,7 @@ def fig_calibration(cal, out_dir):
     plt = _plt()
     fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11, 4.2))
     lim = 0
-    for mm in ["v3", "season_ppg"]:
+    for mm in ["model", "season_ppg"]:
         t = pd.DataFrame(cal["overall"][mm])
         ax.errorbar(t["mean_pred"], t["mean_actual"], yerr=1.96 * t["se"], color=COLORS[mm], marker="o", ms=5,
                     lw=1.6, capsize=2, label=LABELS[mm])
@@ -784,7 +793,7 @@ def fig_calibration(cal, out_dir):
     ax2.plot([0, lim2 * 1.05], [0, lim2 * 1.05], color=TEXT2, ls="--", lw=1)
     ax2.set_xlabel("Mean predicted points (decile within position)")
     ax2.set_ylabel("Mean actual points")
-    ax2.set_title("Reliability by position (v3)")
+    ax2.set_title(f"Reliability by position ({VERSION})")
     ax2.legend(loc="upper left")
     fig.tight_layout()
     return _save(fig, out_dir, "fig_calibration.png")
@@ -794,7 +803,7 @@ def fig_importance(imp, out_dir, n=20):
     plt = _plt()
     fig, (ax, ax2) = plt.subplots(1, 2, figsize=(12, 5.2))
     gain = sorted(imp["gain_share"].items(), key=lambda kv: -kv[1])[:n]
-    ax.barh(range(len(gain)), [v for _, v in gain], color=COLORS["v3"], height=0.65)
+    ax.barh(range(len(gain)), [v for _, v in gain], color=COLORS["model"], height=0.65)
     ax.set_yticks(range(len(gain)))
     ax.set_yticklabels([k for k, _ in gain])
     ax.invert_yaxis()
@@ -803,7 +812,7 @@ def fig_importance(imp, out_dir, n=20):
     ax.grid(axis="y", visible=False)
     perm = sorted(imp["permutation"]["features"].items(), key=lambda kv: -kv[1]["mae_increase"])[:n]
     ax2.barh(range(len(perm)), [v["mae_increase"] for _, v in perm], xerr=[v["mae_increase_std"] for _, v in perm],
-             color=COLORS["v3"], height=0.65, error_kw={"ecolor": TEXT2, "lw": 1})
+             color=COLORS["model"], height=0.65, error_kw={"ecolor": TEXT2, "lw": 1})
     ax2.set_yticks(range(len(perm)))
     ax2.set_yticklabels([k for k, _ in perm])
     ax2.invert_yaxis()
@@ -821,14 +830,14 @@ def fig_groups(imp, out_dir):
     fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11, 3.2), sharey=True)
     y = np.arange(len(keys))
     ax.barh(y, [g[k]["mae_increase"] for k in keys], xerr=[g[k]["mae_increase_std"] for k in keys],
-            color=COLORS["v3"], height=0.6, error_kw={"ecolor": TEXT2, "lw": 1})
+            color=COLORS["model"], height=0.6, error_kw={"ecolor": TEXT2, "lw": 1})
     ax.set_yticks(y)
     ax.set_yticklabels([f"{GROUP_LABELS[k]} ({g[k]['n_features']})" for k in keys])
     ax.invert_yaxis()
     ax.set_xlabel("Increase in test MAE")
     ax.set_title("Group permutation: accuracy")
     ax2.barh(y, [g[k]["top20_drop"] for k in keys], xerr=[g[k]["top20_drop_std"] for k in keys],
-             color=COLORS["v3"], height=0.6, error_kw={"ecolor": TEXT2, "lw": 1})
+             color=COLORS["model"], height=0.6, error_kw={"ecolor": TEXT2, "lw": 1})
     ax2.axvline(0, color=TEXT2, lw=1)
     ax2.set_xlabel("Drop in top-20 points per pick")
     ax2.set_title("Group permutation: pick quality")
@@ -845,8 +854,8 @@ def fig_ablations(abl, out_dir):
     y = np.arange(len(keys))
     for i, k in enumerate(keys):
         r = abl["variants"][k]["top20_diff_vs_full"]
-        ax.plot(r["ci95"], [i, i], color=COLORS["v3"], lw=2)
-        ax.plot(r["estimate"], i, "o", color=COLORS["v3"], ms=6, mec=SURFACE, mew=1.5)
+        ax.plot(r["ci95"], [i, i], color=COLORS["model"], lw=2)
+        ax.plot(r["estimate"], i, "o", color=COLORS["model"], ms=6, mec=SURFACE, mew=1.5)
     ax.axvline(0, color=TEXT2, lw=1)
     ax.set_yticks(y)
     ax.set_yticklabels([abl["variants"][k]["label"] for k in keys])
@@ -855,7 +864,7 @@ def fig_ablations(abl, out_dir):
     ax.set_title("Ablations: pick quality")
     full_mae = abl["variants"]["full"]["test"]["mae"]
     vals = [abl["variants"][k]["test"]["mae"] - full_mae for k in keys]
-    ax2.barh(y, vals, color=COLORS["v3"], height=0.6)
+    ax2.barh(y, vals, color=COLORS["model"], height=0.6)
     span = max(abs(v) for v in vals) or 1
     for yi, v in zip(y, vals):
         ax2.text(v + (0.03 if v >= 0 else -0.03) * span, yi, f"{v:+.4f}", va="center",
@@ -876,7 +885,7 @@ def fig_single_feature(sf, out_dir):
     fig, ax = plt.subplots(figsize=(8.5, 3.6))
     x = np.arange(len(seasons))
     series = [("fpl_xP", "xP_top20", "FPL xP alone"), ("pos_mean", "best_honest_top20", "Best single honest feature"),
-              ("v3", "v3_top20", "v3 (out of sample)")]
+              ("model", "model_top20", f"{VERSION} (out of sample)")]
     w = 0.26
     for i, (ck, key, lab) in enumerate(series):
         vals = [sf[s].get(key) for s in seasons]
@@ -903,7 +912,7 @@ def fig_error_patterns(err, out_dir):
         d = err[key]
         lv = list(d.keys())
         x = np.arange(len(lv))
-        ax.bar(x - 0.2, [d[l]["mean_pred"] for l in lv], 0.4, color=COLORS["v3"], edgecolor=SURFACE, lw=1.5,
+        ax.bar(x - 0.2, [d[l]["mean_pred"] for l in lv], 0.4, color=COLORS["model"], edgecolor=SURFACE, lw=1.5,
                label="Mean predicted")
         ax.bar(x + 0.2, [d[l]["mean_actual"] for l in lv], 0.4, color=COLORS["pos_mean"], edgecolor=SURFACE, lw=1.5,
                label="Mean actual")
@@ -926,8 +935,8 @@ def fig_distribution(test, out_dir):
     fig, ax = plt.subplots(figsize=(8.5, 3.4))
     bins = np.arange(-4, 25) - 0.5
     ax.hist(test[TARGET].clip(-3, 23), bins=bins, color=COLORS["pos_mean"], label="Actual points", edgecolor=SURFACE)
-    ax.hist(test["pred_v3"].clip(-3, 23), bins=np.arange(-3, 23.01, 0.25), histtype="step", color=COLORS["v3"], lw=1.8,
-            label="v3 prediction (0.25-pt bins)")
+    ax.hist(test["pred_model"].clip(-3, 23), bins=np.arange(-3, 23.01, 0.25), histtype="step", color=COLORS["model"], lw=1.8,
+            label=f"{VERSION} prediction (0.25-pt bins)")
     ax.set_yscale("log")
     ax.set_xlabel("Points in one fixture (clipped to 23)")
     ax.set_ylabel("Rows (log scale)")
@@ -964,47 +973,48 @@ def build_readme(m: dict) -> str:
     best = m["significance"]["best_baseline"]
     sig = m["significance"]
     A = R["all"]
-    v3a, bba, orc, rnd = A["v3"], A[best], A["oracle"], A["zero"]
-    d20 = sig["v3_minus_best"]["all"]["top20"]
-    dcap = sig["v3_minus_best"]["all"]["top1"]
-    headroom = (v3a["ranking"]["top20"] - rnd["ranking"]["top20"]) / (orc["ranking"]["top20"] - rnd["ranking"]["top20"])
+    ma, bba, orc, rnd = A["model"], A[best], A["oracle"], A["zero"]
+    d20 = sig["model_minus_best"]["all"]["top20"]
+    dcap = sig["model_minus_best"]["all"]["top1"]
+    headroom = (ma["ranking"]["top20"] - rnd["ranking"]["top20"]) / (orc["ranking"]["top20"] - rnd["ranking"]["top20"])
     headroom_b = (bba["ranking"]["top20"] - rnd["ranking"]["top20"]) / (orc["ranking"]["top20"] - rnd["ranking"]["top20"])
     sigword = lambda r: "significant at 5%" if r["significant_5pct"] else "not significant at 5%"
+    V = m["protocol"].get("version", "v3")
     L = []
     w = L.append
-    w("# Evaluation of the v3 points model")
+    w(f"# Evaluation of the {V} points model")
     w("")
-    w(f"Generated by `python -m ml.evaluate_points_v3` on {m['meta']['generated_at']} (git `{m['meta']['git_commit']}`, "
+    w(f"Generated by `python -m ml.evaluate_points_v3 --version {V}` on {m['meta']['generated_at']} (git `{m['meta']['git_commit']}`, "
       f"runtime {m['meta']['runtime_seconds']:.0f}s). Every number below is read from [`metrics.json`](metrics.json); "
       "rerun the script to refresh both.")
     w("")
     w("## Summary")
     w("")
-    w(f"- **Top-20 picks:** on the held-out test seasons ({' + '.join(seasons)}, {v3a['ranking']['gameweeks']} gameweeks) "
-      f"the 20 players v3 rates highest each gameweek score **{_ci(sig['v3']['all']['top20'])}** points each (95% CI), "
+    w(f"- **Top-20 picks:** on the held-out test seasons ({' + '.join(seasons)}, {ma['ranking']['gameweeks']} gameweeks) "
+      f"the 20 players {V} rates highest each gameweek score **{_ci(sig['model']['all']['top20'])}** points each (95% CI), "
       f"versus {bba['ranking']['top20']:.2f} for the best simple baseline ({LABELS[best].lower()}) and "
-      f"{rnd['ranking']['top20']:.2f} for a random pick. Difference **{_sd(d20)}**, {sigword(d20)}; v3 wins "
+      f"{rnd['ranking']['top20']:.2f} for a random pick. Difference **{_sd(d20)}**, {sigword(d20)}; {V} wins "
       f"{sig['gameweeks_won']['all']['wins']} of {sig['gameweeks_won']['all']['wins'] + sig['gameweeks_won']['all']['losses']} "
       f"decided gameweeks (sign test p = {sig['gameweeks_won']['all']['sign_test_p']:.3f}).")
-    w(f"- **Headroom:** perfect hindsight would average {orc['ranking']['top20']:.2f} for top-20; v3 closes "
+    w(f"- **Headroom:** perfect hindsight would average {orc['ranking']['top20']:.2f} for top-20; {V} closes "
       f"{100 * headroom:.0f}% of the gap between random picks and that oracle ({LABELS[best].lower()}: {100 * headroom_b:.0f}%).")
-    w(f"- **Captain (top-1):** {v3a['ranking']['top1']:.2f} vs {bba['ranking']['top1']:.2f} points "
+    w(f"- **Captain (top-1):** {ma['ranking']['top1']:.2f} vs {bba['ranking']['top1']:.2f} points "
       f"(difference {_sd(dcap)}, {sigword(dcap)}). Single picks are noisy: the CI is wide.")
-    vp = v3a["regression_played"]
-    w(f"- **Accuracy:** test MAE {v3a['regression']['mae']:.3f} / RMSE {v3a['regression']['rmse']:.3f} / "
-      f"R² {v3a['regression']['r2']:.3f}, versus MAE {bba['regression']['mae']:.3f} / R² {bba['regression']['r2']:.3f} for "
-      f"{LABELS[best].lower()}. Overall bias is {v3a['regression']['bias']:+.3f}. On rows where the player did play "
-      f"({100 * vp['rows'] / v3a['regression']['rows']:.0f}%), predictions are {-vp['bias']:.2f} points low on average "
+    vp = ma["regression_played"]
+    w(f"- **Accuracy:** test MAE {ma['regression']['mae']:.3f} / RMSE {ma['regression']['rmse']:.3f} / "
+      f"R² {ma['regression']['r2']:.3f}, versus MAE {bba['regression']['mae']:.3f} / R² {bba['regression']['r2']:.3f} for "
+      f"{LABELS[best].lower()}. Overall bias is {ma['regression']['bias']:+.3f}. On rows where the player did play "
+      f"({100 * vp['rows'] / ma['regression']['rows']:.0f}%), predictions are {-vp['bias']:.2f} points low on average "
       f"(they are expectations that include the chance of not playing) and correlate r = {vp['pearson_r']:.2f} with the outcome.")
-    w(f"- **Rank correlation:** mean per-gameweek Spearman {v3a['ranking']['spearman']:.3f} vs "
+    w(f"- **Rank correlation:** mean per-gameweek Spearman {ma['ranking']['spearman']:.3f} vs "
       f"{A['last3']['ranking']['spearman']:.3f} for the last-3 average. Spearman is dominated by separating "
-      "non-playing from playing players, which simple form already does; v3's advantage is at the top of the table.")
+      f"non-playing from playing players, which simple form already does; {V}'s advantage is at the top of the table.")
     nc = m["noise_ceiling"]
     w(f"- **Points are noisy:** {100 * nc['zero_minute_share']:.0f}% of rows are 0-minute non-appearances; even a model given "
       f"the match's own minutes and xG/xA reaches only R² {nc['process_model']['r2']:.2f}, and the between-player-season "
-      f"share of variance is {nc['between_player_season_variance_share']:.2f}. v3's R² of {v3a['regression']['r2']:.2f} "
+      f"share of variance is {nc['between_player_season_variance_share']:.2f}. {V}'s R² of {ma['regression']['r2']:.2f} "
       + ("is about what knowing every player's true season average would give, without knowing that average."
-         if abs(v3a["regression"]["r2"] - nc["between_player_season_variance_share"]) < 0.03 else
+         if abs(ma["regression"]["r2"] - nc["between_player_season_variance_share"]) < 0.03 else
          "should be read against those ceilings."))
     la = m["leakage_audit"]
     w(f"- **No leakage found:** {la['row_count']['feature_rows']:,} feature rows for {la['row_count']['input_rows']:,} "
@@ -1021,7 +1031,7 @@ def build_readme(m: dict) -> str:
       f"{', '.join(sigabl) if sigabl else 'none'}.")
     w(f"- **Training noise:** across {len(sst['seeds'])} XGBoost seeds, top-20 is {sst['top20']['mean']:.2f} ± "
       f"{sst['top20']['std']:.2f} and captain {sst['top1']['mean']:.2f} ± {sst['top1']['std']:.2f}. The headline uses "
-      "seed 0, which is what `ml/train_points_v3.py` trains.")
+      f"seed 0, which is what `ml/train_points_{V}.py` trains.")
     w("")
     w("## Task and data")
     w("")
@@ -1035,13 +1045,17 @@ def build_readme(m: dict) -> str:
     w(f"Sources: `data/cleaned_merged_seasons_cleaned.csv` (2020-21 to 2025-26) and the current-season file "
       f"`{m['data']['live_csv']}` ({seasons[-1]} GW1-{m['data']['gameweeks_by_season'][seasons[-1]]}), loaded with "
       "`ml.points_model.load_history` exactly as in training. Features: "
-      f"{m['protocol']['n_features']} columns from `ml.points_model.feature_columns()`.")
+      f"{m['protocol']['n_features']} columns from `ml.points_model.feature_columns('{V}')`"
+      + ("; the extra inputs come from `ml.points_model.load_extra_inputs` (FPL player codes, football-data.co.uk "
+         "prices, FPL availability snapshots), with these shares of rows covered: "
+         + ", ".join(f"{k} {v:.0%}" for k, v in m["data"]["input_coverage"]["all"].items())
+         if m["data"].get("input_coverage") else "") + ".")
     w("")
     w("![Target distribution](fig_points_distribution.png)")
     w("")
     w("## Protocol")
     w("")
-    w(f"- **Temporal split, as in `ml/train_points_v3.py`:** train {', '.join(m['protocol']['train_seasons'])}; early "
+    w(f"- **Temporal split, as in `ml/train_points_{V}.py`:** train {', '.join(m['protocol']['train_seasons'])}; early "
       f"stopping on {', '.join(m['protocol']['valid_seasons'])} (best iteration {m['protocol']['best_trees']} trees); test "
       f"{' and '.join(seasons)}. Hyperparameters are `ml.points_model.XGB_PARAMS`, chosen on the validation season. "
       "Ablations and seed repeats use the same split. The last-match and 20-match team-strength features were added "
@@ -1057,21 +1071,21 @@ def build_readme(m: dict) -> str:
     w("- **Baselines on identical rows:** zero (equivalent to a random pick for ranking), training-set position mean, "
       "last-3 and last-6 average points, and season-to-date points per game (falling back to last-6, then 0, before a "
       "player's first match of the season). Missing histories fall back to 0, so every method is scored on the same "
-      f"{v3a['regression']['rows']:,} rows. (The training report drops rows a baseline cannot score, so its baseline "
+      f"{ma['regression']['rows']:,} rows. (The training report drops rows a baseline cannot score, so its baseline "
       "numbers differ slightly.)")
     w(f"- **Uncertainty:** {sig['n_boot']} bootstrap resamples of gameweeks, stratified by season, fixed seed "
       f"{m['meta']['seed']}. Paired differences resample the same gameweeks for both methods.")
     w("")
     w("## Results vs baselines")
     w("")
-    w(f"Combined test seasons ({v3a['ranking']['gameweeks']} gameweeks, {v3a['regression']['rows']:,} rows). "
+    w(f"Combined test seasons ({ma['ranking']['gameweeks']} gameweeks, {ma['regression']['rows']:,} rows). "
       "Bias = mean(predicted - actual).")
     w("")
-    methods = ["v3", "season_ppg", "last6", "last3", "pos_mean", "zero"]
+    methods = ["model", "season_ppg", "last6", "last3", "pos_mean", "zero"]
     rows = []
     for mm in methods:
         r, k = A[mm]["regression"], A[mm]["ranking"]
-        name = f"**{LABELS[mm]}**" if mm == "v3" else LABELS[mm]
+        name = f"**{LABELS[mm]}**" if mm == "model" else LABELS[mm]
         rp = A[mm]["regression_played"]
         rows.append([name, _f(r["mae"], 3), _f(r["rmse"], 3), _f(r["r2"], 3), _f(r["bias"], 3),
                      _f(rp["mae"], 3), _f(rp["bias"], 3), _f(rp["pearson_r"], 3), _f(k["spearman"], 3), _f(k["top1"]),
@@ -1089,9 +1103,9 @@ def build_readme(m: dict) -> str:
     w("")
     rows = []
     for s in seasons:
-        for mm in ["v3", "season_ppg", "last6", "last3"] + (["fpl_xP"] if "fpl_xP" in R[s] else []):
+        for mm in ["model", "season_ppg", "last6", "last3"] + (["fpl_xP"] if "fpl_xP" in R[s] else []):
             r, k = R[s][mm]["regression"], R[s][mm]["ranking"]
-            name = f"**{LABELS[mm]}**" if mm == "v3" else LABELS[mm]
+            name = f"**{LABELS[mm]}**" if mm == "model" else LABELS[mm]
             rows.append([s, name, _f(r["mae"], 3), _f(r["r2"], 3), _f(k["spearman"], 3), _f(k["top1"]), _f(k["top20"]),
                          _f(k["hit20"])])
         rows.append([s, LABELS["oracle"], "", "", "", _f(R[s]["oracle"]["ranking"]["top1"]),
@@ -1113,21 +1127,21 @@ def build_readme(m: dict) -> str:
     w("")
     rows = []
     for s in seasons + ["all"]:
-        dd = sig["v3_minus_best"][s]
+        dd = sig["model_minus_best"][s]
         gwk = sig["gameweeks_won"][s]
-        rows.append([("combined" if s == "all" else s), _ci(sig["v3"][s]["top20"]), _ci(sig["baselines"][s][best]["top20"]),
+        rows.append([("combined" if s == "all" else s), _ci(sig["model"][s]["top20"]), _ci(sig["baselines"][s][best]["top20"]),
                      _sd(dd["top20"]), (f"< {1 / sig['n_boot']:.4f}" if dd["top20"]["p_two_sided"] == 0
                                         else _f(dd["top20"]["p_two_sided"], 3)),
                      _sd(dd["top1"]), _sd(dd["spearman"], 3),
                      _sd(dd["mae"], 3), f"{gwk['wins']}-{gwk['losses']}"])
-    w(_table(["Scope", "v3 top-20", f"{LABELS[best]} top-20", "Δ top-20", "p (Δ top-20)", "Δ captain", "Δ Spearman",
+    w(_table(["Scope", f"{V} top-20", f"{LABELS[best]} top-20", "Δ top-20", "p (Δ top-20)", "Δ captain", "Δ Spearman",
               "Δ MAE", "GWs won-lost"], rows))
     w("")
     w("Top-20 difference against every baseline (combined): " + "; ".join(
-        f"{LABELS[b]} {_sd(sig['v3_minus_each_top20']['all'][b])}" for b in HONEST_BASELINES) + ".")
+        f"{LABELS[b]} {_sd(sig['model_minus_each_top20']['all'][b])}" for b in HONEST_BASELINES) + ".")
     w("")
     s_last = seasons[-1]
-    w(f"The {s_last} interval rests on only {R[s_last]['v3']['ranking']['gameweeks']} gameweeks, so treat it as indicative.")
+    w(f"The {s_last} interval rests on only {R[s_last]['model']['ranking']['gameweeks']} gameweeks, so treat it as indicative.")
     w("")
     w("![Significance](fig_significance.png)")
     w("")
@@ -1139,51 +1153,51 @@ def build_readme(m: dict) -> str:
     rows = []
     for key, title in [("position", "Position"), ("price_band", "Price"), ("home_away", "Venue")]:
         for lvl, r in bd[key].items():
-            v, b = r["methods"]["v3"], r["methods"][best]
+            v, b = r["methods"]["model"], r["methods"][best]
             rows.append([title, lvl, f"{r['rows']:,}", f"{100 * r['played_share']:.0f}%", _f(v["mae"], 3), _f(v["bias"], 3),
                          _f(b["mae"], 3), _f(v["within_spearman"], 3), _f(v["within_top10"]), _f(b["within_top10"]),
                          _f(r["oracle_within_top10"])])
-    w(_table(["Split", "Group", "Rows", "Played", "v3 MAE", "v3 bias", f"{LABELS[best]} MAE", "v3 Spearman",
-              "v3 top-10", f"{LABELS[best]} top-10", "Oracle top-10"], rows))
+    w(_table(["Split", "Group", "Rows", "Played", f"{V} MAE", f"{V} bias", f"{LABELS[best]} MAE", f"{V} Spearman",
+              f"{V} top-10", f"{LABELS[best]} top-10", "Oracle top-10"], rows))
     w("")
     w("![Breakdowns](fig_breakdowns.png)")
     w("")
     dg = m["double_gameweeks"]
     if dg.get("double_gameweeks"):
-        w(f"**Double gameweeks** in the test data: {', '.join(dg['double_gameweeks'])}. Per fixture, v3's MAE is "
+        w(f"**Double gameweeks** in the test data: {', '.join(dg['double_gameweeks'])}. Per fixture, {V}'s MAE is "
           f"{dg['rows_double']['mae']:.3f} on double-gameweek rows vs {dg['rows_single']['mae']:.3f} on single ones "
           f"(bias {dg['rows_double']['bias']:+.3f} vs {dg['rows_single']['bias']:+.3f}). Because a player's fixtures are "
           f"summed, every method heavily favours doubling players: they are {100 * dg['share_dgw_players_all']:.0f}% of players in those "
           f"gameweeks, {100 * dg['share_dgw_players_actual_top20']:.0f}% of the real top 20, and "
-          f"{100 * dg['share_dgw_players_v3_top20']:.0f}% of v3's top 20 ({LABELS[best].lower()}: "
-          f"{100 * dg['share_dgw_players_best_baseline_top20']:.0f}%). Top-20 in double gameweeks: v3 "
-          f"{dg['top20_in_dgws']['v3']:.2f}, {LABELS[best].lower()} {dg['top20_in_dgws'][best]:.2f}, oracle "
-          f"{dg['top20_in_dgws']['oracle']:.2f} (other gameweeks: v3 {dg['top20_in_other_gws']['v3']:.2f}, "
+          f"{100 * dg['share_dgw_players_model_top20']:.0f}% of {V}'s top 20 ({LABELS[best].lower()}: "
+          f"{100 * dg['share_dgw_players_best_baseline_top20']:.0f}%). Top-20 in double gameweeks: {V} "
+          f"{dg['top20_in_dgws']['model']:.2f}, {LABELS[best].lower()} {dg['top20_in_dgws'][best]:.2f}, oracle "
+          f"{dg['top20_in_dgws']['oracle']:.2f} (other gameweeks: {V} {dg['top20_in_other_gws']['model']:.2f}, "
           f"{LABELS[best].lower()} {dg['top20_in_other_gws'][best]:.2f}).")
         w("")
     ph = m["phase"]
     rows = []
     for s in seasons + ["all"]:
         for phase, r in ph[s].items():
-            rows.append([("combined" if s == "all" else s), phase, r["v3"]["gameweeks"], _f(r["v3"]["top20"]),
-                         _f(r[best]["top20"]), _f(r["last3"]["top20"]), _f(r["oracle"]["top20"]), _f(r["v3"]["spearman"], 3),
+            rows.append([("combined" if s == "all" else s), phase, r["model"]["gameweeks"], _f(r["model"]["top20"]),
+                         _f(r[best]["top20"]), _f(r["last3"]["top20"]), _f(r["oracle"]["top20"]), _f(r["model"]["spearman"], 3),
                          _f(r[best]["spearman"], 3)])
     w("**Early season vs the rest** (in GW1-5 season-to-date stats are thin and rolling form spans the summer break):")
     w("")
-    w(_table(["Scope", "Phase", "GWs", "v3 top-20", f"{LABELS[best]} top-20", "Last-3 top-20", "Oracle top-20",
-              "v3 Spearman", f"{LABELS[best]} Spearman"], rows))
+    w(_table(["Scope", "Phase", "GWs", f"{V} top-20", f"{LABELS[best]} top-20", "Last-3 top-20", "Oracle top-20",
+              f"{V} Spearman", f"{LABELS[best]} Spearman"], rows))
     w("")
     w("## Calibration")
     w("")
     cal = m["calibration"]
-    w(f"Predicted-points deciles against mean actual points. Linear fit of actual on predicted: v3 slope "
-      f"{cal['slope']['v3']['slope']:.2f} (intercept {cal['slope']['v3']['intercept']:+.2f}); "
+    w(f"Predicted-points deciles against mean actual points. Linear fit of actual on predicted: {V} slope "
+      f"{cal['slope']['model']['slope']:.2f} (intercept {cal['slope']['model']['intercept']:+.2f}); "
       f"{LABELS['season_ppg'].lower()} {cal['slope']['season_ppg']['slope']:.2f}; last-3 {cal['slope']['last3']['slope']:.2f}. "
       "A slope near 1 means the predictions can be read as expected points; raw form averages are over-dispersed "
       "(slope well below 1) because they don't shrink towards the mean.")
     w("")
-    top = cal["overall"]["v3"][-1]
-    w(f"In the top decile v3 predicts {top['mean_pred']:.2f} and players score {top['mean_actual']:.2f} on average. "
+    top = cal["overall"]["model"][-1]
+    w(f"In the top decile {V} predicts {top['mean_pred']:.2f} and players score {top['mean_actual']:.2f} on average. "
       "By position: " + "; ".join(f"{p} slope {cal['slope_by_position'][p]['slope']:.2f}" for p in pm.POSITIONS) + ".")
     w("")
     w("![Calibration](fig_calibration.png)")
@@ -1259,12 +1273,12 @@ def build_readme(m: dict) -> str:
     w("4. **Rank by a single column.** This is the test that exposed the xP leak: a pre-deadline signal should not "
       "pick much better than the best honest feature.")
     w("")
-    rows = [[s, _f(r["xP_top20"]), f"{r['best_honest_feature']} ({_f(r['best_honest_top20'])})", _f(r.get("v3_top20")),
+    rows = [[s, _f(r["xP_top20"]), f"{r['best_honest_feature']} ({_f(r['best_honest_top20'])})", _f(r.get("model_top20")),
              _f(r["oracle_top20"]), _f(r["xP_corr"], 3)] for s, r in sf.items()]
-    w(_table(["Season", "xP alone top-20", "Best honest single feature", "v3 top-20", "Oracle top-20", "corr(xP, points)"], rows))
+    w(_table(["Season", "xP alone top-20", "Best honest single feature", f"{V} top-20", "Oracle top-20", "corr(xP, points)"], rows))
     w("")
-    w("v3 is shown only where it is out of sample (2024-25 is the early-stopping season, so mildly optimistic). In the "
-      "seasons where xP ranks far above every honest feature and above v3, it carries same-gameweek information "
+    w(f"{V} is shown only where it is out of sample (2024-25 is the early-stopping season, so mildly optimistic). In the "
+      f"seasons where xP ranks far above every honest feature and above {V}, it carries same-gameweek information "
       "(team news/lineups), so it cannot be a feature or a fair baseline.")
     w("")
     w("![Single-feature ranking](fig_leakage_single_feature.png)")
@@ -1302,11 +1316,11 @@ def build_readme(m: dict) -> str:
       "availability flags after the model, which this offline evaluation does not.")
     h = ea["hauls"]
     w(f"- **Hauls (10+ points in a gameweek)** are {h['count']} player-gameweeks ({100 * h['share_of_player_gameweeks']:.1f}%). "
-      f"{100 * h['v3_in_top20']:.0f}% were in v3's top 20 and {100 * h['v3_in_top50']:.0f}% in its top 50 "
+      f"{100 * h['model_in_top20']:.0f}% were in {V}'s top 20 and {100 * h['model_in_top50']:.0f}% in its top 50 "
       f"({LABELS[best].lower()}: {100 * h[f'{best}_in_top20']:.0f}% / {100 * h[f'{best}_in_top50']:.0f}%); the median "
-      f"haul came from a player ranked in the top {100 * h['v3_median_rank_percentile']:.0f}% of that gameweek. By position: "
-      + "; ".join(f"{p} {r['hauls']} hauls ({100 * r['share_of_hauls']:.0f}% of hauls, {100 * r['share_of_v3_top20_picks']:.0f}% "
-                  f"of v3 top-20 picks, {100 * r['v3_in_top50']:.0f}% caught in top 50)" for p, r in h["by_position"].items()) + ".")
+      f"haul came from a player ranked in the top {100 * h['model_median_rank_percentile']:.0f}% of that gameweek. By position: "
+      + "; ".join(f"{p} {r['hauls']} hauls ({100 * r['share_of_hauls']:.0f}% of hauls, {100 * r['share_of_model_top20_picks']:.0f}% "
+                  f"of {V} top-20 picks, {100 * r['model_in_top50']:.0f}% caught in top 50)" for p, r in h["by_position"].items()) + ".")
     ch = ea["by_career_history"]
     w("- **Little history:** " + "; ".join(f"{k} prior matches: n={r['rows']:,}, predicted {r['mean_pred']:.2f} vs actual "
                                          f"{r['mean_actual']:.2f}, MAE {r['mae']:.2f}" for k, r in ch.items()) + ".")
@@ -1323,7 +1337,7 @@ def build_readme(m: dict) -> str:
     w("![Error patterns](fig_error_patterns.png)")
     w("")
     show = lambda r: [r["season"], r["GW"], r["name"], r["position"], f"{r['team']} v {r['opponent']}",
-                      _f(r["pred_v3"]), int(r["total_points"]), int(r["minutes"]), int(r["goals_scored"]),
+                      _f(r["pred_model"]), int(r["total_points"]), int(r["minutes"]), int(r["goals_scored"]),
                       int(r["assists"])]
     hdr = ["Season", "GW", "Player", "Pos", "Fixture", "Predicted", "Actual", "Min", "G", "A"]
     w("Largest under-predictions (hauls nobody saw coming):")
@@ -1337,19 +1351,27 @@ def build_readme(m: dict) -> str:
     w("## Limitations and future work")
     w("")
     nm = ea["name_collisions"]
-    w(f"- **No historical availability data.** Injuries, suspensions and rotation news aren't in the training data, so "
-      "the model predicts an expected value over \"plays\" and \"doesn't play\". Adding the FPL status/chance-of-playing "
-      "history (or a separate minutes model) is the most promising improvement.")
-    w(f"- **Player identity is a name string.** In the test seasons {nm['duplicate_rows_same_fixture_and_name']} "
-      f"(fixture, name) pairs have two rows ({', '.join(nm['duplicate_names']) or 'none'}), and "
+    if V == "v3":
+        w(f"- **No historical availability data.** Injuries, suspensions and rotation news aren't in the training data, so "
+          "the model predicts an expected value over \"plays\" and \"doesn't play\". Adding the FPL status/chance-of-playing "
+          "history (or a separate minutes model) is the most promising improvement.")
+    else:
+        w("- **Thin availability data.** FPL's status before each deadline comes from snapshots of vaastav's "
+          "players_raw.csv history (about 35 of 38 gameweeks a season to 2024-25, a dozen since) and our own archive "
+          "from GW9 2026-27; without a snapshot the availability features are missing, and the model predicts an expected "
+          "value over \"plays\" and \"doesn't play\".")
+    w(f"- **Player identity is {'a name string' if V == 'v3' else 'the FPL code'}.** In the test seasons "
+      f"{nm['duplicate_rows_same_fixture_and_name']} (fixture, player) pairs have two rows "
+      f"({', '.join(nm['duplicate_names']) or 'none'}), and "
       f"{nm['player_gameweeks_with_two_teams']} player-gameweeks mix two teams; such players' form features blend two "
-      "records. A player whose name is spelt differently across seasons also loses his history.")
-    w(f"- **Small current-season sample.** {seasons[-1]} has {R[seasons[-1]]['v3']['ranking']['gameweeks']} gameweeks, so its "
+      "records." + (" A player whose name is spelt differently across seasons also loses his history." if V == "v3" else
+                    " Players are keyed by their FPL code, so a renamed player keeps his history."))
+    w(f"- **Small current-season sample.** {seasons[-1]} has {R[seasons[-1]]['model']['ranking']['gameweeks']} gameweeks, so its "
       "intervals are wide and early-season effects dominate it.")
     w(f"- **xG features exist only from 2023-24.** Earlier training seasons have them missing, so the model learns "
       "xG-based form from one training season.")
-    w(f"- **Irreducible noise.** The oracle top-20 is {orc['ranking']['top20']:.2f} against v3's "
-      f"{v3a['ranking']['top20']:.2f}, but the oracle uses outcomes; a model told the match's own minutes, starts and "
+    w(f"- **Irreducible noise.** The oracle top-20 is {orc['ranking']['top20']:.2f} against {V}'s "
+      f"{ma['ranking']['top20']:.2f}, but the oracle uses outcomes; a model told the match's own minutes, starts and "
       f"xG/xA/xGC still only reaches R² {nc['process_model']['r2']:.2f} (MAE {nc['process_model']['mae']:.3f}), and "
       f"knowing each player-season's true average explains about {nc['between_player_season_variance_share']:.2f} of "
       "the per-fixture variance. Goals, assists and bonus are rare and lumpy, so large single-match errors are expected.")
@@ -1359,22 +1381,22 @@ def build_readme(m: dict) -> str:
     lv = m["live_model"]
     w("## Production model check")
     w("")
-    w(f"The deployed `ml/models/points_v3.json` ({lv['n_trees']} trees, refit on {', '.join(lv['seasons'])}) scored on the "
+    w(f"The served `points_{V}.json` ({lv['n_trees']} trees, refit on {', '.join(lv['seasons'])}) scored on the "
       f"same test rows: MAE {lv['all']['regression']['mae']:.3f}, R² {lv['all']['regression']['r2']:.3f}, Spearman "
       f"{lv['all']['ranking']['spearman']:.3f}, captain {lv['all']['ranking']['top1']:.2f}, top-20 "
       f"{lv['all']['ranking']['top20']:.2f}. **This is optimistic**: the production model was trained on these seasons. "
       "It only confirms that the deployed file loads and behaves like the evaluated one; the honest numbers are the ones above.")
     w("")
     cc = m["consistency_with_training_report"]
-    w(f"Cross-check: `ml.points_model.evaluate` on this run's v3 predictions gives top-20 {cc['this_run']['top20_points']:.3f} / "
+    w(f"Cross-check: `ml.points_model.evaluate` on this run's {V} predictions gives top-20 {cc['this_run']['top20_points']:.3f} / "
       f"MAE {cc['this_run']['mae']:.3f} (combined), "
-      + (f"versus {cc['report']['top20_points']:.3f} / {cc['report']['mae']:.3f} in `ml/models/points_v3_report.json`."
+      + (f"versus {cc['report']['top20_points']:.3f} / {cc['report']['mae']:.3f} in `ml/models/points_{V}_report.json`."
          if cc.get("report") else "(no training report found to compare against)."))
     w("")
     w("## How to reproduce")
     w("")
     w("```bash")
-    w(".venv/Scripts/python.exe -m ml.evaluate_points_v3            # writes docs/ml_evaluation/")
+    w(f".venv/Scripts/python.exe -m ml.evaluate_points_v3 --version {V}   # writes docs/ml_evaluation/")
     w(".venv/Scripts/python.exe -m ml.evaluate_points_v3 --n-boot 500 --perm-repeats 1   # quicker")
     w("```")
     w("")
@@ -1389,7 +1411,9 @@ def build_readme(m: dict) -> str:
 # --------------------------------------------------------------------------- main
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Evaluate the v3 points model")
+    parser = argparse.ArgumentParser(description="Evaluate the points model")
+    parser.add_argument("--version", default=pm.MODEL_VERSION, choices=["v3", "v4"],
+                        help="v4 (production, default) or v3 (the shadow)")
     parser.add_argument("--out-dir", default=OUT_DIR)
     parser.add_argument("--n-boot", type=int, default=2000)
     parser.add_argument("--perm-repeats", type=int, default=3)
@@ -1401,20 +1425,28 @@ def main() -> int:
     if args.readme_only:
         with open(os.path.join(args.out_dir, "metrics.json"), encoding="utf-8") as f:
             m = json.load(f)
+        _use_version(m["protocol"].get("version", "v3"))
         with open(os.path.join(args.out_dir, "README.md"), "w", encoding="utf-8") as f:
             f.write(build_readme(m))
         return 0
+    _use_version(args.version)
     np.random.seed(SEED)
     t0 = time.time()
     lap = lambda msg: logger.info("%s (%.0fs)", msg, time.time() - t0)
 
-    # ---- data and features, exactly as ml/train_points_v3.py
-    live_csv, live_season = _live_csv()
+    # ---- data and features, exactly as ml/train_points_v3.py (load_training_features)
+    live_csv, status_csv, live_season = tp._live_files()
     history = pm.load_history(live_csv=live_csv, live_season=live_season)
     history["_rid"] = np.arange(len(history))
-    feats_all = pm.build_features(history)
+    extras = None
+    if args.version != "v3":
+        extras = pm.load_extra_inputs(live_dir=tp.LIVE_DATA_DIR, season=live_season, status_csv=status_csv,
+                                      ratings_prior=False)
+    feats_all = pm.build_features(history, extras=extras)
+    # One key per player (v4: his FPL code), as training evaluates; double gameweeks are summed by it
+    feats_all["name"] = feats_all[pm.PLAYER_KEY]
     lap("features built")
-    cols = pm.feature_columns()
+    cols = pm.feature_columns(args.version)
     feats = feats_all[feats_all[TARGET].notna()]
     test_seasons = sorted(set(feats["season"]) - set(TRAIN_SEASONS) - set(VALID_SEASONS))
     train = feats[feats["season"].isin(TRAIN_SEASONS)]
@@ -1422,20 +1454,26 @@ def main() -> int:
     test = feats[feats["season"].isin(test_seasons)].reset_index(drop=True).copy()
 
     m: dict = {"meta": {}, "protocol": {
-        "train_seasons": TRAIN_SEASONS, "valid_seasons": VALID_SEASONS, "test_seasons": test_seasons,
-        "n_features": len(cols), "features": cols, "xgb_params": pm.XGB_PARAMS,
+        "version": args.version, "train_seasons": TRAIN_SEASONS, "valid_seasons": VALID_SEASONS,
+        "test_seasons": test_seasons, "n_features": len(cols), "features": cols, "xgb_params": pm.XGB_PARAMS,
         "rows": {"train": len(train), "valid": len(valid), "test": len(test)}}}
     roles = {s: ("train" if s in TRAIN_SEASONS else "validation (early stopping)" if s in VALID_SEASONS else "test")
              for s in sorted(feats["season"].unique())}
     m["data"] = {"rows_by_season": feats.groupby("season").size().to_dict(),
                  "gameweeks_by_season": feats.groupby("season")["GW"].nunique().to_dict(),
                  "season_roles": roles, "live_csv": live_csv}
+    if extras is not None:
+        m["data"]["input_coverage"] = tp.input_coverage(feats)
+        gaps = tp.odds_gaps(m["data"]["input_coverage"])   # the same guard as training
+        if gaps:
+            raise RuntimeError(f"too few rows with odds ({', '.join(f'{s}: {c:.0%}' for s, c in gaps.items())}): "
+                               f"fetch them into ODDS_DIR first (python -m scripts.data.fetch_odds)")
 
     # ---- main model: pm.fit, exactly as training
-    model = pm.fit(train, valid)
+    model = pm.fit(train, valid, cols=cols)
     best_trees = int(model.best_iteration) + 1
     m["protocol"]["best_trees"] = best_trees
-    test["pred_v3"] = model.predict(test[cols])
+    test["pred_model"] = model.predict(test[cols])
     test = baseline_predictions(test, train)
     lap(f"model trained ({best_trees} trees)")
 
@@ -1455,7 +1493,7 @@ def main() -> int:
     m["results"] = results
     best = max(HONEST_BASELINES, key=lambda b: results["all"][b]["ranking"]["top20"])
     m["per_gameweek"] = {mm: tables[mm][["season", "GW", "top1", "top20", "spearman"]].to_dict("records")
-                         for mm in ["v3", best, "last3", "oracle"]}
+                         for mm in ["model", best, "last3", "oracle"]}
     m["significance"] = significance(tables, best, test_seasons, args.n_boot)
     lap(f"results and bootstrap done (best baseline: {best})")
 
@@ -1463,22 +1501,22 @@ def main() -> int:
     # Bands keep >= ~20 players per gameweek so a within-band top-10 is still a choice
     bands = ["<5.0", "5.0-5.9", "6.0-7.4", "7.5+"]
     price_band = pd.Series(np.select([test["price"] < 5.0, test["price"] < 6.0, test["price"] < 7.5], bands[:3], bands[3]))
-    bmethods = ["v3", best] + [b for b in ["last3"] if b != best]
+    bmethods = ["model", best] + [b for b in ["last3"] if b != best]
     m["breakdowns"] = {
         "position": breakdown(test, test["position"], pm.POSITIONS, bmethods),
         "price_band": breakdown(test, price_band, bands, bmethods),
         "home_away": breakdown(test, test["was_home"].map({1.0: "home", 0.0: "away"}), ["home", "away"], bmethods),
     }
     m["double_gameweeks"] = dgw_analysis(test, ranker, tables, best)
-    m["phase"] = phase_analysis(tables, test_seasons, list(dict.fromkeys(["v3", best, "last3", "oracle"])))
+    m["phase"] = phase_analysis(tables, test_seasons, list(dict.fromkeys(["model", best, "last3", "oracle"])))
 
     # ---- calibration
     m["calibration"] = {
-        "overall": {mm: calibration_table(test[TARGET], test[METHOD_COLS[mm]]) for mm in ["v3", "season_ppg", "last3"]},
-        "by_position": {p: calibration_table(test.loc[test["position"] == p, TARGET], test.loc[test["position"] == p, "pred_v3"])
+        "overall": {mm: calibration_table(test[TARGET], test[METHOD_COLS[mm]]) for mm in ["model", "season_ppg", "last3"]},
+        "by_position": {p: calibration_table(test.loc[test["position"] == p, TARGET], test.loc[test["position"] == p, "pred_model"])
                         for p in pm.POSITIONS},
-        "slope": {mm: calib_slope(test[TARGET], test[METHOD_COLS[mm]]) for mm in ["v3", "season_ppg", "last6", "last3"]},
-        "slope_by_position": {p: calib_slope(test.loc[test["position"] == p, TARGET], test.loc[test["position"] == p, "pred_v3"])
+        "slope": {mm: calib_slope(test[TARGET], test[METHOD_COLS[mm]]) for mm in ["model", "season_ppg", "last6", "last3"]},
+        "slope_by_position": {p: calib_slope(test.loc[test["position"] == p, TARGET], test.loc[test["position"] == p, "pred_model"])
                               for p in pm.POSITIONS},
     }
     lap("breakdowns and calibration done")
@@ -1511,6 +1549,10 @@ def main() -> int:
         "r3_only": ("Rolling window 3 only", [c for c in cols if not c.endswith(("_r1", "_r6"))]),
         "r6_only": ("Rolling window 6 only", [c for c in cols if not c.endswith(("_r1", "_r3"))]),
     }
+    for g, label in (("ratings", "Without team ratings"), ("market", "Without transfers & price changes"),
+                     ("odds", "Without bookmaker prices"), ("availability", "Without FPL availability")):
+        if g in groups:   # v4's additions
+            variants[f"no_{g}"] = (label, [c for c in cols if c not in groups[g]])
     vranker = Ranker(valid)
 
     def run_variant(vcols, seed):
@@ -1527,7 +1569,7 @@ def main() -> int:
         run = run_variant(cols, sd)
         full_runs[sd] = run
         if sd == 0:
-            m["protocol"]["fit_wrapper_matches_pm_fit_max_abs_diff"] = float(np.abs(run["pred"] - test["pred_v3"].to_numpy()).max())
+            m["protocol"]["fit_wrapper_matches_pm_fit_max_abs_diff"] = float(np.abs(run["pred"] - test["pred_model"].to_numpy()).max())
         srows.append({"seed": sd, "trees": run["trees"], "mae": float(np.abs(run["pred"] - test[TARGET]).mean()),
                       **{k: float(run["tbl"][k].mean()) for k in ["top1", "top20", "spearman"]}})
     sdf = pd.DataFrame(srows)
@@ -1578,15 +1620,15 @@ def main() -> int:
     la["max_abs_corr"] = {"test": list(corr_test.head(10).items()), "train": list(corr_train.head(10).items()),
                           "xP_by_season": xp_corr}
     mid_gw = 20 if (test.loc[test["season"] == test_seasons[0], "GW"].max() or 0) > 21 else 2
-    la["lookahead"] = lookahead_audit(history, feats_all, cols, test_seasons[0], mid_gw)
+    la["lookahead"] = lookahead_audit(history, feats_all, cols, test_seasons[0], mid_gw, extras)
     lap("look-ahead audit done")
     valid_pred = pd.Series(model.predict(valid[cols]), index=valid.index)
-    v3_by_season = {VALID_SEASONS[0]: valid_pred.reset_index(drop=True)}
+    model_by_season = {VALID_SEASONS[0]: valid_pred.reset_index(drop=True)}
     for s in test_seasons:
-        v3_by_season[s] = test.loc[test["season"] == s, "pred_v3"].reset_index(drop=True)
+        model_by_season[s] = test.loc[test["season"] == s, "pred_model"].reset_index(drop=True)
     sf_seasons = [s for s in ["2023-24"] + VALID_SEASONS + test_seasons if s in set(feats["season"])]
     la["single_feature_ranking"] = single_feature_ranking(
-        feats, cols, feats["season"].isin(TRAIN_SEASONS), sf_seasons, v3_by_season)
+        feats, cols, feats["season"].isin(TRAIN_SEASONS), sf_seasons, model_by_season)
     tr_pred = model.predict(train[cols])
     tr_t = Ranker(train).per_gw(tr_pred, spearman=False)
     va_t = vranker.per_gw(valid_pred.to_numpy(), spearman=False)
@@ -1594,8 +1636,8 @@ def main() -> int:
         "train": {"mae": float(np.abs(tr_pred - train[TARGET]).mean()), "top20": float(tr_t["top20"].mean())},
         "valid": {"mae": float(np.abs(valid_pred - valid[TARGET]).mean()), "top20": float(va_t["top20"].mean()),
                   **{k: v for k, v in reg_metrics(valid[TARGET], valid_pred).items() if k in ("rmse", "r2")}},
-        "test": {"mae": results["all"]["v3"]["regression"]["mae"], "top20": results["all"]["v3"]["ranking"]["top20"],
-                 "rmse": results["all"]["v3"]["regression"]["rmse"], "r2": results["all"]["v3"]["regression"]["r2"]},
+        "test": {"mae": results["all"]["model"]["regression"]["mae"], "top20": results["all"]["model"]["ranking"]["top20"],
+                 "rmse": results["all"]["model"]["regression"]["rmse"], "r2": results["all"]["model"]["regression"]["r2"]},
     }
     if args.skip_v2_check:
         la["v2_duplication"] = {"skipped": True}
@@ -1614,7 +1656,7 @@ def main() -> int:
     lap("error analysis done")
 
     # ---- production model (optimistic: trained on the test seasons too)
-    booster_live, meta_live = pm.load_model()
+    booster_live, meta_live = pm.load_model(version=args.version)
     test["pred_live"] = pm.predict(booster_live, meta_live, test)
     live_tbl = ranker.per_gw(test["pred_live"].to_numpy())
     m["live_model"] = {"note": "Refit on all seasons including the test seasons: in-sample, optimistic.",
@@ -1627,12 +1669,12 @@ def main() -> int:
                                   "ranking": summarize_gw(t)}
 
     # ---- cross-check with ml.points_model.evaluate and the training report
-    cc = {"this_run": pm.evaluate(test, "pred_v3").as_dict()}
-    rp = os.path.join("ml", "models", "points_v3_report.json")
+    cc = {"this_run": pm.evaluate(test, "pred_model").as_dict()}
+    rp = tp.report_path_for(args.version)
     if os.path.exists(rp):
         with open(rp, encoding="utf-8") as f:
             rep = json.load(f)
-        cc["report"] = rep.get("test", {}).get("all", {}).get("v3")
+        cc["report"] = rep.get("test", {}).get("all", {}).get(args.version)
     m["consistency_with_training_report"] = cc
 
     # ---- figures

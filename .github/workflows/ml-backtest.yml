@@ -57,11 +57,19 @@ jobs:
       - name: Fetch the current season from the FPL API
         run: python -m pipeline.current_season --out-dir data/live || echo "::warning::live fetch failed; current-season fold skipped"
       # football-data.co.uk's files aren't committed (free for private use, not for redistribution).
-      # Fetched only when a requested variant uses them (the odds* variants), so other runs don't
-      # touch the site; a variant whose features come out empty fails in the run step.
+      # Fetched only when a requested variant uses them (the odds* variants and v4), so other runs
+      # don't touch the site; a variant whose features come out empty fails in the run step.
       - name: Fetch bookmaker odds from football-data.co.uk
-        if: contains(inputs.variants, 'odds')
-        run: python -m scripts.data.fetch_odds || echo "::warning::odds fetch incomplete; see the odds coverage in the features step"
+        if: contains(inputs.variants, 'odds') || contains(inputs.variants, 'v4')
+        run: python -m scripts.data.fetch_odds --no-fixtures || echo "::warning::odds fetch incomplete; see the odds coverage in the features step"
+      # FPL availability and set-piece snapshots from vaastav's players_raw.csv history (MIT). The
+      # extract is committed (data/fpl_snapshots.csv, what v4 trains on); for the variants that use
+      # snapshots (cop, avail*, sp*, snap_cop, v4) it's refreshed with vaastav's newer commits.
+      - name: Refresh FPL availability snapshots
+        if: contains(inputs.variants, 'cop') || contains(inputs.variants, 'avail') || contains(inputs.variants, 'sp') || contains(inputs.variants, 'v4')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m scripts.data.fetch_fpl_snapshots || echo "::warning::snapshot refresh failed; using the committed data/fpl_snapshots.csv"
       - run: python -m scripts.analysis.ml_backtest features --out feats.pkl.gz
       - uses: actions/upload-artifact@v4
         with:

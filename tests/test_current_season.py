@@ -134,3 +134,102 @@ def test_status_only_run_writes_the_status_file_and_a_snapshot(tmp_path):
     assert {"transfers_in_event", "cost_change_event", "penalties_order"} <= set(status.columns)
     snaps = pd.read_csv(tmp_path / "element_snapshots" / "2026-27" / "gw02.csv")
     assert len(snaps) == 2
+
+
+# ------------------------------------------------------------------ bookmaker odds
+
+VALID_E0 = ("Div,Date,HomeTeam,AwayTeam,AvgH,AvgD,AvgA,Avg>2.5,Avg<2.5\n"
+            "E0,16/08/2026,Arsenal,Chelsea,2.0,3.5,3.8,1.8,2.0\n")
+
+
+class _FakeFootballData:
+    """Stands in for ml.odds' downloads: writes `body` (a valid file by default) and counts calls."""
+
+    def __init__(self, body=VALID_E0):
+        self.body = body
+        self.calls = []
+
+    def _write(self, odds_dir, name):
+        import os
+        os.makedirs(odds_dir, exist_ok=True)
+        path = os.path.join(odds_dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self.body)
+        return path
+
+    def season(self, season, odds_dir):
+        from ml import odds as od
+        self.calls.append(season)
+        return self._write(odds_dir, f"E0_{od.season_code(season)}.csv")
+
+    def fixtures(self, odds_dir):
+        self.calls.append("fixtures")
+        return self._write(odds_dir, "fixtures.csv")
+
+
+def _fake_odds(monkeypatch, fake):
+    from ml import odds as od
+    monkeypatch.setattr(od, "fetch_season", fake.season)
+    monkeypatch.setattr(od, "fetch_fixtures", fake.fixtures)
+    monkeypatch.delenv("ODDS_DIR", raising=False)
+
+
+def test_refresh_odds_fetches_past_seasons_once_and_skips_fresh_files(tmp_path, monkeypatch):
+    from pipeline.current_season import odds_dir, refresh_odds
+    fake = _FakeFootballData()
+    _fake_odds(monkeypatch, fake)
+    now = datetime.now(timezone.utc)
+
+    first = refresh_odds(str(tmp_path), "2026-27", now=now)
+    assert fake.calls == ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27", "fixtures"]
+    assert set(first.values()) == {"fetched"} and len(first) == 8
+    assert odds_dir(str(tmp_path)) == str(tmp_path / "odds")
+    assert sorted(p.name for p in (tmp_path / "odds").iterdir())[-2:] == ["E0_2627.csv", "fixtures.csv"]
+
+    fake.calls.clear()   # a run minutes later: nothing to download
+    assert refresh_odds(str(tmp_path), "2026-27", now=now + timedelta(minutes=5)) == {
+        "E0_2627.csv": "fresh", "fixtures.csv": "fresh"}
+    assert fake.calls == []
+    # The next run: this season's file and fixtures.csv only (two requests); past seasons are final
+    assert refresh_odds(str(tmp_path), "2026-27", now=now + timedelta(hours=12)) == {
+        "E0_2627.csv": "fetched", "fixtures.csv": "fetched"}
+    assert fake.calls == ["2026-27", "fixtures"]
+
+
+def test_refresh_odds_keeps_the_previous_file_when_a_download_fails(tmp_path, monkeypatch):
+    import os
+    from pipeline.current_season import refresh_odds
+    fake = _FakeFootballData(body="<html>Service unavailable</html>\n")   # an error page, not a CSV
+    _fake_odds(monkeypatch, fake)
+    odds = tmp_path / "odds"
+    odds.mkdir()
+    (odds / "fixtures.csv").write_text(VALID_E0, encoding="utf-8")
+    old = (datetime.now(timezone.utc) - timedelta(days=1)).timestamp()
+    os.utime(odds / "fixtures.csv", (old, old))
+
+    result = refresh_odds(str(tmp_path), "2021-22")
+    assert result["fixtures.csv"].startswith("failed") and result["E0_2122.csv"].startswith("failed")
+    assert (odds / "fixtures.csv").read_text(encoding="utf-8") == VALID_E0     # good copy kept
+    assert sorted(p.name for p in odds.iterdir()) == ["fixtures.csv"]           # no staging left behind
+
+    def offline(*args, **kwargs):
+        raise OSError("network is unreachable")
+    monkeypatch.setattr("ml.odds.fetch_fixtures", offline)
+    assert refresh_odds(str(tmp_path), "2021-22", fixtures=True)["fixtures.csv"] == "failed: network is unreachable"
+
+
+def test_refresh_odds_never_raises_when_the_odds_folder_cant_be_made(tmp_path, monkeypatch):
+    from pipeline.current_season import refresh_odds
+    fake = _FakeFootballData()
+    _fake_odds(monkeypatch, fake)
+    (tmp_path / "a_file").write_text("not a folder", encoding="utf-8")
+    monkeypatch.setenv("ODDS_DIR", str(tmp_path / "a_file" / "odds"))     # e.g. a read-only mount
+    result = refresh_odds(str(tmp_path), "2026-27")
+    assert list(result) == ["odds_dir"] and result["odds_dir"].startswith("failed")
+    assert fake.calls == []
+
+
+def test_odds_dir_follows_the_environment(tmp_path, monkeypatch):
+    from pipeline.current_season import odds_dir
+    monkeypatch.setenv("ODDS_DIR", str(tmp_path / "elsewhere"))
+    assert odds_dir(str(tmp_path)) == str(tmp_path / "elsewhere")

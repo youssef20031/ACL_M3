@@ -1,5 +1,6 @@
 """services/explain.py (SHAP + LIME over the saved model inputs) and ml/lime_tabular.py."""
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -67,23 +68,25 @@ ROWS = [  # element, name, team, position, opponent, fixture
 ]
 
 
-@pytest.fixture
-def live(tmp_path, monkeypatch):
-    """A tiny model on pm.feature_columns(), its meta, saved inputs and a predictions file."""
-    features = pm.feature_columns()
+def _make_live(tmp_path, monkeypatch, version="v4"):
+    """A tiny `version` model on its feature columns in LIVE_DATA_DIR/models (no bundled models),
+    its meta, saved inputs and a predictions file."""
+    features = pm.feature_columns(version)
     rng = np.random.default_rng(0)
     x = rng.random((300, len(features)))
     y = 4 * x[:, features.index("minutes_r3")] + 2 * x[:, features.index("team_xgf")] + rng.normal(0, 0.1, 300)
     booster = xgb.train({"max_depth": 3, "eta": 0.3}, xgb.DMatrix(x, label=y, feature_names=features), 20)
     models = tmp_path / "models"
     models.mkdir()
-    booster.save_model(str(models / "points_v3.json"))
-    meta = {"version": "v3", "trained_at": "2026-10-20T00:00:00+00:00", "n_trees": 20, "seasons": ["2025-26"],
+    booster.save_model(str(models / f"points_{version}.json"))
+    scores = {"top20_points": 4.7, "captain_points": 6.6, "rmse": 1.9, "mae": 1.0, "spearman": 0.7}
+    meta = {"version": version, "trained_at": "2026-10-20T00:00:00+00:00", "n_trees": 20, "seasons": ["2025-26"],
             "rows": 300, "features": features,
-            "test_metrics": {"v3": {"top20_points": 4.7, "captain_points": 6.6, "rmse": 1.9, "mae": 1.0,
-                                    "spearman": 0.7}, "fpl_xP": {"top20_points": 2.7}}}
-    (models / "points_v3_meta.json").write_text(json.dumps(meta), encoding="utf-8")
+            "test_metrics": {version: scores, f"{version}_cop": scores, "last3_avg": {"top20_points": 3.9},
+                             "fpl_xP": {"top20_points": 2.7}}}
+    (models / f"points_{version}_meta.json").write_text(json.dumps(meta), encoding="utf-8")
     monkeypatch.setenv("LIVE_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(pm, "MODEL_DIR", str(tmp_path / "bundled"))   # ignore the repo's model files
 
     inputs = pd.DataFrame(rng.random((len(ROWS), len(features))), columns=features)
     inputs["was_home"] = [1.0, 0.0, 0.0, 1.0]
@@ -104,7 +107,12 @@ def live(tmp_path, monkeypatch):
     ]).to_csv(tmp_path / "next_gw_predictions.csv", index=False)
     monkeypatch.setattr(preds_service, "_cached", None)
     explain.reset()
-    yield booster, inputs
+    return booster, inputs
+
+
+@pytest.fixture
+def live(tmp_path, monkeypatch):
+    yield _make_live(tmp_path, monkeypatch)
     explain.reset()
 
 
@@ -133,6 +141,24 @@ def test_player_view_applies_fpl_availability(live):
         explain.player(999)
 
 
+def test_player_view_when_a_feature_is_missing_for_every_player(live, tmp_path):
+    """v4's odds are NaN for the whole gameweek until football-data.co.uk posts Friday's prices (and for
+    gameweeks starting on a Tuesday): the player view must still explain, those features 'missing'."""
+    from ml import odds as od
+
+    booster, _ = live
+    path = tmp_path / explain.FEATURES_NAME
+    frame = pd.read_csv(path, float_precision="round_trip")
+    frame[od.FEATURES] = np.nan
+    features = pm.feature_columns()
+    frame["model_points"] = booster.predict(xgb.DMatrix(frame[features], feature_names=features))
+    frame.to_csv(path, index=False)
+    explain.reset()
+    p = explain.player(1)
+    assert all(f["lime"]["num_samples"] == explain.LIME_SAMPLES for f in p["fixtures"])
+    assert explain.summary()["rows"] == 4
+
+
 def test_summary_ranks_features_and_players(live):
     s = explain.summary()
     assert s["gameweek"] == 9 and s["season"] == "2026-27" and s["rows"] == 4 and s["players"] == 3
@@ -142,7 +168,20 @@ def test_summary_ranks_features_and_players(live):
     assert len(s["beeswarm"]) == explain.BEESWARM_FEATURES and len(s["beeswarm"][0]["points"]) == 4
     assert [g["group"] for g in s["groups"]][:2] == ["Recent form", "Team strength"]
     assert [p["element"] for p in s["top_players"]] == [1, 3, 2]          # by the site's predicted points
-    assert set(s["model"]["test_metrics"]) == {"v3"} and s["model"]["source"] == "live"
+    assert s["model"]["version"] == "v4" and s["model"]["source"] == "live"
+    assert set(s["model"]["test_metrics"]) == {"v4", "last3_avg"}   # the model's own, then the baselines
+    groups = {f["group"] for f in s["features"]}
+    assert {"Team ratings", "Transfers", "Bookmaker forecasts", "Availability"} <= groups
+
+
+def test_explains_v3_until_a_v4_model_exists(tmp_path, monkeypatch):
+    _make_live(tmp_path, monkeypatch, version="v3")
+    try:
+        s = explain.summary()
+        assert s["model"]["version"] == "v3" and set(s["model"]["test_metrics"]) == {"v3", "last3_avg"}
+        assert len(s["features"]) == len(pm.V3_FEATURES)
+    finally:
+        explain.reset()
 
 
 def test_search_dependence_and_name_lookup(live):
@@ -168,9 +207,12 @@ def test_unavailable_without_inputs_or_with_stale_columns(live, tmp_path):
 
 
 def test_every_feature_has_a_label():
-    for f in pm.feature_columns():
+    for f in pm.feature_columns("v4"):
         label, group, description = explain.feature_info(f)
         assert label != f and group != "Other" and description, f
+        # Shown on the site: bookmakers' prices are forecasts, not betting
+        text = f"{label} {group} {description}"
+        assert not re.search(r"\b(bet|betting|gambl\w*|wager\w*|odds|punt\w*|stakes?)\b", text, re.I), f
 
 
 def test_saved_inputs_round_trip_exactly(tmp_path):

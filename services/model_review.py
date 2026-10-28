@@ -8,6 +8,12 @@ function). Files:
 
   $LIVE_DATA_DIR/model_picks/<season>/gwNN.json             the 15-man squad as picked
   $LIVE_DATA_DIR/model_picks/<season>/gwNN_predictions.csv  every player's prediction
+  $LIVE_DATA_DIR/model_picks/<season>/shadow/gwNN.json      the same for the shadow model (v3),
+                                                            from the same run (variant SHADOW)
+
+Each JSON names the model that made it (`model`; missing in picks from before v4). The site
+shows only the live picks; shadow_comparison scores both the same way for
+scripts/analysis/shadow_ledger.py.
 
 Picks recorded by hand (GW7, from the FPL app, before saving existed) are committed in
 data/model_picks/<season>/; a saved pick in LIVE_DATA_DIR wins over a committed one.
@@ -26,7 +32,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from config.settings import CURRENT_SEASON
 from services import season_service as ss
@@ -35,6 +41,7 @@ from services import team_optimizer as opt
 logger = logging.getLogger(__name__)
 
 PICKS_DIR = "model_picks"
+SHADOW = "shadow"   # variant: the shadow model's picks, in model_picks/<season>/shadow/
 COMMITTED_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", PICKS_DIR)
 # Auto-subs live in team_optimizer, shared with the ML backtest
 FORMATION_MIN = opt.FORMATION_MIN
@@ -48,8 +55,10 @@ def _pick_name(gameweek: int) -> str:
     return f"gw{int(gameweek):02d}.json"
 
 
-def _dirs(season: str) -> List[str]:
-    """Where picks live, highest priority first."""
+def _dirs(season: str, variant: Optional[str] = None) -> List[str]:
+    """Where picks live, highest priority first (a variant's picks are only ever saved, never committed)."""
+    if variant:
+        return [os.path.join(ss.live_dir(), PICKS_DIR, season, variant)]
     return [os.path.join(ss.live_dir(), PICKS_DIR, season), os.path.join(COMMITTED_DIR, season)]
 
 
@@ -65,7 +74,7 @@ def _parse_time(value: Optional[str]) -> Optional[datetime]:
 
 def build_picks(selection: opt.Selection, details: Dict[str, Dict[str, Any]], season: str, gameweek: int,
                 deadline: Optional[str], fixture_ids: Dict[str, List[int]],
-                archived_at: Optional[str] = None) -> Dict[str, Any]:
+                archived_at: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
     """The JSON saved for a gameweek: starters in XI order, then the bench in priority
     order (goalkeeper first). `fixture_ids` maps a club to its fixture ids that gameweek."""
     def player(c: opt.Candidate, role: str) -> Dict[str, Any]:
@@ -83,31 +92,35 @@ def build_picks(selection: opt.Selection, details: Dict[str, Dict[str, Any]], se
     return {
         "season": season, "gameweek": int(gameweek), "deadline": deadline,
         "archived_at": archived_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "source": "pipeline", "note": None,
+        "source": "pipeline", "note": None, "model": model,
         "players": [player(c, "starter") for c in selection.starters]
                    + [player(c, "bench") for c in selection.bench],
     }
 
 
-def save_picks(live_dir: str, season: str, gameweek: int, deadline: Optional[str], predictions_csv: str,
-               fixtures_by_team: Dict[str, List[Dict[str, Any]]], now: Optional[datetime] = None) -> Optional[str]:
+def save_picks(live_dir: str, season: str, gameweek: int, deadline: Optional[str], predictions: Union[str, Any],
+               fixtures_by_team: Dict[str, List[Dict[str, Any]]], now: Optional[datetime] = None,
+               variant: Optional[str] = None, model: Optional[str] = None) -> Optional[str]:
     """Save the gameweek's pick and predictions, unless the deadline has passed (then the
-    saved pick is final). Returns the JSON path, or None when nothing was written."""
+    saved pick is final). `predictions` is the predictions CSV's path (the live pick reads
+    exactly what the API reads) or a DataFrame in its schema (the shadow's). `variant` SHADOW
+    saves into model_picks/<season>/shadow/; `model` is recorded in the JSON.
+    Returns the JSON path, or None when nothing was written."""
     import pandas as pd
 
     now = now or datetime.now(timezone.utc)
     deadline_at = _parse_time(deadline)
     if deadline_at is not None and now >= deadline_at:
-        logger.info("GW%s deadline has passed; keeping its saved pick", gameweek)
+        logger.info("GW%s deadline has passed; keeping its saved %spick", gameweek, f"{variant} " if variant else "")
         return None
-    df = pd.read_csv(predictions_csv)      # exactly what the API reads
+    df = pd.read_csv(predictions) if isinstance(predictions, str) else predictions
     opponents = {team: [{"team": e["opponent"], "home": bool(e["is_home"])} for e in entries]
                  for team, entries in fixtures_by_team.items()}
     selection, details = ss.predicted_selection(df.to_dict("records"), opponents)
     fixture_ids = {team: [int(e["fixture_id"]) for e in entries] for team, entries in fixtures_by_team.items()}
     picks = build_picks(selection, details, season, gameweek, deadline, fixture_ids,
-                        archived_at=now.isoformat(timespec="seconds"))
-    out_dir = os.path.join(live_dir, PICKS_DIR, season)
+                        archived_at=now.isoformat(timespec="seconds"), model=model)
+    out_dir = os.path.join(live_dir, PICKS_DIR, season, *([variant] if variant else []))
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, _pick_name(gameweek))
     tmp = path[:-5] + "_predictions.csv.tmp"
@@ -129,19 +142,20 @@ def _read_json(path: str) -> Optional[Dict[str, Any]]:
     return ss._cached(("model-picks", path, ss._mtime(path)), load)
 
 
-def load_picks(gameweek: int, season: str = CURRENT_SEASON) -> Optional[Dict[str, Any]]:
-    for d in _dirs(season):
+def load_picks(gameweek: int, season: str = CURRENT_SEASON, variant: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    for d in _dirs(season, variant):
         picks = _read_json(os.path.join(d, _pick_name(gameweek)))
         if picks is not None:
             return picks
     return None
 
 
-def reviewable_gameweeks(season: str = CURRENT_SEASON, now: Optional[datetime] = None) -> List[int]:
-    """Gameweeks with a saved pick whose deadline has passed, ascending."""
+def reviewable_gameweeks(season: str = CURRENT_SEASON, now: Optional[datetime] = None,
+                         variant: Optional[str] = None) -> List[int]:
+    """Gameweeks with a saved pick (of `variant`) whose deadline has passed, ascending."""
     now = now or datetime.now(timezone.utc)
     found = set()
-    for d in _dirs(season):
+    for d in _dirs(season, variant):
         try:
             names = os.listdir(d)
         except OSError:
@@ -151,7 +165,7 @@ def reviewable_gameweeks(season: str = CURRENT_SEASON, now: Optional[datetime] =
                 found.add(int(name[2:-5]))
     out = []
     for gw in sorted(found):
-        picks = load_picks(gw, season) or {}
+        picks = load_picks(gw, season, variant) or {}
         deadline = _parse_time(picks.get("deadline"))
         if deadline is not None and deadline <= now:
             out.append(gw)
@@ -253,6 +267,49 @@ def score_picks(picks: Dict[str, Any], actual: Dict[int, Dict[str, int]], event:
         "starters": xi_rows, "bench": bench_rows,
         "auto_subs": [{"out": o, "in": i} for o, i in subs],
     }
+
+
+# ------------------------------------------------------------------ live vs shadow
+
+def _elements(picks: Dict[str, Any]) -> set:
+    return {p.get("element") for p in picks.get("players") or [] if p.get("element") is not None}
+
+
+def compare_picks(live: Dict[str, Any], shadow: Dict[str, Any], actual: Dict[int, Dict[str, int]],
+                  event: Dict[str, Any], finished_fixtures: Iterable[int]) -> Dict[str, Any]:
+    """One gameweek of the live model's pick against the shadow's, both scored by score_picks
+    (FPL auto-subs and captaincy): counted points, their difference (live - shadow), predicted
+    points, and how many of the 15 players the squads share. `same_run` says whether both picks
+    come from the same prediction run (pipeline.predict_next_gw saves the pair with one
+    archived_at), False when one of them failed to save on a later run and the other is older,
+    None when either has no archived_at."""
+    finished = list(finished_fixtures)
+    a = score_picks(live, actual, event, finished)
+    b = score_picks(shadow, actual, event, finished)
+    stamps = live.get("archived_at"), shadow.get("archived_at")
+    return {
+        "gameweek": a["gameweek"], "status": a["status"],
+        "same_run": stamps[0] == stamps[1] if all(stamps) else None,
+        "live_model": live.get("model"), "shadow_model": shadow.get("model"),
+        "live_points": a["points"], "shadow_points": b["points"], "difference": a["points"] - b["points"],
+        "live_predicted": a["predicted_points"], "shadow_predicted": b["predicted_points"],
+        "shared_players": len(_elements(live) & _elements(shadow)),
+        "fpl_average": a["fpl_average"],
+    }
+
+
+def shadow_comparison(season: str = CURRENT_SEASON, now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+    """compare_picks for every gameweek with both a live and a shadow pick whose deadline has
+    passed, ascending. A gameweek still being played is provisional (status "live")."""
+    live_gws = set(reviewable_gameweeks(season, now))
+    finished = ss.read_meta(season).get("finished_fixtures") or []
+    out = []
+    for gw in reviewable_gameweeks(season, now, variant=SHADOW):
+        if gw not in live_gws:
+            continue
+        out.append(compare_picks(load_picks(gw, season), load_picks(gw, season, SHADOW),
+                                 actual_by_element(gw, season), event_info(gw, season), finished))
+    return out
 
 
 # ------------------------------------------------------------------ endpoint payload

@@ -45,20 +45,30 @@ fi
 
 "${COMPOSE[@]}" up -d --build --remove-orphans
 
+# `python -m <module> [args]` in a one-off backend container. Once deploy/install-daily-job.sh has
+# installed fpl-pipeline, through its lock, so it waits for a running timer job instead of overlapping it.
+pipeline_job() {
+  if [ -x /usr/local/bin/fpl-pipeline ]; then
+    /usr/local/bin/fpl-pipeline "$@"
+  else
+    "${COMPOSE[@]}" run --rm backend python -m "$@"
+  fi
+}
+
 if [ "$load_data" = 1 ]; then
   echo "==> Loading the graph (wipes Neo4j, takes a minute or two)"
-  "${COMPOSE[@]}" run --rm backend python load_data.py
+  pipeline_job load_data
   # The running backend caches the player index and season list built at startup
   "${COMPOSE[@]}" restart backend
 elif [ "$load_fixtures" = 1 ]; then
   echo "==> Loading promoted teams and fixtures"
-  "${COMPOSE[@]}" run --rm backend python load_data.py --fixtures-only
+  pipeline_job load_data --fixtures-only
   "${COMPOSE[@]}" restart backend
 fi
 
 if [ "$run_daily" = 1 ]; then
   echo "==> Running the current-season refresh"
-  "${COMPOSE[@]}" run --rm backend python -m pipeline.daily
+  pipeline_job pipeline.daily
 fi
 
 docker image prune -f >/dev/null

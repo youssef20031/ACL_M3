@@ -1,0 +1,326 @@
+{
+  "version": "v4",
+  "train_seasons": [
+    "2020-21",
+    "2021-22",
+    "2022-23",
+    "2023-24"
+  ],
+  "valid_seasons": [
+    "2024-25"
+  ],
+  "test_seasons": [
+    "2025-26",
+    "2026-27"
+  ],
+  "best_trees": 105,
+  "rows": {
+    "train": 106042,
+    "valid": 27283,
+    "test": 34977
+  },
+  "test": {
+    "2025-26": {
+      "v4": {
+        "rows": 29757,
+        "mae": 0.965,
+        "rmse": 1.901,
+        "spearman": 0.734,
+        "top20_points": 4.73,
+        "captain_points": 7.237
+      },
+      "v4_cop": {
+        "rows": 29757,
+        "mae": 0.958,
+        "rmse": 1.902,
+        "spearman": 0.735,
+        "top20_points": 4.73,
+        "captain_points": 6.868
+      },
+      "last3_avg": {
+        "rows": 29519,
+        "mae": 1.056,
+        "rmse": 2.171,
+        "spearman": 0.724,
+        "top20_points": 3.763,
+        "captain_points": 4.395
+      },
+      "last6_avg": {
+        "rows": 29519,
+        "mae": 1.057,
+        "rmse": 2.098,
+        "spearman": 0.704,
+        "top20_points": 3.912,
+        "captain_points": 4.974
+      },
+      "season_ppg": {
+        "rows": 28913,
+        "mae": 1.06,
+        "rmse": 2.059,
+        "spearman": 0.694,
+        "top20_points": 4.204,
+        "captain_points": 6.216
+      },
+      "fpl_xP": {
+        "rows": 29757,
+        "mae": 1.07,
+        "rmse": 2.372,
+        "spearman": 0.76,
+        "top20_points": 2.657,
+        "captain_points": 2.921
+      },
+      "v4_same_rows_as_xP": {
+        "rows": 29757,
+        "mae": 0.965,
+        "rmse": 1.901,
+        "spearman": 0.734,
+        "top20_points": 4.73,
+        "captain_points": 7.237
+      }
+    },
+    "2026-27": {
+      "v4": {
+        "rows": 5220,
+        "mae": 1.174,
+        "rmse": 2.119,
+        "spearman": 0.696,
+        "top20_points": 4.45,
+        "captain_points": 7.875
+      },
+      "v4_cop": {
+        "rows": 5220,
+        "mae": 1.165,
+        "rmse": 2.119,
+        "spearman": 0.696,
+        "top20_points": 4.45,
+        "captain_points": 7.875
+      },
+      "last3_avg": {
+        "rows": 5083,
+        "mae": 1.339,
+        "rmse": 2.431,
+        "spearman": 0.623,
+        "top20_points": 3.612,
+        "captain_points": 2.0
+      },
+      "last6_avg": {
+        "rows": 5083,
+        "mae": 1.353,
+        "rmse": 2.368,
+        "spearman": 0.598,
+        "top20_points": 3.719,
+        "captain_points": 3.75
+      },
+      "season_ppg": {
+        "rows": 4551,
+        "mae": 1.291,
+        "rmse": 2.412,
+        "spearman": 0.663,
+        "top20_points": 3.779,
+        "captain_points": 3.0
+      }
+    },
+    "all": {
+      "v4": {
+        "rows": 34977,
+        "mae": 0.996,
+        "rmse": 1.935,
+        "spearman": 0.727,
+        "top20_points": 4.682,
+        "captain_points": 7.348
+      },
+      "v4_cop": {
+        "rows": 34977,
+        "mae": 0.989,
+        "rmse": 1.936,
+        "spearman": 0.728,
+        "top20_points": 4.682,
+        "captain_points": 7.043
+      },
+      "last3_avg": {
+        "rows": 34602,
+        "mae": 1.098,
+        "rmse": 2.211,
+        "spearman": 0.706,
+        "top20_points": 3.737,
+        "captain_points": 3.978
+      },
+      "last6_avg": {
+        "rows": 34602,
+        "mae": 1.1,
+        "rmse": 2.14,
+        "spearman": 0.685,
+        "top20_points": 3.878,
+        "captain_points": 4.761
+      },
+      "season_ppg": {
+        "rows": 33464,
+        "mae": 1.091,
+        "rmse": 2.11,
+        "spearman": 0.689,
+        "top20_points": 4.136,
+        "captain_points": 5.705
+      },
+      "fpl_xP": {
+        "rows": 29757,
+        "mae": 1.07,
+        "rmse": 2.372,
+        "spearman": 0.76,
+        "top20_points": 2.657,
+        "captain_points": 2.921
+      },
+      "v4_same_rows_as_xP": {
+        "rows": 29757,
+        "mae": 0.965,
+        "rmse": 1.901,
+        "spearman": 0.734,
+        "top20_points": 4.73,
+        "captain_points": 7.237
+      }
+    }
+  },
+  "input_coverage": {
+    "2020-21": {
+      "odds": 0.865,
+      "snapshots": 0.93,
+      "transfers": 1.0,
+      "ratings": 1.0
+    },
+    "2021-22": {
+      "odds": 0.896,
+      "snapshots": 0.992,
+      "transfers": 1.0,
+      "ratings": 1.0
+    },
+    "2022-23": {
+      "odds": 0.908,
+      "snapshots": 0.932,
+      "transfers": 1.0,
+      "ratings": 1.0
+    },
+    "2023-24": {
+      "odds": 0.897,
+      "snapshots": 0.964,
+      "transfers": 1.0,
+      "ratings": 1.0
+    },
+    "2024-25": {
+      "odds": 0.97,
+      "snapshots": 0.904,
+      "transfers": 1.0,
+      "ratings": 1.0
+    },
+    "2025-26": {
+      "odds": 0.981,
+      "snapshots": 0.274,
+      "transfers": 1.0,
+      "ratings": 1.0
+    },
+    "2026-27": {
+      "odds": 1.0,
+      "snapshots": 0.361,
+      "transfers": 1.0,
+      "ratings": 1.0
+    },
+    "all": {
+      "odds": 0.924,
+      "snapshots": 0.808,
+      "transfers": 1.0,
+      "ratings": 1.0
+    }
+  },
+  "top_features": [
+    [
+      "minutes_r1",
+      5121.138671875
+    ],
+    [
+      "ict_index_r3",
+      728.33642578125
+    ],
+    [
+      "played_r3",
+      586.8411865234375
+    ],
+    [
+      "minutes_r3",
+      558.3321533203125
+    ],
+    [
+      "tr_in_rank",
+      388.6136474609375
+    ],
+    [
+      "snap_news",
+      296.8030090332031
+    ],
+    [
+      "total_points_r3",
+      245.5916290283203
+    ],
+    [
+      "snap_chance",
+      186.3418426513672
+    ],
+    [
+      "rt_cs",
+      179.63922119140625
+    ],
+    [
+      "ict_index_r6",
+      172.3646240234375
+    ],
+    [
+      "season_ppg",
+      170.7718048095703
+    ],
+    [
+      "price",
+      157.04034423828125
+    ],
+    [
+      "played_r6",
+      138.4040069580078
+    ],
+    [
+      "started_r1",
+      134.8325653076172
+    ],
+    [
+      "odds_win",
+      113.06534576416016
+    ]
+  ],
+  "production": {
+    "version": "v4",
+    "trained_at": "2026-10-28T04:30:35+00:00",
+    "seasons": [
+      "2020-21",
+      "2021-22",
+      "2022-23",
+      "2023-24",
+      "2024-25",
+      "2025-26",
+      "2026-27"
+    ],
+    "rows": 168302,
+    "n_trees": 166,
+    "params": {
+      "objective": "reg:squarederror",
+      "tree_method": "hist",
+      "learning_rate": 0.03,
+      "max_depth": 8,
+      "min_child_weight": 40,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 2.0
+    },
+    "input_coverage": {
+      "odds": 0.924,
+      "snapshots": 0.808,
+      "transfers": 1.0,
+      "ratings": 1.0
+    }
+  },
+  "seconds": 18.7
+}

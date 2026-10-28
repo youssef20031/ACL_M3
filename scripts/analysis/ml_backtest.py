@@ -50,6 +50,25 @@ transfermarkt-datasets dump, which has no 2026-27 season: compare those variants
 Bookmaker odds (ml/odds.py, variants odds and odds_close) come from football-data.co.uk, whose
 files aren't committed: run `python -m scripts.data.fetch_odds` first (the workflow does).
 
+Round of 2026-10-27 (winner's curse): each gameweek's top predictions are over-predicted under
+refit and the in-season replay but not under es. refit_noscale refits with the early-stopped tree
+count as is (no scaling for the extra rows); shrink_tail and shrink_tail_pos shrink the upper tail
+of the row predictions, pred - lambda_g x max(0, pred - kappa_g) (TailHistory), with kappa_g and
+lambda_g fitted on the variant's own uncorrected predictions of earlier test folds of the same run,
+protocol and seed (all positions pooled, or per position). Folds and in-season replays therefore run
+in chronological order. The first fold and the first replay have nothing earlier to fit on, so they
+only start the history and aren't scored (they'd equal current and dilute the pooled comparison):
+list one season before the first one to compare. lambda_g and kappa_g are in the results (fold
+seeds' "tail", and "tail_inseason") and in the report.
+
+Round of 2026-10-27 (snapshots): FPL's own availability and set-piece orders before each deadline
+(ml/snapshots.py, from the git history of vaastav's players_raw.csv: data/fpl_snapshots.csv, which
+`python -m scripts.data.fetch_fpl_snapshots` refreshes, as the workflow does for these variants).
+cop multiplies the current model's predictions by the snapshot's chance of playing, as
+production does (a post-prediction hook, applied in every protocol and to the saved predictions);
+avail, sp and snap_cop add the availability and set-piece features. 2025-26 has only 12 snapshots
+and 2026-27 four, so compare them on `--folds 2022-23,2023-24,2024-25`.
+
 Round of 2026-10-27: player identity by FPL code (code_id). The history keys players by name, and
 173 of 1,980 players appear under several spellings, which restarts their form, while four names
 belong to two players. data/player_codes.csv (scripts.data.fetch_player_codes) and the live status
@@ -58,6 +77,12 @@ adds an additive defensive-contribution term: the model learns points without DC
 and features), and dc_alpha x dc_hat (the player's recent DC points shrunk to his position's rate,
 scaled by least squares on the training rows) is added back, so the 2025-26 rule change doesn't
 leave defenders under-predicted.
+
+v4 (2026-10-28, the production model): variant v4 trains on exactly ml.points_model's v4 columns
+(pm.feature_columns("v4"), stored here as *__v4), built by pm.build_features with pm's ExtraInputs
+(players keyed by FPL code, ratings, transfers, odds, availability; the same snapshots as cop) and
+the cop hook on top, as production applies it. "current" stays v3 (pm.V3_FEATURES), so earlier
+variants mean what they did. v4 needs the odds files: fetch them first (as for odds*).
 
 Round of 2026-10-22: fixture-strength products and opponent-adjusted team ratings
 (ml/fixture_strength.py, variants matchup and ratings), transfer-market ranks and price changes
@@ -84,6 +109,7 @@ from ml import market as mk  # noqa: E402
 from ml import odds as od  # noqa: E402
 from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
+from ml import snapshots as sn  # noqa: E402
 from utils.text import normalize_name  # noqa: E402
 
 
@@ -305,43 +331,9 @@ def dc_points_raw(df: pd.DataFrame) -> pd.Series:
 
 # ----------------------------------------------------------------------------- player identity by FPL code
 
-PLAYER_CODES_CSV = os.path.join(ROOT, "data", "player_codes.csv")
-
-
-def load_player_codes(status_csv: str = None, live_season: str = None) -> pd.DataFrame:
-    """(season, element, code): data/player_codes.csv (scripts.data.fetch_player_codes) plus the
-    current season's live status file."""
-    frames = [pd.read_csv(PLAYER_CODES_CSV, usecols=["season", "element", "code"])]
-    if status_csv and os.path.exists(status_csv):
-        frames.append(pd.read_csv(status_csv, usecols=["element", "code"]).assign(season=live_season))
-    return pd.concat(frames, ignore_index=True).drop_duplicates(["season", "element"])
-
-
-def _row_elements(history: pd.DataFrame, live_csv: str = None, live_season: str = None) -> pd.Series:
-    """Each history row's FPL element (pm.load_history drops it), matched on season, name, team
-    and fixture."""
-    keys = ["season", "name", "team", "fixture"]
-    frames = [pd.read_csv(pm.HISTORY_CSV, usecols=["season_x", "name", "team_x", "fixture", "element"],
-                          low_memory=False).rename(columns={"season_x": "season", "team_x": "team"})]
-    if live_csv and os.path.exists(live_csv):
-        frames.append(pd.read_csv(live_csv, usecols=["name", "team", "fixture", "element"]).assign(season=live_season))
-    lookup = pd.concat(frames, ignore_index=True).drop_duplicates(keys)
-    return history[keys].merge(lookup, on=keys, how="left")["element"].set_axis(history.index)
-
-
-def player_identity(rows: pd.DataFrame, codes: pd.DataFrame) -> pd.Series:
-    """One name per player for every row (season, element, name): his name in the latest season
-    with an FPL code, plus " #code" when two players share it. Rows without a code keep theirs."""
-    keyed = rows[["season", "element", "name"]].merge(codes[["season", "element", "code"]],
-                                                       on=["season", "element"], how="left")
-    keyed.index = rows.index
-    has = keyed["code"].notna()
-    latest = keyed[has].sort_values("season", kind="mergesort").groupby("code")["name"].last()
-    shared = latest.duplicated(keep=False).to_numpy()
-    latest[shared] = latest[shared] + " #" + latest.index[shared].astype(int).astype(str)
-    out = keyed["name"].copy()
-    out[has] = keyed.loc[has, "code"].map(latest)
-    return out
+# In ml.points_model since v4 (pm.load_history keeps each row's element)
+load_player_codes = pm.load_player_codes
+player_identity = pm.player_identity
 
 
 # ----------------------------------------------------------------------------- additive DC term
@@ -463,7 +455,7 @@ def add_extra_features(df: pd.DataFrame, transfers: pd.DataFrame = None) -> pd.D
     return df
 
 
-CURRENT = pm.feature_columns()
+CURRENT = list(pm.V3_FEATURES)
 NEW_2026_10 = [f"{c}_r1" for c in pm.LAST_MATCH_STATS] + [f"{p}_{c}20" for p in ("team", "opp") for c in pm.TEAM_STATS]
 PREVIOUS = [c for c in CURRENT if c not in NEW_2026_10]
 G_P90 = [f"{s}_p90_w{w}" for w in P90_WINDOWS for s in P90_STATS] + [f"minutes_sum_w{w}" for w in P90_WINDOWS]
@@ -483,6 +475,8 @@ G_ODDS_CLOSE = od.CLOSING_FEATURES
 G_MATCHUP = fs.MATCHUP_FEATURES
 G_RATINGS = fs.RATING_FEATURES
 G_TRANSFERS = mk.FEATURES
+G_SNAP_AVAIL = sn.AVAIL_FEATURES
+G_SP = sn.SP_FEATURES
 SUBSETS = ["sub_promoted_early", "sub_efl_player_early", "sub_new_manager"] + oc.SUBSETS + ["sub_after_absence",
                                                                                             "sub_gkdef"]
 PICK_SUBSETS = ["sub_euro_club", "sub_gkdef"]   # top-20 picks among these players only
@@ -499,9 +493,11 @@ SQUADS = True             # run/score --no-squads skips the squad solves
 ENS = -1                  # `seed` of a seed-averaged table in the .gw.parquet files
 EXTRA =G_P90 + G_R10 + G_DC + G_MGR + G_ROT + G_EFL_TEAM + G_EFL_PLAYER + G_OC_SCHED + G_OC_PLAYER + G_OC_STATUS
 EXTRA += G_ABS_FORM + G_ABS_FLAGS + G_ODDS + G_ODDS_CLOSE + G_MATCHUP + G_RATINGS + G_TRANSFERS
+EXTRA += G_SNAP_AVAIL + G_SP + [sn.COP]
 CURRENT_C = [f"{c}__c" for c in CURRENT]     # players keyed by FPL code
 CURRENT_D = [f"{c}__d" for c in CURRENT]     # ... and built from points without DC points
 CODE_COLS = CURRENT_C + CURRENT_D + ["total_points_d", "dc_pts", "dc_hat"]
+V4 = [f"{c}__v4" for c in pm.feature_columns("v4")]   # the production model's columns, built by pm
 KEEP =["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
         "clean_sheets"]
 
@@ -517,13 +513,29 @@ def cmd_features(args) -> None:
             status_csv = os.path.join("data", "live", meta["files"]["status"])
     history = pm.load_history(live_csv=live_csv, live_season=live_season)
     history["row_id"] = np.arange(len(history))
-    history["element"] = _row_elements(history, live_csv, live_season)
-    identity = player_identity(history, load_player_codes(status_csv, live_season))
+    # The production model's inputs, loaded as train_points_v4 loads them (ratings from the full history)
+    extras = pm.load_extra_inputs(live_dir=os.path.join("data", "live"), season=live_season, status_csv=status_csv,
+                                  ratings_prior=False)
+    identity = player_identity(history, extras.codes)
     feats = pm.build_features(history)
     print(f"model features: {len(feats)} rows in {time.time() - t0:.0f}s", flush=True)
     n = len(feats)
     feats = add_extra_features(feats, mk.load_transfers(live_csv=live_csv, live_season=live_season))
     feats = feats.join(code_keyed_features(history, identity), on="row_id")
+    v4 = pm.build_features(history, extras=extras).set_index("row_id")[pm.feature_columns("v4")]
+    feats = feats.join(v4.rename(columns=lambda c: f"{c}__v4"), on="row_id")
+    print(f"v4 features in {time.time() - t0:.0f}s", flush=True)
+    # FPL's availability and set-piece orders before each deadline, by the season's element: the
+    # same snapshots as v4's (vaastav's history, our own archive, the status file)
+    snaps = extras.snapshots
+    snap = sn.snapshot_features(feats, snaps, with_status=True)
+    print(f"FPL snapshots: {len(snaps)} rows, coverage by season {sn.coverage(feats, snaps, snap)}", flush=True)
+    if len(snaps):
+        # If the snapshots were taken after the deadline, or described the previous gameweek,
+        # players they list as out would often play
+        print(f"share who played by pre-deadline status, (player-gameweeks, share): "
+              f"{sn.timing_check(feats, snap)}", flush=True)
+    feats = feats.join(snap.drop(columns="snap_status"))
     assert len(feats) == n, "a merge duplicated rows"
     renamed = history.assign(identity=identity.to_numpy()).groupby("identity")["name"].nunique()
     print(f"code-keyed features in {time.time() - t0:.0f}s: {history['element'].notna().mean():.3f} of rows "
@@ -531,7 +543,7 @@ def cmd_features(args) -> None:
           f"whose history had several names", flush=True)
     feats["name"] = identity.reindex(feats["row_id"]).to_numpy()   # one name per player in every table
     feats = feats[feats["total_points"].notna()]
-    feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS + CODE_COLS))].copy()
+    feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS + CODE_COLS + V4))].copy()
     for c in feats.columns:
         if feats[c].dtype == "float64":
             feats[c] = feats[c].astype("float32")
@@ -599,7 +611,35 @@ VARIANTS = {
     # is added back
     "code_id": {"features": CURRENT_C},
     "code_dc": {"features": CURRENT_D, "target": "total_points_d", "dc_term": True},
+    # 2026-10-27: odds on top of the ratings and transfer features (compare with ratings_transfers),
+    # and the 1X2 part alone, which is all a free odds feed serves for the Premier League
+    "odds_rt": {"features": CURRENT + G_RATINGS + G_TRANSFERS + G_ODDS},
+    "odds_1x2_rt": {"features": CURRENT + G_RATINGS + G_TRANSFERS + G_ODDS[:2]},
+    # 2026-10-27: FPL's availability and set-piece orders before each deadline (ml/snapshots.py,
+    # vaastav's players_raw.csv history). cop is the current model times the snapshot's chance of
+    # playing, as production scales its predictions: the reference the availability features
+    # (avail, avail_cop) have to beat. sp adds the penalty, corner and free-kick takers.
+    "cop": {"features": CURRENT, "post": "cop"},
+    "avail": {"features": CURRENT + G_SNAP_AVAIL},
+    "avail_cop": {"features": CURRENT + G_SNAP_AVAIL, "post": "cop"},
+    "sp": {"features": CURRENT + G_SP},
+    "sp_cop": {"features": CURRENT + G_SP, "post": "cop"},
+    "snap_cop": {"features": CURRENT + G_SNAP_AVAIL + G_SP, "post": "cop"},
+    # 2026-10-27: the winner's curse. Each gameweek's top 20 by prediction are over-predicted under
+    # refit (+0.23) and inseason (+0.33) but not under es, at ranks 2-20 and most for FWD and GK
+    # (calibration slope 0.72-0.79 among their top players), while a uniform shift or scale can't
+    # change the Team of the Week's picks. refit_noscale refits with the early-stopped tree count
+    # unscaled; shrink_tail(_pos) shrink the upper tail, fitted on earlier test folds (TailHistory)
+    "refit_noscale": {"scale_trees": False},
+    "shrink_tail": {"tail": "all"},
+    "shrink_tail_pos": {"tail": "position"},
+    # 2026-10-28: the production model, v4 (ml.points_model's own columns and code path; players
+    # keyed by code, ratings, transfers, odds and availability), times the chance of playing
+    "v4": {"features": V4, "post": "cop"},
 }
+
+# Columns a post-prediction hook needs values in (cmd_run checks them like a variant's features)
+POST_NEEDS = {"cop": ["snap_age_days"]}
 
 
 def _target(frame: pd.DataFrame, spec: dict) -> pd.Series:
@@ -610,6 +650,99 @@ def _target(frame: pd.DataFrame, spec: dict) -> pd.Series:
 def _eval_target(frame: pd.DataFrame, spec: dict) -> pd.Series:
     """Early stopping's target: the model's own, not clipped."""
     return frame[spec.get("target", "total_points")]
+
+
+def _post(frame: pd.DataFrame, pred, spec: dict) -> np.ndarray:
+    """The variant's post-prediction hook, applied to every protocol's test predictions: "cop"
+    multiplies them by the snapshot's chance of playing (ml/snapshots.cop_factor, which is
+    pipeline.predict_next_gw.availability_factor; 1 without a snapshot), as production does."""
+    pred = np.asarray(pred, dtype=float)
+    post = spec.get("post")
+    if not post:
+        return pred
+    if post == "cop":
+        return pred * frame[sn.COP].to_numpy(dtype=float)
+    raise ValueError(f"unknown post hook {post!r}")
+
+
+# Tail shrink (variant spec "tail": "all" or "position"): pred - lambda_g x max(0, pred - kappa_g),
+# applied to the row predictions before _post, squads, the 0-floor and double-gameweek sums. It's
+# fitted on the variant's own uncorrected predictions of earlier test folds (same protocol and
+# seed), never on the fold it corrects, and never touches training targets, features or early stopping.
+TAIL_Q = 0.9        # kappa_g: this quantile of the fitting rows' predictions in group g
+TAIL_MAX = 0.6      # lambda_g's upper clip
+
+
+def tail_params(pred, y, groups) -> dict:
+    """{group: {"kappa", "lambda", "rows"}} fitted on (pred, y) rows: kappa is the TAIL_Q quantile of
+    the group's predictions, lambda the least-squares slope through zero of the over-prediction
+    pred - y on h = max(0, pred - kappa), clipped to [0, TAIL_MAX]."""
+    pred, y, groups = np.asarray(pred, dtype=float), np.asarray(y, dtype=float), np.asarray(groups).astype(str)
+    ok = np.isfinite(pred) & np.isfinite(y)
+    out = {}
+    for g in sorted(set(groups[ok])):
+        m = ok & (groups == g)
+        kappa = float(np.quantile(pred[m], TAIL_Q))
+        h = np.maximum(0.0, pred[m] - kappa)
+        hh = float(np.sum(h * h))
+        lam = float(np.clip(np.sum(h * (pred[m] - y[m])) / hh, 0.0, TAIL_MAX)) if hh > 0 else 0.0
+        out[g] = {"kappa": kappa, "lambda": lam, "rows": int(m.sum())}
+    return out
+
+
+def tail_shrink(pred, groups, params: dict) -> np.ndarray:
+    """pred - lambda_g x max(0, pred - kappa_g); rows of a group without parameters are unchanged."""
+    pred = np.array(pred, dtype=float)
+    groups = np.asarray(groups).astype(str)
+    for g, q in params.items():
+        m = groups == g
+        pred[m] -= q["lambda"] * np.maximum(0.0, pred[m] - q["kappa"])
+    return pred
+
+
+class TailHistory:
+    """A tail-shrink variant's uncorrected test predictions with their actuals, by (protocol, seed),
+    in the order the folds ran. correct() fits the shrink on the folds already added, applies it,
+    and only then adds this fold, so a fold's own actuals never reach its correction; the first fold
+    has no fitting rows, so lambda = 0."""
+
+    def __init__(self, by: str):
+        if by not in ("all", "position"):
+            raise ValueError(f"unknown tail grouping {by!r}")
+        self.by, self.seen = by, {}
+
+    def groups(self, frame: pd.DataFrame) -> np.ndarray:
+        return np.full(len(frame), "all") if self.by == "all" else frame["position"].astype(str).to_numpy()
+
+    def empty(self, proto: str) -> bool:
+        """No fold of this protocol added yet (its first fold only starts the history)."""
+        return not any(k[0] == proto for k in self.seen)
+
+    def params(self, key: tuple) -> dict:
+        past = self.seen.get(key, [])
+        return tail_params(*(np.concatenate(a) for a in zip(*past))) if past else {}
+
+    def shrink(self, key: tuple, frame: pd.DataFrame, pred) -> np.ndarray:
+        """`pred` corrected with the shrink fitted on the folds added so far (nothing is added)."""
+        return tail_shrink(pred, self.groups(frame), self.params(key))
+
+    def correct(self, key: tuple, frame: pd.DataFrame, pred, spec: dict) -> tuple:
+        """(corrected predictions, {"fit_rows", "groups": tail_params}) for `frame`'s rows."""
+        pred, groups = np.asarray(pred, dtype=float), self.groups(frame)
+        past = list(self.seen.get(key, []))
+        params = self.params(key)
+        out = tail_shrink(pred, groups, params)
+        info = {"fit_rows": int(sum(len(p) for p, _, _ in past)), "groups": params}
+        self.seen.setdefault(key, []).append((pred.copy(), _eval_target(frame, spec).to_numpy(dtype=float), groups))
+        return out, info
+
+
+def _refit_trees(best: int, rows: int, train_rows: int, spec: dict) -> int:
+    """A refit's tree count: the early-stopped count scaled by the extra rows (at most 4000), or as
+    is when the variant sets "scale_trees": False (refit_noscale)."""
+    if spec.get("scale_trees", True):
+        return min(int(best * rows / train_rows), 4000)
+    return int(best)
 
 
 def _dc_add(frame: pd.DataFrame, train: pd.DataFrame, spec: dict) -> tuple:
@@ -663,9 +796,10 @@ def _hurdle_fold(tr, va, te, both, cols, p) -> tuple:
     return pe, pr, info
 
 
-def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool) -> tuple:
+def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool, adjust=None) -> tuple:
     """es and refit predictions of one fold and seed, plus run info; with `curve`, also the test
-    metrics along the early-stopping fit and the refit's top features."""
+    metrics along the early-stopping fit (its predictions passed through `adjust`, the es tail
+    shrink, when given) and the refit's top features."""
     import xgboost as xgb
     m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE_FIT, **p)
     m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
@@ -674,7 +808,7 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool) -> tuple:
     best = _patience_stop(valid, PATIENCE)
     dc_es, alpha_es = _dc_add(te, tr, spec)
     pe = m.predict(te[cols], iteration_range=(0, best + 1)) + dc_es
-    n_refit = min(int((best + 1) * len(both) / len(tr)), 4000)
+    n_refit = _refit_trees(best + 1, len(both), len(tr), spec)
     m2 = xgb.XGBRegressor(n_estimators=n_refit, **p)
     m2.fit(both[cols], _target(both, spec), sample_weight=_weights(both, spec.get("halflife")), verbose=False)
     dc_rf, alpha_rf = _dc_add(te, both, spec)
@@ -688,7 +822,8 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool) -> tuple:
         curve_metrics = {}
         for k in CURVE_POINTS:
             if k <= len(valid):
-                t = gw_table(te, m.predict(te[cols], iteration_range=(0, k)) + dc_es, squads=False)
+                raw = m.predict(te[cols], iteration_range=(0, k)) + dc_es
+                t = gw_table(te, _post(te, adjust(raw) if adjust else raw, spec), squads=False)
                 curve_metrics[k] = {**summarize(t), "valid_rmse": float(valid[k - 1])}
         info["test_curve"] = curve_metrics
         gain = m2.get_booster().get_score(importance_type="gain")
@@ -942,7 +1077,8 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -
     params = spec.get("params", P)
     present = [s for s in SEASONS if s in set(feats["season"])]
     res = {"variant": name, "features": len(cols), "folds": {}}
-    for test_season in TEST_SEASONS:
+    tail = TailHistory(spec["tail"]) if spec.get("tail") else None
+    for test_season in sorted(TEST_SEASONS):        # chronological: a tail shrink fits on earlier folds
         if test_season not in present:
             continue
         pool = [s for s in present if s < test_season]
@@ -955,16 +1091,25 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -
         both = pd.concat([tr, va])
         preds = {"es": {}, "refit": {}}
         fold = {"train": train_s, "valid": valid_s, "rows": [len(tr), len(va), len(te)], "seeds": {}}
+        burn_in = tail is not None and tail.empty("refit")
         for seed in SEEDS:
             t0 = time.time()
             p = {**params, "random_state": seed}
             if spec.get("model") == "hurdle":
                 pe, pr, info = _hurdle_fold(tr, va, te, both, cols, p)
             else:
-                pe, pr, info = _xgb_fold(tr, va, te, both, cols, p, spec, curve=seed == SEEDS[0])
+                adjust = (lambda raw, key=("es", seed): tail.shrink(key, te, raw)) if tail is not None else None
+                pe, pr, info = _xgb_fold(tr, va, te, both, cols, p, spec, curve=seed == SEEDS[0], adjust=adjust)
             info["secs"] = round(time.time() - t0, 1)
-            preds["es"][seed], preds["refit"][seed] = pe, pr
+            if tail is not None:
+                pe, tail_es = tail.correct(("es", seed), te, pe, spec)
+                pr, tail_rf = tail.correct(("refit", seed), te, pr, spec)
+                info["tail"] = {"es": tail_es, "refit": tail_rf}
+            preds["es"][seed], preds["refit"][seed] = _post(te, pe, spec), _post(te, pr, spec)
             fold["seeds"][seed] = info
+        if burn_in:     # uncorrected, so the same as without the shrink: it only starts the history
+            print(f"  {name} {test_season}: tail shrink history started, fold not scored", flush=True)
+            continue
         for proto in ("es", "refit"):
             fold[proto], per_seed = score_unit(te, preds[proto], (name, proto, test_season), sink)
             for seed, summary in per_seed.items():
@@ -972,10 +1117,14 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -
         for seed, info in fold["seeds"].items():
             print(_seed_line(name, test_season, seed, info), flush=True)
         res["folds"][test_season] = fold
-    for season in INSEASON:
+    for season in sorted(INSEASON):
         if season in present:
-            res.setdefault("inseason", {})[season] = run_inseason(feats, spec, season, cols, params, present,
-                                                                  name, sink)
+            ins = run_inseason(feats, spec, season, cols, params, present, name, sink, tail)
+            if ins is None:         # the tail shrink's first replay: not scored
+                continue
+            if "tail" in ins:
+                res.setdefault("tail_inseason", {})[season] = ins.pop("tail")
+            res.setdefault("inseason", {})[season] = ins
     return res
 
 
@@ -983,10 +1132,12 @@ INSEASON: tuple = ()
 INSEASON_EVERY = 5
 
 
-def run_inseason(feats, spec, season, cols, params, present, name="", sink=None) -> dict:
+def run_inseason(feats, spec, season, cols, params, present, name="", sink=None, tail=None) -> dict | None:
     """Replays the weekly retrain through `season`: every INSEASON_EVERY gameweeks the model is
     refit on all earlier seasons plus this season's finished gameweeks and predicts the next block.
-    The tree count comes from early stopping on the previous season, as in train_points_v3."""
+    The tree count comes from early stopping on the previous season, as in train_points_v3. A tail
+    shrink (`tail`, a TailHistory) is fitted once per season on earlier replayed seasons; the first
+    replay only starts its history, isn't scored, and returns None."""
     import xgboost as xgb
 
     pool = [s for s in present if s < season]
@@ -997,7 +1148,14 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None)
     va = feats[feats["season"] == valid_s]
     cur = feats[feats["season"] == season]
     gws = sorted(cur["GW"].unique())
-    preds = {}
+    preds, tails = {}, {}
+    burn_in = tail is not None and tail.empty("inseason")
+
+    def finish(seed, raw):
+        if tail is not None:
+            raw, tails[seed] = tail.correct(("inseason", seed), cur, raw, spec)
+        preds[seed] = _post(cur, raw, spec)
+
     for seed in SEEDS:
         p = {**params, "random_state": seed}
         if spec.get("model") == "hurdle":
@@ -1011,7 +1169,7 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None)
                 scale = len(seen) / len(tr)
                 cls, reg = _hurdle_fit(seen, cols, p, min(int(n_cls * scale), 4000), min(int(n_reg * scale), 4000))
                 out.loc[block.index] = _hurdle_predict(cls, reg, block, cols)
-            preds[seed] = out.to_numpy()
+            finish(seed, out.to_numpy())
             print(f"  inseason {season} seed {seed}: best {n_reg}/{n_cls}", flush=True)
             continue
         m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
@@ -1024,14 +1182,20 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None)
             block = cur[(cur["GW"] >= start) & (cur["GW"] < start + INSEASON_EVERY)]
             if block.empty:
                 continue
-            n = min(int(best * len(seen) / len(tr)), 4000)
+            n = _refit_trees(best, len(seen), len(tr), spec)
             m2 = xgb.XGBRegressor(n_estimators=n, **p)
             m2.fit(seen[cols], _target(seen, spec), sample_weight=_weights(seen, spec.get("halflife")), verbose=False)
             out.loc[block.index] = m2.predict(block[cols]) + _dc_add(block, seen, spec)[0]
-        preds[seed] = out.to_numpy()
+        finish(seed, out.to_numpy())
         print(f"  inseason {season} seed {seed}: best {best}", flush=True)
+    if burn_in:
+        print(f"  inseason {season}: tail shrink history started, not scored", flush=True)
+        return None
     unit, per_seed = score_unit(cur, preds, (name, "inseason", season), sink)
-    return {**unit, "seeds": [per_seed[s] for s in unit["seed_list"]]}
+    res = {**unit, "seeds": [per_seed[s] for s in unit["seed_list"]]}
+    if tail is not None:
+        res["tail"] = tails
+    return res
 
 
 def parse_seeds(text: str) -> list:
@@ -1061,7 +1225,9 @@ def cmd_run(args) -> None:
     names = args.variants.split(",")
     for name in names:
         # e.g. odds features when the odds weren't fetched (the workflow fetches them only for odds* variants)
-        empty = [c for c in VARIANTS[name].get("features", CURRENT) if not feats[c].notna().any()]
+        spec = VARIANTS[name]
+        needs = spec.get("features", CURRENT) + POST_NEEDS.get(spec.get("post"), [])
+        empty = [c for c in dict.fromkeys(needs) if not feats[c].notna().any()]
         if empty:
             raise SystemExit(f"variant {name}: no values in {', '.join(empty)}; was its data fetched?")
     out, sink = [], Sink()
@@ -1116,6 +1282,8 @@ def _training_info(variant: str, paths: list) -> dict:
             for season, f in r.get("folds", {}).items():
                 fold = res["folds"].setdefault(season, {k: v for k, v in f.items() if k not in ("seeds", "es", "refit")})
                 fold.setdefault("seeds", {}).update(f.get("seeds", {}))
+            for season, by_seed in r.get("tail_inseason", {}).items():
+                res.setdefault("tail_inseason", {}).setdefault(season, {}).update(by_seed)
     return res
 
 
@@ -1431,6 +1599,28 @@ def _load_results(paths) -> tuple:
     return results, tables, solves
 
 
+def _tail_lines(results: dict) -> list:
+    """Report rows of the tail-shrink parameters per variant, protocol and fold (seeds pooled)."""
+    rows = []
+    for name, r in results.items():
+        by = {}
+        for s, f in r.get("folds", {}).items():
+            for info in f.get("seeds", {}).values():
+                for proto, t in info.get("tail", {}).items():
+                    by.setdefault((proto, s), []).append(t)
+        for s, by_seed in r.get("tail_inseason", {}).items():
+            by.setdefault(("inseason", s), []).extend(by_seed.values())
+        for (proto, s), infos in sorted(by.items()):
+            cells = []
+            for g in sorted({g for t in infos for g in t["groups"]}):
+                lam = [t["groups"][g]["lambda"] for t in infos if g in t["groups"]]
+                kap = [t["groups"][g]["kappa"] for t in infos if g in t["groups"]]
+                cells.append(f"{g} {np.mean(lam):.3f} [{min(lam):.3f}, {max(lam):.3f}] k {np.mean(kap):.2f}")
+            rows.append(f"| {name} | {proto} | {s} | {len(infos)} | {max(t['fit_rows'] for t in infos)} | "
+                        f"{'; '.join(cells) or 'none'} |")
+    return rows
+
+
 def cmd_report(args) -> None:
     results, tables, solves = _load_results(args.paths)
     lines = []
@@ -1525,6 +1715,13 @@ def cmd_report(args) -> None:
         for name, (secs, failed) in solves.items():
             lines.append(f"- **{name}**: {len(secs)} squads, {failed} infeasible, mean {np.nanmean(secs):.2f}s, "
                          f"max {np.nanmax(secs):.1f}s, {int((secs >= 0.98 * SQ_TIME_LIMIT).sum())} at the limit")
+    tail_lines = _tail_lines(results)
+    if tail_lines:
+        lines.append("\n## Tail shrink: lambda mean [min, max] over seeds, kappa mean, per group "
+                     "(fitted on earlier folds; the first fold and replay only start the history, unscored)\n")
+        lines.append("| variant | protocol | fold | seeds | fitting rows | groups |")
+        lines.append("|---|---|---|---|---|---|")
+        lines += tail_lines
     lines.append("\n## Seed spread (refit top20 / rmse per seed)\n")
     for name, r in results.items():
         cells = []

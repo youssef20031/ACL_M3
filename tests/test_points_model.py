@@ -45,7 +45,7 @@ def history():
 def test_one_feature_row_per_input_row(history):
     feats = pm.build_features(history)
     assert len(feats) == len(history)  # v2's opponent merges multiplied rows ~20x
-    assert set(pm.feature_columns()) <= set(feats.columns)
+    assert set(pm.V3_FEATURES) <= set(feats.columns)
 
 
 def test_form_uses_only_earlier_gameweeks(history):

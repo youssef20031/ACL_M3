@@ -628,7 +628,7 @@ export interface ModelReviewResponse {
   auto_subs: Array<{ out: string; in: string }>;
 }
 
-// --- Model insights: SHAP and LIME explanations of the v3 points model's next-gameweek predictions.
+// --- Model insights: SHAP and LIME explanations of the points model's (v4) next-gameweek predictions.
 
 /** One model feature. `importance` = mean |SHAP| in points over this gameweek's player-fixture rows. */
 export interface ExplainFeature {
@@ -671,7 +671,7 @@ export interface ExplainModelInfo {
   rows: number | null;
   /** live = the weekly retrained copy on the server; bundled = the model shipped with the code. */
   source: 'live' | 'bundled';
-  /** Keys like 'v3', 'last3_avg', 'last6_avg', 'season_ppg'. */
+  /** The model's own metrics under its `version` ('v4'), then 'last3_avg', 'last6_avg', 'season_ppg'. */
   test_metrics: Record<string, ExplainMetrics>;
 }
 

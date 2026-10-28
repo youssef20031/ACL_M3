@@ -20,6 +20,9 @@ Writes to LIVE_DATA_DIR (default data/live):
   meta.json                   season, finished fixtures included, timestamps, and per gameweek
                               its deadline, whether it's finished and FPL's average and
                               highest manager score (`events`)
+  odds/                       football-data.co.uk's bookmaker odds for the v4 points model
+                              (refresh_odds, called by pipeline.predict_next_gw and
+                              pipeline.retrain, not by run(); $ODDS_DIR overrides the folder)
 
 Only fixtures FPL marks `finished` (final, bonus confirmed) are included, so rows never
 change after they're written.
@@ -28,8 +31,9 @@ import argparse
 import json
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+import shutil
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
@@ -297,6 +301,86 @@ def run(out_dir: str = LIVE_DATA_DIR, full: bool = False, status_only: bool = Fa
     finally:
         if own_client:
             client.close()
+
+
+# ------------------------------------------------------------------ bookmaker odds (v4 model)
+
+ODDS_FIRST_SEASON = 2020                # the first season the v4 model trains on
+ODDS_MIN_AGE = timedelta(minutes=30)    # a file fetched more recently isn't downloaded again
+
+
+def odds_dir(live_dir: str = LIVE_DATA_DIR) -> str:
+    """Where football-data.co.uk's files live: $ODDS_DIR if set, else LIVE_DATA_DIR/odds (on the
+    VM's data volume, next to the files they're used with)."""
+    return os.getenv("ODDS_DIR") or os.path.join(live_dir, "odds")
+
+
+def odds_seasons(season: str) -> List[str]:
+    """2020-21 .. `season`."""
+    return [f"{y}-{str(y + 1)[2:]}" for y in range(ODDS_FIRST_SEASON, int(season[:4]) + 1)]
+
+
+def _fetch_checked(fetch: Callable[[str], str], directory: str) -> str:
+    """Run one of ml.odds' fetchers into a staging folder and move its file into `directory` only
+    if ml.odds can read it, so an error page or a changed format never replaces a good file."""
+    from ml import odds as od
+
+    staging = os.path.join(directory, ".staging")
+    shutil.rmtree(staging, ignore_errors=True)
+    try:
+        path = fetch(staging)
+        od.load_odds(staging)       # raises on a file it can't parse
+        final = os.path.join(directory, os.path.basename(path))
+        os.replace(path, final)
+        return final
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def refresh_odds(live_dir: str, season: str, fixtures: bool = True,
+                 now: Optional[datetime] = None) -> Dict[str, str]:
+    """Bring odds_dir(live_dir) up to date for the v4 points model: the current season's file and
+    the upcoming fixtures.csv on every call unless fetched within ODDS_MIN_AGE, and each earlier
+    season's file once (again if that copy predates the season's end, July of its second year).
+    So a normal run makes two small requests, and the first one also fetches the past seasons,
+    which the weekly retrain needs.
+
+    Never raises: a failed download is logged and keeps the previous file (or none: the odds
+    features are then NaN). Returns {file: "fetched" | "fresh" | "failed: ..."}; past seasons
+    that are already final aren't listed."""
+    from ml import odds as od
+
+    now = now or datetime.now(timezone.utc)
+    directory = odds_dir(live_dir)
+    try:
+        os.makedirs(directory, exist_ok=True)
+    except OSError as exc:   # e.g. $ODDS_DIR on a read-only mount: predict with what's there
+        logger.warning("Can't create the odds folder %s: %s", directory, exc)
+        return {"odds_dir": f"failed: {exc}"[:200]}
+    jobs = []   # (file name, fetcher, keep the copy if modified after this time)
+    for s in odds_seasons(season):
+        if s == season:
+            keep_after = now - ODDS_MIN_AGE
+        else:
+            keep_after = datetime(int(s[:4]) + 1, 7, 1, tzinfo=timezone.utc)
+        jobs.append((f"E0_{od.season_code(s)}.csv", lambda d, s=s: od.fetch_season(s, d), keep_after, s == season))
+    if fixtures:
+        jobs.append((od.FIXTURES_FILE, od.fetch_fixtures, now - ODDS_MIN_AGE, True))
+
+    result: Dict[str, str] = {}
+    for name, fetch, keep_after, report in jobs:
+        path = os.path.join(directory, name)
+        if os.path.exists(path) and os.path.getmtime(path) >= keep_after.timestamp():
+            if report:
+                result[name] = "fresh"
+            continue
+        try:
+            _fetch_checked(fetch, directory)
+            result[name] = "fetched"
+        except Exception as exc:  # noqa: BLE001 - odds are optional inputs
+            logger.warning("Couldn't fetch the odds file %s: %s", name, exc)
+            result[name] = f"failed: {exc}"[:200]
+    return result
 
 
 def main() -> int:
