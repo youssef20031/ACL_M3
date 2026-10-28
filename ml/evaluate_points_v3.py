@@ -1464,6 +1464,10 @@ def main() -> int:
                  "season_roles": roles, "live_csv": live_csv}
     if extras is not None:
         m["data"]["input_coverage"] = tp.input_coverage(feats)
+        gaps = tp.odds_gaps(m["data"]["input_coverage"])   # the same guard as training
+        if gaps:
+            raise RuntimeError(f"too few rows with odds ({', '.join(f'{s}: {c:.0%}' for s, c in gaps.items())}): "
+                               f"fetch them into ODDS_DIR first (python -m scripts.data.fetch_odds)")
 
     # ---- main model: pm.fit, exactly as training
     model = pm.fit(train, valid, cols=cols)

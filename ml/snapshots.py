@@ -138,12 +138,15 @@ def snapshot_windows(deadlines: pd.DataFrame, snaps: pd.DataFrame) -> pd.DataFra
                              captured_at=commits["captured_at"].astype(_UTC)).sort_values("captured_at")
     d = deadlines.assign(season=deadlines["season"].astype(str),
                          deadline=deadlines["deadline"].astype(_UTC)).sort_values("deadline")
-    if commits.empty:
-        got = d.assign(sha=np.nan, captured_at=pd.NaT)
+    known = d["deadline"].notna()   # none for a gameweek without kickoff times yet
+    if commits.empty or not known.any():
+        got = d.assign(sha=np.nan, captured_at=pd.Series(pd.NaT, index=d.index, dtype=_UTC))
     else:
         # the latest snapshot captured strictly before the deadline, within the season
-        got = pd.merge_asof(d, commits, left_on="deadline", right_on="captured_at", by="season",
+        got = pd.merge_asof(d[known], commits, left_on="deadline", right_on="captured_at", by="season",
                             allow_exact_matches=False, direction="backward")
+        unknown = d[~known].assign(sha=np.nan, captured_at=pd.Series(pd.NaT, index=d.index[~known], dtype=_UTC))
+        got = pd.concat([got, unknown], ignore_index=True) if len(unknown) else got
     stale = got["captured_at"].notna() & got["prev_deadline"].notna() & (got["captured_at"] <= got["prev_deadline"])
     got["stale"] = stale
     got.loc[stale, "sha"] = np.nan

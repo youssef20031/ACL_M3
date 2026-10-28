@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 REPORT_PATH = os.path.join("ml", "models", "points_v3_report.json")
 TRAIN_SEASONS = ["2020-21", "2021-22", "2022-23", "2023-24"]
 VALID_SEASONS = ["2024-25"]
-MIN_ODDS_COVERAGE = 0.5   # v4: share of training rows with pre-deadline odds (about 0.93 with every file)
+# v4: share of rows with pre-deadline odds, overall and in every finished season (odds_gaps; about
+# 0.87-0.91 per season to 2023-24 and 0.97+ since, with every file)
+MIN_ODDS_COVERAGE = 0.5
 
 
 def report_path_for(version: str) -> str:
@@ -67,6 +69,17 @@ def input_coverage(feats: pd.DataFrame) -> dict:
     out = have.groupby(feats["season"]).mean().round(3).to_dict(orient="index")
     out["all"] = have.mean().round(3).to_dict()
     return out
+
+
+def odds_gaps(coverage: dict) -> dict:
+    """{season: share of rows with odds} of the seasons under MIN_ODDS_COVERAGE, from input_coverage,
+    plus "all" when the whole table is. The latest season (the one in progress) is left out, since
+    its file can lag at the start of a season; a finished one without odds means a failed download,
+    which would otherwise train that season as if no prices existed."""
+    seasons = sorted(s for s in coverage if s != "all")
+    check = {s: coverage[s] for s in seasons[:-1]}
+    check["all"] = coverage["all"]
+    return {s: c["odds"] for s, c in check.items() if c.get("odds", 0.0) < MIN_ODDS_COVERAGE}
 
 
 def load_training_features(version: str = "v3") -> pd.DataFrame:
@@ -100,9 +113,14 @@ def train_and_report(model_path: Optional[str] = None, meta_path: Optional[str] 
     if version != "v3":
         coverage = input_coverage(feats)
         logger.info("Input coverage: %s", coverage)
-        if coverage["all"]["odds"] < MIN_ODDS_COVERAGE:
-            raise RuntimeError(f"only {coverage['all']['odds']:.0%} of rows have odds: fetch them into "
-                               f"ODDS_DIR first (python -m scripts.data.fetch_odds)")
+        gaps = odds_gaps(coverage)
+        if gaps:
+            raise RuntimeError(f"too few rows with odds ({', '.join(f'{s}: {c:.0%}' for s, c in gaps.items())}): "
+                               f"fetch them into ODDS_DIR first (python -m scripts.data.fetch_odds)")
+    # Only what training and the report use: the slices below copy the table, and the weekly
+    # retrain runs next to the API and Neo4j on a 4 GB VM
+    keep = dict.fromkeys(["season", "GW", pm.PLAYER_KEY, "total_points", "xP", "cop_factor"] + cols)
+    feats = feats[[c for c in keep if c in feats.columns]]
     # Double gameweeks are summed per player (pm.evaluate groups by name): one key per player
     feats = feats.assign(name=feats[pm.PLAYER_KEY])
 

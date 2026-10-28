@@ -18,9 +18,9 @@ Steps:
   6. Ping HEALTHCHECK_URL (e.g. healthchecks.io) on success, HEALTHCHECK_URL/fail on failure,
      so a silent failure turns into an email
 
-The timer (06:00 and 18:00 UTC, plus Fridays at 16:00 UTC so a Friday-evening deadline gets
-Friday's odds and team news) runs it under one flock with every other pipeline run, so two runs
-never overlap (deploy/install-daily-job.sh).
+The timer (06:00 and 18:00 UTC, plus Fridays at 17:15 and Tuesdays at 16:00 UK time, so an evening
+deadline gets that day's odds and team news) runs it under one flock with every other pipeline run,
+so two runs never overlap (deploy/install-daily-job.sh).
 
 Environment: LIVE_DATA_DIR, ODDS_DIR (optional, default LIVE_DATA_DIR/odds), BACKEND_URL (default http://backend:8000), ADMIN_TOKEN,
 HEALTHCHECK_URL (optional), plus the usual NEO4J_* settings.

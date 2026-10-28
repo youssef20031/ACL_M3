@@ -225,10 +225,11 @@ def fit_goals(p_home, p_away, p_over):
 # --------------------------------------------------------------------------- features
 
 def collected_at(kickoff: pd.Series) -> pd.Series:
-    """Latest time football-data.co.uk collects a match's pre-closing prices (UTC)."""
+    """Latest time football-data.co.uk collects a match's pre-closing prices (UTC); NaT for a
+    match without a kickoff time (an FPL fixture whose time isn't set yet)."""
     local = pd.to_datetime(kickoff, utc=True).dt.tz_convert(UK)
-    back = local.dt.weekday.map(lambda d: COLLECTION[d][0])
-    hour = local.dt.weekday.map(lambda d: COLLECTION[d][1])
+    back = local.dt.weekday.map({d: v[0] for d, v in COLLECTION.items()})
+    hour = local.dt.weekday.map({d: v[1] for d, v in COLLECTION.items()})
     day = local.dt.normalize().dt.tz_localize(None) - pd.to_timedelta(back, unit="D")
     at = (day + pd.to_timedelta(hour, unit="h")).dt.tz_localize(UK, ambiguous="NaT", nonexistent="shift_forward")
     return at.dt.tz_convert("UTC")

@@ -218,6 +218,17 @@ def test_refresh_odds_keeps_the_previous_file_when_a_download_fails(tmp_path, mo
     assert refresh_odds(str(tmp_path), "2021-22", fixtures=True)["fixtures.csv"] == "failed: network is unreachable"
 
 
+def test_refresh_odds_never_raises_when_the_odds_folder_cant_be_made(tmp_path, monkeypatch):
+    from pipeline.current_season import refresh_odds
+    fake = _FakeFootballData()
+    _fake_odds(monkeypatch, fake)
+    (tmp_path / "a_file").write_text("not a folder", encoding="utf-8")
+    monkeypatch.setenv("ODDS_DIR", str(tmp_path / "a_file" / "odds"))     # e.g. a read-only mount
+    result = refresh_odds(str(tmp_path), "2026-27")
+    assert list(result) == ["odds_dir"] and result["odds_dir"].startswith("failed")
+    assert fake.calls == []
+
+
 def test_odds_dir_follows_the_environment(tmp_path, monkeypatch):
     from pipeline.current_season import odds_dir
     monkeypatch.setenv("ODDS_DIR", str(tmp_path / "elsewhere"))

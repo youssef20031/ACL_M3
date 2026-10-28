@@ -352,7 +352,11 @@ def refresh_odds(live_dir: str, season: str, fixtures: bool = True,
 
     now = now or datetime.now(timezone.utc)
     directory = odds_dir(live_dir)
-    os.makedirs(directory, exist_ok=True)
+    try:
+        os.makedirs(directory, exist_ok=True)
+    except OSError as exc:   # e.g. $ODDS_DIR on a read-only mount: predict with what's there
+        logger.warning("Can't create the odds folder %s: %s", directory, exc)
+        return {"odds_dir": f"failed: {exc}"[:200]}
     jobs = []   # (file name, fetcher, keep the copy if modified after this time)
     for s in odds_seasons(season):
         if s == season:

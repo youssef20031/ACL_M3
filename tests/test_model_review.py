@@ -153,6 +153,15 @@ class TestScorePicks(unittest.TestCase):
         self.assertEqual((r["live_points"], r["shadow_points"], r["difference"]), (50, 43, 7))
         self.assertEqual((r["live_model"], r["shadow_model"], r["shared_players"], r["status"]),
                          ("v4", "v3", 15, "finished"))
+        self.assertIsNone(r["same_run"])                           # picks without archived_at
+
+    def test_compare_picks_says_whether_both_picks_are_one_runs(self):
+        live, shadow = picks_352(), picks_352()
+        live["archived_at"] = shadow["archived_at"] = "2026-09-19T06:00:01+00:00"
+        self.assertTrue(mr.compare_picks(live, shadow, actual(), FINISHED, [])["same_run"])
+        # The shadow failed on the last run before the deadline: its pick is an earlier run's
+        shadow["archived_at"] = "2026-09-18T18:00:02+00:00"
+        self.assertIs(mr.compare_picks(live, shadow, actual(), FINISHED, [])["same_run"], False)
 
     def test_finished_fixture_without_minutes_counts_as_didnt_play(self):
         live = {k: {"points": 2, "minutes": 90} for k in range(1, 16) if k != 9}   # M5 (element 9) has no row

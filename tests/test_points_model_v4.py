@@ -217,6 +217,46 @@ def test_upcoming_rows_get_what_the_same_rows_get_as_history(world):
     assert a["snap_age_days"].iloc[0] == pytest.approx((26 * 60 - 90) / 1440)
 
 
+def test_a_new_seasons_first_gameweek_with_a_promoted_club(world):
+    """GW1 predicted before the season (no match of it in the history yet) = GW1 as history: the
+    promoted club starts at RATING_NEW_TEAM in both, not regressed a second time over the summer."""
+    full = world["full"].copy()
+    new = full["season"] == "2026-27"
+    full.loc[new & (full["team"] == "Leeds"), "team"] = "Hull City"
+    gw1 = (new & (full["GW"] == 1)).to_numpy()
+    extras = pm.ExtraInputs(codes=world["codes"], odds=_odds(full))
+    up = pm.build_features(full[~new.to_numpy()], _upcoming(full[gw1]), extras=extras).query("is_upcoming")
+    hist = pm.build_features(full, extras=extras)
+    hist = hist[(hist["season"] == "2026-27") & (hist["GW"] == 1)]
+    cols = pm.feature_columns("v4")
+    a, b = _key(up)[cols].sort_index(), _key(hist)[cols].sort_index()
+    assert len(a) == len(PLAYERS) and a.index.equals(b.index)
+    pd.testing.assert_frame_equal(a, b, check_dtype=False)
+    hull = up[up["team"] == "Hull City"].iloc[0]
+    assert hull["rt_att"] == hull["rt_def"] == fs.RATING_NEW_TEAM
+    assert up.loc[up["opponent"] == "Hull City", "rt_opp_att"].iloc[0] == fs.RATING_NEW_TEAM
+
+
+def test_upcoming_fixtures_without_a_kickoff_time(world):
+    """A fixture in the gameweek whose kickoff isn't set yet gets no odds instead of stopping the
+    prediction run (v3 never needed the time), and so does a gameweek without any kickoff time."""
+    full, gw4 = world["full"], world["gw4"]
+    extras = pm.ExtraInputs(codes=world["codes"], odds=world["odds"],
+                            snapshots=sn.load_all_snapshots(os.devnull, None, world["status"], "2026-27"))
+    up = _upcoming(full[gw4])
+    tbc = (up["fixture"] == up["fixture"].max()).to_numpy()
+    up.loc[tbc, "kickoff_time"] = None
+    f = pm.build_features(full[~gw4], up, extras=extras).query("is_upcoming")
+    late = (f["fixture"] == up["fixture"].max()).to_numpy()
+    assert f.loc[late, od.FEATURES].isna().all().all() and f.loc[~late, od.FEATURES].notna().all().all()
+    assert f["snap_age_days"].notna().all()            # the deadline comes from the known kickoffs
+    up["kickoff_time"] = None
+    f = pm.build_features(full[~gw4], up, extras=extras).query("is_upcoming")
+    assert f[od.FEATURES + sn.AVAIL_FEATURES].isna().all().all() and (f[sn.COP] == 1).all()
+    assert f[["tr_bal_rank", "rt_att"]].notna().all().all()
+    assert od.collected_at(pd.Series([pd.NaT, pd.Timestamp("2026-08-22T14:00:00Z")])).isna().tolist() == [True, False]
+
+
 def test_upcoming_transfer_ranks_use_in_minus_out(world):
     full, gw4 = world["full"], world["gw4"]
     up = _upcoming(full[gw4])
@@ -373,6 +413,19 @@ def test_save_and_load_by_version(world, tmp_path, monkeypatch):
     assert v4_meta["version"] == "v4" and v4_meta["features"] == pm.feature_columns("v4")
     # Both predict from the same v4 feature table
     assert len(pm.predict(booster, meta, f)) == len(pm.predict(v4_booster, v4_meta, f)) == len(f)
+
+
+def test_training_refuses_a_finished_season_without_odds():
+    """A failed download of one past season's file leaves the overall share above the bar; the
+    season itself is caught. The season in progress may lag."""
+    from ml import train_points_v3 as tp
+    cov = {"2020-21": {"odds": 0.9}, "2021-22": {"odds": 0.0}, "2025-26": {"odds": 0.98},
+           "2026-27": {"odds": 0.1}, "all": {"odds": 0.72}}
+    assert tp.odds_gaps(cov) == {"2021-22": 0.0}
+    cov["2021-22"]["odds"] = 0.88
+    assert tp.odds_gaps(cov) == {}
+    assert tp.odds_gaps({"2020-21": {"odds": 0.3}, "2021-22": {"odds": 0.4}, "all": {"odds": 0.35}}) == {
+        "2020-21": 0.3, "all": 0.35}
 
 
 def test_backtest_keeps_v3_as_current_and_builds_v4_with_pm():

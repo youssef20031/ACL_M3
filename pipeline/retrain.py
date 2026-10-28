@@ -86,6 +86,15 @@ def last_trained_at() -> Optional[datetime]:
     return _parse_time(meta.get("trained_at"))
 
 
+def last_attempt_at(out_dir: str) -> Optional[datetime]:
+    """When VERSION was last retrained, accepted or not (retrain_history.json). A rejected candidate
+    leaves the active model's trained_at as it was, so without this the same Monday's evening run
+    would train again, on the same data, at another ~1 GB peak."""
+    history = _read_json(os.path.join(out_dir, "retrain_history.json")) or []
+    times = [_parse_time(e.get("at")) for e in history if isinstance(e, dict) and e.get("version") == VERSION]
+    return max((t for t in times if t is not None), default=None)
+
+
 def _live_season(live_dir: str, now: datetime) -> str:
     """The season in LIVE_DATA_DIR/meta.json, else the one in progress (a new one from July)."""
     meta = _read_json(os.path.join(live_dir, "meta.json")) or {}
@@ -109,11 +118,13 @@ def maybe_retrain(force: bool = False, now: Optional[datetime] = None, live_dir:
     from ml.train_points_v3 import train_and_report
 
     now = now or datetime.now(timezone.utc)
+    out_dir = pm.live_model_dir()
     last = last_trained_at()
-    if not force and not is_due(now, last):
+    # A failed run (an exception) isn't logged, so the next run tries again
+    since = max((t for t in (last, last_attempt_at(out_dir)) if t is not None), default=None)
+    if not force and not is_due(now, since):
         return {"status": "skipped", "reason": "not due", "last_trained": last.isoformat() if last else None}
 
-    out_dir = pm.live_model_dir()
     os.makedirs(out_dir, exist_ok=True)
     cand_model = os.path.join(out_dir, f"points_{VERSION}.candidate.json")
     cand_meta = os.path.join(out_dir, f"points_{VERSION}_meta.candidate.json")

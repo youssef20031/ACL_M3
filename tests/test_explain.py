@@ -141,6 +141,24 @@ def test_player_view_applies_fpl_availability(live):
         explain.player(999)
 
 
+def test_player_view_when_a_feature_is_missing_for_every_player(live, tmp_path):
+    """v4's odds are NaN for the whole gameweek until football-data.co.uk posts Friday's prices (and for
+    gameweeks starting on a Tuesday): the player view must still explain, those features 'missing'."""
+    from ml import odds as od
+
+    booster, _ = live
+    path = tmp_path / explain.FEATURES_NAME
+    frame = pd.read_csv(path, float_precision="round_trip")
+    frame[od.FEATURES] = np.nan
+    features = pm.feature_columns()
+    frame["model_points"] = booster.predict(xgb.DMatrix(frame[features], feature_names=features))
+    frame.to_csv(path, index=False)
+    explain.reset()
+    p = explain.player(1)
+    assert all(f["lime"]["num_samples"] == explain.LIME_SAMPLES for f in p["fixtures"])
+    assert explain.summary()["rows"] == 4
+
+
 def test_summary_ranks_features_and_players(live):
     s = explain.summary()
     assert s["gameweek"] == 9 and s["season"] == "2026-27" and s["rows"] == 4 and s["players"] == 3

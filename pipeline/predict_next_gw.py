@@ -53,6 +53,7 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
@@ -205,19 +206,52 @@ def load_history(live_csv: str, season: str, before_gw: int, before_time: Option
     return history[~late].reset_index(drop=True)
 
 
-def load_extras(live_dir: str, season: str, status_csv: str, history_csv: str = HISTORY_CSV) -> pm.ExtraInputs:
+def load_extras(live_dir: str, season: str, status_csv: str, history_csv: str = HISTORY_CSV,
+                problems: Optional[Dict[str, str]] = None) -> pm.ExtraInputs:
     """v4's extra inputs (ml.points_model.load_extra_inputs): FPL codes, the odds in odds_dir,
     snapshots (vaastav's, our archive, and the status file as the upcoming gameweek's), and the
-    full history's team-match table, so team ratings equal a build from every season. Odds files
-    that can't be read are dropped with a warning (odds features NaN) instead of failing."""
-    kwargs = dict(live_dir=live_dir, season=season, status_csv=status_csv, history_csv=history_csv)
+    full history's team-match table, so team ratings equal a build from every season.
+
+    Never fails the run: if they don't load at once, each part is loaded on its own and a part that
+    can't be read (an unreadable odds file, a malformed element_snapshots file, ...) is left None, so
+    its features are NaN (without codes, players are keyed by name). Snapshots fall back to the
+    status file alone, which is all the upcoming rows use. `problems` gets {part: what happened}."""
+    from ml import fixture_strength as fs
+    from ml import odds as od
+    from ml import snapshots as sn
+
     odds = odds_dir(live_dir)
     try:
-        return pm.load_extra_inputs(odds_dir=odds, **kwargs)
+        return pm.load_extra_inputs(live_dir=live_dir, season=season, status_csv=status_csv,
+                                    history_csv=history_csv, odds_dir=odds)
     except Exception:
-        logger.warning("Couldn't load the extra inputs with the odds in %s; predicting without odds",
-                       odds, exc_info=True)
-    return pm.load_extra_inputs(odds_dir=os.path.join(odds, "missing"), **kwargs)   # no folder, no odds
+        logger.warning("Couldn't load v4's extra inputs at once; loading them part by part", exc_info=True)
+
+    def status() -> Optional[pd.DataFrame]:
+        return pd.read_csv(status_csv) if os.path.exists(status_csv) else None
+
+    attempts = {
+        "codes": [lambda: pm.load_player_codes(status_csv, season)],
+        "odds": [lambda: od.load_odds(odds)],
+        "snapshots": [lambda: sn.load_all_snapshots(sn.SNAPSHOTS_CSV, live_dir, status=status(), season=season),
+                      lambda: sn.load_all_snapshots("", None, status=status(), season=season)],
+        "ratings_prior": [lambda: fs.team_match_history(history_csv=history_csv)],
+    }
+    parts: Dict[str, Any] = {}
+    for part, loaders in attempts.items():
+        parts[part] = None
+        for k, load in enumerate(loaders):
+            try:
+                parts[part] = load()
+            except Exception as exc:
+                logger.warning("Couldn't load v4's %s (attempt %d)", part, k + 1, exc_info=True)
+                if problems is not None:
+                    problems[part] = f"failed: {exc}"[:200]
+                continue
+            if k and problems is not None:
+                problems[part] = f"status file only; {problems[part]}"[:200]
+            break
+    return pm.ExtraInputs(**parts)
 
 
 def previous_season_teams(history: pd.DataFrame, season: str) -> List[str]:
@@ -391,10 +425,11 @@ def assemble_output(players: pd.DataFrame, predictions: Dict[str, Dict[str, Any]
 
 def save_shadow_pick(live_dir: str, season: str, event: Dict[str, Any], players: pd.DataFrame,
                      predictions: Dict[str, Dict[str, Any]], fixtures_by_team: Dict[str, List[Dict[str, Any]]],
-                     promoted: Iterable[str], version: str) -> Optional[str]:
+                     promoted: Iterable[str], version: str, now: Optional[datetime] = None) -> Optional[str]:
     """Assemble the shadow's predictions like the live ones (same availability multiplier and
     blank-gameweek rule) and save its squad pick next to the live pick (model_review.save_picks,
-    variant SHADOW). Returns the JSON path, None after the deadline, or "failed"."""
+    variant SHADOW; `now` as for the live pick). Returns the JSON path, None after the deadline,
+    or "failed"."""
     shadow = {k: {"points": v["shadow_points"], "method": f"xgboost_{version}"}
               for k, v in predictions.items() if "shadow_points" in v}
     if predictions and not shadow:
@@ -403,7 +438,8 @@ def save_shadow_pick(live_dir: str, season: str, event: Dict[str, Any], players:
         from services.model_review import SHADOW, save_picks
         gameweek, deadline = int(event["id"]), event["deadline_time"]
         out = assemble_output(players, shadow, fixtures_by_team, gameweek, deadline, promoted)
-        return save_picks(live_dir, season, gameweek, deadline, out, fixtures_by_team, variant=SHADOW, model=version)
+        return save_picks(live_dir, season, gameweek, deadline, out, fixtures_by_team, now=now,
+                          variant=SHADOW, model=version)
     except Exception:
         logger.exception("Couldn't save the shadow model's pick for GW%s", event["id"])
         return "failed"
@@ -469,7 +505,8 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
     # Leakage guard: nothing from the predicted gameweek or later feeds the features.
     history = load_history(live_csv, season, before_gw=gameweek, before_time=first_kickoff,
                            history_csv=history_csv)
-    extras = load_extras(live_dir, season, status_csv, history_csv)
+    extras_problems: Dict[str, str] = {}
+    extras = load_extras(live_dir, season, status_csv, history_csv, problems=extras_problems)
     if predict_fn is None:
         predict_fn, version = load_model_fn()
         if shadow_fn is None:
@@ -496,18 +533,20 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
     _atomic_write(csv_path, lambda p: out.to_csv(p, index=False))  # CSV last: it is what the API watches
 
     # Keep this gameweek's pick: the last run before the deadline leaves the final one.
-    # A failure here mustn't cost the predictions themselves.
+    # A failure here mustn't cost the predictions themselves. Both picks are saved as of the same
+    # moment: one deadline check, and the same archived_at, which marks them as one run's pair.
+    saved_at = datetime.now(timezone.utc)
     try:
         from services.model_review import save_picks
         picks_path = save_picks(live_dir, season, gameweek, event["deadline_time"], csv_path, fixtures_by_team,
-                                model=version)
+                                now=saved_at, model=version)
     except Exception:
         logger.exception("Couldn't save the model's pick for GW%s", gameweek)
         picks_path = "failed"
     if shadow_fn is not None:
         shadow = {"model": shadow_version,
                   "pick": save_shadow_pick(live_dir, season, event, players, predictions, fixtures_by_team,
-                                           promoted, shadow_version)}
+                                           promoted, shadow_version, now=saved_at)}
     else:
         shadow = {"model": None, "pick": shadow_version}
 
@@ -518,6 +557,7 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
         "deadline": event["deadline_time"],
         "model": version,
         "odds": odds_status,
+        "extra_inputs": extras_problems or "ok",
         "input_coverage": coverage,
         "players": int(len(out)),
         "players_with_fixture": int(has_fixture.sum()),

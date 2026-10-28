@@ -22,6 +22,25 @@ def test_running_total_counts_finished_gameweeks_of_two_models_only():
     assert [sl.counted(r) for r in rows] == [True, True, False, True, False]
 
 
+def test_picks_from_different_runs_are_listed_but_not_counted():
+    """Like with like: a shadow pick left from an earlier run (the shadow failed on the last run
+    before the deadline) saw older team news and odds than the live pick it would be compared with."""
+    rows = sl.ledger([{**row(9, 60, 50), "same_run": True}, {**row(10, 40, 70), "same_run": False},
+                      {**row(11, 55, 50), "same_run": None}])
+    assert [r["running"] for r in rows] == [10, None, 15]
+    text = sl.format_table(rows, sl.bootstrap_ci(r["difference"] for r in rows if sl.counted(r)))
+    assert "(different runs, not counted)" in text.splitlines()[3]
+    assert "2 finished gameweeks: live - shadow = +15 points in total" in text
+
+
+def test_gameweeks_with_only_one_pick_are_named():
+    # live picks from before the shadow existed (GW7 by hand, GW8 v3) aren't gaps; GW11 and GW13 are
+    assert sl.unpaired([7, 8, 9, 10, 11, 12], [9, 10, 12, 13]) == [11, 13]
+    assert sl.unpaired([7, 8], []) == []
+    text = sl.format_table([], sl.bootstrap_ci([]), [11, 13])
+    assert "Only one of the two picks, not compared: GW 11, 13" in text
+
+
 def test_bootstrap_ci_of_the_mean_difference():
     s = sl.bootstrap_ci([10, -5, 5])
     assert (s["gameweeks"], s["total"], s["mean"]) == (3, 10.0, pytest.approx(10 / 3))
@@ -88,3 +107,4 @@ def test_main_reads_the_saved_picks(tmp_path, monkeypatch, capsys):
     # live: 8 x2 + ten others 2 each = 36; shadow: 2 x2 + 8 + nine others 2 each = 30
     assert (r["gameweek"], r["live_points"], r["shadow_points"], r["difference"], r["running"]) == (9, 36, 30, 6, 6)
     assert out["summary"]["gameweeks"] == 1 and out["summary"]["total"] == 6.0
+    assert out["unpaired"] == []

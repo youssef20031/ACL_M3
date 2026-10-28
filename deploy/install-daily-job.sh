@@ -8,15 +8,17 @@
 # Default schedule: 06:00 and 18:00 UTC. FPL finalizes results an hour or two after
 # the last match of the day, so the morning run picks up the previous day's games;
 # the evening run catches team news (injuries, suspensions) before deadlines.
-# Fridays also at 16:00 UTC, so a Friday-evening deadline (18:30 UK time) gets Friday's
-# team news and bookmaker odds: football-data.co.uk collects the weekend's prices on Friday
-# afternoon (by 17:00 UK time), and the 18:00 UTC run is after that deadline during British
-# Summer Time. In winter 16:00 UTC is 16:00 UK time, possibly before the prices are posted;
-# FPL_FRIDAY_SCHEDULE="Fri *-*-* 17:15:00 Europe/London" would always follow them.
+# Also Fridays at 17:15 and Tuesdays at 16:00 UK time, so an evening deadline (18:00-18:30)
+# gets that day's team news and bookmaker odds, an input of the v4 points model:
+# football-data.co.uk collects the prices for Friday-Monday matches by 17:00 UK time on Friday
+# and for Tuesday-Thursday matches by 13:00 on Tuesday (ml/odds.py). The 06:00/18:00 UTC runs
+# miss Tuesday-evening deadlines (18:00 UTC is after them in summer and too close to them in
+# winter), and in summer their only Friday run before an 18:30 deadline is at 07:00 UK time.
+# tests/test_daily_job.py checks that every kind of deadline gets a run with the prices.
 # Persistent=true runs a missed job after the VM was down.
 #
 # Every pipeline run goes through /usr/local/bin/fpl-pipeline, which holds one lock
-# (flock on $lock_file) for the whole run, so the timer's runs, the Friday run and manual
+# (flock on $lock_file) for the whole run, so the timer's runs, deploy.sh's jobs and manual
 # runs (e.g. a forced retrain) never overlap; a run waits up to 40 minutes for the lock:
 #
 #   fpl-pipeline pipeline.daily
@@ -27,7 +29,8 @@ cd "$(dirname "$0")/.."
 repo_dir="$(pwd)"
 run_user="$(id -un)"
 schedule="${FPL_DAILY_SCHEDULE:-*-*-* 06,18:00:00 UTC}"
-friday_schedule="${FPL_FRIDAY_SCHEDULE:-Fri *-*-* 16:00:00 UTC}"
+friday_schedule="${FPL_FRIDAY_SCHEDULE:-Fri *-*-* 17:15:00 Europe/London}"
+tuesday_schedule="${FPL_TUESDAY_SCHEDULE:-Tue *-*-* 16:00:00 Europe/London}"
 lock_file="${FPL_PIPELINE_LOCK:-/run/lock/fpl-pipeline.lock}"
 runner=/usr/local/bin/fpl-pipeline
 
@@ -62,6 +65,7 @@ Description=Run fpl-daily on a schedule
 [Timer]
 OnCalendar=${schedule}
 OnCalendar=${friday_schedule}
+OnCalendar=${tuesday_schedule}
 RandomizedDelaySec=10min
 Persistent=true
 

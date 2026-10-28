@@ -64,7 +64,11 @@ class Discretizer:
         out = np.empty(x.shape, dtype=np.int64)
         for j in range(x.shape[1]):
             col = x[:, j]
-            if self.categorical[j] is not None:
+            if self.categorical[j] is not None and not len(self.categorical[j]):
+                # NaN in every background row (e.g. v4's odds before the prices are posted): every
+                # value is an unseen category, and NaN is marked missing below
+                out[:, j] = -2
+            elif self.categorical[j] is not None:
                 values = self.categorical[j]
                 idx = np.searchsorted(values, col)
                 hit = (idx < len(values)) & (values[np.minimum(idx, len(values) - 1)] == col)

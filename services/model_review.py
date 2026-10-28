@@ -279,12 +279,17 @@ def compare_picks(live: Dict[str, Any], shadow: Dict[str, Any], actual: Dict[int
                   event: Dict[str, Any], finished_fixtures: Iterable[int]) -> Dict[str, Any]:
     """One gameweek of the live model's pick against the shadow's, both scored by score_picks
     (FPL auto-subs and captaincy): counted points, their difference (live - shadow), predicted
-    points, and how many of the 15 players the squads share."""
+    points, and how many of the 15 players the squads share. `same_run` says whether both picks
+    come from the same prediction run (pipeline.predict_next_gw saves the pair with one
+    archived_at), False when one of them failed to save on a later run and the other is older,
+    None when either has no archived_at."""
     finished = list(finished_fixtures)
     a = score_picks(live, actual, event, finished)
     b = score_picks(shadow, actual, event, finished)
+    stamps = live.get("archived_at"), shadow.get("archived_at")
     return {
         "gameweek": a["gameweek"], "status": a["status"],
+        "same_run": stamps[0] == stamps[1] if all(stamps) else None,
         "live_model": live.get("model"), "shadow_model": shadow.get("model"),
         "live_points": a["points"], "shadow_points": b["points"], "difference": a["points"] - b["points"],
         "live_predicted": a["predicted_points"], "shadow_predicted": b["predicted_points"],

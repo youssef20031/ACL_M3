@@ -103,6 +103,30 @@ def test_rejected_candidate_leaves_active_model(live, monkeypatch):
     assert not any("candidate" in p for p in os.listdir(live / "models"))
 
 
+def test_rejected_candidate_isnt_retrained_the_same_week(live, monkeypatch):
+    """The 06:00 attempt is rejected: the 18:00 run (same Monday, same data) doesn't train again;
+    next Monday does. A run that raised isn't logged, so it's retried."""
+    calls = []
+
+    def trainer(*args, **kwargs):
+        calls.append(kwargs.get("version"))
+        return fake_trainer(3.0)(*args, **kwargs)                       # worse than the baselines
+    monkeypatch.setattr("ml.train_points_v3.train_and_report", trainer)
+    monday = MONDAY + timedelta(days=14)                               # the bundled model is older than 5 days
+    assert retrain.maybe_retrain(now=monday, live_dir=str(live))["status"] == "rejected"
+    assert retrain.maybe_retrain(now=monday + timedelta(hours=12), live_dir=str(live))["status"] == "skipped"
+    assert retrain.maybe_retrain(now=monday + timedelta(days=7), live_dir=str(live))["status"] == "rejected"
+    assert calls == ["v4", "v4"]
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("football-data.co.uk is down")
+    monkeypatch.setattr("ml.train_points_v3.train_and_report", boom)
+    with pytest.raises(RuntimeError):
+        retrain.maybe_retrain(now=monday + timedelta(days=14), live_dir=str(live))
+    monkeypatch.setattr("ml.train_points_v3.train_and_report", trainer)
+    assert retrain.maybe_retrain(now=monday + timedelta(days=14, hours=12), live_dir=str(live))["status"] == "rejected"
+
+
 def test_prepare_odds_points_training_at_the_live_odds(tmp_path, monkeypatch):
     from ml import odds as od
     monkeypatch.delenv("ODDS_DIR", raising=False)

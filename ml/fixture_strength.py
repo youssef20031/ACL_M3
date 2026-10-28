@@ -169,11 +169,19 @@ def ratings_features(df: pd.DataFrame, prior: Optional[pd.DataFrame] = None) -> 
     if upcoming.any():
         up = df[upcoming]
         shrink = np.where(up["season"].to_numpy() == last_season, 1.0, RATING_SEASON_SHRINK)
-        get = lambda team, k: latest.get(team, (RATING_NEW_TEAM, RATING_NEW_TEAM))[k]
-        out.loc[upcoming, "rt_att"] = shrink * up["team"].map(lambda t: get(t, 0)).to_numpy()
-        out.loc[upcoming, "rt_def"] = shrink * up["team"].map(lambda t: get(t, 1)).to_numpy()
-        out.loc[upcoming, "rt_opp_att"] = shrink * up["opponent"].map(lambda t: get(t, 0)).to_numpy()
-        out.loc[upcoming, "rt_opp_def"] = shrink * up["opponent"].map(lambda t: get(t, 1)).to_numpy()
+
+        def rating(team_col: str, k: int) -> np.ndarray:
+            # A club without a rated match (promoted) starts at RATING_NEW_TEAM, which team_ratings
+            # gives it after the summer's regression, so it isn't shrunk
+            teams = up[team_col]
+            known = teams.map(lambda t: t in latest).to_numpy(dtype=bool)
+            vals = teams.map(lambda t: latest.get(t, (RATING_NEW_TEAM, RATING_NEW_TEAM))[k]).to_numpy(dtype=float)
+            return np.where(known, shrink * vals, vals)
+
+        out.loc[upcoming, "rt_att"] = rating("team", 0)
+        out.loc[upcoming, "rt_def"] = rating("team", 1)
+        out.loc[upcoming, "rt_opp_att"] = rating("opponent", 0)
+        out.loc[upcoming, "rt_opp_def"] = rating("opponent", 1)
     home = np.where(df["was_home"].astype(float).to_numpy() > 0, HOME_LOG, -HOME_LOG)
     out["rt_xgf"] = LEAGUE_XG * np.exp(out["rt_att"] - out["rt_opp_def"] + home)
     out["rt_xga"] = LEAGUE_XG * np.exp(out["rt_opp_att"] - out["rt_def"] - home)

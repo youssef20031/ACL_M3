@@ -252,6 +252,7 @@ def test_predict_next_gameweek_end_to_end(live_dir):
     records = json.loads((live_dir / "next_gw_predictions.json").read_text(encoding="utf-8"))
 
     assert summary["gameweek"] == 7 and summary["players"] == 5 == len(out) == len(records)
+    assert summary["extra_inputs"] == "ok"
     assert summary["blank_teams"] == ["Hull City"]
     assert summary["double_gameweek_players"] == 3        # the three Arsenal players
     assert summary["history_last_kickoff"] < "2026-10-17"
@@ -343,6 +344,30 @@ def test_odds_download_failure_degrades_to_nan_odds(live_dir, monkeypatch):
     assert set(pm.feature_columns("v4")) <= set(seen.columns) and seen["odds_win"].isna().all()
 
 
+def test_unreadable_extra_input_never_stops_the_run(live_dir, monkeypatch):
+    """A malformed element_snapshots file (here without status / captured_at) and failing FPL codes:
+    the run still predicts, snapshots fall back to the status file (all the upcoming rows use), and
+    the summary says what happened."""
+    archive = live_dir / "element_snapshots" / "2026-27"
+    archive.mkdir(parents=True)
+    (archive / "gw07.csv").write_text("element,code,GW\n1,9001,7\n", encoding="utf-8")
+
+    def broken(*args, **kwargs):
+        raise ValueError("codes file is corrupt")
+    monkeypatch.setattr(pm, "load_player_codes", broken)
+
+    model = RecordingModel(2.0)
+    summary = png.predict_next_gameweek(str(live_dir), client=FakeClient(), history_csv=str(live_dir / "history.csv"),
+                                        predict_fn=model, fetch_odds=False)
+    assert set(summary["extra_inputs"]) == {"codes", "snapshots"}
+    assert summary["extra_inputs"]["codes"] == "failed: codes file is corrupt"
+    assert summary["extra_inputs"]["snapshots"].startswith("status file only; failed: ")
+    assert summary["input_coverage"]["snapshot"] == 1.0 and summary["input_coverage"]["ratings"] == 1.0
+    seen = pd.concat(model.seen).set_index(["name", "opponent"])
+    assert seen.loc[("Doubtful Blue", "Arsenal"), "snap_chance"] == 50
+    assert len(pd.read_csv(live_dir / png.OUTPUT_NAME)) == 5
+
+
 SQUAD_CLUBS = ["Arsenal", "Chelsea", "Ipswich", "Spurs", "Hull City", "Leeds"]
 
 
@@ -385,7 +410,19 @@ class UpcomingClient:
         pass
 
 
-def test_shadow_pick_is_saved_next_to_the_live_pick(live_dir):
+def test_shadow_pick_is_saved_next_to_the_live_pick(live_dir, monkeypatch):
+    from services import model_review as mr
+
+    class TickingClock(datetime):
+        """model_review's clock moves a second per reading: the pair must still share one time."""
+        start = datetime.now(timezone.utc) - timedelta(hours=1)
+        reads = 0
+
+        @classmethod
+        def now(cls, tz=None):
+            cls.reads += 1
+            return cls.start + timedelta(seconds=cls.reads)
+    monkeypatch.setattr(mr, "datetime", TickingClock)
     squad_frame().to_csv(live_dir / "player_status_2026_27.csv", index=False)
     summary = png.predict_next_gameweek(
         str(live_dir), client=UpcomingClient(), history_csv=str(live_dir / "history.csv"), fetch_odds=False,
@@ -400,6 +437,7 @@ def test_shadow_pick_is_saved_next_to_the_live_pick(live_dir):
     assert set(live_pick) == set(shadow_pick)
     assert [set(p) for p in live_pick["players"]] == [set(p) for p in shadow_pick["players"]]
     assert (live_pick["model"], shadow_pick["model"]) == (pm.MODEL_VERSION, pm.SHADOW_VERSION)
+    assert live_pick["archived_at"] == shadow_pick["archived_at"]      # one run's pair, for the ledger
     assert len(shadow_pick["players"]) == 15
     assert {p["name"] for p in live_pick["players"]} != {p["name"] for p in shadow_pick["players"]}
     # Same availability multiplier for the shadow; the site keeps reading the live predictions
