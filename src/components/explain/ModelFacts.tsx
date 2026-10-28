@@ -6,9 +6,9 @@ import { formatDate, formatDateTime, seasonRange } from './format';
 
 // The model's vital statistics and its held-out test results against simple baselines.
 
-/** Methods compared, in display order; keys missing from the payload are skipped. */
-const METHODS: Array<{ key: string; label: string }> = [
-  { key: 'v3', label: 'Points model' },
+/** Baselines compared, in display order, after the model itself (keyed by its version, e.g. 'v4');
+ * keys missing from the payload are skipped. */
+const BASELINES: Array<{ key: string; label: string }> = [
   { key: 'last3_avg', label: 'Average of last 3 matches' },
   { key: 'last6_avg', label: 'Average of last 6 matches' },
   { key: 'season_ppg', label: 'Points per match this season' },
@@ -38,7 +38,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 
 export function ModelFacts({ summary }: { summary: ExplainSummary }) {
   const { model } = summary;
-  const methods = METHODS.filter((m) => model.test_metrics[m.key]);
+  const methods = [{ key: model.version, label: 'Points model' }, ...BASELINES].filter((m) => model.test_metrics[m.key]);
   const trained = formatDate(model.trained_at);
   const generated = formatDateTime(summary.generated_at);
   const seasons = seasonRange(model.seasons);
@@ -80,9 +80,9 @@ export function ModelFacts({ summary }: { summary: ExplainSummary }) {
           {METRICS.map((metric) => {
             const items: ImportanceItem[] = methods.map((m) => ({
               key: m.key,
-              label: m.key === 'v3' ? `${m.label} (${model.version})` : m.label,
+              label: m.key === model.version ? `${m.label} (${model.version})` : m.label,
               value: model.test_metrics[m.key][metric.key],
-              tone: m.key === 'v3' ? 'accent' : 'baseline',
+              tone: m.key === model.version ? 'accent' : 'baseline',
             }));
             return (
               <section key={metric.key} aria-label={metric.title}>

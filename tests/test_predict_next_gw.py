@@ -1,16 +1,27 @@
 """Tests for pipeline/predict_next_gw.py and the live-file selection in services/predictions.py."""
 import json
 import os
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from ml import odds as od
 from ml import points_model as pm
+from ml import snapshots as sn
 from pipeline import predict_next_gw as png
 from services import predictions as preds_service
 
 TEAMS = {1: "Arsenal", 2: "Chelsea", 3: "Ipswich", 4: "Spurs", 5: "Hull City", 6: "Leeds"}
+
+
+@pytest.fixture(autouse=True)
+def hermetic_inputs(tmp_path, monkeypatch):
+    """No real snapshot archive (vaastav's 2026-27 captures would join the test's elements),
+    and odds only from the test's live dir."""
+    monkeypatch.setattr(sn, "SNAPSHOTS_CSV", str(tmp_path / "no_snapshots.csv"))
+    monkeypatch.delenv("ODDS_DIR", raising=False)
 
 
 def fixture(fid, event, home, away, kickoff, finished=False):
@@ -93,7 +104,12 @@ def players_frame():
          "chance_of_playing_next_round": np.nan, "news": "", "now_cost": 55},
         {"element": 5, "name": "Gone Gunner", "team": "Arsenal", "position": "GK", "status": "u",
          "chance_of_playing_next_round": np.nan, "news": "Joined X on loan", "now_cost": 40},
-    ])
+    ]).assign(
+        # the status file's FPL code, transfers since the last deadline and capture time
+        code=lambda d: d["element"] + 9000,
+        transfers_in_event=[50000, 100, 10, 2000, 0], transfers_out_event=[1000, 8000, 30000, 500, 9000],
+        fetched_at="2026-10-16T12:00:00Z",
+    )
 
 
 def test_assemble_output_applies_availability_blank_and_schema():
@@ -151,12 +167,12 @@ def live_dir(tmp_path):
         "season_x": "2025-26", "name": "Fit Gunner", "position": "MID", "team_x": "Arsenal",
         "kickoff_time": "2026-05-10T15:00:00Z", "GW": 37, "was_home": True, "total_points": 2, "value": 75,
         "team_h_score": 1, "team_a_score": 1, "fixture": 370, "minutes": 90, "creativity": 1.0,
-        "ict_index": 1.0, "influence": 1.0, "threat": 1.0,
+        "ict_index": 1.0, "influence": 1.0, "threat": 1.0, "expected_goals": 1.2,
     }, {
         "season_x": "2025-26", "name": "Someone Else", "position": "FWD", "team_x": "Leeds",
         "kickoff_time": "2026-05-10T15:00:00Z", "GW": 37, "was_home": False, "total_points": 2, "value": 60,
         "team_h_score": 1, "team_a_score": 1, "fixture": 371, "minutes": 90, "creativity": 1.0,
-        "ict_index": 1.0, "influence": 1.0, "threat": 1.0,
+        "ict_index": 1.0, "influence": 1.0, "threat": 1.0, "expected_goals": 0.8,
     }])
     hist.to_csv(tmp_path / "history.csv", index=False)
     return tmp_path
@@ -229,9 +245,9 @@ class FakeClient:
 
 
 def test_predict_next_gameweek_end_to_end(live_dir):
-    # Real v3 model file, end to end
+    # Real served model file (v4, or v3 until one exists), end to end; no odds download
     summary = png.predict_next_gameweek(str(live_dir), client=FakeClient(),
-                                        history_csv=str(live_dir / "history.csv"))
+                                        history_csv=str(live_dir / "history.csv"), fetch_odds=False)
     out = pd.read_csv(live_dir / "next_gw_predictions.csv")
     records = json.loads((live_dir / "next_gw_predictions.json").read_text(encoding="utf-8"))
 
@@ -257,6 +273,154 @@ def test_predict_next_gameweek_end_to_end(live_dir):
     fit = inputs[inputs["name"] == "Fit Gunner"]
     assert list(fit["opponent"]) == ["Chelsea", "Spurs"]
     assert fit["model_points"].clip(lower=0).sum() == pytest.approx(rows.loc["Fit Gunner", "predicted_points"], abs=0.01)
+
+
+# ------------------------------------------------------------------ v4 inputs, odds, shadow
+
+# football-data.co.uk's fixtures.csv for GW7 (Tottenham is Spurs in the graph)
+ODDS_FIXTURES_CSV = (
+    "Div,Date,Time,HomeTeam,AwayTeam,AvgH,AvgD,AvgA,Avg>2.5,Avg<2.5\n"
+    "E0,17/10/2026,15:00,Ipswich,Tottenham,3.40,3.50,2.10,1.90,1.90\n"
+    "E0,18/10/2026,16:30,Arsenal,Chelsea,1.80,3.80,4.50,1.70,2.10\n"
+    "E0,21/10/2026,20:00,Arsenal,Tottenham,1.60,4.20,5.00,1.60,2.30\n"
+)
+
+
+def write_odds(live_dir, text=ODDS_FIXTURES_CSV):
+    d = live_dir / "odds"
+    d.mkdir(exist_ok=True)
+    (d / od.FIXTURES_FILE).write_text(text, encoding="utf-8")
+    return d
+
+
+def test_model_rows_carry_every_v4_input(live_dir):
+    write_odds(live_dir)
+    status_csv = str(live_dir / "player_status_2026_27.csv")
+    players = png._load_players(status_csv)
+    history = png.load_history(str(live_dir / "FPL_2026_2027.csv"), "2026-27", before_gw=7,
+                               before_time="2026-10-17T14:00:00Z", history_csv=str(live_dir / "history.csv"))
+    extras = png.load_extras(str(live_dir), "2026-27", status_csv, str(live_dir / "history.csv"))
+    rows = png.model_rows(players, history, png.gameweek_fixtures(GW_FIXTURES, 7, TEAMS), "2026-27", 7, extras)
+
+    assert set(pm.feature_columns("v4")) <= set(rows.columns)
+    assert len(rows) == 7 and set(rows["element"]) == {1, 2, 3, 5}      # Hull City blank
+    r = rows.set_index(["name", "opponent"])
+    # Odds count only if priced before the deadline (here Sunday's first kickoff - 90 min):
+    # Sunday's match on Friday, the Wednesday match only on Tuesday
+    assert 0.45 < r.loc[("Fit Gunner", "Chelsea"), "odds_win"] < 0.6
+    assert r.loc[("Doubtful Blue", "Arsenal"), "odds_win"] < 0.3
+    assert np.isnan(r.loc[("Fit Gunner", "Spurs"), "odds_win"])
+    # The status file is the upcoming gameweek's availability snapshot
+    assert r.loc[("Doubtful Blue", "Arsenal"), "snap_doubtful"] == 1
+    assert r.loc[("Doubtful Blue", "Arsenal"), "snap_chance"] == 50
+    assert r.loc[("Injured Gunner", "Chelsea"), "snap_unavailable"] == 1
+    assert r.loc[("Fit Gunner", "Chelsea"), "snap_age_days"] == pytest.approx(2 + 2 / 24, abs=0.01)
+    # Transfers since the last deadline, ranked within the gameweek; team ratings for everyone
+    assert r.loc[("Fit Gunner", "Chelsea"), "tr_in_rank"] == 1.0
+    assert rows[["tr_bal_rank", "rt_att", "rt_opp_def"]].notna().all().all()
+    assert png.input_coverage(rows) == {"odds": round(4 / 7, 3), "snapshot": 1.0, "transfers": 1.0, "ratings": 1.0}
+
+
+def test_odds_download_failure_degrades_to_nan_odds(live_dir, monkeypatch):
+    def offline(*args, **kwargs):
+        raise OSError("network is unreachable")
+    monkeypatch.setattr(od, "fetch_season", offline)
+    monkeypatch.setattr(od, "fetch_fixtures", offline)
+    # An unreadable leftover (an error page saved by hand) is skipped too, with a warning
+    odds = write_odds(live_dir, "<html>Service unavailable</html>\n")
+    old = (datetime.now() - timedelta(days=1)).timestamp()
+    os.utime(odds / od.FIXTURES_FILE, (old, old))
+
+    model = RecordingModel(2.0)
+    summary = png.predict_next_gameweek(str(live_dir), client=FakeClient(),
+                                        history_csv=str(live_dir / "history.csv"), predict_fn=model)
+    assert summary["odds"]["fixtures.csv"].startswith("failed")
+    assert summary["odds"]["E0_2627.csv"].startswith("failed")
+    assert summary["input_coverage"]["odds"] == 0.0 and summary["input_coverage"]["snapshot"] == 1.0
+    assert summary["shadow"] == {"model": None, "pick": "skipped: no shadow model given"}
+    assert len(pd.read_csv(live_dir / png.OUTPUT_NAME)) == 5
+    seen = pd.concat(model.seen)
+    assert set(pm.feature_columns("v4")) <= set(seen.columns) and seen["odds_win"].isna().all()
+
+
+SQUAD_CLUBS = ["Arsenal", "Chelsea", "Ipswich", "Spurs", "Hull City", "Leeds"]
+
+
+def squad_frame():
+    """Three players per club (GK or FWD, DEF, MID), enough for a 15-man squad, plus an injured keeper."""
+    rows = []
+    for k, team in enumerate(SQUAD_CLUBS):
+        for j, pos in enumerate(["GK" if k < 3 else "FWD", "DEF", "MID"]):
+            e = 100 + 3 * k + j
+            rows.append({"element": e, "name": f"{team} {pos}", "team": team, "position": pos, "status": "a",
+                         "chance_of_playing_next_round": np.nan, "news": "", "now_cost": 45 + (7 * e) % 20})
+    rows.append({"element": 200, "name": "Crocked Keeper", "team": "Leeds", "position": "GK", "status": "i",
+                 "chance_of_playing_next_round": 0.0, "news": "Knee injury", "now_cost": 40})
+    fetched = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return pd.DataFrame(rows).assign(code=lambda d: d["element"] + 9000, transfers_in_event=100,
+                                     transfers_out_event=50, fetched_at=fetched)
+
+
+class UpcomingClient:
+    """GW9, with every club playing, two days from now (its deadline is ahead)."""
+
+    def __init__(self):
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        iso = lambda t: t.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self.deadline = iso(now + timedelta(days=2))
+        kickoff = iso(now + timedelta(days=2, hours=2))
+        self._fixtures = [fixture(90 + i, 9, h, a, kickoff) for i, (h, a) in enumerate([(1, 2), (3, 4), (5, 6)])]
+
+    def bootstrap(self):
+        return {
+            "events": [{"id": 8, "is_next": False, "deadline_time": "2026-10-24T10:00:00Z"},
+                       {"id": 9, "is_next": True, "deadline_time": self.deadline}],
+            "teams": [{"id": i, "name": "Ipswich Town" if n == "Ipswich" else n} for i, n in TEAMS.items()],
+        }
+
+    def fixtures(self):
+        return self._fixtures
+
+    def close(self):
+        pass
+
+
+def test_shadow_pick_is_saved_next_to_the_live_pick(live_dir):
+    squad_frame().to_csv(live_dir / "player_status_2026_27.csv", index=False)
+    summary = png.predict_next_gameweek(
+        str(live_dir), client=UpcomingClient(), history_csv=str(live_dir / "history.csv"), fetch_odds=False,
+        predict_fn=lambda f: f["value"].to_numpy() / 20.0,          # the live model likes pricey players
+        shadow_fn=lambda f: 6.0 - f["value"].to_numpy() / 20.0)     # the shadow likes cheap ones
+    picks_dir = live_dir / "model_picks" / "2026-27"
+    assert summary["model_pick"] == str(picks_dir / "gw09.json")
+    assert summary["shadow"] == {"model": pm.SHADOW_VERSION, "pick": str(picks_dir / "shadow" / "gw09.json")}
+
+    live_pick = json.loads((picks_dir / "gw09.json").read_text(encoding="utf-8"))
+    shadow_pick = json.loads((picks_dir / "shadow" / "gw09.json").read_text(encoding="utf-8"))
+    assert set(live_pick) == set(shadow_pick)
+    assert [set(p) for p in live_pick["players"]] == [set(p) for p in shadow_pick["players"]]
+    assert (live_pick["model"], shadow_pick["model"]) == (pm.MODEL_VERSION, pm.SHADOW_VERSION)
+    assert len(shadow_pick["players"]) == 15
+    assert {p["name"] for p in live_pick["players"]} != {p["name"] for p in shadow_pick["players"]}
+    # Same availability multiplier for the shadow; the site keeps reading the live predictions
+    shadow_preds = pd.read_csv(picks_dir / "shadow" / "gw09_predictions.csv").set_index("name")
+    assert shadow_preds.loc["Crocked Keeper", "predicted_points"] == 0
+    assert set(shadow_preds["prediction_method"]) == {f"xgboost_{pm.SHADOW_VERSION}"}
+    assert set(pd.read_csv(live_dir / png.OUTPUT_NAME)["prediction_method"]) == {png.MODEL_METHOD}
+
+
+def test_failing_shadow_never_touches_the_live_predictions(live_dir):
+    squad_frame().to_csv(live_dir / "player_status_2026_27.csv", index=False)
+
+    def broken(frame):
+        raise RuntimeError("shadow model exploded")
+    summary = png.predict_next_gameweek(str(live_dir), client=UpcomingClient(),
+                                        history_csv=str(live_dir / "history.csv"), fetch_odds=False,
+                                        predict_fn=lambda f: f["value"].to_numpy() / 20.0, shadow_fn=broken)
+    assert summary["shadow"]["pick"] == "failed"
+    assert os.path.exists(summary["model_pick"])
+    assert not (live_dir / "model_picks" / "2026-27" / "shadow").exists()
+    assert len(pd.read_csv(live_dir / png.OUTPUT_NAME)) == 19
 
 
 # ------------------------------------------------------------------ services/predictions.py

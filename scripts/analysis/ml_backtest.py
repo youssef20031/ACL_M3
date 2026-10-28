@@ -62,9 +62,9 @@ list one season before the first one to compare. lambda_g and kappa_g are in the
 seeds' "tail", and "tail_inseason") and in the report.
 
 Round of 2026-10-27 (snapshots): FPL's own availability and set-piece orders before each deadline
-(ml/snapshots.py, from the git history of vaastav's players_raw.csv; data/fpl_snapshots.csv isn't
-committed, so run `python -m scripts.data.fetch_fpl_snapshots` first, as the workflow does for these
-variants). cop multiplies the current model's predictions by the snapshot's chance of playing, as
+(ml/snapshots.py, from the git history of vaastav's players_raw.csv: data/fpl_snapshots.csv, which
+`python -m scripts.data.fetch_fpl_snapshots` refreshes, as the workflow does for these variants).
+cop multiplies the current model's predictions by the snapshot's chance of playing, as
 production does (a post-prediction hook, applied in every protocol and to the saved predictions);
 avail, sp and snap_cop add the availability and set-piece features. 2025-26 has only 12 snapshots
 and 2026-27 four, so compare them on `--folds 2022-23,2023-24,2024-25`.
@@ -77,6 +77,12 @@ adds an additive defensive-contribution term: the model learns points without DC
 and features), and dc_alpha x dc_hat (the player's recent DC points shrunk to his position's rate,
 scaled by least squares on the training rows) is added back, so the 2025-26 rule change doesn't
 leave defenders under-predicted.
+
+v4 (2026-10-28, the production model): variant v4 trains on exactly ml.points_model's v4 columns
+(pm.feature_columns("v4"), stored here as *__v4), built by pm.build_features with pm's ExtraInputs
+(players keyed by FPL code, ratings, transfers, odds, availability; the same snapshots as cop) and
+the cop hook on top, as production applies it. "current" stays v3 (pm.V3_FEATURES), so earlier
+variants mean what they did. v4 needs the odds files: fetch them first (as for odds*).
 
 Round of 2026-10-22: fixture-strength products and opponent-adjusted team ratings
 (ml/fixture_strength.py, variants matchup and ratings), transfer-market ranks and price changes
@@ -325,43 +331,9 @@ def dc_points_raw(df: pd.DataFrame) -> pd.Series:
 
 # ----------------------------------------------------------------------------- player identity by FPL code
 
-PLAYER_CODES_CSV = os.path.join(ROOT, "data", "player_codes.csv")
-
-
-def load_player_codes(status_csv: str = None, live_season: str = None) -> pd.DataFrame:
-    """(season, element, code): data/player_codes.csv (scripts.data.fetch_player_codes) plus the
-    current season's live status file."""
-    frames = [pd.read_csv(PLAYER_CODES_CSV, usecols=["season", "element", "code"])]
-    if status_csv and os.path.exists(status_csv):
-        frames.append(pd.read_csv(status_csv, usecols=["element", "code"]).assign(season=live_season))
-    return pd.concat(frames, ignore_index=True).drop_duplicates(["season", "element"])
-
-
-def _row_elements(history: pd.DataFrame, live_csv: str = None, live_season: str = None) -> pd.Series:
-    """Each history row's FPL element (pm.load_history drops it), matched on season, name, team
-    and fixture."""
-    keys = ["season", "name", "team", "fixture"]
-    frames = [pd.read_csv(pm.HISTORY_CSV, usecols=["season_x", "name", "team_x", "fixture", "element"],
-                          low_memory=False).rename(columns={"season_x": "season", "team_x": "team"})]
-    if live_csv and os.path.exists(live_csv):
-        frames.append(pd.read_csv(live_csv, usecols=["name", "team", "fixture", "element"]).assign(season=live_season))
-    lookup = pd.concat(frames, ignore_index=True).drop_duplicates(keys)
-    return history[keys].merge(lookup, on=keys, how="left")["element"].set_axis(history.index)
-
-
-def player_identity(rows: pd.DataFrame, codes: pd.DataFrame) -> pd.Series:
-    """One name per player for every row (season, element, name): his name in the latest season
-    with an FPL code, plus " #code" when two players share it. Rows without a code keep theirs."""
-    keyed = rows[["season", "element", "name"]].merge(codes[["season", "element", "code"]],
-                                                       on=["season", "element"], how="left")
-    keyed.index = rows.index
-    has = keyed["code"].notna()
-    latest = keyed[has].sort_values("season", kind="mergesort").groupby("code")["name"].last()
-    shared = latest.duplicated(keep=False).to_numpy()
-    latest[shared] = latest[shared] + " #" + latest.index[shared].astype(int).astype(str)
-    out = keyed["name"].copy()
-    out[has] = keyed.loc[has, "code"].map(latest)
-    return out
+# In ml.points_model since v4 (pm.load_history keeps each row's element)
+load_player_codes = pm.load_player_codes
+player_identity = pm.player_identity
 
 
 # ----------------------------------------------------------------------------- additive DC term
@@ -483,7 +455,7 @@ def add_extra_features(df: pd.DataFrame, transfers: pd.DataFrame = None) -> pd.D
     return df
 
 
-CURRENT = pm.feature_columns()
+CURRENT = list(pm.V3_FEATURES)
 NEW_2026_10 = [f"{c}_r1" for c in pm.LAST_MATCH_STATS] + [f"{p}_{c}20" for p in ("team", "opp") for c in pm.TEAM_STATS]
 PREVIOUS = [c for c in CURRENT if c not in NEW_2026_10]
 G_P90 = [f"{s}_p90_w{w}" for w in P90_WINDOWS for s in P90_STATS] + [f"minutes_sum_w{w}" for w in P90_WINDOWS]
@@ -525,6 +497,7 @@ EXTRA += G_SNAP_AVAIL + G_SP + [sn.COP]
 CURRENT_C = [f"{c}__c" for c in CURRENT]     # players keyed by FPL code
 CURRENT_D = [f"{c}__d" for c in CURRENT]     # ... and built from points without DC points
 CODE_COLS = CURRENT_C + CURRENT_D + ["total_points_d", "dc_pts", "dc_hat"]
+V4 = [f"{c}__v4" for c in pm.feature_columns("v4")]   # the production model's columns, built by pm
 KEEP =["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
         "clean_sheets"]
 
@@ -540,15 +513,21 @@ def cmd_features(args) -> None:
             status_csv = os.path.join("data", "live", meta["files"]["status"])
     history = pm.load_history(live_csv=live_csv, live_season=live_season)
     history["row_id"] = np.arange(len(history))
-    history["element"] = _row_elements(history, live_csv, live_season)
-    identity = player_identity(history, load_player_codes(status_csv, live_season))
+    # The production model's inputs, loaded as train_points_v4 loads them (ratings from the full history)
+    extras = pm.load_extra_inputs(live_dir=os.path.join("data", "live"), season=live_season, status_csv=status_csv,
+                                  ratings_prior=False)
+    identity = player_identity(history, extras.codes)
     feats = pm.build_features(history)
     print(f"model features: {len(feats)} rows in {time.time() - t0:.0f}s", flush=True)
     n = len(feats)
     feats = add_extra_features(feats, mk.load_transfers(live_csv=live_csv, live_season=live_season))
     feats = feats.join(code_keyed_features(history, identity), on="row_id")
-    # FPL's availability and set-piece orders before each deadline, by the season's element
-    snaps = sn.load_snapshots()
+    v4 = pm.build_features(history, extras=extras).set_index("row_id")[pm.feature_columns("v4")]
+    feats = feats.join(v4.rename(columns=lambda c: f"{c}__v4"), on="row_id")
+    print(f"v4 features in {time.time() - t0:.0f}s", flush=True)
+    # FPL's availability and set-piece orders before each deadline, by the season's element: the
+    # same snapshots as v4's (vaastav's history, our own archive, the status file)
+    snaps = extras.snapshots
     snap = sn.snapshot_features(feats, snaps, with_status=True)
     print(f"FPL snapshots: {len(snaps)} rows, coverage by season {sn.coverage(feats, snaps, snap)}", flush=True)
     if len(snaps):
@@ -564,7 +543,7 @@ def cmd_features(args) -> None:
           f"whose history had several names", flush=True)
     feats["name"] = identity.reindex(feats["row_id"]).to_numpy()   # one name per player in every table
     feats = feats[feats["total_points"].notna()]
-    feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS + CODE_COLS))].copy()
+    feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS + CODE_COLS + V4))].copy()
     for c in feats.columns:
         if feats[c].dtype == "float64":
             feats[c] = feats[c].astype("float32")
@@ -654,6 +633,9 @@ VARIANTS = {
     "refit_noscale": {"scale_trees": False},
     "shrink_tail": {"tail": "all"},
     "shrink_tail_pos": {"tail": "position"},
+    # 2026-10-28: the production model, v4 (ml.points_model's own columns and code path; players
+    # keyed by code, ratings, transfers, odds and availability), times the chance of playing
+    "v4": {"features": V4, "post": "cop"},
 }
 
 # Columns a post-prediction hook needs values in (cmd_run checks them like a variant's features)

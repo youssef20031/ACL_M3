@@ -145,6 +145,15 @@ class TestScorePicks(unittest.TestCase):
         self.assertIsNone(d1["points"])
         self.assertIsNone(r["fpl_average"])
 
+    def test_compare_picks_counts_each_pick_by_fpl_rules(self):
+        live, shadow = picks_352(captain="F1"), picks_352(captain="M1", vice="F1")
+        live["model"], shadow["model"] = "v4", "v3"
+        r = mr.compare_picks(live, shadow, actual(F1=(10, 90)), FINISHED, [])
+        # live: F1 10 x2 + ten others 3 each; shadow: M1 3 x2 + F1 10 + nine others 3 each
+        self.assertEqual((r["live_points"], r["shadow_points"], r["difference"]), (50, 43, 7))
+        self.assertEqual((r["live_model"], r["shadow_model"], r["shared_players"], r["status"]),
+                         ("v4", "v3", 15, "finished"))
+
     def test_finished_fixture_without_minutes_counts_as_didnt_play(self):
         live = {k: {"points": 2, "minutes": 90} for k in range(1, 16) if k != 9}   # M5 (element 9) has no row
         r = mr.score_picks(picks_352(), live, {"finished": False}, range(100, 115))
@@ -277,6 +286,56 @@ class TestSaveAndReview(unittest.TestCase):
         self.assertEqual(mr.load_picks(8, "2026-27")["source"], "manual")
         self.save(datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc))
         self.assertEqual(mr.load_picks(8, "2026-27")["source"], "pipeline")
+
+    def save_shadow(self, now, model="v3"):
+        df = pd.read_csv(self.csv)
+        df["predicted_points"] = (df["predicted_points"].max() + 1 - df["predicted_points"]).round(2)  # other tastes
+        return mr.save_picks(self.tmp.name, "2026-27", 8, "2026-10-23T17:30:00Z", df, self.fixtures, now=now,
+                             variant=mr.SHADOW, model=model)
+
+    def test_shadow_pick_has_its_own_folder_and_the_same_shape(self):
+        now = datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc)
+        live = mr.save_picks(self.tmp.name, "2026-27", 8, "2026-10-23T17:30:00Z", self.csv, self.fixtures,
+                             now=now, model="v4")
+        shadow = self.save_shadow(now)
+        self.assertEqual(shadow, os.path.join(self.tmp.name, "model_picks", "2026-27", "shadow", "gw08.json"))
+        self.assertTrue(os.path.exists(shadow.replace(".json", "_predictions.csv")))
+        with open(live, encoding="utf-8") as f:
+            a = json.load(f)
+        with open(shadow, encoding="utf-8") as f:
+            b = json.load(f)
+        self.assertEqual(set(a), set(b))
+        self.assertEqual([set(p) for p in a["players"]], [set(p) for p in b["players"]])
+        self.assertEqual((a["model"], b["model"]), ("v4", "v3"))
+        self.assertNotEqual({p["name"] for p in a["players"]}, {p["name"] for p in b["players"]})
+        self.assertEqual(mr.load_picks(8, "2026-27", mr.SHADOW)["model"], "v3")
+        self.assertEqual(mr.load_picks(8, "2026-27")["model"], "v4")      # the site's review is unchanged
+        self.assertIsNone(self.save_shadow(datetime(2026, 10, 23, 18, 0, tzinfo=timezone.utc)))  # after the deadline
+
+    def test_shadow_comparison_scores_both_picks_the_same_way(self):
+        now = datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc)
+        self.save(now)
+        self.save_shadow(now)
+        live, shadow = mr.load_picks(8, "2026-27"), mr.load_picks(8, "2026-27", mr.SHADOW)
+        elements = sorted({p["element"] for p in live["players"] + shadow["players"]})
+        pd.DataFrame([{"element": e, "GW": 8, "minutes": 90, "total_points": e % 7} for e in elements]).to_csv(
+            os.path.join(self.tmp.name, "FPL_2026_2027.csv"), index=False)
+        self.write_meta([{"id": 8, "finished": True, "average_entry_score": 55, "highest_score": 140}])
+        with patch.object(mr, "datetime") as dt:
+            dt.now.return_value = datetime(2026, 10, 27, tzinfo=timezone.utc)
+            dt.fromisoformat = datetime.fromisoformat
+            self.assertEqual(mr.reviewable_gameweeks(variant=mr.SHADOW), [8])
+            rows = mr.shadow_comparison("2026-27")
+        actual_points = {e: {"points": e % 7, "minutes": 90} for e in elements}
+        event = {"id": 8, "finished": True, "average_entry_score": 55, "highest_score": 140}
+        expected = (mr.score_picks(live, actual_points, event, [])["points"],
+                    mr.score_picks(shadow, actual_points, event, [])["points"])
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual((r["gameweek"], r["status"], r["live_points"], r["shadow_points"]), (8, "finished") + expected)
+        self.assertEqual(r["difference"], expected[0] - expected[1])
+        self.assertEqual(r["shared_players"], len({p["element"] for p in live["players"]}
+                                                  & {p["element"] for p in shadow["players"]}))
 
     def test_unknown_gameweek(self):
         self.write_meta([])

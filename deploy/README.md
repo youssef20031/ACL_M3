@@ -105,14 +105,26 @@ Open `https://<SITE_ADDRESS>` (shown in `deploy/.env`). Caddy gets the certifica
 `pipeline/daily.py` keeps the current season up to date from the official FPL API:
 - new results once FPL finalizes them (bonus confirmed)
 - team news and availability (injuries, suspensions, transfers)
-- the graph and next-gameweek predictions
-- on Mondays, a retrain of the points model on everything up to the weekend. The new model is kept only if it still beats the simple baselines on held-out seasons and isn't more than 10% worse than the current one; otherwise the current model stays. Each attempt is logged in the `live_data` volume at `models/retrain_history.json`. To force one now: `docker compose -f deploy/docker-compose.yml run --rm backend python -m pipeline.retrain --force`
+- bookmaker odds from football-data.co.uk (an input of the v4 points model), kept in the `live_data` volume at `odds/` (override with `ODDS_DIR`): this season's file and the upcoming `fixtures.csv` on every run, past seasons once. A failed download only leaves the odds features empty for that run.
+- the graph and next-gameweek predictions (model v4), plus, before each deadline, the squad picks of the live model and of the shadow model (v3, the previous production model, no longer retrained) in `model_picks/<season>/` and `model_picks/<season>/shadow/`
+- on Mondays, a retrain of the v4 points model on everything up to the weekend. The new model is kept only if it still beats the simple baselines on held-out seasons and isn't more than 10% worse than the current one; otherwise the current model stays. Each attempt is logged in the `live_data` volume at `models/retrain_history.json`, with its peak memory. To force one now: `fpl-pipeline pipeline.retrain --force`
 
-When it finishes it tells the API to reload, so there's no restart. Install the timer once; it runs at 06:00 and 18:00 UTC:
+When it finishes it tells the API to reload, so there's no restart. Install the timer once, and again whenever `deploy/install-daily-job.sh` changes (it's safe to re-run). It runs at 06:00 and 18:00 UTC, and on Fridays also at 16:00 UTC so a Friday-evening deadline gets Friday's team news and odds:
 
 ```bash
 bash deploy/install-daily-job.sh
 sudo systemctl start fpl-daily.service   # optional: run it right away
+```
+
+Every run goes through `fpl-pipeline` (installed in `/usr/local/bin` by the script), which takes one lock (`flock /run/lock/fpl-pipeline.lock`) for the whole run, so the timer's runs and manual ones never overlap: a second run waits for the first. Use it for manual runs too, e.g. `fpl-pipeline pipeline.daily` or `fpl-pipeline pipeline.retrain --force`.
+
+The odds for the weekend are collected on Friday afternoon (by 17:00 UK time) and for midweek games on Tuesday (by 13:00). A prediction run between then and the deadline uses them; an earlier one predicts with empty odds features, and each run's summary shows the share of players with odds (`input_coverage`). In winter 16:00 UTC is 16:00 UK time, possibly before the Friday prices appear: to always run after them, install with `FPL_FRIDAY_SCHEDULE="Fri *-*-* 17:15:00 Europe/London" bash deploy/install-daily-job.sh`.
+
+**Live vs shadow model.** The ledger compares the two models' saved picks gameweek by gameweek (points under FPL's rules, the difference, its running total and a bootstrap confidence interval). `scripts/` isn't in the backend image, so mount it into a one-off container:
+
+```bash
+docker compose -f deploy/docker-compose.yml run --rm --no-deps \
+  -v "$PWD/scripts:/app/scripts:ro" backend python -m scripts.analysis.shadow_ledger
 ```
 
 Optional failure alerts:
@@ -130,6 +142,8 @@ You get an email if a run fails or doesn't happen.
 | Reload only promoted teams + 2026-27 fixtures (after editing the fixtures CSV) | `bash deploy/deploy.sh --load-fixtures` |
 | Refresh the current season now (results, team news, predictions) | `bash deploy/deploy.sh --run-daily` |
 | Daily job status / logs | `systemctl list-timers fpl-daily.timer`, `journalctl -u fpl-daily.service --no-pager \| tail -50` |
+| Run a pipeline step without overlapping the timer | `fpl-pipeline pipeline.daily`, `fpl-pipeline pipeline.retrain --force` |
+| Live vs shadow model ledger | see "Live vs shadow model" above |
 | Tail backend logs | `docker compose -f deploy/docker-compose.yml logs -f backend` |
 | Status | `docker compose -f deploy/docker-compose.yml ps` |
 | Neo4j Browser | `ssh -L 7474:localhost:7474 -L 7687:localhost:7687 azureuser@<vm-ip>` (`ubuntu@` on Oracle), then open http://localhost:7474 (user `neo4j`, password from `deploy/.env`) |

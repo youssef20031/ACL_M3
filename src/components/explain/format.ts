@@ -28,7 +28,14 @@ export function trimNumber(value: number): string {
 
 /** Features that are 0/1 flags in the model, shown as Yes/No. */
 function isFlag(feature: string): boolean {
-  return feature === 'was_home' || feature === 'started_r1' || feature.startsWith('pos_');
+  return (
+    feature === 'was_home' ||
+    feature === 'started_r1' ||
+    feature.startsWith('pos_') ||
+    feature === 'snap_unavailable' ||
+    feature === 'snap_doubtful' ||
+    feature === 'snap_news'
+  );
 }
 
 /**

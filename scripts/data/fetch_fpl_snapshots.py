@@ -20,9 +20,9 @@ to keep the file small), penalties_order, corners_and_indirect_freekicks_order,
 direct_freekicks_order.
 
 Source: github.com/vaastav/Fantasy-Premier-League (MIT licence), the repository the history CSV
-and data/player_codes.csv come from. The licence would allow committing this extract, but at 8 MB
-(over 200 snapshots of 600-900 players) it's gitignored instead: the ML backtest workflow runs this
-script for the variants that use it (about 40 s). The commit list comes from the GitHub API, with
+and data/player_codes.csv come from. The extract (8 MB, over 200 snapshots of 600-900 players) is
+committed, since the v4 points model trains on it in CI and on the VM; rerun this script to add
+newer commits (the ML backtest workflow does, for the variants that use it; about 40 s). The commit list comes from the GitHub API, with
 GH_TOKEN or GITHUB_TOKEN when set (CI) and unauthenticated otherwise (60 requests an hour, about 7
 needed); the files come from raw.githubusercontent.com. --raw-dir keeps each downloaded file, so a
 rerun only fetches new commits.

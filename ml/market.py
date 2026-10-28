@@ -1,6 +1,6 @@
 """
-Candidate transfer-market features for the v3 points model (backtest only, 2026-10;
-scripts/analysis/ml_backtest.py variant transfers): how FPL managers moved before the deadline.
+Transfer-market features, part of the v4 points model (ml/points_model.py, since 2026-10-28; first
+tried as scripts/analysis/ml_backtest.py variant transfers): how FPL managers moved before the deadline.
 Net transfers react to team news (injuries, suspensions, a dropped starter) that the match history
 can't see, so they might cut the share of the model's picks who don't play.
 
@@ -14,8 +14,9 @@ can't see, so they might cut the share of the model's picks who don't play.
 Pre-deadline check: in the historical files a gameweek's net-transfer rank correlates with the
 previous gameweek's points (Spearman 0.18-0.23 per season) more than with that gameweek's
 (0.09-0.14) or the next one's (0.04-0.07), as expected of transfers made before the deadline in
-reaction to the last match. Serving would need the next gameweek's transfers_in_event and
-transfers_out_event from FPL's bootstrap, which pipeline/current_season.py doesn't store yet.
+reaction to the last match. Serving uses the next gameweek's transfers_in_event and
+transfers_out_event from FPL's bootstrap (pipeline/current_season.py's status file, captured before
+the deadline), as the upcoming rows' transfers_in / transfers_out.
 """
 import os
 from typing import Optional
@@ -42,21 +43,28 @@ def load_transfers(history_csv: str = pm.HISTORY_CSV, live_csv: Optional[str] = 
     return out.drop_duplicates(["season", "name", "fixture"])
 
 
-def transfer_features(df: pd.DataFrame, transfers: pd.DataFrame) -> pd.DataFrame:
-    """FEATURES for every row of a pm.build_features table (NaN where counts are missing, e.g.
-    upcoming rows unless the caller adds them to `transfers`)."""
-    d = df[["season", "name", "fixture", "GW"]].merge(transfers, on=["season", "name", "fixture"], how="left")
-    d.index = df.index
+def transfer_features(df: pd.DataFrame, transfers: Optional[pd.DataFrame] = None, key: str = "name") -> pd.DataFrame:
+    """FEATURES for every row of a pm.build_features table (NaN where counts are missing).
+
+    The counts come from `transfers` (season, name, fixture; the backtest), or with None from the
+    rows' own TRANSFER_COLUMNS (v4: load_history keeps them, and upcoming rows carry FPL's
+    transfers in and out before the deadline). `key` groups a player's matches (pm.PLAYER_KEY)."""
+    if transfers is None:
+        d = df[["season", "GW", key] + TRANSFER_COLUMNS]
+    else:
+        d = df[["season", "name", "fixture", "GW"]].merge(transfers, on=["season", "name", "fixture"], how="left")
+        d.index = df.index
+        d[key] = df[key].to_numpy()
     # One value per player-gameweek (a double gameweek's two rows carry the same counts)
-    per_gw = d.dropna(subset=TRANSFER_COLUMNS).drop_duplicates(["season", "GW", "name"])
+    per_gw = d.dropna(subset=TRANSFER_COLUMNS).drop_duplicates(["season", "GW", key])
     ranks = per_gw.groupby(["season", "GW"])[TRANSFER_COLUMNS].rank(pct=True)
     ranks.columns = ["tr_bal_rank", "tr_in_rank", "tr_out_rank"]
-    ranks[["season", "GW", "name"]] = per_gw[["season", "GW", "name"]]
-    out = d[["season", "GW", "name"]].merge(ranks, on=["season", "GW", "name"], how="left")
+    ranks[["season", "GW", key]] = per_gw[["season", "GW", key]]
+    out = d[["season", "GW", key]].merge(ranks, on=["season", "GW", key], how="left")
     out.index = df.index
     out = out[["tr_bal_rank", "tr_in_rank", "tr_out_rank"]]
 
-    prev = pm._rolling_before_gameweek(df, "name", ["value"], (1, 3)).reindex(df.index)
+    prev = pm._rolling_before_gameweek(df, key, ["value"], (1, 3)).reindex(df.index)
     played = df["season_matches_before"]
     out["price_change_1"] = ((df["value"] - prev["value_r1"]) / 10.0).where(played >= 1)
     out["price_change_3"] = ((df["value"] - prev["value_r3"]) / 10.0).where(played >= 3)

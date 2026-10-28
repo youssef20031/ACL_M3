@@ -1,16 +1,21 @@
 """
-Pre-match bookmaker odds as candidate team features for the v3 points model: each team's
-implied chance of winning, expected goals for and against, and clean-sheet probability.
+Pre-match bookmaker odds as team features of the v4 points model (ml/points_model.py, since
+2026-10-28): each team's implied chance of winning, expected goals for and against, and
+clean-sheet probability.
 
-Not used by the production model. The ML backtest (scripts/analysis/ml_backtest.py, variants
-odds and odds_close) found top-20 gains that were positive in every protocol but reliable only
-under refit, and no reliable captain gain (2026-10, see CLAUDE.md). Serving would also need
-upcoming fixtures' prices before each deadline.
+The ML backtest (scripts/analysis/ml_backtest.py, variants odds, odds_close and odds_rt) found
+top-20 gains that were positive in every protocol; on top of the ratings and transfer features
+(odds_rt) they beat v3 under refit, early stopping and the weekly retrain on 2023-24 .. 2026-27,
+though not on 2022-23 (2026-10, see CLAUDE.md).
 
 Source: football-data.co.uk's Premier League files (mmz4281/{yyyy}/E0.csv, one per season, with
-the current season updated twice a week). The data is free for private, non-commercial use and
-isn't licensed for redistribution, so the CSVs are not committed: scripts/data/fetch_odds.py
-downloads them into ODDS_DIR (gitignored), and the ML backtest workflow does that in CI.
+the current season updated twice a week) for training, and its fixtures.csv (upcoming matches of
+every league it covers, kept to Div E0; same columns and collection times) for the upcoming
+gameweek. The data is free for private, non-commercial use and isn't licensed for redistribution,
+so the CSVs are not committed: fetch_season and fetch_fixtures (scripts/data/fetch_odds.py)
+download them into ODDS_DIR, which is data/odds (gitignored) unless the ODDS_DIR environment
+variable says otherwise (production: $LIVE_DATA_DIR/odds, on the data volume). The ML workflows
+fetch them in CI.
 
 Each match has two sets of prices (market averages, Bet365 where an average is missing):
   pre-closing  collected on Friday afternoon (by 17:00 UK time) for Friday-Monday matches and on
@@ -21,19 +26,29 @@ Each match has two sets of prices (market averages, Bet365 where an average is m
 Leakage rule (tests/test_points_model.py): a pre-closing price counts only if its collection time
 (collected_at) is no later than the FPL deadline, 90 minutes before the gameweek's first kickoff.
 In a normal gameweek it always is. A midweek match inside a weekend gameweek (a rearranged match
-in a double gameweek) gets NaN, which is also all that serving would have at the deadline.
+in a double gameweek) gets NaN, which is also all that serving would have at the deadline. The
+same rule applies to upcoming rows, whose prices come from a fixtures.csv fetched before the
+prediction run, so before the deadline. A run before Friday's (or Tuesday's) collection finds no
+prices yet and predicts with NaN odds; the last run before the deadline has them.
 
 Goals come from a Poisson fit: the total from the over/under 2.5 price, the split between the two
 teams from the 1X2 prices (P(home) - P(away)), each with the bookmaker margin removed.
 """
+import io
 import os
+import urllib.request
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 
-ODDS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "odds")
+ODDS_DIR = os.getenv("ODDS_DIR") or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                                 "data", "odds")
 BASE_URL = "https://www.football-data.co.uk/mmz4281"
+FIXTURES_URL = "https://www.football-data.co.uk/fixtures.csv"
+FIXTURES_FILE = "fixtures.csv"   # in ODDS_DIR: the upcoming Premier League matches only
+DIVISION = "E0"
+USER_AGENT = "pitch-me"
 
 # football-data.co.uk name -> graph (FPL) name; the rest are the same
 FD_TO_GRAPH = {
@@ -69,6 +84,13 @@ def graph_team(name: str) -> str:
     return FD_TO_GRAPH.get(name, name)
 
 
+def season_of(dates) -> pd.Series:
+    """FPL season label of each match date (dd/mm/yyyy): 2026-27 from July 2026 to June 2027."""
+    d = pd.to_datetime(pd.Series(dates), dayfirst=True)
+    start = d.dt.year - (d.dt.month < 7).astype(int)
+    return start.astype(str) + "-" + (start + 1).astype(str).str[2:]
+
+
 def parse_odds(raw: pd.DataFrame, season: str) -> pd.DataFrame:
     """One row per match from a football-data.co.uk file (a season's E0.csv, or fixtures.csv
     filtered to Div E0): season, home, away, date, and per price set the margin-free
@@ -90,18 +112,71 @@ def parse_odds(raw: pd.DataFrame, season: str) -> pd.DataFrame:
     return out.drop_duplicates(["season", "home", "away"], keep="last").reset_index(drop=True)
 
 
+def empty_odds() -> pd.DataFrame:
+    return parse_odds(pd.DataFrame(columns=["HomeTeam", "AwayTeam", "Date"]), "")
+
+
+def parse_fixtures(raw: pd.DataFrame) -> pd.DataFrame:
+    """parse_odds of fixtures.csv's Premier League rows, each with the season of its date."""
+    if "Div" in raw.columns:
+        raw = raw[raw["Div"] == DIVISION]
+    raw = raw.dropna(subset=["Date"])
+    if raw.empty:
+        return empty_odds()
+    seasons = season_of(raw["Date"]).to_numpy()
+    return pd.concat([parse_odds(raw[seasons == s], s) for s in pd.unique(seasons)], ignore_index=True)
+
+
 def load_odds(odds_dir: str = ODDS_DIR) -> pd.DataFrame:
-    """Every season file in `odds_dir` (E0_2021.csv, ...; see scripts/data/fetch_odds.py)."""
+    """Every file in `odds_dir`: the season files (E0_2021.csv, ...) and the upcoming fixtures.csv
+    (see fetch_season, fetch_fixtures). A match in both keeps the season file's row (the same
+    pre-closing prices, plus closing ones): it comes last, and odds_features keeps the last."""
     frames = []
     if os.path.isdir(odds_dir):
+        fixtures = os.path.join(odds_dir, FIXTURES_FILE)
+        if os.path.exists(fixtures):
+            frames.append(parse_fixtures(pd.read_csv(fixtures, encoding="utf-8-sig")))
         for fname in sorted(os.listdir(odds_dir)):
             if fname.startswith("E0_") and fname.endswith(".csv"):
                 code = fname[3:7]
                 season = f"20{code[:2]}-{code[2:]}"
                 frames.append(parse_odds(pd.read_csv(os.path.join(odds_dir, fname), encoding="utf-8-sig"), season))
     if not frames:
-        return parse_odds(pd.DataFrame(columns=["HomeTeam", "AwayTeam", "Date"]), "")
+        return empty_odds()
     return pd.concat(frames, ignore_index=True)
+
+
+def _download(url: str) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        return resp.read()
+
+
+def _write(path: str, body: bytes) -> None:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "wb") as f:
+        f.write(body)
+    os.replace(tmp, path)
+
+
+def fetch_season(season: str, odds_dir: str = ODDS_DIR) -> str:
+    """Download a season's results-and-odds file to odds_dir/E0_{yyyy}.csv; returns its path."""
+    code = season_code(season)
+    path = os.path.join(odds_dir, f"E0_{code}.csv")
+    _write(path, _download(f"{BASE_URL}/{code}/E0.csv"))
+    return path
+
+
+def fetch_fixtures(odds_dir: str = ODDS_DIR) -> str:
+    """Download fixtures.csv and write its Premier League rows to odds_dir/fixtures.csv, replacing
+    the previous copy (whose matches are in the season file once played); returns its path.
+    Fixtures without prices yet are kept and parse to NaN."""
+    raw = pd.read_csv(io.BytesIO(_download(FIXTURES_URL)), encoding="utf-8-sig")
+    keep = raw[raw["Div"] == DIVISION] if "Div" in raw.columns else raw.iloc[:0]
+    path = os.path.join(odds_dir, FIXTURES_FILE)
+    _write(path, keep.to_csv(index=False).encode("utf-8"))
+    return path
 
 
 # --------------------------------------------------------------------------- Poisson fit

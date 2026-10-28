@@ -1,7 +1,8 @@
 """
-FPL's availability and set-piece information as it stood before each deadline, as candidate
-features for the v3 points model (backtest only, 2026-10-27; scripts/analysis/ml_backtest.py
-variants cop, avail, avail_cop, sp, sp_cop and snap_cop).
+FPL's availability and set-piece information as it stood before each deadline. The availability
+features are part of the v4 points model (ml/points_model.py, since 2026-10-28); the set-piece
+flags stay backtest candidates (2026-10-27; scripts/analysis/ml_backtest.py variants cop, avail,
+avail_cop, sp, sp_cop and snap_cop).
 
 Production multiplies the model's predictions by FPL's chance of playing
 (pipeline.predict_next_gw.availability_factor), but the model never sees that information in
@@ -18,9 +19,13 @@ these snapshots; it is the reference the availability features have to beat.
   sp_fk1             first on direct free kicks
   cop_factor         availability_factor of the snapshot, 1 without one (not a feature: the cop hook)
 
-Source: data/fpl_snapshots.csv (python -m scripts.data.fetch_fpl_snapshots; 8 MB, so gitignored
-and fetched by the ML backtest workflow), the git history of vaastav's players_raw.csv. It is
-committed about once a gameweek, usually a day or two after the gameweek ends.
+Sources (load_all_snapshots), all in load_snapshots' schema, one `sha` per capture:
+  * data/fpl_snapshots.csv (python -m scripts.data.fetch_fpl_snapshots; MIT, committed so training
+    in CI and on the VM needs no network), the git history of vaastav's players_raw.csv. It is
+    committed about once a gameweek, usually a day or two after the gameweek ends.
+  * our own pre-deadline archive, LIVE_DATA_DIR/element_snapshots/<season>/gwNN.csv
+    (pipeline.current_season: every capture before each deadline since GW9 2026-27).
+  * the live status file, captured at its fetched_at: what upcoming rows use, by the same rule.
 
 Timing rule (tests/test_snapshots.py): gameweek N uses the latest snapshot captured strictly
 before N's deadline (its first kickoff minus 90 minutes, as in ml/odds.py) and strictly after
@@ -32,9 +37,9 @@ its commit time, so none was scraped before that deadline and committed after it
 
 Coverage: about 35 of 38 gameweeks a season from 2020-21 to 2024-25, but only 12 snapshots in
 2025-26 and 4 in 2026-27 (GW1, GW2 and GW8), so the useful test folds are 2023-24 and 2024-25 plus
-the untouched 2022-23. Our own pre-deadline archive (pipeline.current_season's element_snapshots)
-starts at GW9 2026-27 and lives on the VM, so it isn't used here.
+the untouched 2022-23. Our own archive covers 2026-27 from GW9 where it exists (on the VM).
 """
+import glob
 import os
 
 import numpy as np
@@ -53,15 +58,65 @@ COP = "cop_factor"
 _UTC = "datetime64[ns, UTC]"
 
 
+COLUMNS = ["season", "captured_at", "sha", "element", "code", "status", "chance_of_playing_next_round",
+           "news_flag"] + ORDERS
+
+
+def empty_snapshots() -> pd.DataFrame:
+    return pd.DataFrame({c: pd.Series(dtype=_UTC if c == "captured_at" else object) for c in COLUMNS})
+
+
 def load_snapshots(path: str = SNAPSHOTS_CSV) -> pd.DataFrame:
     """data/fpl_snapshots.csv with captured_at as UTC times; empty when the file is missing."""
-    cols = ["season", "captured_at", "sha", "element", "code", "status", "chance_of_playing_next_round",
-            "news_flag"] + ORDERS
-    if not os.path.exists(path):
-        return pd.DataFrame(columns=cols)
+    if not os.path.isfile(path):
+        return empty_snapshots()
     snaps = pd.read_csv(path, dtype={"season": str, "sha": str, "status": str})
     snaps["captured_at"] = pd.to_datetime(snaps["captured_at"], utc=True).astype(_UTC)
     return snaps
+
+
+def from_bootstrap(rows: pd.DataFrame, season: str, captured_at, source: str) -> pd.DataFrame:
+    """FPL bootstrap players (pipeline.current_season's status file or element snapshot rows:
+    element, code, status, chance_of_playing_next_round, news, set-piece orders) as snapshot
+    rows captured at `captured_at` (a column name or a time), one sha per capture."""
+    at = rows[captured_at] if isinstance(captured_at, str) and captured_at in rows else captured_at
+    at = pd.Series(pd.to_datetime(at, utc=True), index=rows.index).astype(_UTC)
+    news = rows["news"] if "news" in rows else pd.Series("", index=rows.index)
+    out = pd.DataFrame({
+        "season": str(season), "captured_at": at,
+        "sha": source + "-" + at.dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "element": rows["element"], "code": rows.get("code"),
+        "status": rows["status"],
+        "chance_of_playing_next_round": rows.get("chance_of_playing_next_round"),
+        "news_flag": news.fillna("").astype(str).str.strip().ne("").astype(int),
+    }, index=rows.index)
+    for c in ORDERS:
+        out[c] = rows[c] if c in rows else np.nan
+    return out[COLUMNS].reset_index(drop=True)
+
+
+def load_live_snapshots(live_dir: str) -> pd.DataFrame:
+    """Our own archive, live_dir/element_snapshots/<season>/gwNN.csv: every capture before each
+    deadline (pipeline.current_season.update_element_snapshots), one sha per capture."""
+    frames = []
+    for path in sorted(glob.glob(os.path.join(live_dir, "element_snapshots", "*", "gw*.csv"))):
+        raw = pd.read_csv(path)
+        if len(raw):
+            frames.append(from_bootstrap(raw, os.path.basename(os.path.dirname(path)), "captured_at", "live"))
+    return pd.concat(frames, ignore_index=True) if frames else empty_snapshots()
+
+
+def load_all_snapshots(path: str = SNAPSHOTS_CSV, live_dir: str = None, status: pd.DataFrame = None,
+                       season: str = None) -> pd.DataFrame:
+    """Every source: vaastav's history (`path`), our archive in `live_dir`, and the live status
+    file (`status`, captured at its fetched_at, for `season`)."""
+    frames = [load_snapshots(path)]
+    if live_dir:
+        frames.append(load_live_snapshots(live_dir))
+    if status is not None and len(status) and "fetched_at" in status:
+        frames.append(from_bootstrap(status, season, "fetched_at", "status"))
+    frames = [f for f in frames if len(f)]
+    return pd.concat(frames, ignore_index=True) if frames else empty_snapshots()
 
 
 def gameweek_deadlines(df: pd.DataFrame) -> pd.DataFrame:

@@ -2,9 +2,10 @@
 SHAP and LIME explanations of the next-gameweek predictions, for the /model page
 (GET /api/ml/explain/summary, /player, /dependence, /players).
 
-Input: LIVE_DATA_DIR/next_gw_features.csv, the v3 model's input row for every upcoming fixture,
-written by pipeline.predict_next_gw in the same run as next_gw_predictions.csv, and the served
-model (ml.points_model.active_model_paths). Nothing is computed by the pipeline itself.
+Input: LIVE_DATA_DIR/next_gw_features.csv, the served model's input row for every upcoming
+fixture, written by pipeline.predict_next_gw in the same run as next_gw_predictions.csv, and the
+served model (ml.points_model.active_model_paths: v4, or v3 until a v4 file exists; the v3 shadow
+isn't explained). Nothing is computed by the pipeline itself.
 
   SHAP  XGBoost's own TreeSHAP (Booster.predict(pred_contribs=True)): exact Shapley values of
         every feature for every row, in points. They add up, with the base value (the model's
@@ -39,7 +40,7 @@ BEESWARM_MAX_ROWS = 500
 TOP_PLAYERS = 12
 LIME_SAMPLES = 5000
 LIME_FEATURES = 10
-BASELINES = ("v3", "last3_avg", "last6_avg", "season_ppg")
+BASELINES = ("last3_avg", "last6_avg", "season_ppg")   # shown after the served model's own metrics
 
 
 class ExplainUnavailable(Exception):
@@ -69,6 +70,73 @@ _STATS = {
 _TEAM = {"gf": ("goals for", "goals scored"), "ga": ("goals against", "goals conceded"),
          "xgf": ("xG for", "expected goals created"), "xga": ("xG against", "expected goals conceded")}
 _POSITIONS = {"GK": "goalkeeper", "DEF": "defender", "MID": "midfielder", "FWD": "forward"}
+
+# v4's additions (ml.points_model.v4_extra_features). The wording stays neutral: bookmakers'
+# prices are described as forecasts, never as betting.
+_RATING = ("on a log scale where 0 is an average Premier League side, adjusted for the opponents it has "
+           "faced and updated after every gameweek from xG and goals")
+_NO_ODDS = " Missing when no prices were published before the deadline."
+_NO_SNAPSHOT = " Missing when FPL had no snapshot before the deadline."
+_V4 = {
+    "rt_att": ("Team attack rating", "Team ratings", f"His team's attack rating, {_RATING}."),
+    "rt_def": ("Team defence rating", "Team ratings", f"His team's defence rating (higher concedes less), {_RATING}."),
+    "rt_opp_att": ("Opponent attack rating", "Team ratings", f"The opponent's attack rating, {_RATING}."),
+    "rt_opp_def": ("Opponent defence rating", "Team ratings",
+                   f"The opponent's defence rating (higher concedes less), {_RATING}."),
+    "rt_xgf": ("Expected team xG (ratings)", "Team ratings",
+               "xG his team is expected to create in this fixture, from both teams' ratings and home advantage."),
+    "rt_xga": ("Expected xG against (ratings)", "Team ratings",
+               "xG his team is expected to concede in this fixture, from both teams' ratings and home advantage."),
+    "rt_cs": ("Clean-sheet chance (ratings)", "Team ratings",
+              "Chance his team concedes no goals, from the ratings' expected xG against, times the share of his "
+              "last 6 matches he started."),
+    "rt_pxg": ("His expected goals (ratings)", "Team ratings",
+               "His share of his team's xG over his last 6 matches times the team's expected xG in this fixture."),
+    "rt_pxa": ("His expected assists (ratings)", "Team ratings",
+               "His xA as a share of his team's xG over his last 6 matches, times the team's expected xG in this "
+               "fixture."),
+    "tr_bal_rank": ("Net transfers percentile", "Transfers",
+                    "FPL managers' transfers in minus out before this gameweek's deadline, as a percentile of this "
+                    "gameweek's players (1 = most bought on balance)."),
+    "tr_in_rank": ("Transfers in percentile", "Transfers",
+                   "FPL managers' transfers in before this gameweek's deadline, as a percentile of this gameweek's "
+                   "players (1 = most bought)."),
+    "tr_out_rank": ("Transfers out percentile", "Transfers",
+                    "FPL managers' transfers out before this gameweek's deadline, as a percentile of this "
+                    "gameweek's players (1 = most sold)."),
+    "price_change_1": ("Price change since last match (£m)", "Price & ownership",
+                       "His FPL price now minus his price at his previous match this season."),
+    "price_change_3": ("Price change over 3 matches (£m)", "Price & ownership",
+                       "His FPL price now minus his average price over his last 3 matches this season."),
+    "odds_win": ("Bookmakers' implied win chance", "Bookmaker forecasts",
+                 "His team's chance of winning this fixture implied by bookmakers' prices before the deadline "
+                 "(0 to 1, margin removed)." + _NO_ODDS),
+    "odds_draw": ("Bookmakers' implied draw chance", "Bookmaker forecasts",
+                  "The chance of a draw implied by bookmakers' prices before the deadline (0 to 1, margin removed)."
+                  + _NO_ODDS),
+    "odds_gf": ("Bookmakers' expected goals for", "Bookmaker forecasts",
+                "Goals his team is expected to score in this fixture, worked out from bookmakers' prices for the "
+                "result and for over/under 2.5 goals." + _NO_ODDS),
+    "odds_ga": ("Bookmakers' expected goals against", "Bookmaker forecasts",
+                "Goals his team is expected to concede in this fixture, worked out from bookmakers' prices for the "
+                "result and for over/under 2.5 goals." + _NO_ODDS),
+    "odds_cs": ("Bookmakers' clean-sheet chance", "Bookmaker forecasts",
+                "Chance his team concedes no goals, from the bookmakers' expected goals against (0 to 1)." + _NO_ODDS),
+    "snap_unavailable": ("Flagged unavailable", "Availability",
+                         "1 if FPL listed him as injured, suspended, unavailable or not in the squad before the "
+                         "deadline." + _NO_SNAPSHOT),
+    "snap_doubtful": ("Flagged doubtful", "Availability",
+                      "1 if FPL listed him as doubtful before the deadline." + _NO_SNAPSHOT),
+    "snap_chance": ("FPL chance of playing (%)", "Availability",
+                    "FPL's chance of him playing this gameweek as listed before the deadline (100 with no flag)."
+                    + _NO_SNAPSHOT),
+    "snap_news": ("Has team news", "Availability",
+                  "1 if FPL had team news on him before the deadline (an injury, a suspension, a transfer)."
+                  + _NO_SNAPSHOT),
+    "snap_age_days": ("Age of availability news (days)", "Availability",
+                      "How long before the deadline FPL's availability information was captured, in days."
+                      + _NO_SNAPSHOT),
+}
 
 
 def feature_info(feature: str) -> Tuple[str, str, str]:
@@ -113,6 +181,8 @@ def feature_info(feature: str) -> Tuple[str, str, str]:
     if feature.startswith("pos_"):
         pos = _POSITIONS.get(feature[4:], feature[4:])
         return f"Is a {pos}", "Position", f"1 if he is listed as a {pos}, else 0."
+    if feature in _V4:
+        return _V4[feature]
     return feature, "Other", ""
 
 
@@ -196,11 +266,13 @@ def _predict_fn(state: _State):
 def _model_info(state: _State) -> Dict[str, Any]:
     meta = state.meta
     metrics = meta.get("test_metrics") or {}
+    version = str(meta.get("version", "v3"))
     return {
-        "version": str(meta.get("version", "v3")), "trained_at": meta.get("trained_at"),
+        "version": version, "trained_at": meta.get("trained_at"),
         "n_trees": meta.get("n_trees"), "seasons": list(meta.get("seasons") or []), "rows": meta.get("rows"),
         "source": state.model_source,
-        "test_metrics": {k: metrics[k] for k in BASELINES if isinstance(metrics.get(k), dict)},
+        # The model's own metrics are under its version ("v4"), as in its report
+        "test_metrics": {k: metrics[k] for k in (version,) + BASELINES if isinstance(metrics.get(k), dict)},
     }
 
 
