@@ -84,6 +84,15 @@ v4 (2026-10-28, the production model): variant v4 trains on exactly ml.points_mo
 the cop hook on top, as production applies it. "current" stays v3 (pm.V3_FEATURES), so earlier
 variants mean what they did. v4 needs the odds files: fetch them first (as for odds*).
 
+Round of 2026-10-30 (the chance-of-playing multiplier): v4 sees FPL's flags as features and is then
+multiplied by chance / 100, so it may count them twice; and among regulars, 50% and 25% doubts
+scored far less than half and a quarter of their peers (scripts/analysis/availability_calibration.py).
+v4_raw drops the multiplier. cop_fit (v3) and v4_fit replace it with a factor per flag
+(cop_fit_factors): the flag's actual points over the model's predictions on the validation season,
+relative to unflagged players, shrunk towards the literal factor. Every fold is scored (no
+burn-in); the factors are in the results and the report. Like cop, compare on
+`--folds 2022-23,2023-24,2024-25`.
+
 Round of 2026-10-22: fixture-strength products and opponent-adjusted team ratings
 (ml/fixture_strength.py, variants matchup and ratings), transfer-market ranks and price changes
 (ml/market.py, variant transfers), a Tweedie objective (tweedie) and a two-stage model that
@@ -636,10 +645,18 @@ VARIANTS = {
     # 2026-10-28: the production model, v4 (ml.points_model's own columns and code path; players
     # keyed by code, ratings, transfers, odds and availability), times the chance of playing
     "v4": {"features": V4, "post": "cop"},
+    # 2026-10-30: is FPL's chance / 100 the right multiplier? v4 already sees the flags (snap_*),
+    # so it may count them twice, and among regulars 50% and 25% doubts scored far less than half
+    # and a quarter of their peers (scripts/analysis/availability_calibration.py). v4_raw drops the
+    # multiplier; cop_fit and v4_fit replace it with factors fitted per flag on the validation season
+    # (cop_fit_factors)
+    "v4_raw": {"features": V4},
+    "v4_fit": {"features": V4, "post": "cop_fit"},
+    "cop_fit": {"features": CURRENT, "post": "cop_fit"},
 }
 
 # Columns a post-prediction hook needs values in (cmd_run checks them like a variant's features)
-POST_NEEDS = {"cop": ["snap_age_days"]}
+POST_NEEDS = {"cop": ["snap_age_days"], "cop_fit": ["snap_age_days"]}
 
 
 def _target(frame: pd.DataFrame, spec: dict) -> pd.Series:
@@ -652,17 +669,62 @@ def _eval_target(frame: pd.DataFrame, spec: dict) -> pd.Series:
     return frame[spec.get("target", "total_points")]
 
 
-def _post(frame: pd.DataFrame, pred, spec: dict) -> np.ndarray:
+def _post(frame: pd.DataFrame, pred, spec: dict, cop_fit: dict = None) -> np.ndarray:
     """The variant's post-prediction hook, applied to every protocol's test predictions: "cop"
     multiplies them by the snapshot's chance of playing (ml/snapshots.cop_factor, which is
-    pipeline.predict_next_gw.availability_factor; 1 without a snapshot), as production does."""
+    pipeline.predict_next_gw.availability_factor; 1 without a snapshot), as production does;
+    "cop_fit" by the factors `cop_fit` (cop_fit_factors) instead."""
     pred = np.asarray(pred, dtype=float)
     post = spec.get("post")
     if not post:
         return pred
     if post == "cop":
         return pred * frame[sn.COP].to_numpy(dtype=float)
+    if post == "cop_fit":
+        if cop_fit is None:
+            raise ValueError("the cop_fit hook needs factors fitted on the validation season")
+        return pred * cop_fit_multiplier(frame, cop_fit)
     raise ValueError(f"unknown post hook {post!r}")
+
+
+# Fitted chance-of-playing multiplier (post hook "cop_fit"). Each FPL flag (the multiplier
+# production would use: 0.75, 0.5 and 0.25 for doubts, 0 for out) gets the factor its players'
+# actual points had relative to the model's predictions on the validation season, divided by the
+# same ratio for unflagged players (snapshot status a). The predictions are the early-stopped
+# model's, which saw that season only to choose its tree count. COP_FIT_PRIOR predicted points at
+# the literal factor shrink a flag with few rows towards it.
+COP_FLAGS = {"d75": 0.75, "d50": 0.5, "d25": 0.25, "out": 0.0}
+COP_FIT_PRIOR = 50.0
+COP_FIT_MAX = 1.5
+
+
+def cop_fit_factors(frame: pd.DataFrame, pred) -> dict:
+    """{flag: {"factor", "raw", "rows"}} fitted on `frame`'s rows (predictions floored at 0, as
+    served); "raw" is the unshrunk ratio (None without rows)."""
+    pred = np.maximum(np.asarray(pred, dtype=float), 0.0)
+    y = frame["total_points"].to_numpy(dtype=float)
+    cop = frame[sn.COP].to_numpy(dtype=float)
+    ok = frame["snap_age_days"].notna().to_numpy() & np.isfinite(pred) & np.isfinite(y)
+    unflagged = ok & np.isclose(cop, 1.0)
+    base = y[unflagged].sum() / pred[unflagged].sum() if pred[unflagged].sum() > 0 else 1.0
+    out = {}
+    for flag, literal in COP_FLAGS.items():
+        m = ok & np.isclose(cop, literal)
+        actual, predicted = y[m].sum() / base, pred[m].sum()
+        factor = (actual + COP_FIT_PRIOR * literal) / (predicted + COP_FIT_PRIOR)
+        out[flag] = {"factor": float(np.clip(factor, 0.0, COP_FIT_MAX)),
+                     "raw": float(actual / predicted) if predicted > 0 else None, "rows": int(m.sum())}
+    return out
+
+
+def cop_fit_multiplier(frame: pd.DataFrame, factors: dict) -> np.ndarray:
+    """Each row's multiplier: its flag's fitted factor; 1 when unflagged or without a snapshot."""
+    cop = frame[sn.COP].to_numpy(dtype=float)
+    has = frame["snap_age_days"].notna().to_numpy()
+    mult = np.ones(len(frame))
+    for flag, literal in COP_FLAGS.items():
+        mult[has & np.isclose(cop, literal)] = factors[flag]["factor"]
+    return mult
 
 
 # Tail shrink (variant spec "tail": "all" or "position"): pred - lambda_g x max(0, pred - kappa_g),
@@ -816,6 +878,9 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool, adjust=None) -> tupl
     info = {"best_iter": best + 1, "trained": len(valid), "n_refit": n_refit,
             "valid_rmse_at_best": float(valid[best]), "valid_rmse_min": float(min(valid)),
             "argmin_valid": int(np.argmin(valid)) + 1}
+    if spec.get("post") == "cop_fit":
+        valid_pred = m.predict(va[cols], iteration_range=(0, best + 1)) + _dc_add(va, tr, spec)[0]
+        info["cop_fit"] = cop_fit_factors(va, valid_pred)
     if spec.get("dc_term"):
         info["dc_alpha"] = {"es": alpha_es, "refit": alpha_rf}
     if curve:
@@ -823,7 +888,8 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool, adjust=None) -> tupl
         for k in CURVE_POINTS:
             if k <= len(valid):
                 raw = m.predict(te[cols], iteration_range=(0, k)) + dc_es
-                t = gw_table(te, _post(te, adjust(raw) if adjust else raw, spec), squads=False)
+                post = _post(te, adjust(raw) if adjust else raw, spec, info.get("cop_fit"))
+                t = gw_table(te, post, squads=False)
                 curve_metrics[k] = {**summarize(t), "valid_rmse": float(valid[k - 1])}
         info["test_curve"] = curve_metrics
         gain = m2.get_booster().get_score(importance_type="gain")
@@ -1105,7 +1171,8 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -
                 pe, tail_es = tail.correct(("es", seed), te, pe, spec)
                 pr, tail_rf = tail.correct(("refit", seed), te, pr, spec)
                 info["tail"] = {"es": tail_es, "refit": tail_rf}
-            preds["es"][seed], preds["refit"][seed] = _post(te, pe, spec), _post(te, pr, spec)
+            fit = info.get("cop_fit")
+            preds["es"][seed], preds["refit"][seed] = _post(te, pe, spec, fit), _post(te, pr, spec, fit)
             fold["seeds"][seed] = info
         if burn_in:     # uncorrected, so the same as without the shrink: it only starts the history
             print(f"  {name} {test_season}: tail shrink history started, fold not scored", flush=True)
@@ -1124,6 +1191,8 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -
                 continue
             if "tail" in ins:
                 res.setdefault("tail_inseason", {})[season] = ins.pop("tail")
+            if "cop_fit" in ins:
+                res.setdefault("cop_fit_inseason", {})[season] = ins.pop("cop_fit")
             res.setdefault("inseason", {})[season] = ins
     return res
 
@@ -1148,13 +1217,13 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None,
     va = feats[feats["season"] == valid_s]
     cur = feats[feats["season"] == season]
     gws = sorted(cur["GW"].unique())
-    preds, tails = {}, {}
+    preds, tails, cop_fits = {}, {}, {}
     burn_in = tail is not None and tail.empty("inseason")
 
     def finish(seed, raw):
         if tail is not None:
             raw, tails[seed] = tail.correct(("inseason", seed), cur, raw, spec)
-        preds[seed] = _post(cur, raw, spec)
+        preds[seed] = _post(cur, raw, spec, cop_fits.get(seed))
 
     for seed in SEEDS:
         p = {**params, "random_state": seed}
@@ -1176,6 +1245,9 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None,
         m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
               eval_set=[(va[cols], _eval_target(va, spec))], verbose=False)
         best = int(m.best_iteration) + 1
+        if spec.get("post") == "cop_fit":
+            valid_pred = m.predict(va[cols], iteration_range=(0, best)) + _dc_add(va, tr, spec)[0]
+            cop_fits[seed] = cop_fit_factors(va, valid_pred)
         out = pd.Series(np.nan, index=cur.index)
         for start in range(int(gws[0]), int(gws[-1]) + 1, INSEASON_EVERY):
             seen = feats[feats["season"].isin(pool) | ((feats["season"] == season) & (feats["GW"] < start))]
@@ -1195,6 +1267,8 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None,
     res = {**unit, "seeds": [per_seed[s] for s in unit["seed_list"]]}
     if tail is not None:
         res["tail"] = tails
+    if cop_fits:
+        res["cop_fit"] = cop_fits
     return res
 
 
@@ -1282,8 +1356,9 @@ def _training_info(variant: str, paths: list) -> dict:
             for season, f in r.get("folds", {}).items():
                 fold = res["folds"].setdefault(season, {k: v for k, v in f.items() if k not in ("seeds", "es", "refit")})
                 fold.setdefault("seeds", {}).update(f.get("seeds", {}))
-            for season, by_seed in r.get("tail_inseason", {}).items():
-                res.setdefault("tail_inseason", {}).setdefault(season, {}).update(by_seed)
+            for key in ("tail_inseason", "cop_fit_inseason"):
+                for season, by_seed in r.get(key, {}).items():
+                    res.setdefault(key, {}).setdefault(season, {}).update(by_seed)
     return res
 
 
@@ -1599,6 +1674,28 @@ def _load_results(paths) -> tuple:
     return results, tables, solves
 
 
+def _cop_fit_lines(results: dict) -> list:
+    """Report rows of the fitted chance-of-playing factors per variant, protocol and fold."""
+    rows = []
+    for name, r in results.items():
+        by = {}
+        for s, f in r.get("folds", {}).items():
+            fits = [info["cop_fit"] for info in f.get("seeds", {}).values() if "cop_fit" in info]
+            if fits:
+                by[("es/refit", s)] = fits
+        for s, by_seed in r.get("cop_fit_inseason", {}).items():
+            by[("inseason", s)] = list(by_seed.values())
+        for (proto, s), fits in sorted(by.items()):
+            cells = []
+            for flag in COP_FLAGS:
+                f = [x[flag]["factor"] for x in fits]
+                raw = [x[flag]["raw"] for x in fits if x[flag]["raw"] is not None]
+                cells.append(f"{np.mean(f):.2f} [{min(f):.2f}, {max(f):.2f}]"
+                             + (f" ({np.mean(raw):.2f})" if raw else "") + f" n={fits[0][flag]['rows']}")
+            rows.append(f"| {name} | {proto} | {s} | {len(fits)} | " + " | ".join(cells) + " |")
+    return rows
+
+
 def _tail_lines(results: dict) -> list:
     """Report rows of the tail-shrink parameters per variant, protocol and fold (seeds pooled)."""
     rows = []
@@ -1715,6 +1812,13 @@ def cmd_report(args) -> None:
         for name, (secs, failed) in solves.items():
             lines.append(f"- **{name}**: {len(secs)} squads, {failed} infeasible, mean {np.nanmean(secs):.2f}s, "
                          f"max {np.nanmax(secs):.1f}s, {int((secs >= 0.98 * SQ_TIME_LIMIT).sum())} at the limit")
+    cop_lines = _cop_fit_lines(results)
+    if cop_lines:
+        lines.append("\n## Fitted chance-of-playing factors: mean [min, max] over seeds (unshrunk ratio mean), "
+                     "flagged rows, fitted on the validation season (es/refit) or the replay's\n")
+        lines.append("| variant | protocol | fold | seeds | " + " | ".join(COP_FLAGS) + " |")
+        lines.append("|---|---|---|---|" + "---|" * len(COP_FLAGS))
+        lines += cop_lines
     tail_lines = _tail_lines(results)
     if tail_lines:
         lines.append("\n## Tail shrink: lambda mean [min, max] over seeds, kappa mean, per group "
