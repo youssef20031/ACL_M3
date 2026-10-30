@@ -123,6 +123,12 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
   - only odds collected and snapshots captured before the deadline (`extras_at`; `tests/test_manager_replay.py`).
 
   The season starts from the predicted Team of the Week, the engine validates, applies and scores every entry with the actual points under today's rules, and `VARIANTS` change planner constants, the horizon or chips (`hold` never transfers, so the others' gain over it is what transfers and chips earn). The report gives totals, the difference from the reference with a paired bootstrap over gameweeks (a guide only: decisions carry over), and projection quality by gameweeks ahead (what `DECAY` discounts). Known differences from live: the fixture list is the season as played (doubles and blanks known 4 gameweeks ahead), the model is trained once per season, and a few gameweeks a season have no snapshot.
+
+  First run (2026-10-30, run 41089319406: v4, 2022-23..2024-25 from GW1, no failed plans, no solve at its time limit):
+  - **Baselines:** `default` scored 2256/2285/2401 (6942) with 302 transfers (wildcards included) and 67 hits. `hold` scored 5559, -12.1 per gameweek [-15.9, -8.3], so transfers and chips earn about 460 points a season. `nochips` lost in every season, -2.3 [-4.8, +0.3] (about 87 a season).
+  - **Transfer margin:** `TRANSFER_MARGIN` 1.0 (`margin1`) was the only variant ahead in every season (+125/+58/+43, +1.98 per gameweek [-0.06, +3.97], 43 hits instead of 67). 2.0 was ahead in every season too (+1.46), 0.5 was mixed. It's the best of 13 variants with its CI touching 0, so production stays at 0 until a confirmation run from GW9 (`margin1`, `margin15`, `margin2`, `hitm4`, `margin1_hitm4`).
+  - **No consistent sign across seasons:** fewer hits (`hitm4` +1.19, `nohits` +0.89, `hitm2` +0.39), the horizon (`h1` +0.62, `h2` -0.42), `DECAY` 0.8/1.0 (-0.40/+0.36) and `FT_END_VALUE` 0/3 (+0.77/+0.99).
+  - **Projection quality:** the top 20 by projection scored 5.15-5.25 a player in the deadline's gameweek, then about 96%, 93% and 91% of that 1-3 gameweeks ahead (correlation 0.60, falling to 0.51-0.53). Their over-prediction grows from -0.03..+0.36 to +0.26..+0.69. `DECAY` 0.9 discounts faster than the quality falls, but changing it moved nothing.
 - **Page:** the Team of the Week's **ML manager** tab (`mode=manager`, `components/totw/MlManager*.tsx`) shows:
   - the planned or played team with its moves and the plan's one-line `reason`;
   - free transfers, bank, team value and chips;
