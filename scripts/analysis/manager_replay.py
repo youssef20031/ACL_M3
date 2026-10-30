@@ -5,8 +5,9 @@ points model trained only on earlier seasons and its projections rebuilt at ever
 live pipeline's own code (pipeline.predict_next_gw). Too heavy for a laptop: the "Manager replay"
 workflow (.github/workflows/manager-replay.yml) runs
 
-    python -m scripts.analysis.manager_replay project --season 2023-24 --out proj_2023-24
-    python -m scripts.analysis.manager_replay plan --proj proj_2023-24 --variants default,hold --out plan_2023-24.json
+    python -m scripts.analysis.manager_replay project --season 2023-24 --start-gws 1,5,9,13 --out proj_2023-24
+    python -m scripts.analysis.manager_replay plan --proj proj_2023-24 --variants default,hold \
+        --start-gws 1,5,9,13 --out plan_2023-24.json
     python -m scripts.analysis.manager_replay report 'plan_*.json' --proj 'proj_*' --ref default --out report.md
 
 project  trains the model (v4; --model v3 for the shadow) on the seasons before S as production
@@ -18,7 +19,7 @@ project  trains the model (v4; --model v3 for the shadow) on the seasons before 
          the projections.csv columns), <out>.predictions.parquet (each deadline's
          next_gw_predictions table), <out>.actual.parquet (gameweek, element, points, minutes),
          <out>.prices.parquet (gameweek, element, now_cost) and <out>.json (model, deadlines, coverage).
-plan     plays the season from --start-gw. The first squad is the predicted Team of the Week
+plan     plays the season from each of --start-gws. The first squad is the predicted Team of the Week
          (season_service.predicted_selection, as the ML manager's GW9 start). Then every gameweek the
          planner plans from that deadline's projections under a variant (VARIANTS: planner constants,
          horizon, chips; "hold" never transfers), services/fpl_manager validates and applies the
@@ -27,6 +28,12 @@ plan     plays the season from --start-gw. The first squad is the predicted Team
 report   per variant and season: total points, the difference from --ref with a paired bootstrap CI
          over gameweeks, transfers, hits and chips; and how the projections' quality falls with the
          gameweeks ahead (RMSE, top-20 actual and bias by step), which is what DECAY discounts.
+
+Paths: a season played from one start gameweek is one path. Decisions carry over, so where a season
+starts changes everything after it: one start moved a variant's lead by up to 180 points (2026-10-30).
+Playing each season from several starts (projected once, from the earliest) and pooling the paths
+is what makes effects of a point or two a gameweek measurable. The report counts the paths a variant
+is ahead on, which one lucky path can't fake.
 
 What the live pipeline knew at deadline t, so all the replay uses:
   * matches: the HISTORY_SEASONS seasons before S and S's matches before t (predict_next_gw.load_history)
@@ -104,6 +111,14 @@ VARIANTS: Dict[str, Dict[str, Any]] = {
 
 def log(msg: str) -> None:
     print(msg, flush=True)
+
+
+def parse_gws(text: str) -> List[int]:
+    """'1,5,9,13' -> [1, 5, 9, 13] (sorted, without repeats)."""
+    gws = sorted({int(x) for x in str(text).split(",") if x.strip()})
+    if not gws or not all(1 <= g <= 38 for g in gws):
+        raise argparse.ArgumentTypeError(f"gameweeks must be 1..38, got {text!r}")
+    return gws
 
 
 # ----------------------------------------------------------------------------- what was known at t
@@ -269,7 +284,7 @@ def cmd_project(args) -> None:
     _JOB.update(season=args.season, history=history, rows=rows, fixtures=fixtures, teams=teams, deadlines=dl,
                 status=snapshot_status(rows, snaps), extras=base, version=args.model, predict_fn=predict_fn,
                 odds=odds_collection(base.odds, history) if base is not None else None)
-    gws = [g for g in sorted(dl) if args.start_gw <= g <= (args.end_gw or 38)]
+    gws = [g for g in sorted(dl) if min(args.start_gws) <= g <= (args.end_gw or 38)]
     results = {}
     for gw in gws:
         started = time.time()
@@ -396,7 +411,7 @@ def cmd_plan(args) -> None:
     unknown = [n for n in names if n not in VARIANTS]
     if unknown:
         raise SystemExit(f"unknown variants {unknown}; known: {', '.join(VARIANTS)}")
-    res = [play_season(data, n, args.start_gw, time_limit=args.time_limit) for n in names]
+    res = [play_season(data, n, start, time_limit=args.time_limit) for start in args.start_gws for n in names]
     version = data["summary"]["model"].get("version")
     for r in res:      # another model's projections (project --model v3) report as "<variant>@v3"
         if version and version != pm.MODEL_VERSION:
@@ -439,42 +454,62 @@ def projection_quality(proj: pd.DataFrame, actual: pd.DataFrame, top: int = 20) 
 
 def cmd_report(args) -> None:
     results = [r for path in sorted(glob.glob(args.paths)) for r in json.load(open(path, encoding="utf-8"))]
-    by = {(r["variant"], r["season"]): r for r in results}
+    by = {(r["variant"], r["season"], int(r.get("start_gw") or 1)): r for r in results}
     variants = list(dict.fromkeys(r["variant"] for r in results))
     seasons = sorted({r["season"] for r in results})
+    starts = sorted({int(r.get("start_gw") or 1) for r in results})
+    multi = len(starts) > 1
     lines = ["# Manager replay", "",
-             f"Seasons {', '.join(seasons)}; reference `{args.ref}`. Points after hits, today's rules. "
-             "The CI resamples gameweeks within each season; decisions carry over between gameweeks, so "
-             "treat it as a guide.", "",
-             "| variant | " + " | ".join(seasons) + " | total | vs ref per GW [95% CI] | transfers | hits | chips |",
-             "|---|" + "---|" * len(seasons) + "---|---|---|---|---|"]
+             f"Seasons {', '.join(seasons)}, each from GW{', '.join(map(str, starts))} "
+             f"({len(seasons) * len(starts)} paths); reference `{args.ref}`. Points after hits, today's rules. "
+             "Season cells: total over the starts (difference from the reference"
+             + (", paths ahead" if multi else "") + "). The CI resamples gameweeks within each path; decisions "
+             "carry over between gameweeks, so treat it as a guide. Paths ahead counts the paths where the "
+             "variant beat the reference.", "",
+             "| variant | " + " | ".join(seasons)
+             + " | total | vs ref per GW [95% CI] | paths ahead | transfers | hits | chips |",
+             "|---|" + "---|" * len(seasons) + "---|---|---|---|---|---|"]
     for v in variants:
         cells, diffs, total, transfers, hits, chips = [], {}, 0, 0, 0, []
+        ahead = paths = 0
         for s in seasons:
-            r = by.get((v, s))
-            if r is None:
-                cells.append("-")
-                continue
-            total += r["total"]
-            transfers += sum(g["transfers"] for g in r["gameweeks"])
-            hits += sum(g["hits"] for g in r["gameweeks"])
-            chips += [f"{g['chip']} {s[2:4]}/GW{g['gameweek']}" for g in r["gameweeks"] if g["chip"]]
-            ref = by.get((args.ref, s))
-            delta = f" ({r['total'] - ref['total']:+d})" if ref is not None and v != args.ref else ""
-            cells.append(f"{r['total']}{delta}")
-            if ref is not None:
+            season_total, season_delta, s_ahead, s_paths, have = 0, 0, 0, 0, False
+            for start in starts:
+                r = by.get((v, s, start))
+                if r is None:
+                    continue
+                have = True
+                season_total += r["total"]
+                transfers += sum(g["transfers"] for g in r["gameweeks"])
+                hits += sum(g["hits"] for g in r["gameweeks"])
+                chips += [f"{g['chip']} {s[2:4]}/GW{g['gameweek']}" for g in r["gameweeks"] if g["chip"]]
+                ref = by.get((args.ref, s, start))
+                if ref is None or v == args.ref:
+                    continue
+                season_delta += r["total"] - ref["total"]
+                s_paths += 1
+                s_ahead += r["total"] > ref["total"]
                 mine = {g["gameweek"]: g["points"] for g in r["gameweeks"]}
                 theirs = {g["gameweek"]: g["points"] for g in ref["gameweeks"]}
                 common = sorted(set(mine) & set(theirs))
-                diffs[s] = np.array([mine[g] - theirs[g] for g in common])
+                diffs[(s, start)] = np.array([mine[g] - theirs[g] for g in common])
+            total += season_total
+            ahead, paths = ahead + s_ahead, paths + s_paths
+            if not have:
+                cells.append("-")
+            elif s_paths:
+                cells.append(f"{season_total} ({season_delta:+d}" + (f", {s_ahead}/{s_paths}" if multi else "") + ")")
+            else:
+                cells.append(str(season_total))
         mean, lo, hi = paired_ci(diffs) if v != args.ref else (0.0, 0.0, 0.0)
+        chip_cell = (f"{len(chips)} played" if multi else ", ".join(chips)) if chips else "-"
         lines.append(f"| {v} | " + " | ".join(cells) + f" | {total} | {mean:+.2f} [{lo:+.2f}, {hi:+.2f}] | "
-                     f"{transfers} | {hits} | {', '.join(chips) or '-'} |")
-    failed = [(r["variant"], r["season"], g["gameweek"], g["problems"]) for r in results for g in r["gameweeks"]
-              if g["problems"]]
+                     f"{f'{ahead}/{paths}' if paths else '-'} | {transfers} | {hits} | {chip_cell} |")
+    failed = [(r["variant"], r["season"], r.get("start_gw"), g["gameweek"], g["problems"])
+              for r in results for g in r["gameweeks"] if g["problems"]]
     if failed:
         lines += ["", f"## Gameweeks rolled over after a failed or invalid plan ({len(failed)})", ""]
-        lines += [f"- {v} {s} GW{gw}: {p}" for v, s, gw, p in failed[:50]]
+        lines += [f"- {v} {s} from GW{st}, GW{gw}: {p}" for v, s, st, gw, p in failed[:50]]
     capped = sum(g.get("optimal") is False for r in results for g in r["gameweeks"])
     lines += ["", f"Solves stopped at the time limit: {capped} gameweeks."]
     if args.proj:
@@ -501,14 +536,16 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     p = sub.add_parser("project", help="train on earlier seasons and rebuild every deadline's projections")
     p.add_argument("--season", required=True)
     p.add_argument("--model", default=pm.MODEL_VERSION, choices=["v3", "v4"])
-    p.add_argument("--start-gw", type=int, default=1)
+    p.add_argument("--start-gws", "--start-gw", dest="start_gws", type=parse_gws, default=[1],
+                   help="the plan's start gameweeks, e.g. 1,5,9,13 (projected from the earliest)")
     p.add_argument("--end-gw", type=int, default=None)
     p.add_argument("--out", required=True, help="output prefix")
     p.set_defaults(func=cmd_project)
     p = sub.add_parser("plan", help="play the season under planner variants")
     p.add_argument("--proj", required=True, help="the project step's output prefix")
     p.add_argument("--variants", default="default")
-    p.add_argument("--start-gw", type=int, default=1)
+    p.add_argument("--start-gws", "--start-gw", dest="start_gws", type=parse_gws, default=[1],
+                   help="play each season from each of these gameweeks, e.g. 1,5,9,13")
     p.add_argument("--time-limit", type=float, default=planner.SOLVE_TIME_LIMIT)
     p.add_argument("--out", required=True)
     p.set_defaults(func=cmd_plan)

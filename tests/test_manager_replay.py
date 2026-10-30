@@ -1,5 +1,6 @@
 """scripts/analysis/manager_replay.py: what each deadline's projections may see (nothing from after
 it), and the season loop on a small synthetic season (the real planner and game engine)."""
+import argparse
 import json
 from datetime import timedelta
 
@@ -142,9 +143,10 @@ def synthetic_season():
                              "predicted_points": 2.0 + (k == 25) * 3.0, "availability": 1.0, "status": "a"})
             actual.append({"gameweek": t, "element": k, "points": 2 + (k == 21) * 8, "minutes": 90})
             prices.append({"gameweek": t, "element": k, "now_cost": cost})
-        preds.append({"deadline_gw": 10, "name": f"P{k}", "position": pos, "team": team,
-                      "predicted_points": 2.0 + (k in (21, 22)) * 2.0, "value": cost, "status": "a",
-                      "chance_of_playing_next_round": None, "element": k, "opponent": "X", "is_home": True})
+        preds += [{"deadline_gw": t, "name": f"P{k}", "position": pos, "team": team,
+                   "predicted_points": 2.0 + (k in (21, 22)) * 2.0, "value": cost, "status": "a",
+                   "chance_of_playing_next_round": None, "element": k, "opponent": "X", "is_home": True}
+                  for t in GWS]
     return {"season": SEASON, "summary": {"season": SEASON, "gameweeks": GWS, "deadlines": deadlines,
                                           "model": {"version": "v4"}},
             "projections": pd.DataFrame(proj), "predictions": pd.DataFrame(preds),
@@ -189,3 +191,58 @@ def test_paired_ci_and_projection_quality():
     assert list(q.index) == [1, 2]
     assert q.loc[1, "top1_actual"] == 2 and q.loc[1, "top1_bias"] == 2
     assert q.loc[2, "rmse"] == pytest.approx(np.sqrt(0.5))           # element 2 has no GW2 row: 0 points
+
+
+# ----------------------------------------------------------------------------- several start gameweeks
+
+def test_parse_gws():
+    assert mrp.parse_gws("13,1,5,9,5") == [1, 5, 9, 13]
+    assert mrp.parse_gws("9") == [9]
+    for bad in ("0,5", "39", ""):
+        with pytest.raises(argparse.ArgumentTypeError):
+            mrp.parse_gws(bad)
+
+
+def write_projected(tmp_path, data):
+    prefix = tmp_path / f"proj_{SEASON}"
+    for part in ("projections", "predictions", "actual", "prices"):
+        data[part].to_parquet(f"{prefix}.{part}.parquet", index=False)
+    (tmp_path / f"proj_{SEASON}.json").write_text(json.dumps(data["summary"]), encoding="utf-8")
+    return str(prefix)
+
+
+def test_plan_plays_every_variant_from_every_start(tmp_path):
+    prefix = write_projected(tmp_path, synthetic_season())
+    out = tmp_path / "plan.json"
+    mrp.main(["plan", "--proj", prefix, "--variants", "default,hold", "--start-gws", "11,10",
+              "--time-limit", "10", "--out", str(out)])
+    res = json.loads(out.read_text(encoding="utf-8"))
+    assert [(r["variant"], r["start_gw"]) for r in res] == [("default", 10), ("hold", 10), ("default", 11),
+                                                             ("hold", 11)]
+    from_11 = next(r for r in res if r["start_gw"] == 11 and r["variant"] == "default")
+    assert [g["gameweek"] for g in from_11["gameweeks"]] == [11, 12, 13]
+    assert from_11["gameweeks"][0]["transfers"] == 0                    # a fresh squad from GW11's pick
+
+
+def fake_path(variant, season, start, points):
+    gws = [{"gameweek": start + i, "points": p, "transfers": 1, "hits": 0, "chip": None, "problems": [],
+            "optimal": True} for i, p in enumerate(points)]
+    return {"variant": variant, "season": season, "start_gw": start, "total": sum(points), "gameweeks": gws}
+
+
+def test_report_pools_the_paths_and_counts_those_ahead(tmp_path):
+    res = [fake_path("default", s, start, [50, 50]) for s in ("2022-23", "2023-24") for start in (1, 5)]
+    res += [fake_path("x", "2022-23", 1, [60, 50]), fake_path("x", "2022-23", 5, [55, 50]),
+            fake_path("x", "2023-24", 1, [50, 40]), fake_path("x", "2023-24", 5, [52, 50])]
+    (tmp_path / "plan_a.json").write_text(json.dumps(res), encoding="utf-8")
+    out = tmp_path / "report.md"
+    mrp.main(["report", str(tmp_path / "plan_*.json"), "--out", str(out)])
+    text = out.read_text(encoding="utf-8")
+    assert "each from GW1, 5 (4 paths)" in text
+    row = next(line for line in text.splitlines() if line.startswith("| x |"))
+    assert "| 215 (+15, 2/2) |" in row                  # 110 + 105 against 100 + 100
+    assert "| 192 (-8, 1/2) |" in row                   # 90 + 102 against 100 + 100
+    assert "| 407 |" in row and "| 3/4 |" in row
+    assert "| +0.88 [" in row                           # (10 + 5 - 10 + 2) / 8 gameweek differences
+    ref = next(line for line in text.splitlines() if line.startswith("| default |"))
+    assert "| 200 |" in ref and "| - |" in ref
