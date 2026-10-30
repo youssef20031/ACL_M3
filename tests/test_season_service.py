@@ -321,6 +321,17 @@ class TestQueryLayer(LiveDirTestCase):
         with self.assertRaises(ss.NotFoundError):
             ss.get_team_of_the_week(conn, "actual", 30, season="2026-27")  # unknown gameweek
 
+    def test_team_of_the_week_carries_fpl_short_names(self):
+        self._write_predictions()
+        names = pd.read_csv(os.path.join(self.tmp.name, "next_gw_predictions.csv"))["name"].tolist()
+        # Everyone but GK-0 has a short name in the status file
+        pd.DataFrame([{"element": k, "code": k, "name": n, "web_name": f"Short {n}"}
+                      for k, n in enumerate(names) if n != "GK-0"]).to_csv(
+            os.path.join(self.tmp.name, "player_status_2026_27.csv"), index=False)
+        res = ss.get_team_of_the_week(fake_conn(), "predicted", None, season="2026-27")
+        for p in res["starters"] + res["bench"]:
+            self.assertEqual(p["web_name"], None if p["name"] == "GK-0" else f"Short {p['name']}")
+
     def _write_predictions(self, gameweek=4):
         clubs = ["Arsenal", "Chelsea", "Everton", "Fulham", "Brentford", "Leeds", "Spurs", "Wolves"]
         rows = []

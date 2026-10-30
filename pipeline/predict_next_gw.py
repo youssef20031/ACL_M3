@@ -24,6 +24,16 @@ the Team of the Week page's "Model vs actual" review, and every run writes the m
 inputs for each upcoming row (next_gw_features.csv), which services/explain.py turns into
 SHAP and LIME explanations for the /model page.
 
+Projections: the same run writes LIVE_DATA_DIR/projections.csv, every current player's points
+for the next PROJECTION_HORIZON gameweeks (the ML manager's planner, services/fpl_manager_planner,
+plans transfers over them). The first gameweek is next_gw_predictions itself; each later one is
+predicted by the same model from the same pre-deadline history (one build_features call per
+gameweek, with only that gameweek's fixtures, so form, team strength, price, ownership,
+transfers and the FPL snapshot all stay as they are now), with days_rest measured to the
+team's real previous fixture, odds only where fixtures.csv already prices the match, and
+horizon_availability's rule for flagged players. A failure there is logged and never touches
+the predictions.
+
 Shadow: the same run also scores the previous production model, v3 (LIVE_DATA_DIR/models/
 points_v3.json if present, else the bundled one; no longer retrained), on the same feature rows
 with the same chance-of-playing multiplier, and saves its squad pick before the deadline in
@@ -53,6 +63,7 @@ import logging
 import os
 import sys
 import time
+from bisect import bisect_left
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -82,6 +93,15 @@ HISTORY_SEASONS = 3      # past seasons fed to the features at prediction time
 # football-data.co.uk's Friday/Tuesday collection, snapshots come from the status file
 COVERAGE_COLUMNS = {"odds": "odds_win", "snapshot": "snap_age_days", "transfers": "tr_bal_rank",
                     "ratings": "rt_att"}
+# Multi-gameweek projections for the ML manager's planner (services/fpl_manager_planner.py)
+PROJECTIONS_NAME = "projections.csv"
+PROJECTION_HORIZON = 4   # gameweeks, the next one included
+PROJECTION_COLUMNS = [
+    "element", "name", "web_name", "position", "team", "now_cost", "gameweek", "fixtures", "opponents",
+    "predicted_points",
+    # the chance-of-playing multiplier applied to that gameweek (horizon_availability) and FPL's status
+    "availability", "status",
+]
 
 PredictFn = Callable[[pd.DataFrame], np.ndarray]
 
@@ -135,6 +155,25 @@ def availability_factor(status: Any, chance_next: Any) -> float:
     lives in season_service, whose captain pick uses it as the chance of playing.
     """
     return chance_of_playing(status, chance_next)
+
+
+def horizon_availability(status: Any, chance_next: Any, step: int) -> float:
+    """Chance-of-playing multiplier for the gameweek `step` gameweeks ahead (1 = the next one,
+    which is availability_factor itself). FPL's flag describes the next gameweek only, so later:
+
+      * u (left / unavailable) and n (not in squad): 0 in every gameweek;
+      * ruled out now (availability_factor 0: i/s with chance 0 or none given): half in the
+        second gameweek, then full;
+      * a 25/50/75% doubt counts for the next gameweek only.
+    """
+    factor = availability_factor(status, chance_next)
+    if step <= 1:
+        return factor
+    if isinstance(status, str) and status.strip().lower() in ("u", "n"):
+        return 0.0
+    if factor == 0.0:
+        return 0.5 if step == 2 else 1.0
+    return 1.0
 
 
 def describe_fixtures(entries: List[Dict[str, Any]]) -> Tuple[str, bool, str]:
@@ -453,6 +492,155 @@ def promoted_teams(previous_teams: Iterable[str], teams: Iterable[str]) -> List[
     return sorted(t for t in set(teams) if t not in previous)
 
 
+# ------------------------------------------------------------------ projections (later gameweeks)
+
+def horizon_events(bootstrap: Dict[str, Any], event: Dict[str, Any], horizon: int = PROJECTION_HORIZON
+                   ) -> List[Dict[str, Any]]:
+    """`event` and the gameweeks after it, `horizon` in all (fewer at the end of the season)."""
+    first = int(event["id"])
+    return sorted((e for e in bootstrap["events"] if first <= int(e["id"]) < first + horizon),
+                  key=lambda e: int(e["id"]))
+
+
+def team_kickoffs(fixtures: Iterable[Dict[str, Any]], teams: Dict[int, str]) -> Dict[str, List[pd.Timestamp]]:
+    """Every kickoff of each team on FPL's fixture list (played or not, any gameweek), sorted."""
+    out: Dict[str, List[pd.Timestamp]] = {}
+    for f in fixtures:
+        if not f.get("kickoff_time"):
+            continue                    # unscheduled (postponed) fixtures
+        kickoff = pd.to_datetime(f["kickoff_time"], utc=True)
+        for team_id in (f["team_h"], f["team_a"]):
+            out.setdefault(teams[team_id], []).append(kickoff)
+    for kickoffs in out.values():
+        kickoffs.sort()
+    return out
+
+
+def rest_days(team: str, kickoff: Any, kickoffs: Dict[str, List[pd.Timestamp]]) -> float:
+    """Days from the team's previous fixture to `kickoff` (clipped at 30 like the feature), NaN
+    when the list has none before it."""
+    times = kickoffs.get(team) or []
+    kickoff = pd.to_datetime(kickoff, utc=True)
+    i = bisect_left(times, kickoff)
+    if i == 0:
+        return np.nan
+    return min((kickoff - times[i - 1]).total_seconds() / 86400, 30.0)
+
+
+def project_points(players: pd.DataFrame, history: pd.DataFrame,
+                   fixtures_by_team: Dict[str, List[Dict[str, Any]]], season: str, gameweek: int,
+                   predict_fn: PredictFn, extras: Optional[pm.ExtraInputs],
+                   kickoffs: Dict[str, List[pd.Timestamp]], snapshot_age: Optional[float] = None
+                   ) -> Dict[str, float]:
+    """element (str) -> model points for a gameweek after the next one, summed over its fixtures
+    (each floored at 0), before any availability multiplier.
+
+    Built like the next gameweek's (model_rows: the same history, ending before the next
+    gameweek, and only this gameweek's fixtures), so every input stays as it is now: form, team
+    strength, price, ownership and transfer ranks, and the FPL snapshot (the status file), whose
+    age is held at the next gameweek's (`snapshot_age`): training never saw a snapshot older
+    than the previous deadline. days_rest, which would otherwise count from the player's last
+    match in the history (before the next gameweek), is the gap to his team's previous fixture on
+    FPL's list (a player without any earlier match keeps NaN for his first, as in training). Odds are whatever fixtures.csv prices before
+    this gameweek's deadline, usually none.
+    """
+    rows = model_rows(players, history, fixtures_by_team, season, gameweek, extras)
+    if rows.empty:
+        return {}
+    gap = pd.Series([rest_days(t, k, kickoffs) for t, k in zip(rows["team"], rows["kickoff_time"])],
+                    index=rows.index, dtype=float)
+    rows["days_rest"] = gap.where(rows["days_rest"].notna() & gap.notna(), rows["days_rest"])
+    if snapshot_age is not None and "snap_age_days" in rows.columns:
+        rows.loc[rows["snap_age_days"].notna(), "snap_age_days"] = snapshot_age
+    points = pd.Series(np.clip(np.asarray(predict_fn(rows), dtype=float), 0.0, None), index=rows.index)
+    return {str(int(k)): float(v) for k, v in points.groupby(rows["element"]).sum().items()}
+
+
+def projection_frame(players: pd.DataFrame, gameweek: int, fixtures_by_team: Dict[str, List[Dict[str, Any]]],
+                     points: Dict[str, float], step: int) -> pd.DataFrame:
+    """PROJECTION_COLUMNS for one gameweek, one row per current player: model `points` times
+    horizon_availability(step); a blank gameweek gives 0 and opponent "No fixture", a double
+    gameweek the sum and both opponents."""
+    rows = []
+    for p in players.itertuples(index=False):
+        entries = fixtures_by_team.get(p.team) or []
+        avail = horizon_availability(p.status, p.chance_of_playing_next_round, step)
+        pts = points.get(str(int(p.element)), 0.0) * avail if entries else 0.0
+        web_name = getattr(p, "web_name", None)
+        rows.append({
+            "element": int(p.element), "name": p.name,
+            "web_name": web_name if isinstance(web_name, str) and web_name else p.name,
+            "position": p.position, "team": p.team, "now_cost": int(p.now_cost), "gameweek": int(gameweek),
+            "fixtures": len(entries), "opponents": describe_fixtures(entries)[0] if entries else NO_FIXTURE_OPPONENT,
+            "predicted_points": round(float(pts), 2), "availability": float(avail), "status": p.status,
+        })
+    return pd.DataFrame(rows, columns=PROJECTION_COLUMNS)
+
+
+def build_projections(players: pd.DataFrame, history: pd.DataFrame, season: str,
+                      events: List[Dict[str, Any]], fixtures: List[Dict[str, Any]], teams: Dict[int, str],
+                      next_points: Dict[int, float], predict_fn: PredictFn,
+                      extras: Optional[pm.ExtraInputs] = None, snapshot_age: Optional[float] = None
+                      ) -> Tuple[pd.DataFrame, Dict[int, str]]:
+    """(projections for `events`, {gameweek: why it's missing}). The first event's points are
+    `next_points` (element -> the live predicted_points, so it equals next_gw_predictions
+    exactly); later ones come from project_points, one gameweek at a time. A gameweek that fails
+    is logged and left out."""
+    kickoffs = team_kickoffs(fixtures, teams)
+    frames, problems = [], {}
+    for step, event in enumerate(events, start=1):
+        gameweek = int(event["id"])
+        try:
+            by_team = gameweek_fixtures(fixtures, gameweek, teams)
+            if step == 1:
+                frame = projection_frame(players, gameweek, by_team, {}, step)
+                frame["predicted_points"] = frame["element"].map(next_points).fillna(0.0).astype(float)
+            else:
+                points = project_points(players, history, by_team, season, gameweek, predict_fn, extras,
+                                        kickoffs, snapshot_age)
+                frame = projection_frame(players, gameweek, by_team, points, step)
+        except Exception as exc:
+            logger.exception("Couldn't project GW%s; it is left out of %s", gameweek, PROJECTIONS_NAME)
+            problems[gameweek] = f"failed: {exc}"[:200]
+            continue
+        frames.append(frame)
+    out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=PROJECTION_COLUMNS)
+    return out.sort_values(["gameweek", "predicted_points", "element"], ascending=[True, False, True],
+                           kind="mergesort").reset_index(drop=True), problems
+
+
+def save_projections(live_dir: str, players: pd.DataFrame, history: pd.DataFrame, season: str,
+                     event: Dict[str, Any], bootstrap: Dict[str, Any], fixtures: List[Dict[str, Any]],
+                     out: pd.DataFrame, predict_fn: PredictFn, extras: Optional[pm.ExtraInputs] = None,
+                     snapshot_age: Optional[float] = None, horizon: int = PROJECTION_HORIZON) -> Dict[str, Any]:
+    """Write LIVE_DATA_DIR/projections.csv (build_projections) atomically. Never raises: the
+    summary says which gameweeks it covers and which failed (on a total failure the previous
+    file stays, and its gameweek column tells a reader it is stale)."""
+    started = time.perf_counter()
+    path = os.path.join(live_dir, PROJECTIONS_NAME)
+    try:
+        events = horizon_events(bootstrap, event, horizon)
+        next_points = dict(zip(out["element"].astype(int), out["predicted_points"].astype(float)))
+        frame, problems = build_projections(players, history, season, events, fixtures, team_name_map(bootstrap),
+                                            next_points, predict_fn, extras, snapshot_age)
+        _atomic_write(path, lambda p: frame.to_csv(p, index=False))
+    except Exception as exc:
+        logger.exception("Couldn't write %s; the predictions are unaffected", PROJECTIONS_NAME)
+        return {"output": None, "horizon": horizon, "gameweeks": [], "failed": f"failed: {exc}"[:200],
+                "seconds": round(time.perf_counter() - started, 1)}
+    return {"output": path, "horizon": horizon,
+            "gameweeks": sorted(int(g) for g in frame["gameweek"].unique()),
+            "failed": problems or None, "seconds": round(time.perf_counter() - started, 1)}
+
+
+def _snapshot_age(rows: pd.DataFrame) -> Optional[float]:
+    """The next gameweek's snap_age_days (one snapshot per gameweek, so one value), if any."""
+    if "snap_age_days" not in rows.columns:
+        return None
+    ages = rows["snap_age_days"].dropna()
+    return float(ages.iloc[0]) if len(ages) else None
+
+
 def _load_players(status_csv: str) -> pd.DataFrame:
     players = pd.read_csv(status_csv)
     players = players[players["position"].isin(POSITIONS)].copy()
@@ -461,8 +649,10 @@ def _load_players(status_csv: str) -> pd.DataFrame:
 
 
 def _context(client, live_dir: str, gameweek: Optional[int] = None):
-    bootstrap = client.bootstrap()
-    fixtures = client.fixtures()
+    return _context_from(client.bootstrap(), client.fixtures(), gameweek)
+
+
+def _context_from(bootstrap: Dict[str, Any], fixtures: List[Dict[str, Any]], gameweek: Optional[int] = None):
     season = season_label(bootstrap)
     if gameweek is None:
         event = next_gameweek(bootstrap)
@@ -485,7 +675,8 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
     alongside it; an injected `predict_fn` runs alone unless `shadow_fn` is given too.
     `fetch_odds` first refreshes the odds files (refresh_odds; failures are only logged).
     Returns a summary: gameweek, deadline, model, odds, input coverage, row counts, output
-    paths, the live and shadow picks, timing, memory.
+    paths, the live and shadow picks, the projections (save_projections: path, gameweeks
+    covered, failures), timing, memory.
     """
     started = time.perf_counter()
     own_client = client is None
@@ -493,10 +684,11 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
         from pipeline.fpl_api import FPLClient
         client = FPLClient()
     try:
-        season, event, fixtures_by_team, first_kickoff = _context(client, live_dir)
+        bootstrap, fixtures = client.bootstrap(), client.fixtures()
     finally:
         if own_client:
             client.close()
+    season, event, fixtures_by_team, first_kickoff = _context_from(bootstrap, fixtures)
     gameweek = int(event["id"])
     odds_status = refresh_odds(live_dir, season) if fetch_odds else "not fetched"
 
@@ -521,9 +713,10 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
     features_path = os.path.join(live_dir, FEATURES_NAME)
     rows = model_rows(players, history, fixtures_by_team, season, gameweek, extras)
     coverage = input_coverage(rows)
+    snapshot_age = _snapshot_age(rows)
     logger.info("GW%s: %d upcoming rows, v4 input coverage %s", gameweek, len(rows), coverage)
     predictions = score_rows(rows, predict_fn, f"xgboost_{version}", shadow_fn, features_path, gameweek)
-    del rows, extras
+    del rows
     promoted = promoted_teams(previous_season_teams(history, season), players["team"])
     out = assemble_output(players, predictions, fixtures_by_team, gameweek, event["deadline_time"], promoted)
 
@@ -550,6 +743,12 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
     else:
         shadow = {"model": None, "pick": shadow_version}
 
+    # The next PROJECTION_HORIZON gameweeks for the ML manager's planner, after everything above is
+    # saved, one gameweek's features at a time (never raises)
+    projections = save_projections(live_dir, players, history, season, event, bootstrap, fixtures, out,
+                                   predict_fn, extras, snapshot_age)
+    del extras
+
     has_fixture = out["fixtures"] > 0
     return {
         "season": season,
@@ -573,6 +772,7 @@ def predict_next_gameweek(live_dir: str = LIVE_DATA_DIR, client=None, history_cs
         "model_inputs": features_path if os.path.exists(features_path) else None,
         "model_pick": picks_path,
         "shadow": shadow,
+        "projections": projections,
         "seconds": round(time.perf_counter() - started, 1),
         "peak_memory_mb": (round(peak_memory_mb(), 1) if peak_memory_mb() is not None else None),
     }

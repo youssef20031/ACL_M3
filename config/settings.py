@@ -63,6 +63,12 @@ POSITION_NAMES = {
 SEASONS = ["2020-21", "2021-22", "2022-23", "2023-24", "2024-25", "2025-26", "2026-27"]
 CURRENT_SEASON = SEASONS[-1]
 
+# The ML manager (services/fpl_manager.py): a season-long FPL team run by the points model,
+# started in this gameweek of this season from the model's saved pick and compared with the
+# managers who joined FPL in the same gameweek (FPL's "Gameweek 9" league).
+ML_MANAGER_SEASON = "2026-27"
+ML_MANAGER_START_GW = 9
+
 # Stats columns for embeddings
 STAT_COLUMNS = [
     "goals_scored", "assists", "total_points", "bonus", "bps",

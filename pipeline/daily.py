@@ -14,8 +14,11 @@ Steps:
   4. pipeline.predict_next_gw: refresh the bookmaker odds (LIVE_DATA_DIR/odds), regenerate
      next-gameweek predictions (availability changes daily) and, before the deadline, save the
      live model's and the shadow model's (v3) squad picks
-  5. POST /api/admin/reload so the running API rebuilds its caches without a restart
-  6. Ping HEALTHCHECK_URL (e.g. healthchecks.io) on success, HEALTHCHECK_URL/fail on failure,
+  5. pipeline.ml_manager: the ML manager's gameweek cycle (lock plans at the deadline, score
+     finished gameweeks and rank them among the managers who started in GW9, plan the next
+     gameweek from projections.csv)
+  6. POST /api/admin/reload so the running API rebuilds its caches without a restart
+  7. Ping HEALTHCHECK_URL (e.g. healthchecks.io) on success, HEALTHCHECK_URL/fail on failure,
      so a silent failure turns into an email
 
 The timer (06:00 and 18:00 UTC, plus Fridays at 17:15 and Tuesdays at 16:00 UK time, so an evening
@@ -117,6 +120,16 @@ def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False, retrain: bool 
         errors.append(("predictions", traceback.format_exc()))
         summary["predictions"] = "failed"
         logger.error("Prediction step failed:\n%s", errors[-1][1])
+
+    # After the predictions: it plans from their projections.csv. It never raises; a failed step
+    # is reported in its own summary.
+    try:
+        from pipeline.ml_manager import run as run_ml_manager
+        summary["ml_manager"] = run_ml_manager(live_dir)
+    except Exception:
+        errors.append(("ml_manager", traceback.format_exc()))
+        summary["ml_manager"] = "failed"
+        logger.error("ML manager step failed:\n%s", errors[-1][1])
 
     summary["backend_reload"] = _reload_backend()
     summary["seconds"] = round(time.time() - started, 1)

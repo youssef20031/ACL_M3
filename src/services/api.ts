@@ -546,6 +546,8 @@ export interface TeamOfWeekPlayer {
   chance_of_playing_next_round: number | null;
   news: string | null;
   photo: string | null;
+  /** FPL's short name for the name plate; missing from older backends. */
+  web_name?: string | null;
 }
 
 export type TeamOfWeekMode = 'predicted' | 'actual';
@@ -626,6 +628,204 @@ export interface ModelReviewResponse {
   /** Final bench in priority order, goalkeeper first. */
   bench: ModelReviewPlayer[];
   auto_subs: Array<{ out: string; in: string }>;
+}
+
+// --- ML manager: a season-long team the points model runs under the game's rules, from GW9 on.
+// Prices, bank and team value are in tenths of £1m (1000 = £100.0m), as the game stores them.
+
+export type MlManagerChip = 'wildcard' | 'freehit' | 'bboost' | '3xc';
+
+/** planned = saved before the deadline and replanned every run; locked = the deadline passed; scored = the gameweek finished. */
+export type MlManagerStatus = 'planned' | 'locked' | 'scored';
+
+export interface MlManagerPlayerRef {
+  /** FPL element id. */
+  element: number;
+  name: string;
+  web_name: string | null;
+  position: PositionCode;
+  team: string;
+  /** Photo URL, when the backend knows one without a network call. */
+  photo?: string | null;
+}
+
+export interface MlManagerTransfer {
+  /** Sold at `selling_price` (tenths). */
+  out: MlManagerPlayerRef & { selling_price: number };
+  /** Bought at `price` (tenths). */
+  in: MlManagerPlayerRef & { price: number };
+}
+
+export interface MlManagerSquadPlayer extends MlManagerPlayerRef {
+  /** Tenths. */
+  purchase_price: number;
+  /** Tenths: what selling him would raise (half of any rise, rounded down). */
+  selling_price: number;
+  /** Tenths. */
+  now_cost: number;
+  /** The model's projection for this gameweek (summed over a double gameweek), before the captain's multiplier. */
+  predicted_points: number | null;
+  role: 'starter' | 'bench';
+  /** Bench only: 1 = the substitute goalkeeper, 2..4 = outfield subs in priority order. */
+  bench_order: number | null;
+  captain: boolean;
+  vice_captain: boolean;
+  /** This gameweek's opponents, when the backend sends them (several in a double gameweek). */
+  opponents?: Array<{ team: string; home: boolean }>;
+}
+
+export interface MlManagerResultPlayer {
+  element: number;
+  name?: string;
+  /** Raw points this gameweek; null if unknown. */
+  points: number | null;
+  minutes: number | null;
+  /** 0 for an uncounted bench player, 2 for the captain (3 with Triple Captain). */
+  multiplier: number;
+  counted: boolean;
+  /** Came off the bench via an auto-sub. */
+  subbed_in?: boolean;
+  /** Picked to start, didn't play, replaced. */
+  subbed_out?: boolean;
+}
+
+/** Rank in the game's league of managers who started in the same gameweek (GW9). */
+export interface MlManagerLeague {
+  id?: number | null;
+  /** The league's name in the game, e.g. "Gameweek 9". */
+  name: string | null;
+  /** The gameweek the rank is after (totals only). */
+  gameweek?: number;
+  rank: number;
+  size: number;
+  /** Share of the league with a lower total, 0–100 (95.9 = top 4.1%). */
+  percentile: number | null;
+}
+
+export interface MlManagerResult {
+  /** Net points: gross minus hits. */
+  points: number;
+  gross: number;
+  hit_cost: number;
+  /** Display name of the captain as picked. */
+  captain: string | null;
+  /** Whose points were multiplied: the captain, or the vice when the captain didn't play. */
+  armband?: string | null;
+  vice_captain_used?: boolean;
+  /** [out, in] full player names. */
+  auto_subs: Array<[string, string]>;
+  players: MlManagerResultPlayer[];
+  gw_average: number | null;
+  gw_highest: number | null;
+  /** Running season total after this gameweek. */
+  total: number;
+  league: MlManagerLeague | null;
+  /** Points left on the bench. */
+  bench_points?: number;
+}
+
+/** One gameweek of the manager (a saved gwNN.json). */
+export interface MlManagerGameweek {
+  season: string;
+  gameweek: number;
+  deadline: string | null;
+  status: MlManagerStatus;
+  /** When the plan was last saved (ISO UTC). */
+  planned_at: string | null;
+  model: string;
+  chip: MlManagerChip | null;
+  transfers: MlManagerTransfer[];
+  /** Free transfers available before this gameweek's transfers (0 for the free starting squad). */
+  free_transfers: number;
+  transfers_made: number;
+  /** Transfers beyond the free ones. */
+  hits: number;
+  /** Points deducted for them. */
+  hit_cost: number;
+  /** Tenths. */
+  bank_before: number;
+  /** Tenths. */
+  bank_after: number;
+  /** All 15, starters first. */
+  squad: MlManagerSquadPlayer[];
+  /** This gameweek's projection with the captain/chip, minus hits. */
+  projected_points: number | null;
+  horizon: Array<{ gameweek: number; projected: number }>;
+  /** One-line explanation of the decisions. */
+  reason: string | null;
+  /** Null until the gameweek is scored. */
+  result: MlManagerResult | null;
+  /** Tenths: the squad at current prices, without the bank (summed from `now_cost` when absent). */
+  team_value?: number;
+}
+
+export interface MlManagerChipState {
+  chip: MlManagerChip;
+  /** e.g. "Wildcard". */
+  label: string;
+  /** First and last gameweek it can be played in. */
+  window: [number, number];
+  /** The gameweek it was played in, or is planned for (see `planned`). */
+  used_gameweek: number | null;
+  /** Not used and its window hasn't ended (it may not have started yet). */
+  available: boolean;
+  /** 1 or 2: the half of the season. */
+  half?: number;
+  /** Played in the planned gameweek, which can still change. */
+  planned?: boolean;
+  /** Playable in the gameweek being planned. */
+  active?: boolean;
+}
+
+export interface MlManagerHistoryRow {
+  gameweek: number;
+  /** Net of hits. */
+  points: number;
+  /** Before hits. */
+  gross?: number | null;
+  hit_cost: number;
+  chip: MlManagerChip | null;
+  captain: string | null;
+  transfers: number;
+  /** Running total. */
+  total: number;
+  /** Tenths: the squad at current prices, without the bank. */
+  team_value: number;
+  /** Tenths. */
+  bank: number;
+  gw_average: number | null;
+  gw_highest: number | null;
+  league_id?: number | null;
+  league_name?: string | null;
+  league_rank: number | null;
+  league_size: number | null;
+  percentile: number | null;
+}
+
+export interface MlManagerTotals {
+  points: number;
+  /** Scored gameweeks. */
+  gameweeks: number;
+  /** Season points minus the sum of the gameweek averages; null before the first scored gameweek. */
+  vs_average: number | null;
+  league: MlManagerLeague | null;
+}
+
+export interface MlManagerView {
+  season: string;
+  start_gameweek: number;
+  model: string;
+  /** budget in tenths. */
+  rules: { budget: number; max_free_transfers: number; hit_cost: number };
+  /** The latest gameweek: the plan for the next deadline, or the last locked/scored one. */
+  current: MlManagerGameweek;
+  chips: MlManagerChipState[];
+  /** Scored gameweeks, oldest first. */
+  history: MlManagerHistoryRow[];
+  totals: MlManagerTotals;
+  next_deadline: string | null;
+  /** The replayed state after the last locked/scored gameweek (before any planned one). */
+  state?: { gameweek: number | null; next_gameweek: number; bank: number; free_transfers: number; team_value: number };
 }
 
 // --- Model insights: SHAP and LIME explanations of the points model's (v4) next-gameweek predictions.
@@ -1078,6 +1278,12 @@ export const apiService = {
     const { data } = await api.get<ModelReviewResponse>('/api/model-review', {
       params: gameweek ? { gameweek } : undefined,
     });
+    return data;
+  },
+
+  /** The ML manager's season: its current gameweek, chips, history and totals. 404 until it has started. */
+  async getMlManager(): Promise<MlManagerView> {
+    const { data } = await api.get<MlManagerView>('/api/ml-manager');
     return data;
   },
 

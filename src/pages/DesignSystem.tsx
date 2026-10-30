@@ -35,7 +35,8 @@ import {
 import { AnswerCards, AnswerCardSkeleton, FollowUps } from '../components/assistant/cards/AnswerCards';
 import { SAMPLE_CARDS, SAMPLE_FOLLOW_UPS } from '../components/assistant/cards/samples';
 import { ModelReview } from '../components/totw/ModelReview';
-import { SAMPLE_MODEL_REVIEW } from '../components/totw/samples';
+import { MlManager } from '../components/totw/MlManager';
+import { SAMPLE_ML_MANAGER_PLANNED, SAMPLE_ML_MANAGER_SCORED, SAMPLE_MODEL_REVIEW } from '../components/totw/samples';
 import { ExplainOverview } from '../components/explain/ExplainOverview';
 import { PlayerExplainer } from '../components/explain/PlayerExplainer';
 import { FeatureEffects } from '../components/explain/FeatureEffects';
@@ -327,6 +328,26 @@ export function DesignSystem() {
           <ModelReview review={SAMPLE_MODEL_REVIEW} onGameweekChange={() => undefined} />
         </Section>
 
+        <Section title="ML manager">
+          <p className="mb-4 max-w-3xl text-body text-fg-muted">
+            The Team of the Week&rsquo;s ML manager tab, with the model&rsquo;s real GW9 squad and fixtures but made-up
+            points, ranks and later transfers: a season-long team the model runs under
+            the game&rsquo;s rules from GW9. First the plan for the next gameweek before its deadline (one transfer, no
+            hit), then a scored gameweek with Triple Captain, a 4-point hit and an automatic substitution.
+          </p>
+          <p className="mb-2 text-micro font-semibold uppercase text-fg-subtle">Planned, before the deadline</p>
+          <MlManager view={SAMPLE_ML_MANAGER_PLANNED} />
+
+          <p className="mb-2 mt-10 text-micro font-semibold uppercase text-fg-subtle">Scored</p>
+          <MlManager view={SAMPLE_ML_MANAGER_SCORED} />
+
+          <p className="mb-2 mt-10 text-micro font-semibold uppercase text-fg-subtle">States</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <MlManager error={SAMPLE_NOT_FOUND_ERROR} />
+            <MlManager error={new Error('Sample error: the server could not be reached.')} onRetry={() => undefined} />
+          </div>
+        </Section>
+
         <Section title="Model insights">
           <p className="mb-4 max-w-3xl text-body text-fg-muted">
             The /model page&rsquo;s three tabs with made-up explanations: global SHAP importance and the beeswarm, one
@@ -338,7 +359,7 @@ export function DesignSystem() {
 
           <p className="mb-2 mt-10 text-micro font-semibold uppercase text-fg-subtle">Explain a player</p>
           <Card className="mb-6">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
               <PlayerSearchBox onSelect={() => undefined} />
               <div className="min-w-0">
                 <p className="mb-1.5 text-micro font-semibold uppercase text-fg-muted">Top predicted</p>

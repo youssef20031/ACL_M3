@@ -137,7 +137,7 @@ export function ModelInsights() {
         {view === 'player' && (
           <div className="space-y-6">
             <Card>
-              <div className="grid gap-4 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
                 <PlayerSearchBox onSelect={pickPlayer} />
                 {s && s.top_players.length > 0 && (
                   <div className="min-w-0">

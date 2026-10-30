@@ -2543,6 +2543,27 @@ def model_review_endpoint(gameweek: Optional[int] = Query(None, ge=1, le=38)):
     return _season_call(model_review.get_model_review, gameweek, photo_for=_photo_for)
 
 
+@app.get("/api/ml-manager")
+def ml_manager_endpoint():
+    """The season-long team the points model manages under FPL's rules from GW9 on: the
+    current (planned, locked or scored) gameweek, chips, history and season totals, read
+    from $LIVE_DATA_DIR/ml_manager (logic in services/fpl_manager.py). 404 until the
+    manager exists."""
+    import importlib
+
+    # Imported per call (sys.modules makes that cheap), so the app still starts without it.
+    try:
+        fpl_manager = importlib.import_module("services.fpl_manager")
+    except ImportError as exc:
+        logger.error(f"ML manager unavailable: {exc}")
+        raise HTTPException(status_code=503, detail="The ML manager isn't available")
+    not_found = (season_service.NotFoundError, getattr(fpl_manager, "NotFoundError", season_service.NotFoundError))
+    try:
+        return fpl_manager.get_manager_view(photo_for=_photo_for)
+    except not_found as exc:
+        raise HTTPException(status_code=404, detail=str(exc) or "The ML manager hasn't started yet")
+
+
 @app.get("/api/players/leaders", response_model=PlayerLeadersResponse)
 def player_leaders(
     season: str = Query(CURRENT_SEASON, max_length=16),

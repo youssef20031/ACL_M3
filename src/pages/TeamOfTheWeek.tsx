@@ -27,14 +27,17 @@ import {
   Tabs,
 } from '../components/ui';
 import { ModelReview } from '../components/totw/ModelReview';
+import { MlManager } from '../components/totw/MlManager';
 import { PITCH_LINES } from '../components/totw/pitchLines';
 import { usePageMeta } from '../hooks/usePageMeta';
 
-// The page's tabs: the two squads from /api/team-of-the-week, plus the model's past picks
-// against what they scored (/api/model-review). `mode` in the URL; predicted is the default.
-type View = TeamOfWeekMode | 'review';
+// The page's tabs: the two squads from /api/team-of-the-week, the model's past picks against what
+// they scored (/api/model-review), and the season-long team the model manages (/api/ml-manager).
+// `mode` in the URL; predicted is the default.
+type View = TeamOfWeekMode | 'review' | 'manager';
 
-const parseView = (value: string | null): View => (value === 'actual' || value === 'review' ? value : 'predicted');
+const parseView = (value: string | null): View =>
+  value === 'actual' || value === 'review' || value === 'manager' ? value : 'predicted';
 
 function fmtPoints(points: number, mode: TeamOfWeekMode) {
   return mode === 'predicted' ? points.toFixed(1) : String(Math.round(points));
@@ -51,6 +54,7 @@ function TeamPitch({ starters, mode, gameweek }: { starters: TeamOfWeekPlayer[];
               <PitchPlayer
                 key={p.name}
                 name={p.name}
+                displayName={p.web_name ?? undefined}
                 team={p.team}
                 photo={p.photo}
                 opponents={p.opponents}
@@ -73,7 +77,7 @@ function PitchSkeleton() {
 }
 
 export function TeamOfTheWeek() {
-  usePageMeta({ title: "Team of the Week", description: "The highest-scoring FPL squad our model predicts for the next gameweek (£100m, 3 per club), how its past picks scored, and each week's dream team." });
+  usePageMeta({ title: "Team of the Week", description: "The highest-scoring FPL squad our model predicts for the next gameweek (£100m, 3 per club), how its past picks scored, each week's dream team, and a season-long team the model manages." });
   const [params, setParams] = useSearchParams();
   const view = parseView(params.get('mode'));
   const mode: TeamOfWeekMode = view === 'actual' ? 'actual' : 'predicted';
@@ -92,7 +96,7 @@ export function TeamOfTheWeek() {
     queryFn: () => apiService.getTeamOfTheWeek(mode, gameweek),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60_000,
-    enabled: view !== 'review',
+    enabled: view === 'predicted' || view === 'actual',
   });
 
   const reviewGw = view === 'review' ? requestedGw : undefined;
@@ -106,9 +110,18 @@ export function TeamOfTheWeek() {
     retry: (failures, err) => !isNotFoundError(err) && failures < 1,
   });
 
-  // Keep the gw param out of the URL in predicted mode (it only applies to past gameweeks).
+  const manager = useQuery({
+    queryKey: ['ml-manager'],
+    queryFn: () => apiService.getMlManager(),
+    staleTime: 5 * 60_000,
+    enabled: view === 'manager',
+    // A 404 only means the manager hasn't started: show it at once rather than retrying.
+    retry: (failures, err) => !isNotFoundError(err) && failures < 1,
+  });
+
+  // Keep the gw param out of the URL in predicted and manager modes (it only applies to past gameweeks).
   useEffect(() => {
-    if (view === 'predicted' && params.has('gw')) {
+    if ((view === 'predicted' || view === 'manager') && params.has('gw')) {
       params.delete('gw');
       setParams(params, { replace: true });
     }
@@ -129,7 +142,9 @@ export function TeamOfTheWeek() {
             ? 'The highest-scoring XI our model expects next gameweek, picked like a real FPL squad: £100m, 3 players per club at most.'
             : view === 'review'
               ? 'How the model’s pick for a past gameweek actually did: each player’s predicted and real FPL points, against the average FPL score.'
-              : 'The best-performing XI of a finished gameweek, by actual FPL points.'
+              : view === 'manager'
+                ? 'A season-long team run by our points model since GW9, under the game’s rules: a £100m budget, free transfers, hits and chips, ranked against the managers who started that week.'
+                : 'The best-performing XI of a finished gameweek, by actual FPL points.'
         }
       />
 
@@ -142,11 +157,19 @@ export function TeamOfTheWeek() {
           { value: 'predicted', label: `Predicted${season?.next_gameweek ? ` · GW${season.next_gameweek}` : ''}` },
           { value: 'review', label: 'Model vs actual' },
           { value: 'actual', label: 'Dream team' },
+          { value: 'manager', label: 'ML manager' },
         ]}
       />
 
       <TabPanel idPrefix="totw" value={view} className="pt-5">
-        {view === 'review' ? (
+        {view === 'manager' ? (
+          <MlManager
+            view={manager.data}
+            error={manager.isError ? manager.error : undefined}
+            updating={manager.isFetching && !manager.isLoading}
+            onRetry={() => manager.refetch()}
+          />
+        ) : view === 'review' ? (
           <ModelReview
             review={review.data}
             error={review.isError ? review.error : undefined}
@@ -161,7 +184,7 @@ export function TeamOfTheWeek() {
             <ErrorState title="Couldn't build the team" description={handleApiError(error)} onRetry={() => refetch()} />
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
             <div aria-busy={isFetching}>
               {isLoading || !team ? <PitchSkeleton /> : <TeamPitch starters={team.starters} mode={mode} gameweek={team.gameweek} />}
             </div>

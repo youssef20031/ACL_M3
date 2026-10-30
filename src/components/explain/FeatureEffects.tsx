@@ -36,7 +36,7 @@ export function FeatureEffects({ features, feature, onFeatureChange, dependence,
 
   return (
     <Card>
-      <div className="grid gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:items-end">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:items-end">
         <div>
           <label htmlFor={selectId} className="mb-1.5 block text-micro font-semibold uppercase text-fg-muted">
             Feature
