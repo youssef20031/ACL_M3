@@ -10,6 +10,9 @@ name: Manager replay
 # minutes each). Artifacts: replay-<season> (projections, predictions, actual points, prices and the
 # plan results) and report (report.md, also on the run's summary page).
 on:
+  # Temporary: starts the first run before this workflow is on main (dispatch needs it there)
+  push:
+    branches: [feat/manager-replay]
   workflow_dispatch:
     inputs:
       seasons:
@@ -30,11 +33,13 @@ on:
         description: 'First gameweek of each replayed season'
         default: '1'
 
+# The inputs' defaults again, for a run without inputs
 env:
-  VARIANTS: ${{ inputs.variants }}
-  REF: ${{ inputs.ref }}
-  MODEL: ${{ inputs.model }}
-  START_GW: ${{ inputs.start_gw }}
+  SEASONS: ${{ inputs.seasons || '2022-23,2023-24,2024-25' }}
+  VARIANTS: ${{ inputs.variants || 'default,hold,nochips,h1,h2,decay08,decay1,ftv0,ftv3,margin05,margin1,margin2,hitm2,hitm4,nohits' }}
+  REF: ${{ inputs.ref || 'default' }}
+  MODEL: ${{ inputs.model || 'v4' }}
+  START_GW: ${{ inputs.start_gw || '1' }}
 
 jobs:
   seasons:
@@ -44,8 +49,6 @@ jobs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
       - id: matrix
-        env:
-          SEASONS: ${{ inputs.seasons }}
         run: python3 -c 'import json, os; print("matrix=" + json.dumps([s.strip() for s in os.environ["SEASONS"].split(",") if s.strip()]))' >> "$GITHUB_OUTPUT"
 
   replay:
@@ -68,7 +71,7 @@ jobs:
       # football-data.co.uk's files aren't committed (free for private use, not for redistribution).
       # v4 reads the odds; the replay keeps only prices collected before each deadline.
       - name: Fetch bookmaker odds from football-data.co.uk
-        if: inputs.model == 'v4'
+        if: env.MODEL == 'v4'
         run: python -m scripts.data.fetch_odds --no-fixtures || echo "::warning::odds fetch incomplete; the odds features may be empty"
       - run: python -m scripts.analysis.manager_replay project --season '${{ matrix.season }}' --model "$MODEL" --start-gw "$START_GW" --out 'proj_${{ matrix.season }}'
       - run: python -m scripts.analysis.manager_replay plan --proj 'proj_${{ matrix.season }}' --variants "$VARIANTS" --start-gw "$START_GW" --out 'plan_${{ matrix.season }}.json'
