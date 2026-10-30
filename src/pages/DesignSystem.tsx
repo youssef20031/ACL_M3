@@ -35,7 +35,8 @@ import {
 import { AnswerCards, AnswerCardSkeleton, FollowUps } from '../components/assistant/cards/AnswerCards';
 import { SAMPLE_CARDS, SAMPLE_FOLLOW_UPS } from '../components/assistant/cards/samples';
 import { ModelReview } from '../components/totw/ModelReview';
-import { SAMPLE_MODEL_REVIEW } from '../components/totw/samples';
+import { MlManager } from '../components/totw/MlManager';
+import { SAMPLE_ML_MANAGER_PLANNED, SAMPLE_ML_MANAGER_SCORED, SAMPLE_MODEL_REVIEW } from '../components/totw/samples';
 import { ExplainOverview } from '../components/explain/ExplainOverview';
 import { PlayerExplainer } from '../components/explain/PlayerExplainer';
 import { FeatureEffects } from '../components/explain/FeatureEffects';
@@ -325,6 +326,25 @@ export function DesignSystem() {
             the captain&rsquo;s are doubled; the prediction sits under them.
           </p>
           <ModelReview review={SAMPLE_MODEL_REVIEW} onGameweekChange={() => undefined} />
+        </Section>
+
+        <Section title="ML manager">
+          <p className="mb-4 max-w-3xl text-body text-fg-muted">
+            The Team of the Week&rsquo;s ML manager tab, with made-up players: a season-long team the model runs under
+            the game&rsquo;s rules from GW9. First the plan for the next gameweek before its deadline (one transfer, no
+            hit), then a scored gameweek with Triple Captain, a 4-point hit and an automatic substitution.
+          </p>
+          <p className="mb-2 text-micro font-semibold uppercase text-fg-subtle">Planned, before the deadline</p>
+          <MlManager view={SAMPLE_ML_MANAGER_PLANNED} />
+
+          <p className="mb-2 mt-10 text-micro font-semibold uppercase text-fg-subtle">Scored</p>
+          <MlManager view={SAMPLE_ML_MANAGER_SCORED} />
+
+          <p className="mb-2 mt-10 text-micro font-semibold uppercase text-fg-subtle">States</p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <MlManager error={SAMPLE_NOT_FOUND_ERROR} />
+            <MlManager error={new Error('Sample error: the server could not be reached.')} onRetry={() => undefined} />
+          </div>
         </Section>
 
         <Section title="Model insights">

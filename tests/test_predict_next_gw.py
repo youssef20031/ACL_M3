@@ -461,6 +461,162 @@ def test_failing_shadow_never_touches_the_live_predictions(live_dir):
     assert len(pd.read_csv(live_dir / png.OUTPUT_NAME)) == 19
 
 
+# ------------------------------------------------------------------ projections (next 4 gameweeks)
+
+@pytest.mark.parametrize("status, chance, expected", [
+    ("a", np.nan, [1.0, 1.0, 1.0, 1.0]),
+    ("d", 50.0, [0.5, 1.0, 1.0, 1.0]),      # a doubt counts for the next gameweek only
+    ("d", 25.0, [0.25, 1.0, 1.0, 1.0]),
+    ("i", 0.0, [0.0, 0.5, 1.0, 1.0]),       # ruled out: half the gameweek after, then full
+    ("i", np.nan, [0.0, 0.5, 1.0, 1.0]),
+    ("s", 0.0, [0.0, 0.5, 1.0, 1.0]),
+    ("u", np.nan, [0.0, 0.0, 0.0, 0.0]),    # left the club: never
+    ("u", 100.0, [0.0, 0.0, 0.0, 0.0]),
+    ("n", np.nan, [0.0, 0.0, 0.0, 0.0]),
+])
+def test_horizon_availability(status, chance, expected):
+    assert [png.horizon_availability(status, chance, step) for step in (1, 2, 3, 4)] == expected
+    assert png.horizon_availability(status, chance, 1) == png.availability_factor(status, chance)
+
+
+def test_horizon_events_stop_at_the_season_end():
+    bootstrap = {"events": [{"id": g} for g in range(30, 39)]}
+    assert [e["id"] for e in png.horizon_events(bootstrap, {"id": 32})] == [32, 33, 34, 35]
+    assert [e["id"] for e in png.horizon_events(bootstrap, {"id": 37})] == [37, 38]
+
+
+# GW8 played; GW9 next (deadline passed, so no pick is saved); GW10 Arsenal and Chelsea double
+# while Hull City and Leeds blank; GW12 after an international break
+HORIZON_FIXTURES = [
+    fixture(80, 8, 1, 5, "2026-10-17T15:00:00Z", finished=True),
+    fixture(81, 8, 2, 3, "2026-10-17T15:00:00Z", finished=True),
+    fixture(82, 8, 4, 6, "2026-10-18T15:00:00Z", finished=True),
+    fixture(90, 9, 1, 2, "2026-10-24T15:00:00Z"),
+    fixture(91, 9, 3, 4, "2026-10-24T15:00:00Z"),
+    fixture(92, 9, 5, 6, "2026-10-25T14:00:00Z"),
+    fixture(100, 10, 4, 1, "2026-10-31T15:00:00Z"),
+    fixture(101, 10, 2, 3, "2026-10-31T15:00:00Z"),
+    fixture(102, 10, 1, 2, "2026-11-03T19:45:00Z"),
+    fixture(110, 11, 1, 3, "2026-11-07T15:00:00Z"),
+    fixture(111, 11, 2, 4, "2026-11-07T15:00:00Z"),
+    fixture(112, 11, 6, 5, "2026-11-08T14:00:00Z"),
+    fixture(120, 12, 3, 1, "2026-11-21T15:00:00Z"),
+    fixture(121, 12, 4, 2, "2026-11-21T15:00:00Z"),
+    fixture(122, 12, 5, 6, "2026-11-21T15:00:00Z"),
+    fixture(130, 13, 1, 6, "2026-11-28T15:00:00Z"),
+]
+
+
+HORIZON_DEADLINES = {8: "2026-10-17T13:30:00Z", 9: "2026-10-24T13:30:00Z", 10: "2026-10-31T13:30:00Z",
+                     11: "2026-11-07T13:30:00Z", 12: "2026-11-21T13:30:00Z", 13: "2026-11-28T13:30:00Z"}
+
+
+class HorizonClient:
+    def bootstrap(self):
+        return {
+            "events": [{"id": g, "is_next": g == 9, "deadline_time": d} for g, d in HORIZON_DEADLINES.items()],
+            "teams": [{"id": i, "name": "Ipswich Town" if n == "Ipswich" else n} for i, n in TEAMS.items()],
+        }
+
+    def fixtures(self):
+        return HORIZON_FIXTURES
+
+    def close(self):
+        pass
+
+
+def test_rest_days_from_the_fixture_list():
+    kickoffs = png.team_kickoffs(HORIZON_FIXTURES, TEAMS)
+    assert png.rest_days("Arsenal", "2026-10-31T15:00:00Z", kickoffs) == pytest.approx(7.0)
+    assert png.rest_days("Arsenal", "2026-11-03T19:45:00Z", kickoffs) == pytest.approx(3 + 4.75 / 24)
+    assert png.rest_days("Arsenal", "2026-11-21T15:00:00Z", kickoffs) == pytest.approx(14.0)
+    assert np.isnan(png.rest_days("Arsenal", "2026-10-17T15:00:00Z", kickoffs))     # nothing before
+    assert png.rest_days("Leeds", "2027-01-01T15:00:00Z", kickoffs) == 30.0          # clipped like the feature
+
+
+def test_projections_cover_four_gameweeks_and_start_with_the_live_predictions(live_dir):
+    write_odds(live_dir)       # prices the GW7 matches only: every later gameweek predicts without odds
+    seen = []
+
+    def by_price(frame):               # 5 points a fixture for a 10.0m player
+        seen.append(frame.copy())
+        return frame["value"].to_numpy() / 20.0
+    summary = png.predict_next_gameweek(str(live_dir), client=HorizonClient(), history_csv=str(live_dir / "history.csv"),
+                                        predict_fn=by_price, fetch_odds=False)
+    path = live_dir / png.PROJECTIONS_NAME
+    assert summary["projections"]["seconds"] >= 0
+    assert {k: v for k, v in summary["projections"].items() if k != "seconds"} == {
+        "output": str(path), "horizon": 4, "gameweeks": [9, 10, 11, 12], "failed": None}
+    proj = pd.read_csv(path)
+    assert list(proj.columns) == png.PROJECTION_COLUMNS
+    assert len(proj) == 4 * 5 and not any(p.endswith(".tmp") for p in os.listdir(live_dir))
+
+    # GW+1 is exactly next_gw_predictions
+    live = pd.read_csv(live_dir / png.OUTPUT_NAME).set_index("element")
+    gw9 = proj[proj["gameweek"] == 9].set_index("element")
+    assert gw9["predicted_points"].to_dict() == live.loc[gw9.index, "predicted_points"].to_dict()
+
+    pts = proj.pivot(index="name", columns="gameweek", values="predicted_points")
+    assert pts.loc["Fit Gunner"].tolist() == [5.0, 10.0, 5.0, 5.0]          # GW10 double summed
+    assert pts.loc["Doubtful Blue"].tolist() == [1.25, 5.0, 2.5, 2.5]       # 50% for GW9 only
+    assert pts.loc["Injured Gunner"].tolist() == [0.0, 3.0, 3.0, 3.0]       # out, half (of a double), full
+    assert pts.loc["Gone Gunner"].tolist() == [0.0, 0.0, 0.0, 0.0]
+    assert pts.loc["Blank Tiger"].tolist() == [2.75, 0.0, 2.75, 2.75]       # Hull City blank in GW10
+    rows = proj.set_index(["name", "gameweek"])
+    assert rows.loc[("Fit Gunner", 10), "opponents"] == "Spurs & Chelsea"
+    assert rows.loc[("Fit Gunner", 10), "fixtures"] == 2
+    assert rows.loc[("Blank Tiger", 10), "opponents"] == png.NO_FIXTURE_OPPONENT
+    assert rows.loc[("Blank Tiger", 10), "fixtures"] == 0
+    assert rows.loc[("Injured Gunner", 10), "availability"] == 0.5
+    assert rows.loc[("Fit Gunner", 11), "now_cost"] == 100 and rows.loc[("Fit Gunner", 11), "web_name"] == "Fit Gunner"
+
+    # One feature build per gameweek, each with only its own fixtures
+    frames = {int(f["GW"].iloc[0]): f for f in seen}
+    assert sorted(frames) == [9, 10, 11, 12] and all(f["GW"].nunique() == 1 for f in seen)
+    fit = {gw: f[f["name"] == "Fit Gunner"].sort_values("kickoff_time") for gw, f in frames.items()}
+    # Form and the rest stay as they were before GW9; days_rest is the gap to the team's previous fixture
+    for gw in (10, 11, 12):
+        assert fit[gw]["total_points_r3"].tolist() == pytest.approx([fit[9]["total_points_r3"].iloc[0]] * len(fit[gw]))
+        assert fit[gw]["season_matches_before"].iloc[0] == fit[9]["season_matches_before"].iloc[0]
+    assert fit[10]["days_rest"].tolist() == pytest.approx([7.0, 3 + 4.75 / 24])
+    assert fit[10]["fixtures_in_gw"].tolist() == [2.0, 2.0]
+    assert fit[11]["days_rest"].tolist() == pytest.approx([3 + 19.25 / 24])
+    assert fit[12]["days_rest"].tolist() == pytest.approx([14.0])
+    # No earlier match at all: NaN for his first row, as in training (the double's second counts from the first)
+    gone = frames[10][frames[10]["name"] == "Gone Gunner"].sort_values("kickoff_time")
+    assert np.isnan(gone["days_rest"].iloc[0]) and gone["days_rest"].iloc[1] == pytest.approx(3 + 4.75 / 24)
+    # The status file stays the snapshot, as old as it was for GW9; no odds for later gameweeks
+    age = frames[9]["snap_age_days"].dropna().unique()
+    assert len(age) == 1
+    for gw in (10, 11, 12):
+        assert frames[gw]["snap_age_days"].dropna().unique().tolist() == pytest.approx(age.tolist())
+        assert frames[gw]["snap_unavailable"].notna().all() and frames[gw]["odds_win"].isna().all()
+    doubt = frames[11].set_index("name")
+    assert doubt.loc["Doubtful Blue", "snap_chance"] == 50 and doubt.loc["Fit Gunner", "tr_in_rank"] == 1.0
+
+
+def test_failing_projections_never_touch_the_predictions(live_dir, monkeypatch):
+    def next_gameweek_only(frame):
+        if (frame["GW"] != 9).any():
+            raise RuntimeError("model exploded on a later gameweek")
+        return frame["value"].to_numpy() / 20.0
+    summary = png.predict_next_gameweek(str(live_dir), client=HorizonClient(), history_csv=str(live_dir / "history.csv"),
+                                        predict_fn=next_gameweek_only, fetch_odds=False)
+    assert summary["projections"]["gameweeks"] == [9]
+    assert set(summary["projections"]["failed"]) == {10, 11, 12}
+    assert set(pd.read_csv(live_dir / png.PROJECTIONS_NAME)["gameweek"]) == {9}
+    assert len(pd.read_csv(live_dir / png.OUTPUT_NAME)) == 5
+
+    def broken(*args, **kwargs):
+        raise ValueError("no projections today")
+    monkeypatch.setattr(png, "build_projections", broken)
+    summary = png.predict_next_gameweek(str(live_dir), client=HorizonClient(), history_csv=str(live_dir / "history.csv"),
+                                        predict_fn=lambda f: f["value"].to_numpy() / 20.0, fetch_odds=False)
+    assert summary["projections"]["output"] is None
+    assert summary["projections"]["failed"] == "failed: no projections today"
+    assert pd.read_csv(live_dir / png.OUTPUT_NAME)["predicted_points"].max() == 5.0
+
+
 # ------------------------------------------------------------------ services/predictions.py
 
 @pytest.fixture
