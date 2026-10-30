@@ -10,6 +10,9 @@ name: Manager replay
 # minutes each). Artifacts: replay-<season> (projections, predictions, actual points, prices and the
 # plan results) and report (report.md, also on the run's summary page).
 on:
+  # Throwaway branch: one confirmation run (dispatch needs the workflow on main)
+  push:
+    branches: [replay-run/margins-gw9]
   workflow_dispatch:
     inputs:
       seasons:
@@ -33,10 +36,10 @@ on:
 # The inputs' defaults again, for a run without inputs
 env:
   SEASONS: ${{ inputs.seasons || '2022-23,2023-24,2024-25' }}
-  VARIANTS: ${{ inputs.variants || 'default,hold,nochips,h1,h2,decay08,decay1,ftv0,ftv3,margin05,margin1,margin2,hitm2,hitm4,nohits' }}
+  VARIANTS: ${{ inputs.variants || 'default,margin1,margin15,margin2,hitm4,margin1_hitm4' }}
   REF: ${{ inputs.ref || 'default' }}
   MODEL: ${{ inputs.model || 'v4' }}
-  START_GW: ${{ inputs.start_gw || '1' }}
+  START_GW: ${{ inputs.start_gw || '9' }}
 
 jobs:
   seasons:
