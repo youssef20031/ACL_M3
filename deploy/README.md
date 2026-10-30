@@ -118,6 +118,8 @@ sudo systemctl start fpl-daily.service   # optional: run it right away
 
 Every run goes through `fpl-pipeline` (installed in `/usr/local/bin` by the script), which takes one lock (`flock /run/lock/fpl-pipeline.lock`) for the whole run, so the timer's runs, `deploy.sh`'s jobs (`--run-daily`, `--load-data`, `--load-fixtures`) and manual runs never overlap: a second run waits for the first. Use it for manual runs too, e.g. `fpl-pipeline pipeline.daily` or `fpl-pipeline pipeline.retrain --force`, and run it as yourself, not with `sudo` (the lock file belongs to the timer's user).
 
+A second timer, `fpl-deadline`, fires every hour (at :40 UTC; `FPL_DEADLINE_SCHEDULE` moves it) and runs the same job with `--before-deadline`: it goes ahead only when the next deadline is 45-105 minutes away and no run started in the 150 minutes before it, so late team news reaches the predictions, the saved pick and the ML manager's plan. Otherwise the container exits within seconds, without a healthcheck ping. It never retrains, and missed firings aren't caught up.
+
 The odds for Friday-Monday matches are collected on Friday afternoon (by 17:00 UK time) and for Tuesday-Thursday matches on Tuesday (by 13:00). A prediction run between then and the deadline uses them; an earlier one predicts with empty odds features, and each run's summary shows the share of upcoming player-fixtures with odds (`predictions.input_coverage.odds`). The 06:00/18:00 UTC runs alone would miss Tuesday-evening deadlines, hence the extra runs; `FPL_FRIDAY_SCHEDULE` and `FPL_TUESDAY_SCHEDULE` (systemd `OnCalendar` values) move them, e.g. `FPL_TUESDAY_SCHEDULE="Tue *-*-* 15:30:00 Europe/London" bash deploy/install-daily-job.sh`.
 
 **After updating to the v4 points model** (the deploy itself is automatic):
@@ -136,7 +138,7 @@ Optional failure alerts:
 1. Create a free check on [healthchecks.io](https://healthchecks.io) with period 12 hours and grace 2 hours.
 2. Put its ping URL in `deploy/.env` as `HEALTHCHECK_URL=https://hc-ping.com/...`, then run `bash deploy/deploy.sh`.
 
-You get an email if a run fails or doesn't happen.
+You get an email if a run fails or doesn't happen, and also when a run finishes but reports a problem (the summary's `problems`): an ML manager step that failed, a plan the rules rejected or whose solve hit its time limit, no plan for the next deadline, a captain or vice-captain who is out, an unsaved model pick, failed projections, an unreadable v4 input, or odds missing for most of the next gameweek after football-data.co.uk has collected them.
 
 ## Day-to-day
 
@@ -146,7 +148,8 @@ You get an email if a run fails or doesn't happen.
 | Reload the graph after changing the CSVs or the loader | `bash deploy/deploy.sh --load-data` |
 | Reload only promoted teams + 2026-27 fixtures (after editing the fixtures CSV) | `bash deploy/deploy.sh --load-fixtures` |
 | Refresh the current season now (results, team news, predictions) | `bash deploy/deploy.sh --run-daily` |
-| Daily job status / logs | `systemctl list-timers fpl-daily.timer`, `journalctl -u fpl-daily.service --no-pager \| tail -50` |
+| Daily job status / logs | `systemctl list-timers fpl-daily.timer fpl-deadline.timer`, `journalctl -u fpl-daily.service --no-pager \| tail -50` |
+| Pre-deadline runs | `journalctl -u fpl-deadline.service --no-pager \| grep -i 'pre-deadline run' \| tail` |
 | Run a pipeline step without overlapping the timer | `fpl-pipeline pipeline.daily`, `fpl-pipeline pipeline.retrain --force` |
 | Live vs shadow model ledger | see "Live vs shadow model" above |
 | Tail backend logs | `docker compose -f deploy/docker-compose.yml logs -f backend` |

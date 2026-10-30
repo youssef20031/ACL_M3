@@ -705,7 +705,8 @@ def plan(current: Dict[str, Any], projections: pd.DataFrame, rules: Optional[Dic
     horizon      gameweeks planned over, this one included (fewer when the projections stop)
 
     The entry also carries, per horizon gameweek, the plan's projected points, transfers, hits and
-    free transfers, though only this gameweek's moves count. Raises ValueError for an invalid
+    free transfers, though only this gameweek's moves count, and `optimal`: False when a solve (with
+    or without a chip) stopped at its time limit with its best plan so far. Raises ValueError for an invalid
     squad or missing projections, team_optimizer.InfeasibleError when no plan fits.
     """
     rules = _rules(rules)
@@ -725,6 +726,7 @@ def plan(current: Dict[str, Any], projections: pd.DataFrame, rules: Optional[Dic
                for chip in CHIPS if chip in windows and chip_may_play(chip, pool, gws, base, windows)}
     chip, chip_why = chip_decision(pool, gws, base, options, windows)
     sol = options[chip] if chip else base
+    optimal = base.optimal and all(o.optimal for o in options.values())
 
     starters = opt.order_starters(_candidate(pool[i]) for i in sol.starters[0])
     bench = opt.order_bench(_candidate(pool[i]) for i in sol.squads[0] if i not in set(sol.starters[0]))
@@ -763,6 +765,7 @@ def plan(current: Dict[str, Any], projections: pd.DataFrame, rules: Optional[Dic
         "projected_points": round(projected, 2),
         "horizon": horizon_rows,
         "reason": _reason(pool, gws, sol, pairs, chip, chip_why, captain, vice, rules),
+        "optimal": optimal,
         "result": None,
     }
 

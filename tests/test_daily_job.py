@@ -1,5 +1,6 @@
 """Checks on deploy/install-daily-job.sh (the timer's schedule and the one lock around every pipeline
 run) and deploy/deploy.sh, whose pipeline jobs take the same lock."""
+import json
 import os
 import re
 import shutil
@@ -92,6 +93,59 @@ def test_every_deadline_gets_a_run_with_the_odds(script, clock, day, time):
     latest_start = deadline - delay - RUN_TIME
     runs = run_starts([default(script, v) for v in SCHEDULES], collected + POSTED, latest_start + timedelta(seconds=1))
     assert runs, f"no run between {collected + POSTED:%a %H:%M} and {latest_start:%a %H:%M} UTC ({clock})"
+
+
+def test_an_hourly_timer_offers_a_run_before_every_deadline(script):
+    assert 'deadline_schedule="${FPL_DEADLINE_SCHEDULE:-*-*-* *:40:00 UTC}"' in script
+    service = re.search(r"fpl-deadline.service >/dev/null <<EOF\n(.*?)\nEOF\n", script, re.S).group(1)
+    timer = re.search(r"fpl-deadline.timer >/dev/null <<EOF\n(.*?)\nEOF\n", script, re.S).group(1)
+    assert "ExecStart=${runner} pipeline.daily --before-deadline" in service
+    assert "OnCalendar=${deadline_schedule}" in timer and "Persistent=false" in timer   # never after the deadline
+    assert "RandomizedDelaySec" not in timer
+    assert "sudo systemctl enable fpl-daily.timer fpl-deadline.timer" in script
+
+
+HOURLY = re.compile(r"^\*-\*-\* \*:(?P<minute>\d\d):00 UTC$")
+
+
+def hourly_starts(expression: str, start: datetime, end: datetime):
+    minute = int(HOURLY.match(expression)["minute"])
+    t = start.replace(minute=minute, second=0, microsecond=0) - timedelta(hours=1)
+    out = []
+    while t < end:
+        if t >= start:
+            out.append(t)
+        t += timedelta(hours=1)
+    return out
+
+
+@pytest.mark.parametrize("delay", [0, 10])
+@pytest.mark.parametrize("clock", sorted(MONDAYS))
+@pytest.mark.parametrize("day,time", FIRST_KICKOFFS)
+def test_every_deadline_gets_one_run_shortly_before_it(script, tmp_path, clock, day, time, delay):
+    """With both timers, each kind of deadline gets a run that starts within PRE_DEADLINE_RECENT
+    of it and at least 45 minutes before it (time to finish), and at most one pre-deadline run.
+    `delay`: the scheduled runs' RandomizedDelaySec, at its extremes."""
+    from pipeline import daily
+
+    hours, minutes = map(int, time.split(":"))
+    kickoff = (MONDAYS[clock] + timedelta(days=WEEKDAYS.index(day))).replace(hour=hours, minute=minutes, tzinfo=UK)
+    deadline = kickoff.astimezone(timezone.utc) - timedelta(minutes=od.DEADLINE_MINUTES)
+    meta = {"events": [{"id": 10, "deadline_time": deadline.isoformat()}]}
+    (tmp_path / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    start, end = deadline - timedelta(days=2), deadline
+    scheduled = [(t + timedelta(minutes=delay), "scheduled")
+                 for t in run_starts([default(script, v) for v in SCHEDULES], start, end)]
+    hourly = [(t, "hourly") for t in hourly_starts(default(script, "FPL_DEADLINE_SCHEDULE"), start, end)]
+    runs = []
+    for t, kind in sorted(scheduled + hourly):
+        if kind == "hourly" and not daily.pre_deadline_due(str(tmp_path), t)[0]:
+            continue
+        runs.append((t, kind))
+        (tmp_path / daily.RUNS_FILE).write_text(json.dumps({"last_started": t.isoformat()}), encoding="utf-8")
+    close = [t for t, _ in runs if deadline - daily.PRE_DEADLINE_RECENT <= t <= deadline - daily.PRE_DEADLINE_WINDOW[0]]
+    assert close, f"no run in the {daily.PRE_DEADLINE_RECENT} before {deadline:%a %H:%M} UTC ({clock}): {runs}"
+    assert sum(kind == "hourly" for _, kind in runs) <= 1
 
 
 def test_every_run_goes_through_one_lock(script):

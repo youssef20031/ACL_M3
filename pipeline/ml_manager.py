@@ -16,7 +16,10 @@ Each run:
      rank lookup is retried on the next run.
   5. Plans the next gameweek from projections.csv, checks it against the rules and saves it as
      planned; every run before the deadline replaces it, so the last one counts.
-  6. Rebuilds state.json.
+  6. Checks what the next deadline will lock against FPL's latest status: no plan (the previous
+     team would play again) or a captain who is out (a plan that replanning couldn't refresh) is
+     listed under check.problems, which pipeline.daily turns into a failed healthcheck.
+  7. Rebuilds state.json.
 Never raises: each step's failure is logged and reported in the summary.
 """
 import argparse
@@ -184,7 +187,42 @@ def _plan_next(live_dir: str, season: str, rules: fm.Rules, meta: Dict[str, Any]
     fm.save_entry(live_dir, entry, now=now)
     return {"status": "planned", "gameweek": gw, "chip": entry.get("chip"),
             "transfers": len(entry.get("transfers") or []), "hit_cost": entry.get("hit_cost"),
-            "projected_points": entry.get("projected_points"), "seconds": round(time.perf_counter() - started, 1)}
+            "projected_points": entry.get("projected_points"), "optimal": entry.get("optimal"),
+            "seconds": round(time.perf_counter() - started, 1)}
+
+
+def _out_players(status: pd.DataFrame) -> Dict[int, str]:
+    """element -> FPL status letter, for the players FPL gives no chance of playing."""
+    from services.season_service import chance_of_playing
+
+    if "status" not in status:
+        return {}
+    column = "chance_of_playing_next_round"
+    chance = status[column] if column in status else [None] * len(status)
+    return {int(e): str(s) for e, s, c in zip(status["element"], status["status"], chance)
+            if pd.notna(e) and chance_of_playing(s, c) == 0.0}
+
+
+def _check_next(live_dir: str, season: str, meta: Dict[str, Any], status: pd.DataFrame, start_gw: int,
+                now: datetime) -> Dict[str, Any]:
+    """Step 6: the entry the next deadline will lock, against FPL's latest status. `problems` are
+    what pipeline.daily alerts on while there's still time to act."""
+    gw, deadline = meta.get("next_gameweek"), meta.get("next_deadline")
+    if gw is None or not deadline or _passed(deadline, now) or int(gw) <= start_gw:
+        return {"problems": []}
+    gw = int(gw)
+    entry = fm.load_entry(live_dir, season, gw)
+    if not entry or entry.get("status") != fm.PLANNED:
+        return {"gameweek": gw, "problems": [f"GW{gw} has no plan: at its deadline ({deadline}) the previous "
+                                             "team plays again"]}
+    out = _out_players(status)
+    squad = entry.get("squad") or []
+    problems = [f"GW{gw}'s {'captain' if p.get('captain') else 'vice-captain'} {p.get('name')} is out "
+                f"(status {out[int(p['element'])]}; plan from {entry.get('planned_at')})"
+                for p in squad if (p.get("captain") or p.get("vice_captain")) and int(p["element"]) in out]
+    starters_out = sum(p.get("role") == "starter" and int(p["element"]) in out for p in squad)
+    return {"gameweek": gw, "planned_at": entry.get("planned_at"), "starters_out": starters_out,
+            "problems": problems}
 
 
 def run(live_dir: str = LIVE_DATA_DIR, client=None, now: Optional[datetime] = None,
@@ -218,6 +256,7 @@ def run(live_dir: str = LIVE_DATA_DIR, client=None, now: Optional[datetime] = No
         ("score", lambda: _score(live_dir, season, rules, start_gameweek, now, league_rank)),
         ("plan", lambda: _plan_next(live_dir, season, rules, meta, prices, opponents_for, start_gameweek,
                                     now, planner)),
+        ("check", lambda: _check_next(live_dir, season, meta, status, start_gameweek, now)),
         ("state", lambda: {k: v for k, v in fm.rebuild_state(live_dir, season, rules).items()
                            if k in ("gameweek", "next_gameweek", "bank", "free_transfers", "totals", "problems")}),
     ]

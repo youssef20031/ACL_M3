@@ -170,3 +170,39 @@ def test_another_season_is_left_alone(live):
     (live / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     assert run(live, after(9))["status"].startswith("skipped")
     assert not os.path.exists(live / "ml_manager")
+
+
+def broken_planner(*args, **kwargs):
+    raise RuntimeError("solver crashed")
+
+
+def test_the_check_reports_a_missing_plan_for_the_next_deadline(live):
+    write_meta(live, 9)
+    assert run(live, before(9))["check"] == {"problems": []}      # GW9 is the model's saved pick
+    write_meta(live, 10)
+    s = ml_manager.run(str(live), now=after(9), fpl_context=lambda client: (fm.DEFAULT_RULES, None),
+                       planner=broken_planner, league_rank=lambda *a, **k: None)
+    assert s["plan"].startswith("failed")
+    assert len(s["check"]["problems"]) == 1 and "GW10 has no plan" in s["check"]["problems"][0]
+
+
+def test_the_check_reports_a_captain_who_is_out_when_replanning_fails(live):
+    write_meta(live, 10)
+    s = run(live, after(9))
+    assert s["check"]["problems"] == [] and s["check"]["gameweek"] == 10 and s["check"]["starters_out"] == 0
+    captain = next(p["element"] for p in entry(live, 10)["squad"] if p["captain"])
+    status = pd.read_csv(live / "player_status_2026_27.csv")
+    status["chance_of_playing_next_round"] = None
+    status.loc[status["element"] == captain, ["status", "chance_of_playing_next_round"]] = ["i", 0]
+    status.to_csv(live / "player_status_2026_27.csv", index=False)
+    s = ml_manager.run(str(live), now=after(9) + timedelta(hours=6),
+                       fpl_context=lambda client: (fm.DEFAULT_RULES, None), planner=broken_planner,
+                       league_rank=lambda *a, **k: None)
+    assert s["check"]["starters_out"] == 1
+    assert len(s["check"]["problems"]) == 1
+    assert f"captain Player {captain} is out (status i" in s["check"]["problems"][0]
+
+
+def test_the_plan_summary_says_whether_its_solve_was_optimal(live):
+    write_meta(live, 10)
+    assert run(live, after(9))["plan"]["optimal"] is True

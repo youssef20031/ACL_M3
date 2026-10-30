@@ -19,11 +19,21 @@ Steps:
      gameweek from projections.csv)
   6. POST /api/admin/reload so the running API rebuilds its caches without a restart
   7. Ping HEALTHCHECK_URL (e.g. healthchecks.io) on success, HEALTHCHECK_URL/fail on failure,
-     so a silent failure turns into an email
+     so a silent failure turns into an email. Failures the steps report instead of raising count
+     too (run_problems): an ML manager step that failed, a plan the rules rejected or whose solve
+     stopped at its time limit, no plan for the next deadline or a captain who is out, an unsaved
+     model pick, failed projections, an unreadable v4 input, and odds missing for most of the next
+     gameweek after football-data.co.uk has collected them
 
 The timer (06:00 and 18:00 UTC, plus Fridays at 17:15 and Tuesdays at 16:00 UK time, so an evening
 deadline gets that day's odds and team news) runs it under one flock with every other pipeline run,
 so two runs never overlap (deploy/install-daily-job.sh).
+
+A second timer calls it every hour with --before-deadline, which runs only when the next deadline is
+45-105 minutes away (PRE_DEADLINE_WINDOW) and no run started in the 150 minutes before it
+(PRE_DEADLINE_RECENT), so late team news reaches the predictions, the saved pick and the ML
+manager's plan. Otherwise it exits at once, without a healthcheck ping. Such a run never retrains.
+Every run records its start in LIVE_DATA_DIR/daily_runs.json.
 
 Environment: LIVE_DATA_DIR, ODDS_DIR (optional, default LIVE_DATA_DIR/odds), BACKEND_URL (default http://backend:8000), ADMIN_TOKEN,
 HEALTHCHECK_URL (optional), plus the usual NEO4J_* settings.
@@ -36,9 +46,11 @@ import subprocess
 import sys
 import time
 import traceback
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+import pandas as pd
 
 from pipeline.current_season import LIVE_DATA_DIR, run as refresh_current_season
 
@@ -47,6 +59,61 @@ logger = logging.getLogger("pipeline.daily")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")
 HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL", "").rstrip("/")
+
+# Odds: the next gameweek's share of upcoming rows with prices, once football-data.co.uk has
+# collected them (ml/odds.collected_at of its first kickoff, plus a margin for publishing). Less is
+# a failed download or a feed change, not a rearranged match or two.
+MIN_ODDS_COVERAGE = 0.5
+ODDS_PUBLISH_MARGIN = timedelta(minutes=15)
+
+# --before-deadline: start between 105 and 45 minutes before the deadline (an hourly timer always
+# fires once in that hour; a run takes 10-20 minutes), unless a run started within 150 minutes of it
+PRE_DEADLINE_WINDOW = (timedelta(minutes=45), timedelta(minutes=105))
+PRE_DEADLINE_RECENT = timedelta(minutes=150)
+RUNS_FILE = "daily_runs.json"
+
+
+def _read_json(path: str) -> Dict[str, Any]:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def next_deadline(meta: Dict[str, Any], now: datetime) -> Optional[datetime]:
+    """The first deadline after `now` in meta.json (its events, or next_deadline)."""
+    times = [e.get("deadline_time") for e in meta.get("events") or []] + [meta.get("next_deadline")]
+    ahead = [t for t in pd.to_datetime(pd.Series(times, dtype=object), utc=True, errors="coerce").dropna()
+             if t > now]
+    return min(ahead).to_pydatetime() if ahead else None
+
+
+def pre_deadline_due(live_dir: str, now: datetime) -> Tuple[bool, str]:
+    """(whether a --before-deadline run should go ahead now, why)."""
+    deadline = next_deadline(_read_json(os.path.join(live_dir, "meta.json")), now)
+    if deadline is None:
+        return False, "no deadline ahead in meta.json"
+    soonest, latest = PRE_DEADLINE_WINDOW
+    if not deadline - latest <= now <= deadline - soonest:
+        return False, f"the next deadline ({deadline.isoformat()}) isn't 45-105 minutes away"
+    last = pd.to_datetime(_read_json(os.path.join(live_dir, RUNS_FILE)).get("last_started"), utc=True,
+                          errors="coerce")
+    if pd.notna(last) and last >= deadline - PRE_DEADLINE_RECENT:
+        return False, f"a run started at {last.isoformat()}, close enough to the {deadline.isoformat()} deadline"
+    return True, f"the deadline is at {deadline.isoformat()}"
+
+
+def _record_start(live_dir: str, now: datetime, before_deadline: bool) -> None:
+    """daily_runs.json: when the last run started (what pre_deadline_due reads). Never raises."""
+    path = os.path.join(live_dir, RUNS_FILE)
+    try:
+        os.makedirs(live_dir, exist_ok=True)
+        with open(f"{path}.tmp", "w", encoding="utf-8") as f:
+            json.dump({"last_started": now.isoformat(), "before_deadline": before_deadline}, f)
+        os.replace(f"{path}.tmp", path)
+    except OSError as exc:
+        logger.warning("Couldn't record the run's start in %s: %s", path, exc)
 
 
 def _ping(suffix: str = "", body: str = "") -> None:
@@ -82,7 +149,58 @@ def _run_retrain(force: bool = False) -> Dict[str, Any]:
     return json.loads(proc.stdout)
 
 
-def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False, retrain: bool = False) -> Dict[str, Any]:
+def _missing_odds(predictions: Dict[str, Any], now: datetime) -> Optional[str]:
+    """The odds problem of a prediction run's summary, if any: the deadline is ahead, the prices
+    for its first match have been collected, and most upcoming rows still have none."""
+    from ml import odds as od
+
+    coverage = (predictions.get("input_coverage") or {}).get("odds")
+    deadline = pd.to_datetime(predictions.get("deadline"), utc=True, errors="coerce")
+    if coverage is None or pd.isna(deadline) or now >= deadline:
+        return None
+    collected = od.collected_at(pd.Series([deadline + timedelta(minutes=od.DEADLINE_MINUTES)])).iloc[0]
+    if pd.isna(collected) or now < collected + ODDS_PUBLISH_MARGIN or coverage >= MIN_ODDS_COVERAGE:
+        return None
+    return (f"predictions: odds for {coverage:.0%} of GW{predictions.get('gameweek')}'s rows, collected by "
+            f"{collected.isoformat()} (odds files: {predictions.get('odds')})")
+
+
+def run_problems(summary: Dict[str, Any], now: Optional[datetime] = None) -> List[str]:
+    """What a run's summary shows went wrong without raising (see the module docstring)."""
+    now = now or datetime.now(timezone.utc)
+    problems = []
+    predictions = summary.get("predictions")
+    if isinstance(predictions, dict):
+        if predictions.get("model_pick") == "failed":
+            problems.append("predictions: the model's pick wasn't saved")
+        failed = (predictions.get("projections") or {}).get("failed")
+        if failed:
+            problems.append(f"predictions: projections failed: {failed}")
+        if predictions.get("extra_inputs") not in (None, "ok"):
+            problems.append(f"predictions: unreadable v4 inputs: {predictions['extra_inputs']}")
+        odds = _missing_odds(predictions, now)
+        if odds:
+            problems.append(odds)
+    manager = summary.get("ml_manager")
+    if isinstance(manager, dict):
+        for step, value in manager.items():
+            if isinstance(value, str) and value.startswith("failed"):
+                problems.append(f"ml_manager {step}: {value}")
+        plan = manager.get("plan")
+        if isinstance(plan, dict) and plan.get("status") == "rejected":
+            problems.append(f"ml_manager plan: rejected by the rules: {plan.get('errors')}")
+        if isinstance(plan, dict) and plan.get("optimal") is False:
+            problems.append(f"ml_manager plan: GW{plan.get('gameweek')}'s solve stopped at its time limit")
+        check = manager.get("check")
+        if isinstance(check, dict):
+            problems += [f"ml_manager: {p}" for p in check.get("problems") or []]
+    return problems
+
+
+def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False, retrain: bool = False,
+              allow_retrain: bool = True) -> Dict[str, Any]:
+    """One run (the module docstring's steps). `allow_retrain` False skips the retrain step
+    (a run right before a deadline mustn't spend half an hour training)."""
     summary: Dict[str, Any] = {}
     started = time.time()
 
@@ -107,7 +225,10 @@ def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False, retrain: bool 
     # healthcheck alerts.
     errors = []
     try:
-        summary["retrain"] = _run_retrain(force=retrain)
+        if allow_retrain or retrain:
+            summary["retrain"] = _run_retrain(force=retrain)
+        else:
+            summary["retrain"] = "skipped (pre-deadline run)"
     except Exception:
         errors.append(("retrain", traceback.format_exc()))
         summary["retrain"] = "failed"
@@ -133,6 +254,11 @@ def run_daily(live_dir: str = LIVE_DATA_DIR, force: bool = False, retrain: bool 
 
     summary["backend_reload"] = _reload_backend()
     summary["seconds"] = round(time.time() - started, 1)
+    problems = run_problems(summary)
+    if problems:
+        summary["problems"] = problems
+        errors.append(("problems", "\n".join(problems)))
+        logger.error("Problems:\n%s", errors[-1][1])
     if errors:
         failed = ", ".join(step for step, _ in errors)
         details = "\n".join(tb for _, tb in errors)
@@ -146,13 +272,24 @@ def main() -> int:
     parser.add_argument("--force", action="store_true",
                         help="Re-fetch all history and reload the graph even if nothing changed")
     parser.add_argument("--retrain", action="store_true", help="Retrain the model now, not just on Mondays")
+    parser.add_argument("--before-deadline", action="store_true",
+                        help="Run only when the next deadline is 45-105 minutes away and no run started within "
+                             "150 minutes of it, and don't retrain (the hourly fpl-deadline timer)")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    now = datetime.now(timezone.utc)
+    if args.before_deadline:
+        due, why = pre_deadline_due(args.live_dir, now)
+        logger.info("%s: %s", "Pre-deadline run" if due else "No pre-deadline run", why)
+        if not due:
+            return 0
+    _record_start(args.live_dir, now, args.before_deadline)
     _ping("/start")
     try:
-        summary = run_daily(args.live_dir, force=args.force, retrain=args.retrain)
+        summary = run_daily(args.live_dir, force=args.force, retrain=args.retrain,
+                            allow_retrain=not args.before_deadline)
     except Exception:
         details = traceback.format_exc()
         logger.error("Daily refresh failed:\n%s", details)
