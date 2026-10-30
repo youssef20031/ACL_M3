@@ -10,9 +10,6 @@ name: Manager replay
 # minutes each). Artifacts: replay-<season> (projections, predictions, actual points, prices and the
 # plan results) and report (report.md, also on the run's summary page).
 on:
-  # Temporary: starts the first run before this workflow is on main (dispatch needs it there)
-  push:
-    branches: [feat/manager-replay]
   workflow_dispatch:
     inputs:
       seasons:
