@@ -1,0 +1,107 @@
+name: Manager replay
+
+# Season replay of the ML manager (scripts/analysis/manager_replay.py): for each season the points
+# model is trained on the earlier ones, every deadline's projections are rebuilt the way the live
+# pipeline builds them, and the planner plays the season under each variant, scored with the actual
+# points under today's rules. Run it from the Actions tab before changing the planner's constants or
+# its chip policy; it is too heavy for a laptop.
+#
+# One job per season: project once from the earliest start (train, then about 35 s per deadline), then
+# play every variant from every start gameweek (about 3-4 s a gameweek, so 17 variants from the four
+# default starts take about 2 hours). Artifacts: replay-<season> (projections, predictions, actual
+# points, prices and the plan results) and report (report.md, also on the run's summary page).
+on:
+  workflow_dispatch:
+    inputs:
+      seasons:
+        description: 'Seasons to replay, comma-separated (those with FPL snapshots before most deadlines)'
+        default: '2022-23,2023-24,2024-25'
+      variants:
+        description: 'Comma-separated planner variants (VARIANTS in scripts/analysis/manager_replay.py)'
+        default: 'default,hold,nochips,h1,h2,decay08,decay1,ftv0,ftv3,margin05,margin1,margin15,margin2,margin1_hitm4,hitm2,hitm4,nohits'
+      ref:
+        description: 'Variant the others are compared against'
+        default: 'default'
+      model:
+        description: 'Points model whose projections the planner uses'
+        type: choice
+        options: [v4, v3]
+        default: v4
+      start_gws:
+        description: 'Gameweeks each season is played from, comma-separated (each start is one path; pooling several measures smaller effects)'
+        default: '1,5,9,13'
+
+# The inputs' defaults again, for a run without inputs
+env:
+  SEASONS: ${{ inputs.seasons || '2022-23,2023-24,2024-25' }}
+  VARIANTS: ${{ inputs.variants || 'default,hold,nochips,h1,h2,decay08,decay1,ftv0,ftv3,margin05,margin1,margin15,margin2,margin1_hitm4,hitm2,hitm4,nohits' }}
+  REF: ${{ inputs.ref || 'default' }}
+  MODEL: ${{ inputs.model || 'v4' }}
+  START_GWS: ${{ inputs.start_gws || '1,5,9,13' }}
+
+jobs:
+  seasons:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - id: matrix
+        run: python3 -c 'import json, os; print("matrix=" + json.dumps([s.strip() for s in os.environ["SEASONS"].split(",") if s.strip()]))' >> "$GITHUB_OUTPUT"
+
+  replay:
+    needs: seasons
+    name: replay (${{ matrix.season }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        season: ${{ fromJSON(needs.seasons.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      # neo4j, python-dotenv and tqdm: the services package, config.settings and graph import them
+      - run: pip install pandas numpy scipy xgboost-cpu scikit-learn httpx pyarrow neo4j python-dotenv tqdm
+      # football-data.co.uk's files aren't committed (free for private use, not for redistribution).
+      # v4 reads the odds; the replay keeps only prices collected before each deadline.
+      - name: Fetch bookmaker odds from football-data.co.uk
+        if: env.MODEL == 'v4'
+        run: python -m scripts.data.fetch_odds --no-fixtures || echo "::warning::odds fetch incomplete; the odds features may be empty"
+      - run: python -m scripts.analysis.manager_replay project --season '${{ matrix.season }}' --model "$MODEL" --start-gws "$START_GWS" --out 'proj_${{ matrix.season }}'
+      - run: python -m scripts.analysis.manager_replay plan --proj 'proj_${{ matrix.season }}' --variants "$VARIANTS" --start-gws "$START_GWS" --out 'plan_${{ matrix.season }}.json'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: replay-${{ matrix.season }}
+          path: |
+            proj_${{ matrix.season }}.*
+            plan_${{ matrix.season }}.json
+          retention-days: 14
+
+  report:
+    needs: replay
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - run: pip install pandas numpy scipy xgboost-cpu scikit-learn httpx pyarrow neo4j python-dotenv tqdm
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: replay-*
+          merge-multiple: true
+      - run: python -m scripts.analysis.manager_replay report 'plan_*.json' --proj 'proj_*' --ref "$REF" --out report.md
+      - run: cat report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: report
+          path: report.md
+          retention-days: 14
