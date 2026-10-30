@@ -546,6 +546,8 @@ export interface TeamOfWeekPlayer {
   chance_of_playing_next_round: number | null;
   news: string | null;
   photo: string | null;
+  /** FPL's short name for the name plate; missing from older backends. */
+  web_name?: string | null;
 }
 
 export type TeamOfWeekMode = 'predicted' | 'actual';

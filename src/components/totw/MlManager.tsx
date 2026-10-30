@@ -426,7 +426,7 @@ function LoadingState() {
     <div role="status" className="space-y-6">
       <span className="sr-only">Loading the ML manager…</span>
       <Skeleton className="h-20 w-full rounded-lg" />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <Skeleton className="h-[30rem] w-full rounded-lg sm:h-[38rem]" />
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -499,7 +499,7 @@ export function MlManager({ view, error, onRetry, updating = false }: MlManagerP
 
       <StatusBanner gw={gw} phase={phase} nextDeadline={view.next_deadline} />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-2 text-data text-fg-muted">
             <span className="font-semibold text-fg">GW{gw.gameweek}</span>

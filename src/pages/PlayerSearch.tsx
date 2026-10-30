@@ -569,7 +569,7 @@ function PlayerDetail({
         <StatCard label="Bonus" value={bonus.toLocaleString()} detail="Bonus point haul" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <section aria-labelledby="season-breakdown">
           <SectionHeading as="h3" id="season-breakdown" title="Season breakdown" subtitle={`${selectedSeason} · ${games.toLocaleString()} games`} />
           <DataTable

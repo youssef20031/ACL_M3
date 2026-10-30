@@ -112,33 +112,56 @@ export const SAMPLE_MODEL_REVIEW: ModelReviewResponse = {
 };
 
 /*
- * ML MANAGER SAMPLES (made-up players, real clubs) for the /design page: the team planned for GW10
- * (one transfer, no hit) a day or two before its deadline, and the same team scored in GW12 after a
- * Triple Captain, a 4-point hit and an automatic substitution. Prices are in tenths of £1m.
+ * ML MANAGER SAMPLES for the /design page: the model's real GW9 2026-27 squad (players, FPL short
+ * names, photos and prices from that pick) with real GW10 and GW12 fixtures, planned for GW10 (one
+ * transfer, no hit) and scored in GW12 after a Triple Captain, a 4-point hit and an automatic
+ * substitution. The points, ranks, later price changes and transfers are made up. Prices are in
+ * tenths of £1m.
  */
 
 type Opp = { team: string; home: boolean };
 
 const H = (team: string): Opp => ({ team, home: true });
 const A = (team: string): Opp => ({ team, home: false });
+const photo = (code: number) => `https://resources.premierleague.com/premierleague25/photos/players/110x140/${code}.png`;
+
+/** element -> [full name, FPL short name, club, position, photo code (null: FPL has no photo)] */
+const PEOPLE: Record<number, [string, string, string, MlManagerSquadPlayer['position'], number | null]> = {
+  496: ['Antonín Kinský', 'Kinsky', 'Spurs', 'GK', 485055],
+  572: ['Konstantinos Tzolakis', 'Tzolakis', 'Hull City', 'GK', 473284],
+  229: ['James Tarkowski', 'Tarkowski', 'Everton', 'DEF', 17761],
+  566: ['António João Pereira de Albuquerque Tavares da Silva', 'Silva', 'Bournemouth', 'DEF', 483067],
+  257: ['Calvin Bassey', 'Bassey', 'Fulham', 'DEF', 232892],
+  277: ['John Egan', 'Egan', 'Hull City', 'DEF', 108416],
+  32: ['Matty Cash', 'Cash', 'Aston Villa', 'DEF', 199796],
+  258: ['Timothy Castagne', 'Castagne', 'Fulham', 'DEF', 166477],
+  304: ["Dara O'Shea", "O'Shea", 'Ipswich', 'DEF', 216616],
+  68: ['Marcus Tavernier', 'Tavernier', 'Bournemouth', 'MID', 201658],
+  154: ['Cole Palmer', 'Palmer', 'Chelsea', 'MID', 244851],
+  427: ['Bryan Mbeumo', 'Mbeumo', 'Man Utd', 'MID', 446008],
+  286: ['Mohamed Belloumi', 'Belloumi', 'Hull City', 'MID', 540324],
+  236: ['Kiernan Dewsbury-Hall', 'Dewsbury-Hall', 'Everton', 'MID', 215413],
+  129: ['Yasin Ayari', 'Ayari', 'Brighton', 'MID', 509416],
+  411: ['Erling Haaland', 'Haaland', 'Man City', 'FWD', 223094],
+  106: ['Igor Thiago Nascimento Rodrigues', 'Thiago', 'Brentford', 'FWD', 502500],
+  166: ['Nicolas Jackson', 'N.Jackson', 'Aston Villa', 'FWD', null],
+  401: ['Omar Marmoush', 'Marmoush', 'Spurs', 'FWD', 438234],
+};
+
+const ref = (element: number) => {
+  const [name, web_name, team, position, code] = PEOPLE[element];
+  return { element, name, web_name, team, position, photo: code == null ? null : photo(code) };
+};
 
 const squadPlayer = (
   element: number,
-  name: string,
-  web_name: string,
-  team: string,
-  position: MlManagerSquadPlayer['position'],
   prices: [purchase: number, selling: number, now: number],
   predicted: number,
   slot: 'XI' | 1 | 2 | 3 | 4,
   opponents: Opp[],
   extra: Partial<MlManagerSquadPlayer> = {},
 ): MlManagerSquadPlayer => ({
-  element,
-  name,
-  web_name,
-  team,
-  position,
+  ...ref(element),
   purchase_price: prices[0],
   selling_price: prices[1],
   now_cost: prices[2],
@@ -147,7 +170,6 @@ const squadPlayer = (
   bench_order: slot === 'XI' ? null : slot,
   captain: false,
   vice_captain: false,
-  photo: null,
   opponents,
   ...extra,
 });
@@ -210,7 +232,7 @@ const historyRow = (
   ...extra,
 });
 
-const GW9_ROW = historyRow(9, 58, 49, 121, 'Sample Striker', 0, 58, [993, 8], 41230);
+const GW9_ROW = historyRow(9, 58, 49, 121, 'Erling Haaland', 0, 58, [995, 5], 41230);
 
 // --- Planned: GW10, deadline a couple of days away ---------------------------------------------
 
@@ -226,43 +248,38 @@ const GW10: MlManagerGameweek = {
   planned_at: PLANNED_AT,
   model: 'v4',
   chip: null,
-  transfers: [
-    {
-      out: { element: 116, name: 'Injured Winger', web_name: 'Injured', position: 'MID', team: 'Brighton', selling_price: 74 },
-      in: { element: 111, name: 'Transfer Target', web_name: 'Target', position: 'MID', team: 'Chelsea', price: 80 },
-    },
-  ],
+  transfers: [{ out: { ...ref(166), selling_price: 68 }, in: { ...ref(401), price: 70 } }],
   free_transfers: 1,
   transfers_made: 1,
   hits: 0,
   hit_cost: 0,
-  bank_before: 8,
-  bank_after: 2,
+  bank_before: 5,
+  bank_after: 3,
   squad: [
-    squadPlayer(101, 'Placeholder Keeper', 'Keeper', 'Arsenal', 'GK', [56, 56, 56], 4.1, 'XI', [H('Everton')]),
-    squadPlayer(103, 'Demo Defender', 'Demo', 'Arsenal', 'DEF', [60, 60, 61], 4.4, 'XI', [H('Everton')]),
-    squadPlayer(104, 'Sample Fullback', 'Fullback', 'Liverpool', 'DEF', [62, 62, 62], 4.0, 'XI', [A('Ipswich')]),
-    squadPlayer(105, 'Example Centreback', 'Centreback', 'Chelsea', 'DEF', [50, 50, 50], 3.6, 'XI', [H('Wolves')]),
-    squadPlayer(108, 'Example Winger', 'Winger', 'Liverpool', 'MID', [105, 105, 105], 7.6, 'XI', [A('Ipswich')], { vice_captain: true }),
-    squadPlayer(109, 'Sample Playmaker', 'Playmaker', 'Aston Villa', 'MID', [78, 78, 78], 5.4, 'XI', [H('Bournemouth')]),
-    squadPlayer(110, 'Mock Midfielder', 'Midfielder', 'Man City', 'MID', [70, 70, 70], 5.1, 'XI', [H('Sunderland')]),
-    squadPlayer(111, 'Transfer Target', 'Target', 'Chelsea', 'MID', [80, 80, 80], 5.6, 'XI', [H('Wolves')]),
-    squadPlayer(113, 'Sample Striker', 'Striker', 'Man City', 'FWD', [140, 141, 142], 8.9, 'XI', [H('Sunderland')], { captain: true }),
-    squadPlayer(114, 'Second Striker', 'Second', 'Brentford', 'FWD', [66, 66, 66], 4.6, 'XI', [A('Fulham')]),
-    squadPlayer(115, 'Budget Forward', 'Budget', 'Everton', 'FWD', [55, 55, 55], 3.3, 'XI', [A('Arsenal')]),
-    squadPlayer(102, 'Reserve Keeper', 'Reserve', 'Brentford', 'GK', [40, 40, 40], 2.0, 1, [A('Fulham')]),
-    squadPlayer(112, 'Squad Runner', 'Runner', 'Fulham', 'MID', [48, 48, 48], 2.6, 2, [H('Brentford')]),
-    squadPlayer(106, 'Mock Wingback', 'Wingback', 'Newcastle', 'DEF', [47, 47, 48], 3.1, 3, [A('Spurs')]),
-    squadPlayer(107, 'Test Stopper', 'Stopper', 'Ipswich', 'DEF', [40, 40, 40], 1.8, 4, [H('Liverpool')]),
+    squadPlayer(496, [44, 44, 44], 3.9, 'XI', [A('Leeds')]),
+    squadPlayer(229, [62, 62, 62], 4.3, 'XI', [H('Coventry City')]),
+    squadPlayer(566, [50, 50, 50], 3.8, 'XI', [A('Ipswich')]),
+    squadPlayer(257, [45, 45, 45], 3.6, 'XI', [H('Newcastle')]),
+    squadPlayer(68, [64, 64, 64], 4.6, 'XI', [A('Ipswich')], { vice_captain: true }),
+    squadPlayer(154, [98, 98, 99], 6.1, 'XI', [A('Sunderland')]),
+    squadPlayer(427, [79, 79, 79], 4.9, 'XI', [H('Aston Villa')]),
+    squadPlayer(286, [52, 52, 52], 3.7, 'XI', [A('Arsenal')]),
+    squadPlayer(411, [158, 159, 160], 7.4, 'XI', [A("Nott'm Forest")], { captain: true }),
+    squadPlayer(106, [78, 78, 78], 4.4, 'XI', [A('Brighton')]),
+    squadPlayer(401, [70, 70, 70], 4.1, 'XI', [A('Leeds')]),
+    squadPlayer(572, [47, 47, 47], 2.1, 1, [A('Arsenal')]),
+    squadPlayer(236, [66, 66, 66], 3.9, 2, [H('Coventry City')]),
+    squadPlayer(277, [41, 41, 41], 2.2, 3, [A('Arsenal')]),
+    squadPlayer(32, [43, 43, 43], 2.0, 4, [A('Man Utd')]),
   ],
-  projected_points: 65.5,
+  projected_points: 57.6,
   horizon: [
-    { gameweek: 10, projected: 65.5 },
-    { gameweek: 11, projected: 58.2 },
-    { gameweek: 12, projected: 61.0 },
-    { gameweek: 13, projected: 57.4 },
+    { gameweek: 10, projected: 57.6 },
+    { gameweek: 11, projected: 54.2 },
+    { gameweek: 12, projected: 56.0 },
+    { gameweek: 13, projected: 53.4 },
   ],
-  reason: 'Injured Winger (injured, 0% chance of playing) out for Transfer Target: +9.8 projected over the next 4 gameweeks, with the free transfer.',
+  reason: 'N.Jackson (injured, 0% chance of playing) out for Marmoush: +9.8 projected over the next 4 gameweeks, with the free transfer.',
   result: null,
 };
 
@@ -280,86 +297,88 @@ export const SAMPLE_ML_MANAGER_PLANNED: MlManagerView = {
 
 // --- Scored: GW12, Triple Captain, a 4-point hit and an auto-sub ---------------------------------
 
-const scored = (element: number, points: number, minutes: number, multiplier = 1): MlManagerResultPlayer => ({
+const scored = (
+  element: number,
+  points: number,
+  minutes: number,
+  multiplier = 1,
+  extra: Partial<MlManagerResultPlayer> = {},
+): MlManagerResultPlayer => ({
   element,
+  name: PEOPLE[element][0],
   points,
   minutes,
   multiplier,
   counted: multiplier > 0,
+  ...extra,
 });
 
 const GW12: MlManagerGameweek = {
   season: '2026-27',
   gameweek: 12,
-  deadline: '2026-11-21T11:00:00Z',
+  deadline: '2026-12-05T11:00:00Z',
   status: 'scored',
-  planned_at: '2026-11-21T06:00:00Z',
+  planned_at: '2026-12-05T06:00:00Z',
   model: 'v4',
   chip: '3xc',
   transfers: [
-    {
-      out: { element: 115, name: 'Budget Forward', web_name: 'Budget', position: 'FWD', team: 'Everton', selling_price: 54 },
-      in: { element: 119, name: 'Form Forward', web_name: 'Form', position: 'FWD', team: 'Bournemouth', price: 58 },
-    },
-    {
-      out: { element: 106, name: 'Mock Wingback', web_name: 'Wingback', position: 'DEF', team: 'Newcastle', selling_price: 47 },
-      in: { element: 117, name: 'Attacking Fullback', web_name: 'Attacker', position: 'DEF', team: 'Spurs', price: 45 },
-    },
+    { out: { ...ref(277), selling_price: 41 }, in: { ...ref(304), price: 40 } },
+    { out: { ...ref(286), selling_price: 52 }, in: { ...ref(129), price: 54 } },
   ],
   free_transfers: 1,
   transfers_made: 2,
   hits: 1,
   hit_cost: 4,
-  bank_before: 5,
-  bank_after: 3,
+  bank_before: 1,
+  bank_after: 0,
   squad: [
-    squadPlayer(101, 'Placeholder Keeper', 'Keeper', 'Arsenal', 'GK', [56, 56, 56], 4.3, 'XI', [A('Leeds')]),
-    squadPlayer(103, 'Demo Defender', 'Demo', 'Arsenal', 'DEF', [60, 60, 61], 3.9, 'XI', [A('Leeds')]),
-    squadPlayer(104, 'Sample Fullback', 'Fullback', 'Liverpool', 'DEF', [62, 62, 63], 4.6, 'XI', [H('Aston Villa')]),
-    squadPlayer(105, 'Example Centreback', 'Centreback', 'Chelsea', 'DEF', [50, 50, 50], 3.4, 'XI', [A('Newcastle')]),
-    squadPlayer(117, 'Attacking Fullback', 'Attacker', 'Spurs', 'DEF', [45, 45, 45], 4.1, 'XI', [H('Bournemouth')]),
-    squadPlayer(108, 'Example Winger', 'Winger', 'Liverpool', 'MID', [105, 105, 106], 6.8, 'XI', [H('Aston Villa')], { vice_captain: true }),
-    squadPlayer(109, 'Sample Playmaker', 'Playmaker', 'Aston Villa', 'MID', [78, 78, 78], 5.0, 'XI', [A('Liverpool')]),
-    squadPlayer(111, 'Transfer Target', 'Target', 'Chelsea', 'MID', [80, 80, 81], 5.2, 'XI', [A('Newcastle')]),
-    squadPlayer(110, 'Mock Midfielder', 'Midfielder', 'Man City', 'MID', [70, 69, 69], 4.9, 'XI', [H('Ipswich')]),
-    squadPlayer(113, 'Sample Striker', 'Striker', 'Man City', 'FWD', [140, 142, 144], 9.6, 'XI', [H('Ipswich')], { captain: true }),
-    squadPlayer(119, 'Form Forward', 'Form', 'Bournemouth', 'FWD', [58, 58, 58], 5.4, 'XI', [A('Spurs')]),
-    squadPlayer(102, 'Reserve Keeper', 'Reserve', 'Brentford', 'GK', [40, 40, 40], 1.9, 1, [H('Wolves')]),
-    squadPlayer(114, 'Second Striker', 'Second', 'Brentford', 'FWD', [66, 66, 66], 4.2, 2, [H('Wolves')]),
-    squadPlayer(118, 'Cheap Midfielder', 'Cheap', 'Wolves', 'MID', [45, 45, 45], 2.4, 3, [A('Brentford')]),
-    squadPlayer(107, 'Test Stopper', 'Stopper', 'Ipswich', 'DEF', [40, 39, 39], 1.5, 4, [A('Man City')]),
+    squadPlayer(496, [44, 44, 44], 4.0, 'XI', [A('Sunderland')]),
+    squadPlayer(229, [62, 62, 62], 3.4, 'XI', [H('Liverpool')]),
+    squadPlayer(566, [50, 50, 50], 3.9, 'XI', [A('Fulham')]),
+    squadPlayer(257, [45, 45, 45], 3.7, 'XI', [H('Bournemouth')]),
+    squadPlayer(68, [64, 64, 64], 4.8, 'XI', [A('Fulham')], { vice_captain: true }),
+    squadPlayer(154, [98, 98, 99], 6.3, 'XI', [A("Nott'm Forest")]),
+    squadPlayer(427, [79, 79, 79], 4.6, 'XI', [H('Brentford')]),
+    squadPlayer(129, [54, 54, 54], 4.4, 'XI', [H('Newcastle')]),
+    squadPlayer(411, [158, 159, 160], 8.1, 'XI', [A('Arsenal')], { captain: true }),
+    squadPlayer(106, [78, 78, 78], 4.5, 'XI', [A('Man Utd')]),
+    squadPlayer(401, [70, 70, 70], 4.2, 'XI', [A('Sunderland')]),
+    squadPlayer(572, [47, 47, 47], 2.0, 1, [A('Crystal Palace')]),
+    squadPlayer(236, [66, 66, 66], 3.8, 2, [H('Liverpool')]),
+    squadPlayer(258, [45, 45, 45], 3.2, 3, [H('Bournemouth')]),
+    squadPlayer(304, [40, 40, 40], 2.6, 4, [H('Aston Villa')]),
   ],
-  projected_points: 72.4,
+  projected_points: 70.6,
   horizon: [
-    { gameweek: 12, projected: 72.4 },
-    { gameweek: 13, projected: 57.9 },
-    { gameweek: 14, projected: 60.3 },
-    { gameweek: 15, projected: 58.8 },
+    { gameweek: 12, projected: 70.6 },
+    { gameweek: 13, projected: 55.9 },
+    { gameweek: 14, projected: 58.3 },
+    { gameweek: 15, projected: 56.8 },
   ],
   reason:
-    'Triple Captain on Sample Striker (9.6 projected at home); Budget Forward and Mock Wingback out for Form Forward and Attacking Fullback: +7.1 over the next 4 gameweeks, worth the 4-point hit.',
+    "Triple Captain on Haaland (8.1 projected); Egan and Belloumi out for O'Shea and Ayari: +7.1 over the next 4 gameweeks, worth the 4-point hit.",
   result: {
     points: 82,
     gross: 86,
     hit_cost: 4,
-    captain: 'Sample Striker',
-    auto_subs: [['Mock Midfielder', 'Second Striker']],
+    captain: 'Erling Haaland',
+    auto_subs: [['Bryan Mbeumo', 'Kiernan Dewsbury-Hall']],
     players: [
-      scored(101, 6, 90),
-      scored(103, 2, 90),
-      scored(104, 8, 90),
-      scored(105, 1, 90),
-      scored(117, 6, 90),
-      scored(108, 5, 90),
-      scored(109, 3, 78),
-      scored(111, 2, 90),
-      scored(110, 0, 0, 0),
-      scored(113, 13, 90, 3),
-      scored(119, 9, 90),
-      scored(102, 0, 0, 0),
-      scored(114, 5, 72),
-      scored(118, 2, 65, 0),
-      scored(107, 1, 90, 0),
+      scored(496, 6, 90),
+      scored(229, 2, 90),
+      scored(566, 8, 90),
+      scored(257, 1, 90),
+      scored(68, 5, 90),
+      scored(154, 9, 90),
+      scored(427, 0, 0, 0, { subbed_out: true }),
+      scored(129, 3, 78),
+      scored(411, 13, 90, 3),
+      scored(106, 6, 90),
+      scored(401, 2, 72),
+      scored(572, 0, 0, 0),
+      scored(236, 5, 85, 1, { subbed_in: true }),
+      scored(258, 2, 90, 0),
+      scored(304, 1, 90, 0),
     ],
     gw_average: 52,
     gw_highest: 134,
@@ -377,10 +396,10 @@ export const SAMPLE_ML_MANAGER_SCORED: MlManagerView = {
   chips: chipStates({ '3xc': 12 }),
   history: [
     GW9_ROW,
-    historyRow(10, 71, 55, 128, 'Sample Striker', 1, 129, [1001, 2], 23410),
-    historyRow(11, 44, 47, 112, 'Example Winger', 1, 173, [1002, 5], 26870),
-    historyRow(12, 82, 52, 134, 'Sample Striker', 2, 255, [1001, 3], 11920, { hit_cost: 4, chip: '3xc' }),
+    historyRow(10, 71, 55, 128, 'Erling Haaland', 1, 129, [997, 3], 23410),
+    historyRow(11, 44, 47, 112, 'Cole Palmer', 1, 173, [1000, 1], 26870),
+    historyRow(12, 82, 52, 134, 'Erling Haaland', 2, 255, [1003, 0], 11920, { hit_cost: 4, chip: '3xc' }),
   ],
   totals: { points: 255, gameweeks: 4, vs_average: 52, league: league(11920) },
-  next_deadline: '2026-11-28T13:30:00Z',
+  next_deadline: '2026-12-12T13:30:00Z',
 };

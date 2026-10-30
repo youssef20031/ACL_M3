@@ -466,7 +466,7 @@ export function ModelReview({
           Gameweek {review.gameweek}: the model’s pick against its actual points
         </h2>
       )}
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className={cn('transition-opacity', updating && 'opacity-60')}>
           {review ? (
             <ReviewPitch review={review} cameOnFor={cameOnFor} />

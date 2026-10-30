@@ -729,7 +729,12 @@ def get_team_of_the_week(conn, mode: str = "predicted", gameweek: Optional[int] 
         payload = _actual_team(conn, gameweek, season)
     else:
         raise ValueError("mode must be 'predicted' or 'actual'")
-    return with_photos(payload, photo_for)
+    out = with_photos(payload, photo_for)
+    # FPL's short name for the pitch's name plates ("Thiago", not the last word of the full name)
+    web_names = status_lookup(season)["web_name"]
+    for p in out.get("starters", []) + out.get("bench", []):
+        p["web_name"] = web_names.get(p["name"])
+    return out
 
 
 def _predicted_team(conn, gameweek: Optional[int], season: str) -> Dict[str, Any]:

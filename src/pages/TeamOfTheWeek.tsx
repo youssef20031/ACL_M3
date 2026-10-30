@@ -54,6 +54,7 @@ function TeamPitch({ starters, mode, gameweek }: { starters: TeamOfWeekPlayer[];
               <PitchPlayer
                 key={p.name}
                 name={p.name}
+                displayName={p.web_name ?? undefined}
                 team={p.team}
                 photo={p.photo}
                 opponents={p.opponents}
@@ -183,7 +184,7 @@ export function TeamOfTheWeek() {
             <ErrorState title="Couldn't build the team" description={handleApiError(error)} onRetry={() => refetch()} />
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
             <div aria-busy={isFetching}>
               {isLoading || !team ? <PitchSkeleton /> : <TeamPitch starters={team.starters} mode={mode} gameweek={team.gameweek} />}
             </div>
