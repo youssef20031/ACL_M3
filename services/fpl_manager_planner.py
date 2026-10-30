@@ -58,6 +58,11 @@ FT_END_VALUE = 1.5         # points per free transfer still banked after the hor
 MAX_HITS_PER_GW = 2        # at most 2 transfers beyond the free ones per gameweek (-8): bigger rebuilds
                            # rest on projections too noisy to bet on; that is the wildcard's job
 TRANSFER_TIEBREAK = 1e-3   # points per transfer: between equal plans, make fewer moves
+# A transfer's projected gain is the difference of two noisy predictions, so the optimizer's curse
+# inflates it. Margins the gain must clear (scripts/analysis/manager_replay.py tunes them): every
+# transfer outside a wildcard or free hit, and each hit on top of its cost. 0 = off.
+TRANSFER_MARGIN = 0.0
+HIT_MARGIN = 0.0
 BANK_TIEBREAK = 1e-5       # points per tenth in the bank after the horizon: then keep more money
 RANK_TIEBREAK = 1e-4       # up to this per player per gameweek: then prefer players earlier in the pool's
                            # order (higher value, cheaper, lower element), so ties have one answer
@@ -386,7 +391,8 @@ def solve_plan(pool: Sequence[PoolPlayer], bank: int, free_transfers: int, rules
         ordered = t < ORDERED_BENCH_GWS
         w_bench = np.where(is_gk, opt.BENCH_GK_WEIGHT, w_rest) if ordered else flat_bench
         x = m.var(n, gain=w * rank_pref)
-        bi = m.var(n, gain=-w * TRANSFER_TIEBREAK)
+        margin = 0.0 if free_week and t == 0 else TRANSFER_MARGIN
+        bi = m.var(n, gain=-w * (TRANSFER_TIEBREAK + margin))
         bo = m.var(n, integer=False)   # integral anyway: previous squad + bought - squad
         fh = (m.var(n, gain=w * rank_pref - w * TRANSFER_TIEBREAK * (1.0 - x0))
               if chip == "freehit" and t == 0 else None)
@@ -404,7 +410,7 @@ def solve_plan(pool: Sequence[PoolPlayer], bank: int, free_transfers: int, rules
         m.gain(plays, w * (1.0 if boost else w_bench) * p)
         money = m.var(1, lb=0.0, ub=np.inf, integer=False, gain=BANK_TIEBREAK if t == horizon - 1 else 0.0)
         u = m.var(1, ub=0.0 if free_week and t == 0 else max_ft)
-        hits = m.var(1, ub=0.0 if free_week and t == 0 else MAX_HITS_PER_GW, gain=-w * hit_cost)
+        hits = m.var(1, ub=0.0 if free_week and t == 0 else MAX_HITS_PER_GW, gain=-w * (hit_cost + HIT_MARGIN))
         ft_next = m.var(1, lb=1.0, ub=max_ft, gain=FT_END_VALUE * DECAY ** horizon if t == horizon - 1 else 0.0)
         blocks.append((x, bi, bo, fh, s, k, f, g, money, u, hits))
 

@@ -192,6 +192,17 @@ def test_a_hit_only_when_it_pays():
                                                     + captain["predicted_points"] - 4)
 
 
+def test_margins_hold_back_transfers_and_hits(monkeypatch):
+    upgrade = {**SQUAD, **MARKET, 120: ("MID", "A", 45, 4.0)}
+    monkeypatch.setattr(planner, "TRANSFER_MARGIN", 50.0)       # far more than the +12 projected
+    assert plan(upgrade)["transfers"] == []
+    monkeypatch.setattr(planner, "TRANSFER_MARGIN", 0.0)
+    monkeypatch.setattr(planner, "HIT_MARGIN", 50.0)
+    big = plan({**SQUAD, **MARKET, 120: ("MID", "A", 45, 9.0), 141: ("FWD", "B", 45, 9.0)})
+    check_entry(big)
+    assert len(big["transfers"]) == 1 and big["hits"] == 0 and big["hit_cost"] == 0
+
+
 def test_budget_uses_selling_prices():
     # Bought at 8.0m, now 9.0m: sells for 8.5m, so a 8.7m midfielder is out of reach with no money
     # in the bank (the price now would afford him), and in reach with 0.2m
