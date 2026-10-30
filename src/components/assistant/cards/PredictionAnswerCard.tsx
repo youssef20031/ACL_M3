@@ -150,7 +150,7 @@ export function PredictionAnswerCard({ card }: { card: PredictionCardData }) {
       <Highlights items={card.highlights} />
       {card.model && (
         <p className={cn('border-t border-line px-4 py-2 text-micro text-fg-subtle sm:px-5')}>
-          Predicted by the Pitch Me model ({card.model}). Points are scaled by FPL&rsquo;s chance of playing.
+          Predicted by the Pitch Me model ({card.model}). Points account for FPL&rsquo;s injury and availability flags.
         </p>
       )}
     </CardFrame>

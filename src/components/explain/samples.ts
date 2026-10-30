@@ -423,8 +423,8 @@ export const SAMPLE_PLAYER_EXPLANATION: PlayerExplanation = {
   gameweek: 9,
   fixtures: [fixtureA, fixtureB],
   model_points: round(fixtureA.model_points + fixtureB.model_points),
-  availability_factor: 0.75,
-  predicted_points: round((fixtureA.model_points + fixtureB.model_points) * 0.75, 2),
+  availability_factor: 0.91,
+  predicted_points: round((fixtureA.model_points + fixtureB.model_points) * 0.91, 2),
 };
 
 /** Shaped like an axios 404, to show the "not in this gameweek" state. */

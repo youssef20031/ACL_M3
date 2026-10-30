@@ -50,10 +50,11 @@ are dropped before anything is computed).
 
   * Double gameweek: one row per fixture, predictions summed.
   * Blank gameweek: the player is kept with 0 points and opponent "No fixture".
-  * Availability: status u/n, or chance_of_playing_next_round 0 -> 0 points;
-    otherwise points x chance/100. v4 also sees FPL's availability before the deadline
-    as features (snap_*, from the status file), but the history has few pre-deadline
-    snapshots, so this multiplier stays on top, as in its backtest.
+  * Availability: status u/n, or chance_of_playing_next_round 0 -> 0 points; a 25/50/75%
+    doubt -> points x 0.61/0.77/0.91 (availability_factor). v4 already lowers flagged
+    players' predictions from FPL's availability before the deadline (snap_*, from the
+    status file), so chance/100 on top counted the flags twice; those factors are fitted
+    against v4's own predictions (ml.snapshots.DOUBT_POINTS).
   * Players are keyed by FPL code (the status file's `code`), so a renamed player keeps
     his history; the shadow predicts from the same rows.
 """
@@ -71,6 +72,7 @@ import numpy as np
 import pandas as pd
 
 from ml import points_model as pm
+from ml import snapshots as sn
 from pipeline.current_season import (
     LIVE_DATA_DIR, next_event, odds_dir, refresh_odds, season_file_stem, season_label,
 )
@@ -99,7 +101,8 @@ PROJECTION_HORIZON = 4   # gameweeks, the next one included
 PROJECTION_COLUMNS = [
     "element", "name", "web_name", "position", "team", "now_cost", "gameweek", "fixtures", "opponents",
     "predicted_points",
-    # the chance-of-playing multiplier applied to that gameweek (horizon_availability) and FPL's status
+    # FPL's chance of playing that gameweek (horizon_availability with chance_of_playing: the planner's
+    # chance for the armband; predicted_points carry availability_factor's multiplier) and FPL's status
     "availability", "status",
 ]
 
@@ -149,29 +152,32 @@ def gameweek_fixtures(fixtures: Iterable[Dict[str, Any]], event_id: int,
 def availability_factor(status: Any, chance_next: Any) -> float:
     """Multiplier for a player's predicted points from his FPL status.
 
-    u (left / unavailable) and n (not in squad) -> 0. Otherwise FPL's
-    chance_of_playing_next_round / 100 when set (0 for ruled out); injured or
-    suspended players without a chance value are treated as out; else 1. The rule
-    lives in season_service, whose captain pick uses it as the chance of playing.
+    0 when he's out: u (left / unavailable), n (not in squad), FPL's chance 0, or injured or
+    suspended without a chance value. 1 without a flag. A 25/50/75% doubt gets
+    ml.snapshots.DOUBT_POINTS (0.61/0.77/0.91), not the chance itself: v4 already lowers flagged
+    players' predictions, so chance / 100 counted the flags twice. The chance itself
+    (season_service.chance_of_playing) stays the chance of playing behind the armband.
     """
-    return chance_of_playing(status, chance_next)
+    return float(sn.points_factor(chance_of_playing(status, chance_next)))
 
 
-def horizon_availability(status: Any, chance_next: Any, step: int) -> float:
-    """Chance-of-playing multiplier for the gameweek `step` gameweeks ahead (1 = the next one,
-    which is availability_factor itself). FPL's flag describes the next gameweek only, so later:
+def horizon_availability(status: Any, chance_next: Any, step: int,
+                         factor: Callable[[Any, Any], float] = availability_factor) -> float:
+    """Availability for the gameweek `step` gameweeks ahead (1 = the next one, `factor` itself:
+    availability_factor's points multiplier, or chance_of_playing for the chance of playing).
+    FPL's flag describes the next gameweek only, so later:
 
       * u (left / unavailable) and n (not in squad): 0 in every gameweek;
       * ruled out now (availability_factor 0: i/s with chance 0 or none given): half in the
         second gameweek, then full;
       * a 25/50/75% doubt counts for the next gameweek only.
     """
-    factor = availability_factor(status, chance_next)
+    now = factor(status, chance_next)
     if step <= 1:
-        return factor
+        return now
     if isinstance(status, str) and status.strip().lower() in ("u", "n"):
         return 0.0
-    if factor == 0.0:
+    if now == 0.0:
         return 0.5 if step == 2 else 1.0
     return 1.0
 
@@ -559,12 +565,13 @@ def project_points(players: pd.DataFrame, history: pd.DataFrame,
 def projection_frame(players: pd.DataFrame, gameweek: int, fixtures_by_team: Dict[str, List[Dict[str, Any]]],
                      points: Dict[str, float], step: int) -> pd.DataFrame:
     """PROJECTION_COLUMNS for one gameweek, one row per current player: model `points` times
-    horizon_availability(step); a blank gameweek gives 0 and opponent "No fixture", a double
-    gameweek the sum and both opponents."""
+    horizon_availability(step), and the chance of playing as `availability`; a blank gameweek
+    gives 0 and opponent "No fixture", a double gameweek the sum and both opponents."""
     rows = []
     for p in players.itertuples(index=False):
         entries = fixtures_by_team.get(p.team) or []
         avail = horizon_availability(p.status, p.chance_of_playing_next_round, step)
+        chance = horizon_availability(p.status, p.chance_of_playing_next_round, step, factor=chance_of_playing)
         pts = points.get(str(int(p.element)), 0.0) * avail if entries else 0.0
         web_name = getattr(p, "web_name", None)
         rows.append({
@@ -572,7 +579,7 @@ def projection_frame(players: pd.DataFrame, gameweek: int, fixtures_by_team: Dic
             "web_name": web_name if isinstance(web_name, str) and web_name else p.name,
             "position": p.position, "team": p.team, "now_cost": int(p.now_cost), "gameweek": int(gameweek),
             "fixtures": len(entries), "opponents": describe_fixtures(entries)[0] if entries else NO_FIXTURE_OPPONENT,
-            "predicted_points": round(float(pts), 2), "availability": float(avail), "status": p.status,
+            "predicted_points": round(float(pts), 2), "availability": float(chance), "status": p.status,
         })
     return pd.DataFrame(rows, columns=PROJECTION_COLUMNS)
 

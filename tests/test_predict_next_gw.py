@@ -72,8 +72,9 @@ def test_describe_fixtures_joins_double_gameweek_opponents():
     ("a", np.nan, 1.0),
     ("a", None, 1.0),
     ("a", 100.0, 1.0),
-    ("d", 75.0, 0.75),
-    ("d", 25.0, 0.25),
+    ("d", 75.0, 0.91),      # a doubt: the fitted factor, not the chance (v4 sees the flag already)
+    ("d", 50.0, 0.77),
+    ("d", 25.0, 0.61),
     ("i", 0.0, 0.0),
     ("i", np.nan, 0.0),     # injured without a chance value: out
     ("s", np.nan, 0.0),
@@ -83,6 +84,12 @@ def test_describe_fixtures_joins_double_gameweek_opponents():
 ])
 def test_availability_factor(status, chance, expected):
     assert png.availability_factor(status, chance) == pytest.approx(expected)
+
+
+def test_the_armbands_chance_of_playing_stays_fpls():
+    from services.season_service import chance_of_playing
+    assert chance_of_playing("d", 50.0) == 0.5 and chance_of_playing("d", 25.0) == 0.25
+    assert chance_of_playing("i", np.nan) == 0.0 and chance_of_playing("a", None) == 1.0
 
 
 def test_promoted_teams():
@@ -124,7 +131,7 @@ def test_assemble_output_applies_availability_blank_and_schema():
     assert rows.loc["Fit Gunner", "predicted_points"] == 9.0
     assert rows.loc["Fit Gunner", "opponent"] == "Chelsea & Spurs"
     assert rows.loc["Fit Gunner", "fixtures"] == 2
-    assert rows.loc["Doubtful Blue", "predicted_points"] == 2.0          # 4 x 50%
+    assert rows.loc["Doubtful Blue", "predicted_points"] == 3.08         # 4 x 0.77 (a 50% doubt)
     assert rows.loc["Injured Gunner", "predicted_points"] == 0.0
     assert rows.loc["Injured Gunner", "news"] == "Back injury"
     assert rows.loc["Gone Gunner", "predicted_points"] == 0.0
@@ -465,8 +472,8 @@ def test_failing_shadow_never_touches_the_live_predictions(live_dir):
 
 @pytest.mark.parametrize("status, chance, expected", [
     ("a", np.nan, [1.0, 1.0, 1.0, 1.0]),
-    ("d", 50.0, [0.5, 1.0, 1.0, 1.0]),      # a doubt counts for the next gameweek only
-    ("d", 25.0, [0.25, 1.0, 1.0, 1.0]),
+    ("d", 50.0, [0.77, 1.0, 1.0, 1.0]),     # a doubt counts for the next gameweek only
+    ("d", 25.0, [0.61, 1.0, 1.0, 1.0]),
     ("i", 0.0, [0.0, 0.5, 1.0, 1.0]),       # ruled out: half the gameweek after, then full
     ("i", np.nan, [0.0, 0.5, 1.0, 1.0]),
     ("s", 0.0, [0.0, 0.5, 1.0, 1.0]),
@@ -475,8 +482,15 @@ def test_failing_shadow_never_touches_the_live_predictions(live_dir):
     ("n", np.nan, [0.0, 0.0, 0.0, 0.0]),
 ])
 def test_horizon_availability(status, chance, expected):
-    assert [png.horizon_availability(status, chance, step) for step in (1, 2, 3, 4)] == expected
+    assert [png.horizon_availability(status, chance, step) for step in (1, 2, 3, 4)] == pytest.approx(expected)
     assert png.horizon_availability(status, chance, 1) == png.availability_factor(status, chance)
+
+
+def test_horizon_chance_of_playing_is_fpls():
+    from services.season_service import chance_of_playing
+    chances = [png.horizon_availability("d", 50.0, step, factor=chance_of_playing) for step in (1, 2, 3)]
+    assert chances == [0.5, 1.0, 1.0]
+    assert [png.horizon_availability("i", 0.0, step, factor=chance_of_playing) for step in (1, 2, 3)] == [0.0, 0.5, 1.0]
 
 
 def test_horizon_events_stop_at_the_season_end():
@@ -558,7 +572,7 @@ def test_projections_cover_four_gameweeks_and_start_with_the_live_predictions(li
 
     pts = proj.pivot(index="name", columns="gameweek", values="predicted_points")
     assert pts.loc["Fit Gunner"].tolist() == [5.0, 10.0, 5.0, 5.0]          # GW10 double summed
-    assert pts.loc["Doubtful Blue"].tolist() == [1.25, 5.0, 2.5, 2.5]       # 50% for GW9 only
+    assert pts.loc["Doubtful Blue"].tolist() == [round(2.5 * 0.77, 2), 5.0, 2.5, 2.5]   # a 50% doubt in GW9 only
     assert pts.loc["Injured Gunner"].tolist() == [0.0, 3.0, 3.0, 3.0]       # out, half (of a double), full
     assert pts.loc["Gone Gunner"].tolist() == [0.0, 0.0, 0.0, 0.0]
     assert pts.loc["Blank Tiger"].tolist() == [2.75, 0.0, 2.75, 2.75]       # Hull City blank in GW10
@@ -568,6 +582,7 @@ def test_projections_cover_four_gameweeks_and_start_with_the_live_predictions(li
     assert rows.loc[("Blank Tiger", 10), "opponents"] == png.NO_FIXTURE_OPPONENT
     assert rows.loc[("Blank Tiger", 10), "fixtures"] == 0
     assert rows.loc[("Injured Gunner", 10), "availability"] == 0.5
+    assert rows.loc[("Doubtful Blue", 9), "availability"] == 0.5          # the chance itself, for the armband
     assert rows.loc[("Fit Gunner", 11), "now_cost"] == 100 and rows.loc[("Fit Gunner", 11), "web_name"] == "Fit Gunner"
 
     # One feature build per gameweek, each with only its own fixtures
