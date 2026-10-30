@@ -115,6 +115,14 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
   - **Chips:** a chip is played only when its solve beats the plan without it, by the module's thresholds (`TRIPLE_CAPTAIN_MIN_POINTS` and the rest), or late in its window if it still helps.
   - **Armband:** captain and vice come from `pick_captains`.
   - **Checks:** every plan passes `validate_entry` before it's saved.
+  - **Margins:** `TRANSFER_MARGIN` (points each transfer outside a wildcard or free hit must gain) and `HIT_MARGIN` (on top of a hit's 4 points) are 0, i.e. off, until the season replay picks values.
+- **Season replay** (`scripts/analysis/manager_replay.py`, the **Manager replay** workflow): the planner played through past seasons (2022-23..2024-25 by default, the ones with FPL snapshots before most deadlines), to tune its constants and chip policy. For each season the model is trained on the earlier ones as production trains it. At every deadline the replay rebuilds what the live pipeline would have had, and runs `predict_next_gw`'s own `model_rows`/`score_rows`/`assemble_output`/`build_projections` on it:
+  - the 3 seasons before plus the season's matches before the deadline;
+  - each player's price, ownership and transfers from that gameweek's row;
+  - status and chance of playing from the last snapshot before the deadline;
+  - only odds collected and snapshots captured before the deadline (`extras_at`; `tests/test_manager_replay.py`).
+
+  The season starts from the predicted Team of the Week, the engine validates, applies and scores every entry with the actual points under today's rules, and `VARIANTS` change planner constants, the horizon or chips (`hold` never transfers, so the others' gain over it is what transfers and chips earn). The report gives totals, the difference from the reference with a paired bootstrap over gameweeks (a guide only: decisions carry over), and projection quality by gameweeks ahead (what `DECAY` discounts). Known differences from live: the fixture list is the season as played (doubles and blanks known 4 gameweeks ahead), the model is trained once per season, and a few gameweeks a season have no snapshot.
 - **Page:** the Team of the Week's **ML manager** tab (`mode=manager`, `components/totw/MlManager*.tsx`) shows:
   - the planned or played team with its moves and the plan's one-line `reason`;
   - free transfers, bank, team value and chips;
