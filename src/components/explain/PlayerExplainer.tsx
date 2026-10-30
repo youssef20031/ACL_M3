@@ -27,7 +27,7 @@ interface AdjustStep {
   value: number;
 }
 
-/** Fixtures' model outputs → floored at 0 per fixture → × chance of playing → the prediction. Unchanged steps are skipped. */
+/** Fixtures' model outputs → floored at 0 per fixture → × FPL availability → the prediction. Unchanged steps are skipped. */
 function Adjustments({ explanation }: { explanation: PlayerExplanation }) {
   const { fixtures, availability_factor: factor, predicted_points: predicted } = explanation;
   if (!fixtures.length) return null;
@@ -43,7 +43,15 @@ function Adjustments({ explanation }: { explanation: PlayerExplanation }) {
     steps.push({ label: fixtures.length > 1 ? 'Negative fixtures count as 0' : 'Negative output counts as 0', value: floored });
   }
   if (factor < 0.995) {
-    steps.push({ label: `× ${Math.round(factor * 100)}% chance of playing`, value: floored * factor });
+    // A doubt's factor isn't its chance: the model already lowered his output for the flag
+    const chance = explanation.player.chance_of_playing_next_round;
+    const label =
+      factor <= 0
+        ? '× 0, not expected to play'
+        : chance != null && chance > 0 && chance < 100
+          ? `× ${factor.toFixed(2)} for a ${chance}% chance of playing`
+          : `× ${factor.toFixed(2)} for FPL availability`;
+    steps.push({ label, value: floored * factor });
   }
 
   if (steps.length === 1 && Math.abs(raw - predicted) < 0.05) {

@@ -110,8 +110,9 @@ def _str_or_none(value: Any) -> Optional[str]:
 def chance_of_playing(status: Any, chance_next: Any) -> float:
     """Chance a player plays from FPL's status and chance_of_playing_next_round: 0 for u
     (left / unavailable) and n (not in squad); else the chance / 100 when set; injured or
-    suspended players without a chance value are out; anyone else 1. The predictions
-    file is scaled by this (pipeline.predict_next_gw.availability_factor)."""
+    suspended players without a chance value are out; anyone else 1. The captain pick's chance
+    of playing. The predictions file's points use pipeline.predict_next_gw.availability_factor,
+    which keeps 0 and 1 but gives a doubt a fitted factor instead of this chance."""
     status = (_str_or_none(status) or "a").lower()
     if status in ("u", "n"):
         return 0.0

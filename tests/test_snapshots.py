@@ -156,15 +156,23 @@ def test_no_snapshots_leaves_nan_and_factor_one():
 
 @pytest.mark.parametrize("status", ["a", "d", "i", "s", "u", "n", "", None, "A", " d "])
 @pytest.mark.parametrize("chance", [None, np.nan, 0, 25, 50, 75, 100, 150, -10])
-def test_cop_factor_matches_availability_factor(status, chance):
+def test_cop_factor_is_the_chance_and_production_its_points_factor(status, chance):
     from pipeline.predict_next_gw import availability_factor
-    assert sn.cop_factor([status], [chance])[0] == pytest.approx(availability_factor(status, chance))
+    from services.season_service import chance_of_playing
+    cop = sn.cop_factor([status], [chance])[0]
+    assert cop == pytest.approx(chance_of_playing(status, chance))
+    assert sn.points_factor(cop) == pytest.approx(availability_factor(status, chance))
+
+
+def test_points_factor_keeps_in_and_out_and_fits_the_doubts():
+    assert sn.points_factor([0.0, 0.25, 0.5, 0.75, 1.0]).tolist() == [0.0, 0.61, 0.77, 0.91, 1.0]
 
 
 def test_cop_post_hook_scales_every_protocols_predictions():
     from scripts.analysis import ml_backtest as bt
     frame = pd.DataFrame({sn.COP: [1.0, 0.5, 0.0]})
     assert bt._post(frame, [2.0, 4.0, 6.0], {"post": "cop"}).tolist() == [2.0, 2.0, 0.0]
+    assert bt._post(frame, [2.0, 4.0, 6.0], {"post": "cop_prod"}) == pytest.approx([2.0, 4.0 * 0.77, 0.0])
     assert bt._post(frame, [2.0, 4.0, 6.0], {}).tolist() == [2.0, 4.0, 6.0]
     for name in ("cop", "avail_cop", "sp_cop", "snap_cop"):
         assert bt.VARIANTS[name]["post"] == "cop"

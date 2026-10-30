@@ -4,10 +4,11 @@ features are part of the v4 points model (ml/points_model.py, since 2026-10-28);
 flags stay backtest candidates (2026-10-27; scripts/analysis/ml_backtest.py variants cop, avail,
 avail_cop, sp, sp_cop and snap_cop).
 
-Production multiplies the model's predictions by FPL's chance of playing
-(pipeline.predict_next_gw.availability_factor), but the model never sees that information in
-training, because the history has no FPL status. Variant cop replays that multiplication with
-these snapshots; it is the reference the availability features have to beat.
+Production multiplied the model's predictions by FPL's chance of playing until 2026-10-31
+(pipeline.predict_next_gw.availability_factor); v3 never sees that information in training,
+because the history has no FPL status. Variant cop replays that multiplication with these
+snapshots; it is the reference the availability features had to beat. v4 sees them (snap_*), so
+the chance itself counted the flags twice, and production now uses DOUBT_POINTS (points_factor).
 
   snap_unavailable   status i, s, u or n (injured, suspended, left / unavailable, not in squad)
   snap_doubtful      status d
@@ -54,6 +55,13 @@ AVAIL_FEATURES = ["snap_unavailable", "snap_doubtful", "snap_chance", "snap_news
 SP_FEATURES = ["sp_pen1", "sp_pen", "sp_corners1", "sp_fk1"]
 FEATURES = AVAIL_FEATURES + SP_FEATURES
 COP = "cop_factor"
+
+# Points multiplier per FPL doubt (chance of playing 25/50/75%) for a model that already sees the flags
+# (v4's snap_* features), where chance / 100 counted them twice. Fitted against v4's own predictions on
+# the validation season of each backtest fold (scripts/analysis/ml_backtest.py variant v4_fit, ML backtest
+# run 41084780871, 2022-23..2024-25: 75%: 0.89-0.94, 50%: 0.75-0.79, 25%: 0.43-0.74), averaged. The
+# snapshots behind the fit are a day or two old at the deadline; refit as our own archive grows.
+DOUBT_POINTS = {0.25: 0.61, 0.5: 0.77, 0.75: 0.91}
 
 _UTC = "datetime64[ns, UTC]"
 
@@ -154,10 +162,18 @@ def snapshot_windows(deadlines: pd.DataFrame, snaps: pd.DataFrame) -> pd.DataFra
     return got.sort_values(["season", "GW"], kind="mergesort").reset_index(drop=True)
 
 
+def points_factor(chance) -> np.ndarray:
+    """Production's points multiplier for a chance of playing on cop_factor's 0..1 scale: 0 and 1
+    unchanged, a doubt's DOUBT_POINTS factor (interpolated between FPL's 25/50/75 steps)."""
+    steps = sorted(DOUBT_POINTS)
+    return np.interp(np.asarray(chance, dtype=float), [0.0] + steps + [1.0],
+                     [0.0] + [DOUBT_POINTS[s] for s in steps] + [1.0])
+
+
 def cop_factor(status, chance) -> np.ndarray:
-    """pipeline.predict_next_gw.availability_factor (services.season_service.chance_of_playing)
-    on arrays: 0 for u and n; else the chance / 100 when given (clipped to 0..1); 0 for i and s
-    without a chance; 1 otherwise, a missing status counting as a."""
+    """services.season_service.chance_of_playing on arrays: 0 for u and n; else the chance / 100
+    when given (clipped to 0..1); 0 for i and s without a chance; 1 otherwise, a missing status
+    counting as a. Production's points multiplier is points_factor of it."""
     status = pd.Series(np.asarray(status, dtype=object)).fillna("").astype(str).str.strip().str.lower()
     status = status.replace("", "a").to_numpy()
     chance = pd.to_numeric(pd.Series(np.asarray(chance, dtype=object)), errors="coerce").to_numpy(dtype=float)

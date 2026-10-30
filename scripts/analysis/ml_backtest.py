@@ -653,10 +653,13 @@ VARIANTS = {
     "v4_raw": {"features": V4},
     "v4_fit": {"features": V4, "post": "cop_fit"},
     "cop_fit": {"features": CURRENT, "post": "cop_fit"},
+    # 2026-10-31: production's multiplier since then (ml.snapshots.points_factor: the fitted DOUBT_POINTS
+    # table), so v4_prod is what the site serves and v4 the literal chance it replaced
+    "v4_prod": {"features": V4, "post": "cop_prod"},
 }
 
 # Columns a post-prediction hook needs values in (cmd_run checks them like a variant's features)
-POST_NEEDS = {"cop": ["snap_age_days"], "cop_fit": ["snap_age_days"]}
+POST_NEEDS = {"cop": ["snap_age_days"], "cop_fit": ["snap_age_days"], "cop_prod": ["snap_age_days"]}
 
 
 def _target(frame: pd.DataFrame, spec: dict) -> pd.Series:
@@ -671,15 +674,17 @@ def _eval_target(frame: pd.DataFrame, spec: dict) -> pd.Series:
 
 def _post(frame: pd.DataFrame, pred, spec: dict, cop_fit: dict = None) -> np.ndarray:
     """The variant's post-prediction hook, applied to every protocol's test predictions: "cop"
-    multiplies them by the snapshot's chance of playing (ml/snapshots.cop_factor, which is
-    pipeline.predict_next_gw.availability_factor; 1 without a snapshot), as production does;
-    "cop_fit" by the factors `cop_fit` (cop_fit_factors) instead."""
+    multiplies them by the snapshot's chance of playing (ml/snapshots.cop_factor; 1 without a
+    snapshot), as production did until 2026-10-31; "cop_prod" by production's multiplier since
+    (ml/snapshots.points_factor of that chance); "cop_fit" by the factors `cop_fit` (cop_fit_factors)."""
     pred = np.asarray(pred, dtype=float)
     post = spec.get("post")
     if not post:
         return pred
     if post == "cop":
         return pred * frame[sn.COP].to_numpy(dtype=float)
+    if post == "cop_prod":
+        return pred * sn.points_factor(frame[sn.COP].to_numpy(dtype=float))
     if post == "cop_fit":
         if cop_fit is None:
             raise ValueError("the cop_fit hook needs factors fitted on the validation season")

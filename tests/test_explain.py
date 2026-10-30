@@ -134,7 +134,7 @@ def test_shap_adds_up_to_the_model_output(live):
 
 def test_player_view_applies_fpl_availability(live):
     p = explain.player(2)
-    assert p["availability_factor"] == 0.5
+    assert p["availability_factor"] == 0.77                       # a 50% doubt's fitted factor
     assert p["player"]["status"] == "d" and p["player"]["news"] == "Knock"
     assert p["player"]["chance_of_playing_next_round"] == 50
     with pytest.raises(KeyError):
