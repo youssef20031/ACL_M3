@@ -1,4 +1,5 @@
 """Tests for services/fpl_manager_planner.py: small synthetic pools, every solve well under a second."""
+import dataclasses
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -126,6 +127,20 @@ def test_no_transfer_when_nothing_beats_the_squad():
     assert captain["element"] == 8
     assert entry["projected_points"] == pytest.approx(sum(SQUAD[e][3] for e in xi) + 6.0)
     assert entry["season"] == "2026-27" and entry["gameweek"] == 10 and entry["planned_at"] == "2026-11-02T12:00:00Z"
+
+
+def test_a_solve_that_stops_at_its_time_limit_is_reported(monkeypatch):
+    assert plan({**SQUAD, **MARKET}, chips=ALL_CHIPS)["optimal"] is True
+    solve = planner.solve_plan
+
+    def capped(pool, bank, free_transfers, rules, chip, time_limit):
+        sol = solve(pool, bank, free_transfers, rules, chip, time_limit)
+        return dataclasses.replace(sol, optimal=False) if chip is None else sol
+
+    monkeypatch.setattr(planner, "solve_plan", capped)
+    entry = plan({**SQUAD, **MARKET}, chips=ALL_CHIPS)
+    check_entry(entry)
+    assert entry["optimal"] is False
 
 
 def test_a_tiny_gain_keeps_the_free_transfer():
