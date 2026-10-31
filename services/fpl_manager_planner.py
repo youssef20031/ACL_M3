@@ -376,8 +376,10 @@ def solve_plan(pool: Sequence[PoolPlayer], bank: int, free_transfers: int, rules
     by_pos = {pos: np.flatnonzero([p.position == pos for p in pool]) for pos in opt.POSITIONS}
     clubs = sorted({p.team for p in pool})
     by_club = {c: np.flatnonzero([p.team == c for p in pool]) for c in clubs}
-    # A squad over the club limit (a player moved clubs) may stay so, but never grow
+    # A squad over the club limit (a player moved clubs) may stay so, but FPL won't add to that club:
+    # none of its other players can be bought (fpl_manager.validate_entry checks the same)
     club_cap = {c: max(limit, int(x0[idx].sum())) for c, idx in by_club.items()}
+    no_buys = [idx[x0[idx] == 0] for c, idx in by_club.items() if club_cap[c] > limit]
     w1, w2, w_rest = opt.BENCH_WEIGHTS
     flat_bench = np.where(is_gk, opt.BENCH_GK_WEIGHT, sum(opt.BENCH_WEIGHTS) / len(opt.BENCH_WEIGHTS))
     free_week = chip in ("wildcard", "freehit")
@@ -432,6 +434,9 @@ def solve_plan(pool: Sequence[PoolPlayer], bank: int, free_transfers: int, rules
             for c, idx in by_club.items():
                 if len(idx) > club_cap[c]:
                     m.add_row(sq[idx], 1.0, -np.inf, club_cap[c])
+            for idx in no_buys:
+                if len(idx):
+                    m.add_row(sq[idx], 1.0, -np.inf, 0.0)
         # the XI, captain (and first two outfield substitutes), from the squad that plays
         m.add_rows([(s, 1.0), (plays, -1.0)], -np.inf, 0.0, n)
         m.add_rows([(k, 1.0), (s, -1.0)], -np.inf, 0.0, n)

@@ -228,6 +228,17 @@ def test_budget_uses_selling_prices():
     assert plan(players, cur)["transfers"] == []
 
 
+def test_a_club_over_the_limit_after_a_move_gets_no_new_players():
+    moved = {**SQUAD, 5: ("DEF", "A", 45, 3.5), 8: ("MID", "A", 80, 6.0)}   # A: 1, 3, 5 and 8
+    star = {120: ("MID", "A", 45, 9.0)}                                       # cheap, and the best MID
+    entry = plan({**moved, **MARKET, **star}, cur=current(moved))
+    squad = {p["element"]: p for p in entry["squad"]}
+    assert 120 not in squad
+    assert all(e in moved for e, p in squad.items() if p["team"] == "A")
+    other = plan({**SQUAD, **MARKET, 120: ("MID", "I", 45, 9.0)})            # elsewhere he's bought
+    assert 120 in {p["element"] for p in other["squad"]}
+
+
 def test_three_players_per_club():
     # Club A already has three players; its star midfielder can only replace the A midfielder,
     # not the weaker G one

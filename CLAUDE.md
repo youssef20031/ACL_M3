@@ -90,7 +90,7 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
 
 **ML manager** (`services/fpl_manager.py`, `fpl_manager_planner.py`, `fpl_manager_league.py`, `pipeline/ml_manager.py`, `GET /api/ml-manager`): a season-long FPL team run by the served model (v4) under FPL's real rules, from GW9 2026-27 (`ML_MANAGER_SEASON`, `ML_MANAGER_START_GW` in `config/settings.py`).
 - **Rules:** read from bootstrap-static (`Rules.from_bootstrap`, saved per season in `rules.json`):
-  - GBP 100.0m, 15 players, 3 per club;
+  - GBP 100.0m, 15 players, 3 per club. A club over the limit because an owned player moved there may stay so, but nobody else from it can be bought (`validate_entry` and the planner agree; the 2025-26 replay hit this in January);
   - 1 free transfer a gameweek, banked up to 5, 4-point hits;
   - selling price = purchase price + half the rise;
   - two of each chip, one per half: wildcard and free hit GW2-19 and GW20-38, bench boost and triple captain GW1-19 and GW20-38;
@@ -145,6 +145,21 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
     - **Hits:** limiting them did nothing: `hitm4` +0.00 (8/12), `nohits` +0.03 and `hitm2` -0.36. Combining them with a margin hurt (`margin1_hitm4` -0.89, 5/12).
     - **No direction:** `DECAY` 0.8/1.0 (-0.14/+0.20) and `FT_END_VALUE` 0/3 (-0.08/+0.52).
     - **Adopted:** `TRANSFER_MARGIN` 1.0, on the user's decision. It was ahead in 2 of 3 seasons with fewer hits, and in the GW1 run too. So `default` now has the margin, and `margin0` is the old production setting.
+  - **2025-26, out of sample** (run 41151367761, from `main`, so `default` is margin 0; 4 paths). Only 11 of 38 gameweeks had an FPL snapshot, so most flagged players counted as available, and the model, trained before defensive contributions scored, under-rated defenders.
+    - **Large effects held:** `hold` -12.35 [-15.23, -9.56] and `nochips` -3.44 [-5.84, -1.14].
+    - **The margin didn't confirm:** `margin1` -1.34 [-3.10, +0.41] (1/4 paths ahead), and 0.5, 1.5 and 2 were reliably worse (-2.1 to -2.9).
+    - **Default was luckiest:** every other change of planner constants also lost (`DECAY` 0.8/1.0 -3.09/-2.23, `FT_END_VALUE` 0/3 -2.67/-1.52). Only fewer hits matched it (`nohits`/`hitm2` +0.41, `hitm4` +0.04).
+    - **Pooled with the 12 earlier paths:** the 1-point margin is about +0.2 a gameweek, ahead on 10 of 16 paths, i.e. no evidence either way.
+    - **Rejected plans:** 7 plans in GW22-23 had 4 Man City players after a January move: the planner let a club over the limit stay so, while `validate_entry` refused it. Both now allow it, with no buying from that club (see Rules).
+  - **Chip rules** (2026-10-31, run 41152131426, 12 paths, `default` with the margin). Per gameweek against `default`, paths ahead out of 12:
+    - **Chips matter:** `nochips` -3.73 [-5.17, -2.30] (1/12), about 140 points a season.
+    - **Thresholds:**
+      - Triple captain at 8/6 was -0.14 (0/12); at 10/8 it played identically.
+      - Bench boost at 9 and 15 was -0.07 and -0.28.
+      - Free hit at 8 was reliably worse, -1.03 [-2.00, -0.17] (1/12); at 16 it was +0.15 (6/12).
+      - Wildcard at 10 and 25 was -0.50 and -1.28.
+    - **Thresholds against late use:** only playing chips when their window forces them (`late_only`) was -0.84 [-2.48, +0.65] (4/12).
+    - **Conclusion:** the current thresholds are at or near the best tried, so none changed.
 - **Page:** the Team of the Week's **ML manager** tab (`mode=manager`, `components/totw/MlManager*.tsx`) shows:
   - the planned or played team with its moves and the plan's one-line `reason`;
   - free transfers, bank, team value and chips;
@@ -200,6 +215,20 @@ The path is reduced to its lowercase route (no query/hash or trailing slash, `^/
     - **Early stopping:** the expected-points CIs cover two folds against the actual ones' three, and were 23-39% narrower for seed-averaged top-20 and about as wide for single models.
     - **Squads:** seed-averaged squad differences were near zero either way.
     - **Conclusion unchanged:** neither variant moved reliably on expected points either (e.g. `v4_fit` in the replay: `top20_xp` +0.011 [-0.003, +0.027], `sq_xi_xp` +0.09 [-0.01, +0.26]).
+
+  - **Tree count and seed ensembles** (2026-10-31, run 41152128774: `v4_trees05`, half the RMSE early stop's trees, and `v4_stop_picks`, the count whose validation-season top 20 scored most, against `v4_prod`; folds 2022-23..2025-26, 6 seeds). Half the trees, per gameweek:
+    - **Seed-averaged:**
+      - early stopping: `sq_fpl` +1.41 [+0.29, +2.49], `capt_fpl` +0.52 [+0.15, +0.96], `sq_fpl_xp` +0.90 [+0.12, +1.68];
+      - refit: `sq_fpl` +0.33, `capt_fpl` +0.29, `top20` +0.032 [-0.015, +0.083];
+      - weekly retrain: `capt_fpl` +0.37 [+0.01, +0.84], `sq_fpl` +0.96.
+    - **Single models:** every squad and captain delta was positive (refit `sq_fpl` +0.53, weekly retrain +0.85), none reliable.
+    - **Costs:** RMSE rose 0.002-0.015, and MID/FWD were under-predicted 0.02-0.05 more (fewer trees shrink predictions toward the mean).
+    - **`v4_stop_picks`:** similar but smaller gains. Its tree count swung from 40 to 106, and its RMSE rose up to 0.025.
+    - **Seed ensemble** (`v4_prod`'s 6 seeds averaged, minus the average single model):
+      - `sq_fpl` +0.73 (refit), +0.65 (early stopping) and +1.00 (weekly retrain), none reliable;
+      - on expected points `sq_fpl_xp` +0.77 [+0.19, +1.34] (refit) and +0.79 [+0.04, +1.51] (weekly retrain), reliable;
+      - captain +0.18 to +0.32;
+      - with half the trees, the ensemble added `sq_fpl` +1.90 [+0.90, +2.93] under early stopping.
 
   The workflow's `rescore_run` input (an earlier run's id; its chunk artifacts last 14 days) scores that run's saved predictions again with the current metrics, without training, so earlier results can be rechecked on expected points. `ref_seeds` (e.g. `0-19`) gives the reference more seeds; seeds run in jobs of 5 and `score --pool` merges them, and `score` also rescores saved `chunk_*.preds.parquet` files without retraining. Tried in 2026-10 and not adopted (no reliable gain over the current features): per-90 rates, a 10-match window, recency weighting, training on the last 3 seasons only, DC-points features, depth 6, `min_child_weight` 200, dropping `career_matches_before`, days since a manager change (`data/manager_changes.csv`), starting-XI rotation, and previous-Championship-season team/player stats (`EFL_Data_All_Seasons/`). The last-match and 20-match team features already capture most of what the manager and Championship data add. Also not adopted:
   - Matches in other competitions (`ml/other_competitions.py`, backtest-only: congestion around ties, minutes in the club's latest cup and all-competition matches, still-in-competition flags). Data: `data/non_pl_*.csv` from the CC0 transfermarkt-datasets dump (`python -m scripts.data.fetch_transfermarkt_non_pl`): UCL/UEL/UECL, FA Cup and super cups, 2020-21..2025-26, with no EFL Cup, no kickoff times and no 2026-27, so run those variants with the workflow's `folds` input set to `2023-24,2024-25,2025-26`. RMSE fell 0.005 (0.013 near cup ties), but neither top-20 (refit +0.056 [-0.022, +0.134]) nor captain points (+0.16 [-0.53, +0.86]) moved reliably, nor `dnp20`. Serving would also need a current-season source: the dump stopped updating in July 2026, and the only free source with all five competitions and their schedule is ESPN's unofficial, unlicensed API.
