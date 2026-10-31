@@ -106,6 +106,18 @@ VARIANTS: Dict[str, Dict[str, Any]] = {
     "hitm2": {"set": {"HIT_MARGIN": 2.0}},
     "hitm4": {"set": {"HIT_MARGIN": 4.0}},
     "nohits": {"set": {"MAX_HITS_PER_GW": 0}},
+    # 2026-10-31: the chip rules (services/fpl_manager_planner.chip_decision), one threshold at a
+    # time each way; late_only plays a chip only when its window forces it
+    "tc8": {"set": {"TRIPLE_CAPTAIN_MIN_POINTS": 8.0, "TRIPLE_CAPTAIN_DOUBLE_MIN_POINTS": 6.0}},
+    "tc10": {"set": {"TRIPLE_CAPTAIN_MIN_POINTS": 10.0, "TRIPLE_CAPTAIN_DOUBLE_MIN_POINTS": 8.0}},
+    "bb9": {"set": {"BENCH_BOOST_MIN_POINTS": 9.0}},
+    "bb15": {"set": {"BENCH_BOOST_MIN_POINTS": 15.0}},
+    "fh8": {"set": {"FREE_HIT_MIN_GAIN": 8.0}},
+    "fh16": {"set": {"FREE_HIT_MIN_GAIN": 16.0}},
+    "wc10": {"set": {"WILDCARD_MIN_GAIN": 10.0}},
+    "wc25": {"set": {"WILDCARD_MIN_GAIN": 25.0}},
+    "late_only": {"set": {k: 1e6 for k in ("TRIPLE_CAPTAIN_MIN_POINTS", "TRIPLE_CAPTAIN_DOUBLE_MIN_POINTS",
+                                           "BENCH_BOOST_MIN_POINTS", "FREE_HIT_MIN_GAIN", "WILDCARD_MIN_GAIN")}},
 }
 
 
@@ -218,7 +230,8 @@ def extras_at(base: pm.ExtraInputs, odds: pd.DataFrame, deadline: pd.Timestamp) 
 
 def train_model(feats: pd.DataFrame, season: str, version: str) -> Tuple[Any, Dict[str, Any]]:
     """(predict function, info): `version`'s columns, fit like ml.train_points_v3 on the seasons
-    before `season`: early-stopped on the last of them, then refit on all with the scaled count."""
+    before `season`: early-stopped on the last of them, then production's ensemble refit on all
+    (pm.fit_ensemble, each member with pm.ensemble_trees of the early-stopped count)."""
     cols = pm.feature_columns(version)
     seasons = sorted(s for s in feats["season"].unique() if s < season)
     if len(seasons) < 2:
@@ -228,10 +241,11 @@ def train_model(feats: pd.DataFrame, season: str, version: str) -> Tuple[Any, Di
     model = pm.fit(train, valid, cols=cols)
     best = int(model.best_iteration) + 1
     both = feats[feats["season"].isin(seasons)]
-    n_trees = min(int(best * len(both) / len(train)), 4000)
-    final = pm.fit(both, None, n_estimators=n_trees, cols=cols)
-    info = {"version": version, "seasons": seasons, "best_trees": best, "n_trees": n_trees, "rows": len(both)}
-    return (lambda frame: final.predict(frame[cols])), info
+    n_trees = pm.ensemble_trees(best, len(both), len(train))
+    final = pm.fit_ensemble(both, n_trees, cols=cols)
+    info = {"version": version, "seasons": seasons, "best_trees": best, "n_trees": n_trees, "members": len(final),
+            "rows": len(both)}
+    return (lambda frame: pm.predict(final, {"features": cols}, frame)), info
 
 
 # ----------------------------------------------------------------------------- project
@@ -518,8 +532,9 @@ def cmd_report(args) -> None:
             prefix = prefix[:-5]
             data = load_projected(prefix)
             q = projection_quality(data["projections"], data["actual"]).round(3)
-            lines += [f"**{data['season']}** (model {data['summary']['model'].get('version')}, "
-                      f"{data['summary']['model'].get('n_trees')} trees)", "",
+            model = data["summary"]["model"]
+            lines += [f"**{data['season']}** (model {model.get('version')}, {model.get('members', 1)} x "
+                      f"{model.get('n_trees')} trees)", "",
                       "| " + " | ".join(q.columns) + " |", "|" + "---|" * len(q.columns)]
             lines += ["| " + " | ".join(str(v) for v in row) + " |" for row in q.itertuples(index=False)] + [""]
     text = "\n".join(lines) + "\n"

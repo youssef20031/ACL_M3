@@ -5,7 +5,8 @@ This module is the game engine (pure functions over plain dicts) plus its files.
 rules (Rules, read from bootstrap-static's game_settings, element_types and chips, with the
 2026-27 values as defaults):
 
-  squad      15 players (2 GK, 5 DEF, 5 MID, 3 FWD), at most 3 per club, 100.0m. The XI
+  squad      15 players (2 GK, 5 DEF, 5 MID, 3 FWD), at most 3 per club, 100.0m (a club over
+             the limit because an owned player moved there may stay so, but never grow). The XI
              is 1 GK, 3-5 DEF, 2-5 MID and 1-3 FWD. Bench order 1 is the substitute
              goalkeeper, 2-4 the outfield subs in priority order (FPL's layout).
   prices     a player is bought at now_cost and sold at purchase + half the rise, rounded
@@ -351,7 +352,9 @@ def apply_entry(state: Dict[str, Any], entry: Dict[str, Any], rules: Rules = DEF
 
 # ------------------------------------------------------------------ validation
 
-def _check_squad(squad: List[Dict[str, Any]], rules: Rules) -> List[str]:
+def _check_squad(squad: List[Dict[str, Any]], rules: Rules, kept: Optional[set] = None) -> List[str]:
+    """Rule violations of a squad. `kept`: the elements it keeps from the previous squad; a club
+    may have as many of them as it holds (a player moved there), but no more than that."""
     errors: List[str] = []
     if len(squad) != rules.squad_size:
         errors.append(f"Squad has {len(squad)} players, not {rules.squad_size}")
@@ -366,11 +369,16 @@ def _check_squad(squad: List[Dict[str, Any]], rules: Rules) -> List[str]:
         if k != n:
             errors.append(f"Squad has {k} {pos}, not {n}")
     clubs: Dict[str, int] = {}
+    kept_clubs: Dict[str, int] = {}
     for p in squad:
         clubs[p.get("team")] = clubs.get(p.get("team"), 0) + 1
+        if kept and _int(p.get("element")) in kept:
+            kept_clubs[p.get("team")] = kept_clubs.get(p.get("team"), 0) + 1
     for club, k in sorted(clubs.items(), key=lambda kv: str(kv[0])):
-        if k > rules.max_per_club:
-            errors.append(f"{k} players from {club} (at most {rules.max_per_club})")
+        allowed = max(rules.max_per_club, kept_clubs.get(club, 0))
+        if k > allowed:
+            errors.append(f"{k} players from {club} (at most {allowed}"
+                          + (" after a player moved there)" if allowed > rules.max_per_club else ")"))
 
     roles = {p.get("role") for p in squad} - {"starter", "bench"}
     if roles:
@@ -436,7 +444,8 @@ def validate_entry(prev_state: Dict[str, Any], entry: Dict[str, Any], rules: Rul
         errors.append(f"Gameweek {gw} doesn't follow gameweek {last}: save the gameweeks between "
                       "(rollover_entry) first")
     squad = entry.get("squad") or []
-    errors += _check_squad(squad, rules)
+    kept = {int(p["element"]) for p in prev_state.get("squad") or []}
+    errors += _check_squad(squad, rules, kept)
 
     chip = entry.get("chip")
     if chip is not None:

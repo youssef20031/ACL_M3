@@ -9,6 +9,10 @@ name: ML backtest
 # pools them with `score --pool` before reporting. Artifacts: report (report.md, res.json and
 # res.gw.parquet, every per-gameweek table per seed) and chunk-* (each job's results and its
 # row-level predictions, chunk_*.preds.parquet, which `score` can rescore without retraining).
+#
+# rescore_run: an earlier run's id (from its URL). Nothing is trained: the report job scores that
+# run's chunk artifacts again (kept 14 days) with this commit's metrics, e.g. expected points for
+# predictions saved before they existed. Give the same ref as that run; variants is ignored.
 on:
   workflow_dispatch:
     inputs:
@@ -30,6 +34,9 @@ on:
       ref_seeds:
         description: 'Seeds for the reference variant only, e.g. 0-19 (blank: the same as seeds)'
         default: ''
+      rescore_run:
+        description: 'Rescore this earlier run id instead of training (blank to train)'
+        default: ''
 
 env:
   VARIANTS: ${{ inputs.variants }}
@@ -38,6 +45,7 @@ env:
   FOLDS: ${{ inputs.folds }}
   SEEDS: ${{ inputs.seeds }}
   REF_SEEDS: ${{ inputs.ref_seeds }}
+  RESCORE_RUN: ${{ inputs.rescore_run }}
 
 jobs:
   features:
@@ -79,6 +87,7 @@ jobs:
 
   run:
     needs: features
+    if: inputs.rescore_run == ''
     name: run (${{ matrix.tag }})
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -104,10 +113,14 @@ jobs:
           retention-days: 14
 
   report:
-    needs: run
-    if: always()
+    needs: [features, run]
+    if: always() && needs.features.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Rescoring an earlier run solves every squad again
+    timeout-minutes: ${{ inputs.rescore_run == '' && 60 || 300 }}
+    permissions:
+      actions: read     # download an earlier run's artifacts
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -119,9 +132,15 @@ jobs:
         with:
           pattern: chunk-*
           merge-multiple: true
+          run-id: ${{ inputs.rescore_run || github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: feats
       # Merges each variant's seed chunks. Tables whose predictions are unchanged are reused, so only
-      # the seed-averaged squads of variants split over several jobs are solved again.
-      - run: python -m scripts.analysis.ml_backtest score 'chunk_*.preds.parquet' --pool --reuse --out res.json
+      # the seed-averaged squads of variants split over several jobs are solved again. --feats adds
+      # expected points to predictions saved without them (an earlier run's).
+      - run: python -m scripts.analysis.ml_backtest score 'chunk_*.preds.parquet' --pool --reuse --feats feats.pkl.gz --out res.json
       - run: python -m scripts.analysis.ml_backtest report res.json --ref "$REF" --out report.md
       - run: cat report.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

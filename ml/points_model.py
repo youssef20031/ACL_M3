@@ -484,9 +484,54 @@ XGB_PARAMS = dict(
 )
 
 
+# Production fits an average of len(ENSEMBLE_SEEDS) models, each with TREE_FRACTION of the
+# early-stopped tree count (scaled up for the refit's extra rows). In the 2026-10-31 backtest (run
+# 41152128774) half the trees and averaging the seeds each raised the squad's and the captain's
+# points, while the early stop on validation RMSE picks more trees than pick quality wants
+TREE_FRACTION = 0.5
+ENSEMBLE_SEEDS = (0, 1, 2, 3, 4)
+MAX_TREES = 4000
+
+
 def _xgb():
     import xgboost as xgb
     return xgb
+
+
+class Ensemble:
+    """Boosters whose outputs are averaged. predict(DMatrix, **kwargs) works like an xgboost
+    Booster's, pred_contribs included: TreeSHAP is additive, so the average's SHAP values are the
+    members' mean and still sum to its output."""
+
+    def __init__(self, boosters):
+        self.boosters = list(boosters)
+
+    def __len__(self) -> int:
+        return len(self.boosters)
+
+    def predict(self, data, **kwargs) -> np.ndarray:
+        return np.mean([b.predict(data, **kwargs) for b in self.boosters], axis=0)
+
+
+def ensemble_trees(best_trees: int, rows: int = 1, train_rows: int = 1) -> int:
+    """Each member's tree count: TREE_FRACTION of the early-stopped `best_trees`, scaled by the
+    rows it's fitted on over the early-stopping fit's (`rows` / `train_rows`), at most MAX_TREES."""
+    return max(1, min(int(round(best_trees * TREE_FRACTION) * rows / train_rows), MAX_TREES))
+
+
+def fit_ensemble(df: pd.DataFrame, n_trees: int, cols: Optional[List[str]] = None, params: Optional[dict] = None,
+                 seeds=ENSEMBLE_SEEDS) -> Ensemble:
+    """One model per seed, `n_trees` each, on all of `df`, averaged."""
+    params = params or XGB_PARAMS
+    return Ensemble(fit(df, None, n_estimators=n_trees, params={**params, "random_state": s}, cols=cols).get_booster()
+                    for s in seeds)
+
+
+def member_paths(model_path: str, members: int) -> List[str]:
+    """The files of a model saved at `model_path`: the first member there, the others beside it
+    (points_v4.json, points_v4_m1.json, ...)."""
+    root, ext = os.path.splitext(model_path)
+    return [model_path] + [f"{root}_m{k}{ext}" for k in range(1, members)]
 
 
 def fit(train: pd.DataFrame, valid: Optional[pd.DataFrame] = None, n_estimators: int = 3000,
@@ -503,25 +548,34 @@ def fit(train: pd.DataFrame, valid: Optional[pd.DataFrame] = None, n_estimators:
 
 def save_model(model, meta: dict, model_path: str = MODEL_PATH, meta_path: str = META_PATH,
                features: Optional[List[str]] = None) -> None:
-    """Booster plus meta, whose "features" (default feature_columns(meta["version"])) predict reads."""
-    model.get_booster().save_model(model_path)
+    """A model (XGBRegressor, Booster or Ensemble) plus meta, whose "features" (default
+    feature_columns(meta["version"])) predict reads and whose "members" says how many files
+    (member_paths) an ensemble has. The members are written first and the meta last."""
+    boosters = model.boosters if isinstance(model, Ensemble) else [
+        model.get_booster() if hasattr(model, "get_booster") else model]
+    for booster, path in zip(boosters, member_paths(model_path, len(boosters))):
+        booster.save_model(path)
     features = features or feature_columns(meta.get("version", MODEL_VERSION))
     with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump({**meta, "features": features}, f, indent=2)
+        json.dump({**meta, "members": len(boosters), "features": features}, f, indent=2)
 
 
 def load_model(model_path: Optional[str] = None, meta_path: Optional[str] = None,
                version: Optional[str] = None):
     """(booster, meta) from the given paths, else active_model_paths(version): load_model(version="v3")
-    is the shadow, load_model() the production model."""
+    is the shadow, load_model() the production model. A meta with "members" > 1 gives an Ensemble
+    of its member files; older files (one booster, no "members") load as before."""
     if model_path is None or meta_path is None:
         model_path, meta_path = active_model_paths(version)
     xgb = _xgb()
-    booster = xgb.Booster()
-    booster.load_model(model_path)
     with open(meta_path, encoding="utf-8") as f:
         meta = json.load(f)
-    return booster, meta
+    boosters = []
+    for path in member_paths(model_path, int(meta.get("members") or 1)):
+        booster = xgb.Booster()
+        booster.load_model(path)
+        boosters.append(booster)
+    return (boosters[0] if len(boosters) == 1 else Ensemble(boosters)), meta
 
 
 def predict(booster, meta: dict, features: pd.DataFrame) -> np.ndarray:

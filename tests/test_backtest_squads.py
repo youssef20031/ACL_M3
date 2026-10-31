@@ -267,3 +267,88 @@ def test_seed_parsing_and_matrix(capsys):
     jobs = json.loads(capsys.readouterr().out.split("=", 1)[1])
     assert [j["tag"] for j in jobs] == ["current-s0", "current-s5", "current-s10", "dc"]
     assert jobs[2]["seeds"] == "10,11" and jobs[3]["seeds"] == "0,1,2"
+
+
+# ----------------------------------------------------------------------------- expected points
+
+def test_picks_are_scored_on_expected_points_too():
+    rows = league()
+    rows["xpts"] = np.where(rows["minutes"] > 0, rows["total_points"] / 2, 0.0)
+    pred = rows["total_points"].to_numpy()
+    t = bt.gw_table(rows, pred)
+    for gw, g in rows.groupby("GW"):
+        r = t[t["GW"] == gw].iloc[0]
+        top = g.assign(pred=pred[g.index]).sort_values("pred", ascending=False, kind="mergesort")
+        assert r["top20_xp"] == pytest.approx(top["xpts"].head(20).mean())
+        assert r["top20_xp"] == pytest.approx(r["top20"] / 2)
+        assert r["capt_fpl_xp"] == pytest.approx(r["capt_fpl"] / 2)
+        assert r["sq_xi_xp"] == pytest.approx(r["sq_xi"] / 2) and r["sq_fpl_xp"] == pytest.approx(r["sq_fpl"] / 2)
+    assert set(bt.XP_METRICS) <= set(bt.summarize(t))
+
+
+def test_a_pick_without_expected_stats_has_no_expected_score():
+    rows = league(gws=(1,))
+    rows["xpts"] = rows["total_points"]
+    pred = rows["total_points"].to_numpy()
+    rows.loc[int(np.argmax(pred)), "xpts"] = np.nan          # the captain
+    t = bt.gw_table(rows, pred, squads=False)
+    assert np.isnan(t.loc[0, "top20_xp"]) and np.isnan(t.loc[0, "capt_fpl_xp"]) and not np.isnan(t.loc[0, "top20"])
+
+
+def test_score_adds_expected_points_to_older_predictions(tmp_path, monkeypatch):
+    rows = league()
+    write_chunk(tmp_path, "chunk_a", {"current": [0, 1]}, rows)      # saved without xpts
+    feats = rows.assign(xpts=rows["total_points"] / 2)
+    feats.to_pickle(tmp_path / "feats.pkl.gz")
+    solves = []
+    real = opt.best_squad
+    monkeypatch.setattr(opt, "best_squad", lambda *a, **k: solves.append(1) or real(*a, **k))
+    args = argparse.Namespace(preds=[str(tmp_path / "chunk_*.preds.parquet")], out=str(tmp_path / "res.json"),
+                              pool=True, reuse=True, no_squads=False, feats=str(tmp_path / "feats.pkl.gz"))
+    bt.cmd_score(args)
+    assert len(solves) == 6                     # the saved tables lack expected points: every table again
+    unit = json.loads((tmp_path / "res.json").read_text())[0]["folds"]["2025-26"]["refit"]
+    assert unit["summary"]["top20_xp"] == pytest.approx(unit["summary"]["top20"] / 2)
+
+
+# ----------------------------------------------------------------------------- tree counts and seed ensembles
+
+class Staged:
+    """A fitted model stand-in: predict(X, iteration_range=(0, k)) is perfect at the tree counts in
+    `good` and noise at the others."""
+
+    def __init__(self, rows, good):
+        self.rows, self.good = rows, set(good)
+
+    def predict(self, X, iteration_range):
+        k = iteration_range[1]
+        if k in self.good:
+            return self.rows.loc[X.index, "total_points"].to_numpy(dtype=float)
+        return np.random.default_rng(k).normal(0, 3, len(X))
+
+
+def test_stop_trees_keeps_the_rmse_stop_by_default_and_halves_it_on_request():
+    rows = league(gws=(1,))
+    assert bt._stop_trees(None, rows, rows, [], 120, {}) == (120, {})
+    assert bt._stop_trees(None, rows, rows, [], 121, {"tree_frac": 0.5})[0] == 60
+
+
+def test_stop_by_picks_takes_the_count_whose_validation_picks_scored_most():
+    va = league(gws=(1, 2, 3))
+    used, info = bt._stop_trees(Staged(va, good={20, 30, 40}), va, va, [], 95, {"stop": "picks"})
+    assert used == 30                                      # the middle of the plateau after smoothing
+    assert list(info["stop_grid"]) == ["10", "20", "30", "40", "50", "60", "70", "80", "90", "95"]
+
+
+def test_ensemble_gain_is_the_averaged_predictions_minus_the_mean_single_model():
+    gws = pd.DataFrame({"season": "2025-26", "GW": range(1, 31)})
+    ens = gws.assign(top20=5.1, sq_fpl=60.5)
+    seeds = pd.concat([gws.assign(seed=s, top20=5.0 + off, sq_fpl=60.0 + off) for s, off in enumerate((-0.2, 0, 0.2))])
+    g = bt._ens_gain(ens, seeds, n=500)
+    assert g["top20"] == pytest.approx((0.1, 0.1, 0.1)) and g["sq_fpl"] == pytest.approx((0.5, 0.5, 0.5))
+    assert "capt_fpl" not in g
+
+
+def test_tree_count_variants_exist():
+    assert bt.VARIANTS["v4_trees05"]["tree_frac"] == 0.5 and bt.VARIANTS["v4_stop_picks"]["stop"] == "picks"
+    assert bt.VARIANTS["v4_trees05"]["post"] == bt.VARIANTS["v4_prod"]["post"]

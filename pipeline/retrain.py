@@ -18,6 +18,9 @@ ml.points_model.active_model_paths() serves the live copy when present, else the
 ml/models/points_v4.json. The shadow model (v3) is no longer retrained: it stays at its last
 version, live copy or bundled. Every attempt is appended to LIVE_DATA_DIR/models/retrain_history.json,
 with the child process's peak memory (v3 peaked around 0.8 GB; v4 has 96 features instead of 72).
+The model is an ensemble (ml.points_model.fit_ensemble: 5 seeds, half the early-stopped trees),
+fitted one member after another, so it takes about 2-3 times as long as one model but no more
+memory; its member files are moved into place before the meta.
 """
 import argparse
 import json
@@ -139,12 +142,17 @@ def maybe_retrain(force: bool = False, now: Optional[datetime] = None, live_dir:
     ok, reason = passes_guardrail(candidate, active_meta.get("test_metrics"), VERSION, active_version)
 
     live_model, live_meta = pm.live_model_paths(VERSION)
+    members = int((_read_json(cand_meta) or {}).get("members") or 1)
+    candidates = pm.member_paths(cand_model, members)
     if ok:
-        # Model first, meta last: active_model_paths needs both, and meta marks completion
+        # The ensemble's other members, then its first file, then the meta: active_model_paths
+        # needs the first file and the meta, and the meta marks completion
+        for src, dst in list(zip(candidates, pm.member_paths(live_model, members)))[1:]:
+            os.replace(src, dst)
         os.replace(cand_model, live_model)
         os.replace(cand_meta, live_meta)
     else:
-        for path in (cand_model, cand_meta):
+        for path in candidates + [cand_meta]:
             if os.path.exists(path):
                 os.remove(path)
 

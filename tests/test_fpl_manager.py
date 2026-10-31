@@ -382,6 +382,17 @@ class TestValidate(unittest.TestCase):
         e = next_entry(self.state, 10, swaps={9: 11, 23: 24}, teams={24: "ARS"})   # ARS: 1, 21, 11, 24
         self.assertIn("4 players from ARS (at most 3)", fm.validate_entry(self.state, e))
 
+    def test_a_club_over_the_limit_after_a_move_may_stay_but_not_grow(self):
+        moved = {5: "ARS", 6: "ARS"}                         # ARS: 1 and 21, then 5 and 6 move there
+        e = next_entry(self.state, 10, teams=moved)
+        self.assertEqual(fm.validate_entry(self.state, e), [])
+        e = next_entry(self.state, 10, swaps={9: 10}, teams=moved)     # other transfers are fine
+        self.assertEqual(fm.validate_entry(self.state, e), [])
+        e = next_entry(self.state, 10, swaps={9: 11}, teams=moved)     # 11 is another ARS defender
+        self.assertIn("5 players from ARS (at most 4 after a player moved there)", fm.validate_entry(self.state, e))
+        e = next_entry(self.state, 10, swaps={5: 10, 9: 11}, teams=moved)   # sell one, buy one: FPL blocks the buy
+        self.assertIn("4 players from ARS (at most 3)", fm.validate_entry(self.state, e))
+
     def test_positions(self):
         e = next_entry(self.state, 10, swaps={9: 18})        # a defender out, a midfielder in
         errors = fm.validate_entry(self.state, e)

@@ -11,7 +11,9 @@ Temporal protocol:
   test   2025-26 and the current season so far (never seen while choosing anything)
 Baselines on the same test rows: FPL's own expected points (xP, where present), the
 player's last-3 and last-6 average points, and season-to-date points per game.
-The production model is then refit on all seasons with the early-stopped tree count
+The model is an average of len(pm.ENSEMBLE_SEEDS) seeds, each with pm.TREE_FRACTION of the
+early-stopped tree count (pm.ensemble_trees): the test metrics are that ensemble fitted on the
+training seasons, and the production model the same refit on all seasons, its tree count
 scaled by the extra data.
 
 v4 builds the same rows with pm.load_extra_inputs (player codes, odds from ODDS_DIR, FPL
@@ -132,7 +134,8 @@ def train_and_report(model_path: Optional[str] = None, meta_path: Optional[str] 
     model = pm.fit(train, valid, cols=cols)
     best_trees = int(model.best_iteration) + 1
     pred = f"pred_{version}"
-    test[pred] = model.predict(test[cols])
+    eval_trees = pm.ensemble_trees(best_trees)
+    test[pred] = pm.predict(pm.fit_ensemble(train, eval_trees, cols=cols), {"features": cols}, test)
     test["last3"] = test["total_points_r3"]
     test["last6"] = test["total_points_r6"]
     scored = [(version, pred), ("last3_avg", "last3"), ("last6_avg", "last6"), ("season_ppg", "season_ppg")]
@@ -142,6 +145,8 @@ def train_and_report(model_path: Optional[str] = None, meta_path: Optional[str] 
 
     report = {"version": version, "train_seasons": TRAIN_SEASONS, "valid_seasons": VALID_SEASONS,
               "test_seasons": test_seasons, "best_trees": best_trees,
+              "ensemble": {"members": len(pm.ENSEMBLE_SEEDS), "tree_fraction": pm.TREE_FRACTION,
+                           "eval_trees": eval_trees},
               "rows": {"train": len(train), "valid": len(valid), "test": len(test)}, "test": {}}
     if coverage is not None:
         report["input_coverage"] = coverage
@@ -159,16 +164,17 @@ def train_and_report(model_path: Optional[str] = None, meta_path: Optional[str] 
 
     if not eval_only:
         # Refit on all seasons; scale trees with the extra data, capped
-        n_trees = min(int(best_trees * len(feats) / len(train)), 4000)
-        final = pm.fit(feats, None, n_estimators=n_trees, cols=cols)
+        n_trees = pm.ensemble_trees(best_trees, len(feats), len(train))
+        final = pm.fit_ensemble(feats, n_trees, cols=cols)
         meta = {"version": version, "trained_at": pd.Timestamp.utcnow().isoformat(timespec="seconds"),
                 "seasons": sorted(feats["season"].unique().tolist()), "rows": len(feats),
-                "n_trees": n_trees, "params": pm.XGB_PARAMS, "test_metrics": report["test"].get("all")}
+                "n_trees": n_trees, "tree_fraction": pm.TREE_FRACTION, "seeds": list(pm.ENSEMBLE_SEEDS),
+                "params": pm.XGB_PARAMS, "test_metrics": report["test"].get("all")}
         if coverage is not None:
             meta["input_coverage"] = coverage["all"]
         pm.save_model(final, meta, model_path, meta_path, features=cols)
         report["production"] = {k: v for k, v in meta.items() if k != "test_metrics"}
-        logger.info("Saved %s (%d trees, %d rows)", model_path, n_trees, len(feats))
+        logger.info("Saved %s (%d models of %d trees, %d rows)", model_path, len(final), n_trees, len(feats))
 
     report["seconds"] = round(time.time() - t0, 1)
     with open(report_path, "w", encoding="utf-8") as f:

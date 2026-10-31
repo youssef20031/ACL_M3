@@ -866,7 +866,9 @@ export interface ExplainMetrics {
 export interface ExplainModelInfo {
   version: string;
   trained_at: string | null;
+  /** Trees per model; the served model averages `members` models (1 for older files). */
   n_trees: number | null;
+  members?: number;
   seasons: string[];
   rows: number | null;
   /** live = the weekly retrained copy on the server; bundled = the model shipped with the code. */

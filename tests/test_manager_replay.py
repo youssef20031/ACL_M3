@@ -170,9 +170,10 @@ def test_a_season_is_planned_scored_and_rolled_over_where_nothing_was_played():
 
 def test_hold_never_transfers_and_nochips_never_plays_one():
     data = synthetic_season()
+    before = (planner.TRANSFER_MARGIN, planner.MAX_HITS_PER_GW)
     hold = mrp.play_season(data, "hold", start_gw=10, time_limit=10)
     assert sum(g["transfers"] for g in hold["gameweeks"]) == 0 and not any(g["chip"] for g in hold["gameweeks"])
-    assert planner.TRANSFER_MARGIN == 0.0 and planner.MAX_HITS_PER_GW == 2     # restored
+    assert (planner.TRANSFER_MARGIN, planner.MAX_HITS_PER_GW) == before     # restored
     nochips = mrp.play_season(data, "nochips", start_gw=10, time_limit=10)
     assert not any(g["chip"] for g in nochips["gameweeks"])
 

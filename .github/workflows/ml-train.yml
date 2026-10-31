@@ -53,6 +53,7 @@ jobs:
           name: model-${{ inputs.version }}
           path: |
             ml/models/points_${{ inputs.version }}.json
+            ml/models/points_${{ inputs.version }}_m*.json
             ml/models/points_${{ inputs.version }}_meta.json
             ml/models/points_${{ inputs.version }}_report.json
             docs/ml_evaluation/

@@ -49,13 +49,21 @@ export function ModelFacts({ summary }: { summary: ExplainSummary }) {
         as="h2"
         size="md"
         title="The model"
-        subtitle="Gradient-boosted trees (XGBoost) predicting each player’s points per fixture."
+        subtitle={
+          (model.members ?? 1) > 1
+            ? `The average of ${model.members} gradient-boosted tree models (XGBoost) predicting each player’s points per fixture.`
+            : 'Gradient-boosted trees (XGBoost) predicting each player’s points per fixture.'
+        }
         action={<Chip tone={model.source === 'live' ? 'accent' : 'neutral'}>{model.source === 'live' ? 'Retrained weekly' : 'Bundled'}</Chip>}
       />
       <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line">
         <Fact label="Version">{model.version}</Fact>
         <Fact label="Trained">{trained ?? '–'}</Fact>
-        <Fact label="Trees">{model.n_trees != null ? model.n_trees.toLocaleString('en-GB') : '–'}</Fact>
+        <Fact label="Trees">
+          {model.n_trees != null
+            ? `${(model.members ?? 1) > 1 ? `${model.members} × ` : ''}${model.n_trees.toLocaleString('en-GB')}`
+            : '–'}
+        </Fact>
         <Fact label="Training rows">{model.rows != null ? model.rows.toLocaleString('en-GB') : '–'}</Fact>
         <div className="col-span-2 min-w-0 bg-surface px-3 py-2">
           <dt className="text-micro font-semibold uppercase text-fg-subtle">Seasons</dt>

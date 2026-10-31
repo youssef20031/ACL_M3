@@ -269,7 +269,8 @@ def _model_info(state: _State) -> Dict[str, Any]:
     version = str(meta.get("version", "v3"))
     return {
         "version": version, "trained_at": meta.get("trained_at"),
-        "n_trees": meta.get("n_trees"), "seasons": list(meta.get("seasons") or []), "rows": meta.get("rows"),
+        "n_trees": meta.get("n_trees"), "members": int(meta.get("members") or 1),
+        "seasons": list(meta.get("seasons") or []), "rows": meta.get("rows"),
         "source": state.model_source,
         # The model's own metrics are under its version ("v4"), as in its report
         "test_metrics": {k: metrics[k] for k in (version,) + BASELINES if isinstance(metrics.get(k), dict)},

@@ -1,6 +1,7 @@
 """Tests for pipeline/retrain.py: schedule, guardrail, and promotion of the candidate (v4) model."""
 import json
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -57,14 +58,16 @@ def live(tmp_path, monkeypatch, odds_calls):
     return tmp_path
 
 
-def fake_trainer(top20, seen=None):
+def fake_trainer(top20, seen=None, members=1):
     def train_and_report(model_path, meta_path, report_path, eval_only=False, version="v3"):
         if seen is not None:
             seen.append(version)
-        with open(model_path, "w") as f:
-            f.write("{}")
+        for path in pm.member_paths(model_path, members):
+            with open(path, "w") as f:
+                f.write("{}")
         with open(meta_path, "w") as f:
-            json.dump({"version": version, "trained_at": MONDAY.isoformat(), "test_metrics": metrics(top20)}, f)
+            json.dump({"version": version, "trained_at": MONDAY.isoformat(), "test_metrics": metrics(top20),
+                       "members": members}, f)
         report = {"test": {"all": metrics(top20)}, "production": {"rows": 1000}, "seconds": 1.0,
                   "input_coverage": {"all": {"odds": 0.93}}}
         with open(report_path, "w") as f:
@@ -92,6 +95,20 @@ def test_accepted_candidate_becomes_active(live, odds_calls, monkeypatch):
     assert history[-1]["accepted"] is True and history[-1]["test_top20"] == 4.7
     assert history[-1]["version"] == "v4" and history[-1]["input_coverage"] == {"odds": 0.93}
     assert history[-1]["odds"] == {"E0_2627.csv": "fetched"}
+
+
+def test_an_accepted_ensemble_moves_every_member(live, monkeypatch):
+    monkeypatch.setattr("ml.train_points_v3.train_and_report", fake_trainer(4.7, members=5))
+    assert retrain.maybe_retrain(force=True, now=MONDAY, live_dir=str(live))["status"] == "accepted"
+    names = sorted(os.listdir(live / "models"))
+    assert [f"points_v4_m{k}.json" for k in range(1, 5)] == [n for n in names if re.search(r"_m\d", n)]
+    assert "points_v4.json" in names and not any("candidate" in n for n in names)
+
+
+def test_a_rejected_ensemble_leaves_no_member_behind(live, monkeypatch):
+    monkeypatch.setattr("ml.train_points_v3.train_and_report", fake_trainer(3.0, members=5))
+    assert retrain.maybe_retrain(force=True, now=MONDAY, live_dir=str(live))["status"] == "rejected"
+    assert not any("candidate" in n or re.search(r"_m\d", n) for n in os.listdir(live / "models"))
 
 
 def test_rejected_candidate_leaves_active_model(live, monkeypatch):

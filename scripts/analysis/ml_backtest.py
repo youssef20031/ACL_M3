@@ -27,6 +27,14 @@ The top-20 metrics are unconstrained and mostly midfielders, so position picks (
 10 MID and 6 FWD by prediction) and pred20/pred_capt (the predicted side, for selection bias) are
 reported too.
 
+Expected points (scripts/analysis/xpts.py): every row also has its expected points from realized
+xG, xA and xG conceded, with actual minutes, saves and defensive contributions (calibrated per
+season and position; NaN before 2023-24, which has no expected stats). top20_xp, capt_fpl_xp,
+sq_xi_xp and sq_fpl_xp score the same picks on them. They leave out finishing luck, so a variant's
+difference is less noisy in them than in actual points, at the price of ignoring finishing skill;
+actual points stay the primary metrics. `score --feats` adds them to predictions saved before they
+existed (the workflow's rescore_run input).
+
 `run` writes <out>.json, <out>.gw.parquet (every per-gameweek table, per seed and seed-averaged)
 and <out>.preds.parquet (row-level predictions). `score` rescores prediction files without
 retraining; --pool merges files of the same variant with different seeds (the workflow splits a
@@ -93,6 +101,14 @@ relative to unflagged players, shrunk towards the literal factor. Every fold is 
 burn-in); the factors are in the results and the report. Like cop, compare on
 `--folds 2022-23,2023-24,2024-25`.
 
+Round of 2026-10-31 (tree count and seeds): the early-stopping curve's test top 20 was best at 50
+trees in every fold, while validation RMSE stops at 100-120 and the refit scales that up.
+v4_trees05 uses half the early-stopped count (es, refit and the in-season replay); v4_stop_picks
+chooses it by pick quality: among multiples of STOP_GRID trees up to the RMSE stop, the count whose
+validation-season top 20 scored most (smoothed over neighbouring counts). Both take production's
+multiplier (cop_prod), so compare them with v4_prod. The report also shows what averaging the seeds'
+predictions gains over the average single model (production ships one seed).
+
 Round of 2026-10-22: fixture-strength products and opponent-adjusted team ratings
 (ml/fixture_strength.py, variants matchup and ratings), transfer-market ranks and price changes
 (ml/market.py, variant transfers), a Tweedie objective (tweedie) and a two-stage model that
@@ -119,6 +135,7 @@ from ml import odds as od  # noqa: E402
 from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
 from ml import snapshots as sn  # noqa: E402
+from scripts.analysis import xpts as xpt  # noqa: E402
 from utils.text import normalize_name  # noqa: E402
 
 
@@ -495,6 +512,8 @@ POS_TOPK = {"GK": 4, "DEF": 10, "MID": 10, "FWD": 6}     # position picks: top k
 POS_METRICS = [f"top_{p}" for p in POS_TOPK]             # ... their mean actual points
 PRED_METRICS = ["pred20", "pred_capt"] + [f"pred_{p}" for p in POS_TOPK]   # ... and predicted
 SQ_METRICS = ["sq_xi", "sq_fpl", "sq_pred", "sq_dnp"]
+XP_METRICS = ["top20_xp", "capt_fpl_xp", "sq_xi_xp", "sq_fpl_xp"]     # the same picks on expected points
+XP_PAIRS = [("top20", "top20_xp"), ("capt_fpl", "capt_fpl_xp"), ("sq_xi", "sq_xi_xp"), ("sq_fpl", "sq_fpl_xp")]
 SQ_TOP_PER_POS = 60       # squad pool: each position's best predictions ...
 SQ_CHEAPEST = 15          # ... plus its cheapest players, the same for every variant
 SQ_TIME_LIMIT = 5.0       # seconds per squad solve
@@ -508,7 +527,7 @@ CURRENT_D = [f"{c}__d" for c in CURRENT]     # ... and built from points without
 CODE_COLS = CURRENT_C + CURRENT_D + ["total_points_d", "dc_pts", "dc_hat"]
 V4 = [f"{c}__v4" for c in pm.feature_columns("v4")]   # the production model's columns, built by pm
 KEEP =["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
-        "clean_sheets"]
+        "clean_sheets", "xpts"]
 
 
 def cmd_features(args) -> None:
@@ -522,6 +541,7 @@ def cmd_features(args) -> None:
             status_csv = os.path.join("data", "live", meta["files"]["status"])
     history = pm.load_history(live_csv=live_csv, live_season=live_season)
     history["row_id"] = np.arange(len(history))
+    xpts = pd.Series(xpt.expected_points(history).to_numpy(), index=history["row_id"].to_numpy())
     # The production model's inputs, loaded as train_points_v4 loads them (ratings from the full history)
     extras = pm.load_extra_inputs(live_dir=os.path.join("data", "live"), season=live_season, status_csv=status_csv,
                                   ratings_prior=False)
@@ -551,6 +571,12 @@ def cmd_features(args) -> None:
           f"with an element, {(identity != history['name']).mean():.3f} renamed, {(renamed > 1).sum()} players "
           f"whose history had several names", flush=True)
     feats["name"] = identity.reindex(feats["row_id"]).to_numpy()   # one name per player in every table
+    feats["xpts"] = xpts.reindex(feats["row_id"]).to_numpy()
+    played = feats[feats["minutes"] > 0]
+    xp_check = played.groupby("season").apply(lambda g: pd.Series({
+        "actual": round(float(g["total_points"].mean()), 3), "xpts": round(float(g["xpts"].mean()), 3),
+        "corr": round(float(g["total_points"].corr(g["xpts"])), 3), "missing": round(float(g["xpts"].isna().mean()), 3)}))
+    print(f"expected points per played match by season:\n{xp_check.to_string()}", flush=True)
     feats = feats[feats["total_points"].notna()]
     feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS + CODE_COLS + V4))].copy()
     for c in feats.columns:
@@ -656,6 +682,11 @@ VARIANTS = {
     # 2026-10-31: production's multiplier since then (ml.snapshots.points_factor: the fitted DOUBT_POINTS
     # table), so v4_prod is what the site serves and v4 the literal chance it replaced
     "v4_prod": {"features": V4, "post": "cop_prod"},
+    # 2026-10-31: fewer trees. The test top 20 peaked at 50 trees in every fold of the early-stopping
+    # curve, below the RMSE stop (and refit_noscale gained +0.05): half the count, or the count whose
+    # validation-season picks scored most (_stop_trees)
+    "v4_trees05": {"features": V4, "post": "cop_prod", "tree_frac": 0.5},
+    "v4_stop_picks": {"features": V4, "post": "cop_prod", "stop": "picks"},
 }
 
 # Columns a post-prediction hook needs values in (cmd_run checks them like a variant's features)
@@ -812,6 +843,30 @@ def _refit_trees(best: int, rows: int, train_rows: int, spec: dict) -> int:
     return int(best)
 
 
+STOP_GRID = 10     # trees between the counts "stop": "picks" tries
+
+
+def _stop_trees(m, va: pd.DataFrame, tr: pd.DataFrame, cols, best: int, spec: dict) -> tuple:
+    """(trees, info): the early-stopped tree count a variant predicts with and refits from. `best`
+    (validation RMSE) unless the variant sets "tree_frac" (that share of it) or "stop": "picks": the
+    multiple of STOP_GRID up to `best` (or `best` itself) whose top 20 on the validation season
+    scored most, each count's score averaged with its neighbours'."""
+    if spec.get("tree_frac"):
+        return max(1, int(round(best * spec["tree_frac"]))), {}
+    if spec.get("stop") != "picks":
+        return best, {}
+    grid = list(range(STOP_GRID, best, STOP_GRID)) + [best]
+    dc = _dc_add(va, tr, spec)[0]
+    scores = []
+    for k in grid:
+        raw = m.predict(va[cols], iteration_range=(0, k)) + dc
+        pred = raw if spec.get("post") == "cop_fit" else _post(va, raw, spec)
+        scores.append(summarize(gw_table(va, pred, squads=False))["top20"])
+    smooth = np.convolve(np.pad(np.asarray(scores), 1, mode="edge"), np.ones(3) / 3, mode="valid")
+    k = grid[int(np.argmax(smooth))]
+    return k, {"stop_grid": {str(g): round(float(v), 4) for g, v in zip(grid, scores)}}
+
+
 def _dc_add(frame: pd.DataFrame, train: pd.DataFrame, spec: dict) -> tuple:
     """(the DC term to add to the model's predictions for `frame`, its scale fitted on `train`)."""
     if not spec.get("dc_term"):
@@ -873,16 +928,17 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool, adjust=None) -> tupl
           eval_set=[(va[cols], _eval_target(va, spec))], verbose=False)
     valid = m.evals_result()["validation_0"]["rmse"]
     best = _patience_stop(valid, PATIENCE)
+    used, stop_info = _stop_trees(m, va, tr, cols, best + 1, spec)
     dc_es, alpha_es = _dc_add(te, tr, spec)
-    pe = m.predict(te[cols], iteration_range=(0, best + 1)) + dc_es
-    n_refit = _refit_trees(best + 1, len(both), len(tr), spec)
+    pe = m.predict(te[cols], iteration_range=(0, used)) + dc_es
+    n_refit = _refit_trees(used, len(both), len(tr), spec)
     m2 = xgb.XGBRegressor(n_estimators=n_refit, **p)
     m2.fit(both[cols], _target(both, spec), sample_weight=_weights(both, spec.get("halflife")), verbose=False)
     dc_rf, alpha_rf = _dc_add(te, both, spec)
     pr = m2.predict(te[cols]) + dc_rf
-    info = {"best_iter": best + 1, "trained": len(valid), "n_refit": n_refit,
+    info = {"best_iter": best + 1, "used_trees": used, "trained": len(valid), "n_refit": n_refit,
             "valid_rmse_at_best": float(valid[best]), "valid_rmse_min": float(min(valid)),
-            "argmin_valid": int(np.argmin(valid)) + 1}
+            "argmin_valid": int(np.argmin(valid)) + 1, **stop_info}
     if spec.get("post") == "cop_fit":
         valid_pred = m.predict(va[cols], iteration_range=(0, best + 1)) + _dc_add(va, tr, spec)[0]
         info["cop_fit"] = cop_fit_factors(va, valid_pred)
@@ -965,12 +1021,18 @@ def squad_metrics(g: pd.DataFrame) -> dict:
     """The squad best_squad picks from one gameweek's per-player rows, scored on actual points;
     NaN when no valid squad fits. sq_secs is the solve time."""
     t0 = time.perf_counter()
+    xp = "xpts" in g
     try:
         sel = opt.best_squad(squad_pool(g), time_limit=SQ_TIME_LIMIT)
     except opt.InfeasibleError:
-        return {**{k: np.nan for k in SQ_METRICS}, "sq_secs": time.perf_counter() - t0}
+        failed = SQ_METRICS + (["sq_xi_xp", "sq_fpl_xp"] if xp else [])
+        return {**{k: np.nan for k in failed}, "sq_secs": time.perf_counter() - t0}
     actual = dict(zip(g["name"], zip(g["total_points"], g["minutes"])))
-    return {**score_squad(sel, actual), "sq_secs": time.perf_counter() - t0}
+    out = score_squad(sel, actual)
+    if xp:   # the same squad on expected points (NaN if a picked player has none); subs by actual minutes
+        expected = score_squad(sel, dict(zip(g["name"], zip(g["xpts"], g["minutes"]))))
+        out.update({"sq_xi_xp": expected["sq_xi"], "sq_fpl_xp": expected["sq_fpl"]})
+    return {**out, "sq_secs": time.perf_counter() - t0}
 
 
 def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.DataFrame:
@@ -978,9 +1040,10 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.Da
     picks (top 20/50, captain), position picks and, with `squads`, the optimiser's squad."""
     subsets = [c for c in SUBSETS if c in test.columns]
     extra = ["clean_sheets"] if "clean_sheets" in test.columns else []
+    xp = ["xpts"] if "xpts" in test.columns else []
     info = [c for c in ("position", "team", "price") if c in test.columns]
     squads = squads and len(info) == 3
-    d = test[["season", "GW", "name", "total_points", "minutes"] + info + extra + subsets].copy()
+    d = test[["season", "GW", "name", "total_points", "minutes"] + info + extra + xp + subsets].copy()
     d["pred"] = np.asarray(pred, dtype=float)
     d["err"] = d["pred"] - d["total_points"]
     d["se"] = d["err"] ** 2
@@ -999,10 +1062,15 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.Da
     rows["GW"] = rows["GW"].astype(int)
     picks = [c for c in PICK_SUBSETS if c in subsets]
     d["pred_sq"] = d["pred"].clip(lower=0)   # serving floors each fixture at 0, then sums a double gameweek
+    if xp:
+        d["xpts_na"] = d["xpts"].isna()
     pg = d.groupby(["season", "GW", "name"], as_index=False).agg(
         pred=("pred", "sum"), pred_sq=("pred_sq", "sum"), total_points=("total_points", "sum"),
         minutes=("minutes", "sum"), **{c: (c, "first") for c in info},
-        **{c: (c, "max") for c in picks}, **{c: (c, "sum") for c in extra})
+        **{c: (c, "max") for c in picks}, **{c: (c, "sum") for c in extra + xp},
+        **({"xpts_na": ("xpts_na", "max")} if xp else {}))
+    if xp:   # a player without expected stats in any of his fixtures has none for the gameweek
+        pg["xpts"] = pg["xpts"].mask(pg.pop("xpts_na"))
     out = []
     for (s, gw), g in pg.groupby(["season", "GW"]):
         r = g.sort_values("pred", ascending=False, kind="mergesort")
@@ -1016,6 +1084,9 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.Da
                "pred_capt": float(r["pred"].iloc[0]),
                "spear": float(g["pred"].corr(g["total_points"], method="spearman")),
                "dnp20": float((r["minutes"].head(20) == 0).mean())}
+        if xp:
+            row["top20_xp"] = float(r["xpts"].head(20).mean(skipna=False))
+            row["capt_fpl_xp"] = float(r["xpts"].iloc[capt_row])
         for c in picks:
             sub = r[r[c] > 0]
             row[f"top20_{c}"] = float(sub["total_points"].head(20).mean()) if len(sub) >= 40 else np.nan
@@ -1037,7 +1108,7 @@ def summarize(t: pd.DataFrame) -> dict:
     out = {"rmse": float(np.sqrt(t["se"].sum() / t["rows"].sum())), "mae": float(t["ae"].sum() / t["rows"].sum()),
            "top20": float(t["top20"].mean()), "top50": float(t["top50"].mean()), "capt": float(t["capt"].mean()),
            "spear": float(t["spear"].mean()), "gws": int(len(t))}
-    for k in PICK_METRICS + ["capt_fpl"] + PRED_METRICS + POS_METRICS + SQ_METRICS:
+    for k in PICK_METRICS + ["capt_fpl"] + PRED_METRICS + POS_METRICS + SQ_METRICS + XP_METRICS:
         if k in t and t[k].notna().any():
             out[k] = float(t[k].mean())
     for p in opt.POSITIONS:
@@ -1061,7 +1132,7 @@ def position_bias(test, pred) -> dict:
 
 
 ROW_KEY = ["season", "GW", "fixture", "team", "name"]
-ROW_COLUMNS = ROW_KEY + ["position", "price", "total_points", "minutes", "clean_sheets"] + SUBSETS
+ROW_COLUMNS = ROW_KEY + ["position", "price", "total_points", "minutes", "clean_sheets", "xpts"] + SUBSETS
 TABLE_META = ["variant", "proto", "fold", "seed", "seeds"]
 
 
@@ -1249,7 +1320,7 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None,
         m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
         m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
               eval_set=[(va[cols], _eval_target(va, spec))], verbose=False)
-        best = int(m.best_iteration) + 1
+        best, _ = _stop_trees(m, va, tr, cols, int(m.best_iteration) + 1, spec)
         if spec.get("post") == "cop_fit":
             valid_pred = m.predict(va[cols], iteration_range=(0, best)) + _dc_add(va, tr, spec)[0]
             cop_fits[seed] = cop_fit_factors(va, valid_pred)
@@ -1418,13 +1489,22 @@ def cmd_score(args) -> None:
     for path, df in files.items():
         for v in dict.fromkeys(c.split("|")[1] for c in df.columns if c.startswith("pred|")):
             by_variant.setdefault(v, []).append(path)
+    lookup = None
+    if getattr(args, "feats", None):
+        lookup = pd.read_pickle(args.feats)[ROW_KEY + ["xpts"]].drop_duplicates(ROW_KEY)
     out, sink = [], Sink(keep_preds=False)
     for variant, vpaths in by_variant.items():
         if len(vpaths) > 1 and not args.pool:
             raise SystemExit(f"{variant} is in {len(vpaths)} files; pass --pool to merge their seeds")
         print(f"== {variant}: {', '.join(vpaths)}", flush=True)
         rows = _merge_preds(variant, [files[p] for p in vpaths])
+        if lookup is not None and "xpts" not in rows:
+            rows = rows.merge(lookup, on=ROW_KEY, how="left")
+            print(f"  expected points from {args.feats}: {rows['xpts'].notna().mean():.3f} of rows", flush=True)
         reuse = _saved_tables(variant, vpaths) if args.reuse else {}
+        if "xpts" in rows and any("top20_xp" not in t for by in reuse.values() for t in by.values()):
+            print("  saved tables predate expected points: scoring every table again", flush=True)
+            reuse = {}
         out.append(score_variant(variant, rows, _training_info(variant, vpaths), reuse, sink))
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(out, f)
@@ -1453,7 +1533,8 @@ def _boot(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, len(m), size=(n, len(m)))
     out = {}
-    for k in ("top20", "top50", "capt", "spear", *PICK_METRICS, "capt_fpl", *SQ_METRICS, *POS_METRICS, *PRED_METRICS):
+    for k in ("top20", "top50", "capt", "spear", *PICK_METRICS, "capt_fpl", *SQ_METRICS, *POS_METRICS, *PRED_METRICS,
+              *XP_METRICS):
         if f"{k}_v" not in m or f"{k}_b" not in m:
             continue
         d = (m[f"{k}_v"] - m[f"{k}_b"]).to_numpy(dtype=float)
@@ -1528,7 +1609,7 @@ def _boot2(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
 
     wb, wv = seed_weights(base), seed_weights(var)
     out = {}
-    for k in SINGLE_METRICS + SINGLE_POS_METRICS:
+    for k in SINGLE_METRICS + SINGLE_POS_METRICS + XP_METRICS:
         if k in RATIOS:
             num, den, f = RATIOS[k]
             if num not in base or num not in var:
@@ -1614,6 +1695,8 @@ def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
         lines.append("|---|---|---|---|---|---|---|---|---|")
         lines += rows
 
+    _xp_sections(lines, base, boots)
+
     lines.append("\n#### Bias by position (pred - actual), every variant, seed-averaged: pooled over folds, "
                  "difference from the reference [95% CI], per fold GK/DEF/MID/FWD\n")
     lines.append("| variant | GK | DEF | MID | FWD | ΔGK | ΔDEF | ΔMID | ΔFWD | per fold |")
@@ -1635,7 +1718,7 @@ def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
     tb = tb[tb["proto"] == proto] if tb is not None else None
     if tb is None or tb.empty:
         return
-    main_rows, pos_rows = [], []
+    main_rows, pos_rows, xp_rows = [], [], []
     for name in results:
         tv = tables.get(name)
         if name == ref or tv is None:
@@ -1649,6 +1732,8 @@ def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
         main_rows.append(f"| {name} | {seeds} | " + " | ".join(_fmt(b2[k], _digits(k)) if k in b2 else "-"
                                                              for k in SINGLE_METRICS) + " |")
         pos_rows.append(f"| {name} | " + " | ".join(_fmt(b2[k]) if k in b2 else "-" for k in SINGLE_POS_METRICS) + " |")
+        if any(k in b2 for k in XP_METRICS):
+            xp_rows.append(_xp_row(name, b2))
     if main_rows:
         lines.append("\n#### Single models (what production ships): per-seed metrics, variant minus reference, "
                      "two-level bootstrap (gameweeks and seeds resampled) [95% CI]\n")
@@ -1659,6 +1744,42 @@ def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
                      "| Δbias FWD |")
         lines.append("|---|---|---|---|---|---|---|---|---|")
         lines += pos_rows
+    if xp_rows:
+        lines.append("\n#### Single models on expected points: actual | expected, variant minus reference, two-level "
+                     "bootstrap [95% CI]\n")
+        lines += _xp_header() + xp_rows
+
+
+def _xp_header() -> list:
+    names = " | ".join(f"Δ{a} \\| Δ{x}" for a, x in XP_PAIRS)
+    return [f"| variant | {names} |", "|---|" + "---|" * len(XP_PAIRS)]
+
+
+def _xp_row(name: str, b: dict) -> str:
+    cells = [f"{_fmt(b[a], _digits(a)) if a in b else '-'} \\| {_fmt(b[x], _digits(a)) if x in b else '-'}"
+             for a, x in XP_PAIRS]
+    return f"| {name} | " + " | ".join(cells) + " |"
+
+
+def _xp_sections(lines, base: dict, boots: dict) -> None:
+    """Report sections on the picks scored on expected points (xpts.py), next to actual points."""
+    if not any("top20_xp" in u["summary"] for u in base.values()):
+        return
+    lines.append("\n#### The same picks on expected points (from realized xG, xA, xG conceded and minutes; "
+                 "finishing luck removed; '-' before 2023-24): actual | expected\n")
+    lines.append("| fold | " + " | ".join(f"{a} \\| {x}" for a, x in XP_PAIRS) + " |")
+    lines.append("|---|" + "---|" * len(XP_PAIRS))
+    for s, u in base.items():
+        sm = u["summary"]
+        cells = [f"{sm[a]:.{_digits(a)}f} \\| " + (f"{sm[x]:.{_digits(a)}f}" if x in sm else "-") if a in sm else "-"
+                 for a, x in XP_PAIRS]
+        lines.append(f"| {s} | " + " | ".join(cells) + " |")
+    rows = [_xp_row(name, b) for name, b in boots.items() if any(k in b for k in XP_METRICS)]
+    if rows:
+        lines.append("\nVariant minus reference, seed-averaged, gameweek bootstrap [95% CI]. The expected-points "
+                     "difference covers the gameweeks with expected stats only, so compare its CI width with the "
+                     "actual one on the same folds.\n")
+        lines += _xp_header() + rows
 
 
 def _load_results(paths) -> tuple:
@@ -1699,6 +1820,65 @@ def _cop_fit_lines(results: dict) -> list:
                              + (f" ({np.mean(raw):.2f})" if raw else "") + f" n={fits[0][flag]['rows']}")
             rows.append(f"| {name} | {proto} | {s} | {len(fits)} | " + " | ".join(cells) + " |")
     return rows
+
+
+ENS_METRICS = ["top20", "capt_fpl", "sq_xi", "sq_fpl", "top20_xp", "sq_fpl_xp"]
+
+
+def _ens_gain(ens: pd.DataFrame, seeds: pd.DataFrame, n: int = 10000, seed: int = 0) -> dict:
+    """{metric: (mean, CI low, CI high)} of the seed-averaged predictions' per-gameweek table `ens`
+    minus the mean of the per-seed tables `seeds` (NaN gameweeks skipped), over a gameweek bootstrap."""
+    single = seeds.groupby(["season", "GW"]).mean(numeric_only=True)
+    m = ens.merge(single.reset_index(), on=["season", "GW"], suffixes=("", "_single"))
+    if m.empty:
+        return {}
+    idx = np.random.default_rng(seed).integers(0, len(m), size=(n, len(m)))
+    out = {}
+    for k in ENS_METRICS:
+        if k not in m or f"{k}_single" not in m:
+            continue
+        d = (m[k] - m[f"{k}_single"]).to_numpy(dtype=float)
+        if np.isnan(d).all():
+            continue
+        bs = np.nanmean(d[idx], axis=1)
+        out[k] = (float(np.nanmean(d)), float(np.nanpercentile(bs, 2.5)), float(np.nanpercentile(bs, 97.5)))
+    return out
+
+
+def _ensemble_rows(results: dict, tables: dict) -> list:
+    """Report rows of _ens_gain per variant and protocol (needs the per-seed tables)."""
+    rows = []
+    for name, r in results.items():
+        t = tables.get(name)
+        if t is None:
+            continue
+        for proto in ("refit", "es", "inseason"):
+            units = r.get("inseason", {}) if proto == "inseason" else \
+                {s: f[proto] for s, f in r.get("folds", {}).items() if proto in f}
+            tp = t[t["proto"] == proto]
+            if not units or tp["seed"].nunique() < 2:
+                continue
+            ens = pd.concat([pd.DataFrame(u["per_gw"]) for u in units.values()], ignore_index=True)
+            g = _ens_gain(ens, tp)
+            if g:
+                rows.append(f"| {name} | {proto} | {tp['seed'].nunique()} | "
+                            + " | ".join(_fmt(g[k], _digits(k)) if k in g else "-" for k in ENS_METRICS) + " |")
+    return rows
+
+
+def _stop_lines(results: dict) -> list:
+    """Report lines with each fold's RMSE stop and the tree count used, for variants that change it."""
+    lines = []
+    for name, r in results.items():
+        cells = []
+        for s, f in r.get("folds", {}).items():
+            infos = [i for i in f.get("seeds", {}).values() if isinstance(i, dict) and "used_trees" in i]
+            if infos and any(i["used_trees"] != i["best_iter"] for i in infos):
+                cells.append(f"{s[2:]}: {np.mean([i['best_iter'] for i in infos]):.0f} -> "
+                             f"{np.mean([i['used_trees'] for i in infos]):.0f}")
+        if cells:
+            lines.append(f"- **{name}**: " + "; ".join(cells))
+    return lines
 
 
 def _tail_lines(results: dict) -> list:
@@ -1812,6 +1992,18 @@ def cmd_report(args) -> None:
         lines.append("| variant | protocol | seeds | " + " | ".join(spread_keys) + " |")
         lines.append("|---|---|---|" + "---|" * len(spread_keys))
         lines += spread_rows
+    ens_rows = _ensemble_rows(results, tables)
+    if ens_rows:
+        lines.append("\n## Seed ensemble: the seeds' averaged predictions minus the average single model, per "
+                     "gameweek, gameweek bootstrap [95% CI]\n")
+        lines.append("Production ships one seed; this is what averaging the variant's seeds would add.\n")
+        lines.append("| variant | protocol | seeds | " + " | ".join(f"Δ{k}" for k in ENS_METRICS) + " |")
+        lines.append("|---|---|---|" + "---|" * len(ENS_METRICS))
+        lines += ens_rows
+    stop_rows = _stop_lines(results)
+    if stop_rows:
+        lines.append("\n## Tree counts: the RMSE early stop and the count used (mean over seeds), per fold\n")
+        lines += stop_rows
     if solves:
         lines.append(f"\n## Squad solves (time limit {SQ_TIME_LIMIT:.0f}s each)\n")
         for name, (secs, failed) in solves.items():
@@ -1882,6 +2074,7 @@ def main() -> int:
     sc.add_argument("--reuse", action="store_true",
                     help="keep the tables in the .gw.parquet beside each file whose predictions are unchanged")
     sc.add_argument("--no-squads", action="store_true", help="skip the squad solves")
+    sc.add_argument("--feats", help="features file (from `features`) to add expected points to older predictions")
     mx = sub.add_parser("matrix", help="the workflow's run jobs: variants x chunks of seeds")
     mx.add_argument("--variants", required=True)
     mx.add_argument("--seeds", default="")

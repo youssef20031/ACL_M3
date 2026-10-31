@@ -68,23 +68,31 @@ ROWS = [  # element, name, team, position, opponent, fixture
 ]
 
 
-def _make_live(tmp_path, monkeypatch, version="v4"):
+def _make_live(tmp_path, monkeypatch, version="v4", members=1):
     """A tiny `version` model on its feature columns in LIVE_DATA_DIR/models (no bundled models),
-    its meta, saved inputs and a predictions file."""
+    its meta, saved inputs and a predictions file. One booster in the format from before ensembles
+    (no "members" in the meta), or with `members` > 1 an ensemble saved by pm.save_model."""
     features = pm.feature_columns(version)
     rng = np.random.default_rng(0)
     x = rng.random((300, len(features)))
     y = 4 * x[:, features.index("minutes_r3")] + 2 * x[:, features.index("team_xgf")] + rng.normal(0, 0.1, 300)
-    booster = xgb.train({"max_depth": 3, "eta": 0.3}, xgb.DMatrix(x, label=y, feature_names=features), 20)
+    train = xgb.DMatrix(x, label=y, feature_names=features)
     models = tmp_path / "models"
     models.mkdir()
-    booster.save_model(str(models / f"points_{version}.json"))
     scores = {"top20_points": 4.7, "captain_points": 6.6, "rmse": 1.9, "mae": 1.0, "spearman": 0.7}
     meta = {"version": version, "trained_at": "2026-10-20T00:00:00+00:00", "n_trees": 20, "seasons": ["2025-26"],
             "rows": 300, "features": features,
             "test_metrics": {version: scores, f"{version}_cop": scores, "last3_avg": {"top20_points": 3.9},
                              "fpl_xP": {"top20_points": 2.7}}}
-    (models / f"points_{version}_meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    model_path, meta_path = models / f"points_{version}.json", models / f"points_{version}_meta.json"
+    if members == 1:
+        booster = xgb.train({"max_depth": 3, "eta": 0.3}, train, 20)
+        booster.save_model(str(model_path))
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    else:
+        booster = pm.Ensemble(xgb.train({"max_depth": 3, "eta": 0.3, "subsample": 0.7, "seed": k}, train, 20)
+                              for k in range(members))
+        pm.save_model(booster, meta, str(model_path), str(meta_path), features=features)
     monkeypatch.setenv("LIVE_DATA_DIR", str(tmp_path))
     monkeypatch.setattr(pm, "MODEL_DIR", str(tmp_path / "bundled"))   # ignore the repo's model files
 
@@ -130,6 +138,18 @@ def test_shap_adds_up_to_the_model_output(live):
     assert p["fixtures"][0]["is_home"] is True and p["fixtures"][1]["is_home"] is False
     assert p["model_points"] == pytest.approx(float(np.clip(inputs["model_points"][:2], 0, None).sum()), abs=1e-3)
     assert p["predicted_points"] == 7.1 and p["availability_factor"] == 1.0
+
+
+def test_an_ensemble_is_explained_by_its_members_mean(tmp_path, monkeypatch):
+    model, inputs = _make_live(tmp_path, monkeypatch, members=3)
+    try:
+        assert isinstance(model, pm.Ensemble) and (tmp_path / "models" / "points_v4_m2.json").exists()
+        p = explain.player(1)
+        for f, raw in zip(p["fixtures"], inputs["model_points"][:2]):
+            assert f["base_value"] + sum(c["shap"] for c in f["contributions"]) == pytest.approx(raw, abs=1e-3)
+        assert explain.summary()["model"]["members"] == 3
+    finally:
+        explain.reset()
 
 
 def test_player_view_applies_fpl_availability(live):
