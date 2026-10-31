@@ -12,19 +12,39 @@ import { PlayerSearchDialog } from './PlayerSearchDialog';
 import { ConsentBanner } from './ConsentBanner';
 import { MobileAskButton } from './MobileAskButton';
 import { useConsent } from '../../lib/consent';
+import { isOwnerBrowser, visitorDetails } from '../../lib/visitor';
 
 // Pages that manage their own full-height scrolling (chat) get a fixed-height main and no footer.
 const FULL_HEIGHT_ROUTES = ['/assistant'];
 
-/** Counts a page view per route change, only after the visitor accepted (cookie-free, aggregate). */
+/**
+ * Counts a page view per route change (cookie-free, aggregate). Every view is counted anonymously;
+ * with consent it also carries the browser's timezone and visitor flags, and accepting on a page
+ * already counted adds the visitor without a second view. The owner's browsers are counted apart.
+ */
 function usePageviews(pathname: string, accepted: boolean) {
   const first = useRef(true);
+  const acceptedRef = useRef(accepted);
+  acceptedRef.current = accepted;
+  const pathRef = useRef(pathname);
+  pathRef.current = pathname;
+
   useEffect(() => {
-    if (!accepted) return;
     // The external referrer only applies to the page the visitor landed on
-    apiService.trackPageview(pathname, first.current ? document.referrer || null : null);
+    const referrer = first.current ? document.referrer || null : null;
     first.current = false;
-  }, [pathname, accepted]);
+    if (isOwnerBrowser()) apiService.trackPageview(pathname, referrer, { owner: true });
+    else if (acceptedRef.current) apiService.trackPageview(pathname, referrer, { consented: true, ...visitorDetails() });
+    else apiService.trackPageview(pathname, referrer);
+  }, [pathname]);
+
+  const wasAccepted = useRef(accepted);
+  useEffect(() => {
+    if (accepted && !wasAccepted.current && !isOwnerBrowser()) {
+      apiService.trackPageview(pathRef.current, null, { consented: true, view: false, ...visitorDetails() });
+    }
+    wasAccepted.current = accepted;
+  }, [accepted]);
 }
 
 function isTypingTarget(el: EventTarget | null) {

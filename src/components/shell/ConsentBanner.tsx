@@ -4,8 +4,9 @@ import { Button } from '../ui';
 import { setConsent, useConsent } from '../../lib/consent';
 
 /**
- * Asks once whether the cookie-free page-view counter may run. Nothing is counted until the
- * visitor accepts; the choice can be changed later from the footer or the privacy page.
+ * Asks once whether visits may add the browser's timezone and visitor flags (lib/visitor.ts) to the
+ * cookie-free page-view counter, which counts views anonymously either way. The choice can be
+ * changed later from the footer or the privacy page.
  */
 export function ConsentBanner() {
   const consent = useConsent();
@@ -19,9 +20,9 @@ export function ConsentBanner() {
       <div className="mx-auto flex w-full max-w-page flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:gap-6 sm:px-6">
         <BarChart3 className="hidden h-6 w-6 shrink-0 text-accent sm:block" aria-hidden="true" />
         <p className="flex-1 text-data text-fg-muted">
-          <strong className="font-semibold text-fg">Help improve Pitch Me?</strong> With your OK we count page views
-          anonymously: no cookies, no tracking across sites, nothing that identifies you. Your settings are kept in
-          your browser either way.{' '}
+          <strong className="font-semibold text-fg">Help improve Pitch Me?</strong> We count page views anonymously,
+          with no cookies and nothing that identifies you. With your OK we also count visitors: your browser sends its
+          timezone, so we see roughly which country visits come from, and keeps the date of your last visit.{' '}
           <Link to="/privacy" className="font-semibold text-accent hover:underline">
             Privacy policy
           </Link>

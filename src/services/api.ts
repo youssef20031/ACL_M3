@@ -1320,12 +1320,56 @@ export const apiService = {
     return data;
   },
 
-  // Cookie-free page-view counter (aggregate counts only; called only after consent).
+  // Cookie-free page-view counter (aggregate counts only). Every route change is counted; with
+  // consent the view also carries the browser's timezone and visitor flags (lib/visitor.ts).
   // Fire-and-forget: analytics must never surface an error to the visitor.
-  trackPageview(path: string, referrer: string | null): void {
-    api.post('/api/analytics/pageview', { path, referrer }, { timeout: 5000 }).catch(() => undefined);
+  trackPageview(path: string, referrer: string | null, extras: PageviewExtras = {}): void {
+    api.post('/api/analytics/pageview', { path, referrer, ...extras }, { timeout: 5000 }).catch(() => undefined);
+  },
+
+  /** The owner's site stats (`/stats`): 403 for a wrong token, 404 when the server has none set. */
+  async getSiteStats(days: number, token: string): Promise<SiteStats> {
+    const { data } = await api.get('/api/admin/analytics', { params: { days }, headers: { 'X-Admin-Token': token } });
+    return data;
   },
 };
+
+// Page-view analytics (services/analytics.py)
+export interface PageviewExtras {
+  /** The visitor accepted the consent banner; the fields below are ignored without it. */
+  consented?: boolean;
+  timezone?: string | null;
+  new_visitor?: boolean;
+  first_today?: boolean;
+  /** The owner's own browser: counted apart from everyone else. */
+  owner?: boolean;
+  /** False: only the visitor flags, for a page whose view was already counted. */
+  view?: boolean;
+}
+
+export interface SiteStatsDay {
+  date: string;
+  views: number;
+  visitors: number;
+  owner_views: number;
+}
+
+export interface SiteStats {
+  days: number;
+  /** Other people's views (the owner's are in owner_views). */
+  total_views: number;
+  /** Views from visitors who accepted the consent banner: what visitors and countries cover. */
+  consented_views: number;
+  /** Visitors who accepted, counted once per UTC day. */
+  visitors: number;
+  new_visitors: number;
+  owner_views: number;
+  by_day: SiteStatsDay[];
+  top_paths: { path: string; views: number }[];
+  top_referrers: { host: string; views: number }[];
+  top_countries: { code: string | null; country: string; visitors: number }[];
+  top_zones: { zone: string; visitors: number }[];
+}
 
 // Error handling
 export const handleApiError = (error: unknown): string => {
@@ -1347,6 +1391,10 @@ export const handleApiError = (error: unknown): string => {
 /** True for an HTTP 404, e.g. a resource that doesn't exist yet (not a failure worth retrying). */
 export const isNotFoundError = (error: unknown): boolean =>
   axios.isAxiosError(error) && error.response?.status === 404;
+
+/** True for an HTTP 403, e.g. a wrong admin token. */
+export const isForbiddenError = (error: unknown): boolean =>
+  axios.isAxiosError(error) && error.response?.status === 403;
 
 /** True for an HTTP 503: the service is up but its data isn't ready (e.g. no explanations yet). */
 export const isServiceUnavailableError = (error: unknown): boolean =>

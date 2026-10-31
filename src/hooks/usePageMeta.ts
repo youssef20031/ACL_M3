@@ -7,6 +7,8 @@ interface PageMeta {
   title?: string;
   /** One or two sentences, ~150 characters: shown in search results and link previews. */
   description: string;
+  /** Keep search engines away (private pages such as /stats). */
+  noindex?: boolean;
 }
 
 function setMeta(selector: string, attr: 'name' | 'property', key: string, content: string) {
@@ -25,7 +27,7 @@ function setMeta(selector: string, attr: 'name' | 'property', key: string, conte
  * Search engines render the SPA and read these; social scrapers don't run JS, so index.html
  * keeps site-level defaults for link previews.
  */
-export function usePageMeta({ title, description }: PageMeta) {
+export function usePageMeta({ title, description, noindex = false }: PageMeta) {
   useEffect(() => {
     const fullTitle = title ? `${title} · ${SITE_NAME}` : `${SITE_NAME} · FPL stats, predictions & AI assistant`;
     const url = `${window.location.origin}${window.location.pathname}`;
@@ -44,5 +46,9 @@ export function usePageMeta({ title, description }: PageMeta) {
       document.head.appendChild(canonical);
     }
     canonical.href = url;
-  }, [title, description]);
+
+    const robots = document.head.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (noindex) setMeta('meta[name="robots"]', 'name', 'robots', 'noindex, nofollow');
+    else robots?.remove();
+  }, [title, description, noindex]);
 }

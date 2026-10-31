@@ -10,10 +10,10 @@ function ConsentControls() {
   const consent = useConsent();
   const label =
     consent === 'accepted'
-      ? 'You allowed anonymous page-view counting.'
+      ? 'You allowed visitor counting: your visits add your timezone and whether you visited before.'
       : consent === 'declined'
-        ? 'You declined page-view counting, so nothing is counted.'
-        : "You haven't chosen yet, so nothing is counted.";
+        ? 'You declined visitor counting, so your visits only add to the anonymous page-view count.'
+        : "You haven't chosen yet, so your visits only add to the anonymous page-view count.";
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-data text-fg" role="status">{label}</p>
@@ -40,11 +40,12 @@ export function Privacy() {
       eyebrow="Legal"
       title="Privacy policy"
       description="Pitch Me is a fan-made Fantasy Premier League project. It has no accounts and sets no cookies. Here is everything it does with data."
-      updated="17 October 2026"
+      updated="31 October 2026"
     >
       <ProseSection title="Your choices">
         <p>
-          Anonymous page-view counting only runs if you allow it. You can change your answer here at any time, or from{' '}
+          Page views are counted anonymously for everyone. Visitor counting, which adds your timezone and two dates kept
+          in your browser, only runs if you allow it. You can change your answer here at any time, or from{' '}
           <strong>Privacy choices</strong> in the footer. If your browser sends a Global Privacy Control signal, we treat
           it as a no.
         </p>
@@ -55,7 +56,9 @@ export function Privacy() {
         <ul>
           <li>
             <strong>In your browser (local storage), not on our servers:</strong> your assistant settings (language
-            model, retrieval method), your trivia score and your privacy choice. Clearing site data removes them.
+            model, retrieval method), your trivia score and your privacy choice, and, only if you allow visitor
+            counting, the dates of your first visit and of your latest visit. Clearing site data removes them, and
+            declining visitor counting deletes the two dates.
           </li>
           <li>
             <strong>Your assistant conversation, in your browser (session storage):</strong> so it survives reloading
@@ -63,9 +66,16 @@ export function Privacy() {
             straight away.
           </li>
           <li>
-            <strong>Page views, only if you allow them:</strong> a count of views per page per day and the domain of the
-            website that sent you (for example google.com). No IP address, device details, cookies or identifiers are
-            stored, so these counts can't be linked to you. They're kept for up to 400 days.
+            <strong>Page views, for everyone:</strong> a count of views per page per day and the domain of the website
+            that sent you (for example google.com). No IP address, device details, cookies or identifiers are stored,
+            so these counts can't be linked to you. They're kept for up to 400 days.
+          </li>
+          <li>
+            <strong>Visitors, only if you allow it:</strong> with each page view your browser also says whether it's
+            your first visit and your first view that day (from the two dates above), and its timezone (for example
+            Europe/London). We count visitors per day and per timezone, which tells us roughly which countries visits
+            come from. Your IP address is never used to find your location. These counts are also anonymous and kept
+            for up to 400 days.
           </li>
           <li>
             <strong>Technical logs:</strong> like most websites, our server's access logs record your IP address, the

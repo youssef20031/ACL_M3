@@ -2644,11 +2644,23 @@ def ml_explain_players(q: str = Query("", max_length=100), limit: int = Query(20
 class PageViewRequest(BaseModel):
     path: str = Field(max_length=200)
     referrer: Optional[str] = Field(default=None, max_length=500)
+    # Sent only by visitors who accepted the consent banner (ignored unless consented is true):
+    # the browser's IANA timezone and its local-storage flags for a first visit ever / of the day
+    consented: bool = False
+    timezone: Optional[str] = Field(default=None, max_length=64)
+    new_visitor: bool = False
+    first_today: bool = False
+    # The owner's own browser (the /stats page's "this browser is me"): counted apart
+    owner: bool = False
+    # False: only the visitor flags (a visitor accepting on a page whose view was already counted)
+    view: bool = True
 
 
 class AnalyticsDay(BaseModel):
     date: str
     views: int
+    visitors: int
+    owner_views: int
 
 
 class AnalyticsPath(BaseModel):
@@ -2661,12 +2673,29 @@ class AnalyticsReferrer(BaseModel):
     views: int
 
 
+class AnalyticsCountry(BaseModel):
+    code: Optional[str]
+    country: str
+    visitors: int
+
+
+class AnalyticsZone(BaseModel):
+    zone: str
+    visitors: int
+
+
 class AnalyticsSummaryResponse(BaseModel):
     days: int
     total_views: int
+    consented_views: int
+    visitors: int
+    new_visitors: int
+    owner_views: int
     by_day: List[AnalyticsDay]
     top_paths: List[AnalyticsPath]
     top_referrers: List[AnalyticsReferrer]
+    top_countries: List[AnalyticsCountry]
+    top_zones: List[AnalyticsZone]
 
 
 pageview_limiter = RateLimiter(limits_from_env("PAGEVIEW_RATE_LIMITS", "60/60,600/3600"))
@@ -2675,20 +2704,22 @@ pageview_limiter = RateLimiter(limits_from_env("PAGEVIEW_RATE_LIMITS", "60/60,60
 @app.post("/api/analytics/pageview", status_code=204,
           dependencies=[Depends(pageview_limiter.dependency)])
 def record_pageview(body: PageViewRequest, request: Request):
-    """Count one page view (sent by the frontend after cookie consent).
+    """Count one page view (sent by the frontend for every route change).
 
-    Stores no IP, user agent or identifier: only the normalised path and the external
-    referring host are added to that day's totals.
+    Stores no IP, user agent or identifier: the normalised path and the external referring host
+    are added to that day's totals, and with consent the browser's timezone and visitor flags.
     """
-    analytics.record_pageview(body.path, body.referrer, own_host=request.headers.get("host"))
+    analytics.record_pageview(body.path, body.referrer, own_host=request.headers.get("host"),
+                              consented=body.consented, raw_zone=body.timezone, new_visitor=body.new_visitor,
+                              first_today=body.first_today, owner=body.owner, view=body.view)
     return Response(status_code=204)
 
 
 @app.get("/api/admin/analytics", response_model=AnalyticsSummaryResponse,
          dependencies=[Depends(require_admin)])
 def admin_analytics(days: int = Query(30, ge=1, le=400)):
-    """Page views over the last `days` UTC days: daily totals (zero-filled, oldest first),
-    top 20 paths and top 20 external referrers."""
+    """Page views over the last `days` UTC days: daily views, visitors and owner views (zero-filled,
+    oldest first), totals, and the top 20 paths, external referrers, countries and timezones."""
     return analytics.get_store().summary(days)
 
 

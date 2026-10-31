@@ -21,6 +21,7 @@ const loadModelInsights = () => import('./pages/ModelInsights').then((m) => ({ d
 const loadPrivacy = () => import('./pages/Privacy').then((m) => ({ default: m.Privacy }));
 const loadTerms = () => import('./pages/Terms').then((m) => ({ default: m.Terms }));
 const loadContact = () => import('./pages/Contact').then((m) => ({ default: m.Contact }));
+const loadSiteStats = () => import('./pages/SiteStats').then((m) => ({ default: m.SiteStats }));
 const loadDesignSystem = () => import('./pages/DesignSystem').then((m) => ({ default: m.DesignSystem }));
 
 const QAAssistant = lazy(loadQAAssistant);
@@ -37,6 +38,7 @@ const ModelInsights = lazy(loadModelInsights);
 const Privacy = lazy(loadPrivacy);
 const Terms = lazy(loadTerms);
 const Contact = lazy(loadContact);
+const SiteStats = lazy(loadSiteStats);
 const DesignSystem = lazy(loadDesignSystem);
 
 const queryClient = new QueryClient({
@@ -101,6 +103,7 @@ function App() {
             <Route path="privacy" element={<Page><Privacy /></Page>} />
             <Route path="terms" element={<Page><Terms /></Page>} />
             <Route path="contact" element={<Page><Contact /></Page>} />
+            <Route path="stats" element={<Page><SiteStats /></Page>} />
             <Route path="qa" element={<Redirect to="/assistant" />} />
             <Route path="search" element={<Redirect to="/players" />} />
             <Route path="*" element={<NotFound />} />
