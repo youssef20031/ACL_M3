@@ -109,6 +109,15 @@ validation-season top 20 scored most (smoothed over neighbouring counts). Both t
 multiplier (cop_prod), so compare them with v4_prod. The report also shows what averaging the seeds'
 predictions gains over the average single model (production ships one seed).
 
+Round of 2026-10-31 (playing chance): the Team of the Week and the ML manager pick the armband by
+captain + (1 - his chance of playing) x vice, with FPL's chance (1 for anyone unflagged). v4_pfpl
+does that in the squad metrics (p_play from the snapshot); v4_pmodel uses a classifier of
+minutes > 0 on the same features instead, fitted per fold like the points model (play_chance).
+Their points are v4_prod's, so the squads are the same and only the armband (sq_fpl) can differ;
+the in-season replay doesn't fit the classifier, so run them with --inseason "", and keep each
+variant's seeds in one job (at most 5): the saved rows hold one chance per row, the es one. The
+report gives both chances' Brier scores against who played.
+
 Round of 2026-10-22: fixture-strength products and opponent-adjusted team ratings
 (ml/fixture_strength.py, variants matchup and ratings), transfer-market ranks and price changes
 (ml/market.py, variant transfers), a Tweedie objective (tweedie) and a two-stage model that
@@ -687,6 +696,9 @@ VARIANTS = {
     # validation-season picks scored most (_stop_trees)
     "v4_trees05": {"features": V4, "post": "cop_prod", "tree_frac": 0.5},
     "v4_stop_picks": {"features": V4, "post": "cop_prod", "stop": "picks"},
+    # 2026-10-31: the armband's chance of playing: FPL's (as served) or a classifier's
+    "v4_pfpl": {"features": V4, "post": "cop_prod", "p_play": "fpl"},
+    "v4_pmodel": {"features": V4, "post": "cop_prod", "p_play": "model"},
 }
 
 # Columns a post-prediction hook needs values in (cmd_run checks them like a variant's features)
@@ -958,6 +970,37 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool, adjust=None) -> tupl
     return pe, pr, info
 
 
+def play_chance(tr, va, te, both, cols, params) -> tuple:
+    """({"es": ..., "refit": ...} chances that each test row's player plays (minutes > 0), info):
+    an XGBoost classifier on the points model's features, early-stopped on the validation season's
+    log loss and refit on both with the scaled tree count, like the points model (seed 0)."""
+    import xgboost as xgb
+    p = {**params, "objective": "binary:logistic", "eval_metric": "logloss", "random_state": 0}
+    played = lambda f: (f["minutes"] > 0).astype(int)     # noqa: E731
+    m = xgb.XGBClassifier(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
+    m.fit(tr[cols], played(tr), eval_set=[(va[cols], played(va))], verbose=False)
+    best = int(m.best_iteration) + 1
+    p_es = m.predict_proba(te[cols], iteration_range=(0, best))[:, 1]
+    m2 = xgb.XGBClassifier(n_estimators=_refit_trees(best, len(both), len(tr), {}), **p)
+    m2.fit(both[cols], played(both), verbose=False)
+    p_rf = m2.predict_proba(te[cols])[:, 1]
+    y = played(te).to_numpy()
+    fpl = te[sn.COP].fillna(1.0).clip(0.0, 1.0).to_numpy() if sn.COP in te else np.ones(len(te))
+    brier = lambda q: round(float(np.mean((q - y) ** 2)), 4)   # noqa: E731
+    return {"es": p_es, "refit": p_rf}, {"trees": best, "played": round(float(y.mean()), 4), "brier_es": brier(p_es),
+                                         "brier_refit": brier(p_rf), "brier_fpl": brier(fpl)}
+
+
+def _with_chance(te: pd.DataFrame, spec: dict, chances: dict, proto: str) -> pd.DataFrame:
+    """The test rows with the armband's chance of playing (spec "p_play"): FPL's (the snapshot's
+    chance, 1 without one) or the classifier's; unchanged without it."""
+    if spec.get("p_play") == "fpl":
+        return te.assign(p_play=te[sn.COP].fillna(1.0).clip(0.0, 1.0))
+    if spec.get("p_play") == "model":
+        return te.assign(p_play=chances[proto])
+    return te
+
+
 def _weights(df, halflife):
     if not halflife:
         return None
@@ -990,8 +1033,13 @@ def squad_pool(g: pd.DataFrame) -> list:
     if not keep:
         return []
     return [opt.Candidate(id=str(r.name), position=str(r.position), team=str(r.team), points=float(r.pred_sq),
-                          cost=int(round(float(r.price) * 10)))
+                          cost=int(round(float(r.price) * 10)), p_play=_chance(getattr(r, "p_play", 1.0)))
             for r in pd.concat(keep).itertuples(index=False)]
+
+
+def _chance(p) -> float:
+    p = float(p)
+    return 1.0 if np.isnan(p) else min(max(p, 0.0), 1.0)
 
 
 def score_squad(sel, actual: dict) -> dict:
@@ -1042,8 +1090,10 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.Da
     extra = ["clean_sheets"] if "clean_sheets" in test.columns else []
     xp = ["xpts"] if "xpts" in test.columns else []
     info = [c for c in ("position", "team", "price") if c in test.columns]
+    chance = "p_play" in test.columns
     squads = squads and len(info) == 3
-    d = test[["season", "GW", "name", "total_points", "minutes"] + info + extra + xp + subsets].copy()
+    d = test[["season", "GW", "name", "total_points", "minutes"] + info + extra + xp + subsets
+             + (["p_play"] if chance else [])].copy()
     d["pred"] = np.asarray(pred, dtype=float)
     d["err"] = d["pred"] - d["total_points"]
     d["se"] = d["err"] ** 2
@@ -1064,11 +1114,15 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.Da
     d["pred_sq"] = d["pred"].clip(lower=0)   # serving floors each fixture at 0, then sums a double gameweek
     if xp:
         d["xpts_na"] = d["xpts"].isna()
+    if chance:   # plays in the gameweek: in at least one of its fixtures
+        d["p_miss"] = 1.0 - d.pop("p_play").fillna(1.0).clip(0.0, 1.0)
     pg = d.groupby(["season", "GW", "name"], as_index=False).agg(
         pred=("pred", "sum"), pred_sq=("pred_sq", "sum"), total_points=("total_points", "sum"),
         minutes=("minutes", "sum"), **{c: (c, "first") for c in info},
         **{c: (c, "max") for c in picks}, **{c: (c, "sum") for c in extra + xp},
-        **({"xpts_na": ("xpts_na", "max")} if xp else {}))
+        **({"xpts_na": ("xpts_na", "max")} if xp else {}), **({"p_miss": ("p_miss", "prod")} if chance else {}))
+    if chance:
+        pg["p_play"] = 1.0 - pg.pop("p_miss")
     if xp:   # a player without expected stats in any of his fixtures has none for the gameweek
         pg["xpts"] = pg["xpts"].mask(pg.pop("xpts_na"))
     out = []
@@ -1132,7 +1186,7 @@ def position_bias(test, pred) -> dict:
 
 
 ROW_KEY = ["season", "GW", "fixture", "team", "name"]
-ROW_COLUMNS = ROW_KEY + ["position", "price", "total_points", "minutes", "clean_sheets", "xpts"] + SUBSETS
+ROW_COLUMNS = ROW_KEY + ["position", "price", "total_points", "minutes", "clean_sheets", "xpts", "p_play"] + SUBSETS
 TABLE_META = ["variant", "proto", "fold", "seed", "seeds"]
 
 
@@ -1234,6 +1288,10 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -
         preds = {"es": {}, "refit": {}}
         fold = {"train": train_s, "valid": valid_s, "rows": [len(tr), len(va), len(te)], "seeds": {}}
         burn_in = tail is not None and tail.empty("refit")
+        chances = {}
+        if spec.get("p_play") == "model":
+            chances, fold["p_play"] = play_chance(tr, va, te, both, cols, params)
+            print(f"  {name} {test_season}: chance of playing {fold['p_play']}", flush=True)
         for seed in SEEDS:
             t0 = time.time()
             p = {**params, "random_state": seed}
@@ -1254,7 +1312,8 @@ def run_variant(feats: pd.DataFrame, name: str, spec: dict, sink: Sink = None) -
             print(f"  {name} {test_season}: tail shrink history started, fold not scored", flush=True)
             continue
         for proto in ("es", "refit"):
-            fold[proto], per_seed = score_unit(te, preds[proto], (name, proto, test_season), sink)
+            rows = _with_chance(te, spec, chances, proto)
+            fold[proto], per_seed = score_unit(rows, preds[proto], (name, proto, test_season), sink)
             for seed, summary in per_seed.items():
                 fold["seeds"][seed][proto] = summary
         for seed, info in fold["seeds"].items():
@@ -2000,6 +2059,14 @@ def cmd_report(args) -> None:
         lines.append("| variant | protocol | seeds | " + " | ".join(f"Δ{k}" for k in ENS_METRICS) + " |")
         lines.append("|---|---|---|" + "---|" * len(ENS_METRICS))
         lines += ens_rows
+    chance_rows = [f"| {name} | {s} | {f['p_play']['played']:.3f} | {f['p_play']['brier_fpl']:.4f} | "
+                   f"{f['p_play']['brier_es']:.4f} | {f['p_play']['brier_refit']:.4f} |"
+                   for name, r in results.items() for s, f in r.get("folds", {}).items() if "p_play" in f]
+    if chance_rows:
+        lines.append("\n## Chance of playing: Brier score against who played (lower is better)\n")
+        lines.append("| variant | fold | share who played | FPL's chance | classifier (es) | classifier (refit) |")
+        lines.append("|---|---|---|---|---|---|")
+        lines += chance_rows
     stop_rows = _stop_lines(results)
     if stop_rows:
         lines.append("\n## Tree counts: the RMSE early stop and the count used (mean over seeds), per fold\n")
