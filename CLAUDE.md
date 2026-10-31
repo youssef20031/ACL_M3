@@ -159,6 +159,10 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
       - Wildcard at 10 and 25 was -0.50 and -1.28.
     - **Thresholds against late use:** only playing chips when their window forces them (`late_only`) was -0.84 [-2.48, +0.65] (4/12).
     - **Conclusion:** the current thresholds are at or near the best tried, so none changed.
+  - **Odds for later gameweeks** (2026-10-31, run 41208707079, 2022-23..2025-26 from GW1, 5, 9 and 13, so 16 paths). Bookmaker prices exist only for the next round, so gameweeks 2-4 of the projections have NaN odds features. `odds_ahead` fills them from team attack/defence ratings fitted to the known prices (`ml.odds.market_ratings`/`rating_features`, `pipeline.predict_next_gw.fill_odds_ahead`):
+    - **Projections barely changed:** RMSE and correlation at steps 2-4 moved by at most 0.006 and 0.001 either way; the top 20's over-prediction rose (e.g. 2024-25 step 2 bias -0.39 to -0.04, 2025-26 -0.31 to -0.02) while what they scored was mixed (2023-24 step 2 +0.17, 2024-25 -0.09, 2025-26 -0.12).
+    - **The manager lost:** -1.36 per gameweek [-2.39, -0.25], ahead on 3 of 16 paths, behind in every season (-61/-167/-263/-204), with about as many transfers (1333 against 1350) and hits (144 against 148).
+    - **Not adopted:** `ODDS_AHEAD` stays False.
 - **Page:** the Team of the Week's **ML manager** tab (`mode=manager`, `components/totw/MlManager*.tsx`) shows:
   - the planned or played team with its moves and the plan's one-line `reason`;
   - free transfers, bank, team value and chips;
