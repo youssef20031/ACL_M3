@@ -115,7 +115,7 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
   - **Chips:** a chip is played only when its solve beats the plan without it, by the module's thresholds (`TRIPLE_CAPTAIN_MIN_POINTS` and the rest), or late in its window if it still helps.
   - **Armband:** captain and vice come from `pick_captains`.
   - **Checks:** every plan passes `validate_entry` before it's saved.
-  - **Margins:** `TRANSFER_MARGIN` (points each transfer outside a wildcard or free hit must gain) and `HIT_MARGIN` (on top of a hit's 4 points) are 0, i.e. off, until the season replay picks values.
+  - **Margins:** `TRANSFER_MARGIN` is the points each transfer outside a wildcard or free hit must gain: 1.0 since 2026-10-31, from the multi-start replay below. `HIT_MARGIN` (on top of a hit's 4 points) is 0, i.e. off.
 - **Season replay** (`scripts/analysis/manager_replay.py`, the **Manager replay** workflow): the planner played through past seasons (2022-23..2024-25 by default, the ones with FPL snapshots before most deadlines), to tune its constants and chip policy. For each season the model is trained on the earlier ones as production trains it. At every deadline the replay rebuilds what the live pipeline would have had, and runs `predict_next_gw`'s own `model_rows`/`score_rows`/`assemble_output`/`build_projections` on it:
   - the 3 seasons before plus the season's matches before the deadline;
   - each player's price, ownership and transfers from that gameweek's row;
@@ -126,10 +126,25 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
 
   First run (2026-10-30, run 41089319406: v4, 2022-23..2024-25 from GW1, no failed plans, no solve at its time limit):
   - **Baselines:** `default` scored 2256/2285/2401 (6942) with 302 transfers (wildcards included) and 67 hits. `hold` scored 5559, -12.1 per gameweek [-15.9, -8.3], so transfers and chips earn about 460 points a season. `nochips` lost in every season, -2.3 [-4.8, +0.3] (about 87 a season).
-  - **Transfer margin:** `TRANSFER_MARGIN` 1.0 (`margin1`) was the only variant ahead in every season (+125/+58/+43, +1.98 per gameweek [-0.06, +3.97], 43 hits instead of 67). 2.0 was ahead in every season too (+1.46), 0.5 was mixed. It was the best of 13 variants with its CI touching 0. The confirmation run from GW9 (run 41112157292) didn't hold it up: `margin1` -123/+13/+60 (-0.56 [-3.23, +2.29]), `margin15` +0.97, `margin2` -0.79, `hitm4` +0.19 and `margin1_hitm4` -1.46. None was ahead in every season. So production keeps both margins at 0.
+  - **Transfer margin:** `TRANSFER_MARGIN` 1.0 (`margin1`) was the only variant ahead in every season (+125/+58/+43, +1.98 per gameweek [-0.06, +3.97], 43 hits instead of 67). 2.0 was ahead in every season too (+1.46), 0.5 was mixed. It was the best of 13 variants with its CI touching 0. The confirmation run from GW9 (run 41112157292) didn't hold it up: `margin1` -123/+13/+60 (-0.56 [-3.23, +2.29]), `margin15` +0.97, `margin2` -0.79, `hitm4` +0.19 and `margin1_hitm4` -1.46. None was ahead in every season, so both margins stayed at 0 until the multi-start run.
   - **No consistent sign across seasons:** fewer hits (`hitm4` +1.19, `nohits` +0.89, `hitm2` +0.39), the horizon (`h1` +0.62, `h2` -0.42), `DECAY` 0.8/1.0 (-0.40/+0.36) and `FT_END_VALUE` 0/3 (+0.77/+0.99).
   - **Projection quality:** the top 20 by projection scored 5.15-5.25 a player in the deadline's gameweek, then about 96%, 93% and 91% of that 1-3 gameweeks ahead (correlation 0.60, falling to 0.51-0.53). Their over-prediction grows from -0.03..+0.36 to +0.26..+0.69. `DECAY` 0.9 discounts faster than the quality falls, but changing it moved nothing.
   - **What the replay can and can't resolve:** it clearly separates effects of hundreds of points a season (transfers, chips). Changing where a season starts moved a variant's lead by up to 180 points, so a gain of 1-2 points a gameweek over three seasons is noise. Smaller effects need more starting gameweeks or seasons pooled, hence the several starts per season.
+  - **Multi-start run** (2026-10-31, run 41133663018: v4 with the fitted availability factors, each season from GW1, 5, 9 and 13, so 12 paths; no solve at its time limit). Per gameweek against `default`, with the paths ahead out of 12:
+    - **Large effects held:**
+      - `default` scored 24003 over the 12 paths (1137 transfers, 224 hits).
+      - `hold` was -11.59 [-13.61, -9.58] (0/12).
+      - `nochips` was -2.75 [-4.06, -1.42], now reliable (3/12).
+      - Planning 1 gameweek ahead (`h1`) was -1.22 [-2.75, +0.34] (4/12); `h2` was -0.62 (4/12).
+    - **Transfer margins:** every value was ahead on average, none reliably:
+      - `margin05` +0.96 [-0.18, +2.19] (9/12; seasons +385/-65/+47);
+      - `margin1` +0.70 [-0.51, +1.93] (9/12; +161/-105/+212);
+      - `margin2` +0.62 (8/12) and `margin15` +0.02 (8/12).
+
+      All of them lost in 2023-24. Margins cut hits (187 for 0.5, 148 for 1, 81 for 2, against 224).
+    - **Hits:** limiting them did nothing: `hitm4` +0.00 (8/12), `nohits` +0.03 and `hitm2` -0.36. Combining them with a margin hurt (`margin1_hitm4` -0.89, 5/12).
+    - **No direction:** `DECAY` 0.8/1.0 (-0.14/+0.20) and `FT_END_VALUE` 0/3 (-0.08/+0.52).
+    - **Adopted:** `TRANSFER_MARGIN` 1.0, on the user's decision. It was ahead in 2 of 3 seasons with fewer hits, and in the GW1 run too. So `default` now has the margin, and `margin0` is the old production setting.
 - **Page:** the Team of the Week's **ML manager** tab (`mode=manager`, `components/totw/MlManager*.tsx`) shows:
   - the planned or played team with its moves and the plan's one-line `reason`;
   - free transfers, bank, team value and chips;

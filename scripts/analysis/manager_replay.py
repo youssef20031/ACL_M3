@@ -98,6 +98,7 @@ VARIANTS: Dict[str, Dict[str, Any]] = {
     "decay1": {"set": {"DECAY": 1.0}},
     "ftv0": {"set": {"FT_END_VALUE": 0.0}},
     "ftv3": {"set": {"FT_END_VALUE": 3.0}},
+    "margin0": {"set": {"TRANSFER_MARGIN": 0.0}},      # production before 2026-10-31
     "margin05": {"set": {"TRANSFER_MARGIN": 0.5}},
     "margin1": {"set": {"TRANSFER_MARGIN": 1.0}},
     "margin15": {"set": {"TRANSFER_MARGIN": 1.5}},

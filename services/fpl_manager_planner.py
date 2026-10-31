@@ -60,8 +60,10 @@ MAX_HITS_PER_GW = 2        # at most 2 transfers beyond the free ones per gamewe
 TRANSFER_TIEBREAK = 1e-3   # points per transfer: between equal plans, make fewer moves
 # A transfer's projected gain is the difference of two noisy predictions, so the optimizer's curse
 # inflates it. Margins the gain must clear (scripts/analysis/manager_replay.py tunes them): every
-# transfer outside a wildcard or free hit, and each hit on top of its cost. 0 = off.
-TRANSFER_MARGIN = 0.0
+# transfer outside a wildcard or free hit, and each hit on top of its cost. 0 = off. A 1-point
+# transfer margin was ahead on average in the 12-path replay (+0.70 a gameweek, 9 of 12 paths, not
+# reliably) and cut hits by a third; a hit margin added nothing on top (CLAUDE.md, Season replay).
+TRANSFER_MARGIN = 1.0
 HIT_MARGIN = 0.0
 BANK_TIEBREAK = 1e-5       # points per tenth in the bank after the horizon: then keep more money
 RANK_TIEBREAK = 1e-4       # up to this per player per gameweek: then prefer players earlier in the pool's
