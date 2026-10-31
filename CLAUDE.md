@@ -115,7 +115,7 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
   - **Chips:** a chip is played only when its solve beats the plan without it, by the module's thresholds (`TRIPLE_CAPTAIN_MIN_POINTS` and the rest), or late in its window if it still helps.
   - **Armband:** captain and vice come from `pick_captains`.
   - **Checks:** every plan passes `validate_entry` before it's saved.
-  - **Margins:** `TRANSFER_MARGIN` is the points each transfer outside a wildcard or free hit must gain: 1.0 since 2026-10-31, from the multi-start replay below. `HIT_MARGIN` (on top of a hit's 4 points) is 0, i.e. off.
+  - **Margins:** `TRANSFER_MARGIN` (points each transfer outside a wildcard or free hit must gain) and `HIT_MARGIN` (on top of a hit's 4 points) are 0, i.e. off: no margin held up across the replays below.
 - **Season replay** (`scripts/analysis/manager_replay.py`, the **Manager replay** workflow): the planner played through past seasons (2022-23..2024-25 by default, the ones with FPL snapshots before most deadlines), to tune its constants and chip policy. For each season the model is trained on the earlier ones as production trains it. At every deadline the replay rebuilds what the live pipeline would have had, and runs `predict_next_gw`'s own `model_rows`/`score_rows`/`assemble_output`/`build_projections` on it:
   - the 3 seasons before plus the season's matches before the deadline;
   - each player's price, ownership and transfers from that gameweek's row;
@@ -144,14 +144,13 @@ Results, including misses (which expire), persist to `.cache/avatars.json`. When
       All of them lost in 2023-24. Margins cut hits (187 for 0.5, 148 for 1, 81 for 2, against 224).
     - **Hits:** limiting them did nothing: `hitm4` +0.00 (8/12), `nohits` +0.03 and `hitm2` -0.36. Combining them with a margin hurt (`margin1_hitm4` -0.89, 5/12).
     - **No direction:** `DECAY` 0.8/1.0 (-0.14/+0.20) and `FT_END_VALUE` 0/3 (-0.08/+0.52).
-    - **Adopted:** `TRANSFER_MARGIN` 1.0, on the user's decision. It was ahead in 2 of 3 seasons with fewer hits, and in the GW1 run too. So `default` now has the margin, and `margin0` is the old production setting.
-  - **2025-26, out of sample** (run 41151367761, from `main`, so `default` is margin 0; 4 paths). Only 11 of 38 gameweeks had an FPL snapshot, so most flagged players counted as available, and the model, trained before defensive contributions scored, under-rated defenders.
+  - **2025-26, out of sample** (run 41151367761, `default` margin 0; 4 paths). Only 11 of 38 gameweeks had an FPL snapshot, so most flagged players counted as available, and the model, trained before defensive contributions scored, under-rated defenders.
     - **Large effects held:** `hold` -12.35 [-15.23, -9.56] and `nochips` -3.44 [-5.84, -1.14].
     - **The margin didn't confirm:** `margin1` -1.34 [-3.10, +0.41] (1/4 paths ahead), and 0.5, 1.5 and 2 were reliably worse (-2.1 to -2.9).
     - **Default was luckiest:** every other change of planner constants also lost (`DECAY` 0.8/1.0 -3.09/-2.23, `FT_END_VALUE` 0/3 -2.67/-1.52). Only fewer hits matched it (`nohits`/`hitm2` +0.41, `hitm4` +0.04).
-    - **Pooled with the 12 earlier paths:** the 1-point margin is about +0.2 a gameweek, ahead on 10 of 16 paths, i.e. no evidence either way.
+    - **Pooled with the 12 earlier paths:** the 1-point margin is about +0.2 a gameweek, ahead on 10 of 16 paths, i.e. no evidence either way. It was briefly adopted on 2026-10-31 and set back to 0 after this run (the club-limit bug below hit only `default` and other variants, not `margin1`).
     - **Rejected plans:** 7 plans in GW22-23 had 4 Man City players after a January move: the planner let a club over the limit stay so, while `validate_entry` refused it. Both now allow it, with no buying from that club (see Rules).
-  - **Chip rules** (2026-10-31, run 41152131426, 12 paths, `default` with the margin). Per gameweek against `default`, paths ahead out of 12:
+  - **Chip rules** (2026-10-31, run 41152131426, 12 paths, `default` with a 1-point margin, then production). Per gameweek against `default`, paths ahead out of 12:
     - **Chips matter:** `nochips` -3.73 [-5.17, -2.30] (1/12), about 140 points a season.
     - **Thresholds:**
       - Triple captain at 8/6 was -0.14 (0/12); at 10/8 it played identically.

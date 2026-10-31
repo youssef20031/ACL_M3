@@ -18,7 +18,7 @@ on:
         default: '2022-23,2023-24,2024-25'
       variants:
         description: 'Comma-separated planner variants (VARIANTS in scripts/analysis/manager_replay.py)'
-        default: 'default,hold,nochips,h1,h2,decay08,decay1,ftv0,ftv3,margin0,margin05,margin15,margin2,margin1_hitm4,hitm2,hitm4,nohits'
+        default: 'default,hold,nochips,h1,h2,decay08,decay1,ftv0,ftv3,margin05,margin1,margin15,margin2,margin1_hitm4,hitm2,hitm4,nohits'
       ref:
         description: 'Variant the others are compared against'
         default: 'default'
@@ -34,7 +34,7 @@ on:
 # The inputs' defaults again, for a run without inputs
 env:
   SEASONS: ${{ inputs.seasons || '2022-23,2023-24,2024-25' }}
-  VARIANTS: ${{ inputs.variants || 'default,hold,nochips,h1,h2,decay08,decay1,ftv0,ftv3,margin0,margin05,margin15,margin2,margin1_hitm4,hitm2,hitm4,nohits' }}
+  VARIANTS: ${{ inputs.variants || 'default,hold,nochips,h1,h2,decay08,decay1,ftv0,ftv3,margin05,margin1,margin15,margin2,margin1_hitm4,hitm2,hitm4,nohits' }}
   REF: ${{ inputs.ref || 'default' }}
   MODEL: ${{ inputs.model || 'v4' }}
   START_GWS: ${{ inputs.start_gws || '1,5,9,13' }}
