@@ -112,7 +112,7 @@ def test_counts_are_aggregated_by_day(tmp_path):
     store.record("/table", "reddit.com")
 
     s = store.summary(3)
-    assert s["by_day"] == [
+    assert [{k: d[k] for k in ("date", "views")} for d in s["by_day"]] == [
         {"date": "2026-10-13", "views": 2},
         {"date": "2026-10-14", "views": 0},
         {"date": "2026-10-15", "views": 3},
@@ -128,11 +128,13 @@ def test_summary_shape_zero_fill_and_ordering(tmp_path):
     store = make_store(tmp_path)
     assert store.summary(30) == {
         "days": 30,
-        "total_views": 0,
-        "by_day": [{"date": (date(2026, 10, 15) - timedelta(days=29 - i)).isoformat(), "views": 0}
-                   for i in range(30)],
+        "total_views": 0, "consented_views": 0, "visitors": 0, "new_visitors": 0, "owner_views": 0,
+        "by_day": [{"date": (date(2026, 10, 15) - timedelta(days=29 - i)).isoformat(), "views": 0,
+                    "visitors": 0, "owner_views": 0} for i in range(30)],
         "top_paths": [],
         "top_referrers": [],
+        "top_countries": [],
+        "top_zones": [],
     }
 
     for i in range(25):
@@ -166,8 +168,10 @@ def test_flush_and_reload_round_trip(tmp_path):
     assert path.exists()
     assert not [p for p in os.listdir(tmp_path) if p.endswith(".tmp")]
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["days"]["2026-10-15"] == {"paths": {"/": 1, "/fixtures": 1},
-                                         "referrers": {"google.com": 1}}
+    assert data["version"] == 2
+    assert data["days"]["2026-10-15"] == {"paths": {"/": 1, "/fixtures": 1}, "referrers": {"google.com": 1},
+                                         "zones": {}, "consented_views": 0, "visitors": 0, "new_visitors": 0,
+                                         "owner_views": 0}
 
     reloaded = make_store(tmp_path)
     assert reloaded.summary(30) == store.summary(30)
@@ -369,10 +373,116 @@ def test_admin_analytics_returns_summary(client, store):
                           headers={"X-Admin-Token": "s3cret"}).status_code == 422
     assert resp.status_code == 200
     body = resp.json()
-    assert set(body) == {"days", "total_views", "by_day", "top_paths", "top_referrers"}
+    assert set(body) == {"days", "total_views", "consented_views", "visitors", "new_visitors", "owner_views",
+                         "by_day", "top_paths", "top_referrers", "top_countries", "top_zones"}
     assert body["days"] == 7 and body["total_views"] == 2
     assert len(body["by_day"]) == 7
-    assert body["by_day"][-1] == {"date": "2026-10-15", "views": 2}
+    assert body["by_day"][-1] == {"date": "2026-10-15", "views": 2, "visitors": 0, "owner_views": 0}
     assert body["top_paths"] == [{"path": "/", "views": 1}, {"path": "/table", "views": 1}]
     assert body["top_referrers"] == [{"host": "google.com", "views": 1}]
     assert default.json()["days"] == 30 and len(default.json()["by_day"]) == 30
+
+
+# --- Visitors, countries and the owner's own views ---------------------------------------------------
+
+def test_consented_views_count_visitors_new_visitors_and_their_timezones(tmp_path):
+    store = make_store(tmp_path)
+    store.record("/", consented=True, zone="Africa/Cairo", new_visitor=True, first_today=True)
+    store.record("/players", consented=True, zone="Africa/Cairo")              # same visitor, same day
+    store.record("/", consented=True, zone="Europe/London", first_today=True)  # a returning visitor
+    store.record("/", consented=True, zone="Asia/Calcutta", first_today=True)  # an old alias
+    store.record("/", consented=True, zone=analytics.UNKNOWN_ZONE, first_today=True)
+    store.record("/table")                                                     # no consent: a view only
+
+    s = store.summary(1)
+    assert s["total_views"] == 6 and s["consented_views"] == 5
+    assert s["visitors"] == 4 and s["new_visitors"] == 1 and s["owner_views"] == 0
+    assert s["by_day"][-1] == {"date": "2026-10-15", "views": 6, "visitors": 4, "owner_views": 0}
+    assert {z["zone"]: z["visitors"] for z in s["top_zones"]} == {
+        "Africa/Cairo": 1, "Europe/London": 1, "Asia/Calcutta": 1, analytics.UNKNOWN_ZONE: 1}
+    countries = {c["code"]: c for c in s["top_countries"]}
+    assert set(countries) == {"EG", "GB", "IN", None}
+    assert countries["EG"]["visitors"] == 1 and countries["EG"]["country"] == "Egypt"
+    assert countries[None] == {"code": None, "country": "Unknown", "visitors": 1}
+
+
+def test_without_consent_the_browsers_details_are_ignored(tmp_path):
+    store = make_store(tmp_path)
+    store.record("/", consented=False, zone="Africa/Cairo", new_visitor=True, first_today=True)
+    s = store.summary(1)
+    assert s["total_views"] == 1 and s["consented_views"] == 0 and s["visitors"] == 0
+    assert s["top_zones"] == [] and s["top_countries"] == []
+
+
+def test_the_owners_views_are_counted_apart(tmp_path):
+    store = make_store(tmp_path)
+    store.record("/stats", "google.com", owner=True, consented=True, zone="Africa/Cairo", first_today=True)
+    store.record("/", "google.com")
+    s = store.summary(1)
+    assert s["owner_views"] == 1 and s["total_views"] == 1 and s["visitors"] == 0
+    assert s["top_paths"] == [{"path": "/", "views": 1}]
+    assert s["top_referrers"] == [{"host": "google.com", "views": 1}]
+    assert s["by_day"][-1]["owner_views"] == 1
+
+
+def test_version_1_files_load_with_the_new_counters_at_zero(tmp_path):
+    (tmp_path / "analytics.json").write_text(json.dumps(
+        {"version": 1, "days": {"2026-10-15": {"paths": {"/": 3}, "referrers": {"google.com": 1}}}}))
+    store = make_store(tmp_path)
+    s = store.summary(1)
+    assert s["total_views"] == 3 and s["visitors"] == 0 and s["owner_views"] == 0
+    store.record("/", consented=True, zone="Europe/London", first_today=True)
+    assert store.summary(1)["visitors"] == 1
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("Africa/Cairo", "Africa/Cairo"),
+    (" Europe/London ", "Europe/London"),
+    ("Mars/Olympus_Mons", analytics.UNKNOWN_ZONE),
+    ("<script>alert(1)</script>", analytics.UNKNOWN_ZONE),
+    ("", analytics.UNKNOWN_ZONE),
+    (None, analytics.UNKNOWN_ZONE),
+])
+def test_normalize_zone_keeps_only_real_timezones(raw, expected):
+    assert analytics.normalize_zone(raw) == expected
+
+
+def test_zone_countries_cover_canonical_zones_and_old_aliases():
+    countries, names = analytics.zone_countries()
+    assert countries["Africa/Cairo"] == "EG" and countries["America/New_York"] == "US"
+    assert countries["Asia/Calcutta"] == "IN" and countries["US/Eastern"] == "US"
+    assert "UTC" not in countries and "Etc/GMT+3" not in countries
+    assert names["EG"] == "Egypt"
+
+
+def test_pageview_with_consent_counts_a_visitor_and_their_country(client, store):
+    body = {"path": "/", "consented": True, "timezone": "Africa/Cairo", "new_visitor": True, "first_today": True}
+    assert client.post("/api/analytics/pageview", json=body).status_code == 204
+    no_consent = {"path": "/", "timezone": "Europe/London", "first_today": True}
+    assert client.post("/api/analytics/pageview", json=no_consent).status_code == 204
+    assert client.post("/api/analytics/pageview", json={"path": "/stats", "owner": True}).status_code == 204
+    s = store.summary(1)
+    assert s["total_views"] == 2 and s["visitors"] == 1 and s["new_visitors"] == 1 and s["owner_views"] == 1
+    assert [c["code"] for c in s["top_countries"]] == ["EG"]
+
+
+def test_accepting_on_a_counted_page_adds_the_visitor_not_a_view(client, store):
+    client.post("/api/analytics/pageview", json={"path": "/players"})
+    client.post("/api/analytics/pageview", json={"path": "/players", "view": False, "consented": True,
+                                                 "timezone": "Europe/London", "first_today": True,
+                                                 "new_visitor": True})
+    s = store.summary(1)
+    assert s["total_views"] == 1 and s["consented_views"] == 0
+    assert s["visitors"] == 1 and s["new_visitors"] == 1
+    assert s["top_zones"] == [{"zone": "Europe/London", "visitors": 1}]
+
+
+def test_pageview_rejects_an_overlong_timezone(client, store):
+    body = {"path": "/", "consented": True, "timezone": "A" * 65}
+    assert client.post("/api/analytics/pageview", json=body).status_code == 422
+
+
+def test_timezone_is_stored_only_with_consent(client, store, tmp_path):
+    client.post("/api/analytics/pageview", json={"path": "/", "timezone": "Pacific/Auckland", "first_today": True})
+    store.flush(force=True)
+    assert "Pacific/Auckland" not in (tmp_path / "analytics.json").read_text()

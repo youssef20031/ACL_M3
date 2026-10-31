@@ -1,6 +1,10 @@
 import { useSyncExternalStore } from 'react';
+import { forgetVisitor } from './visitor';
 
-/** "accepted" lets the cookie-free page-view counter run; null means not asked yet. */
+/**
+ * "accepted" adds this browser's timezone and visitor flags to the cookie-free page-view counter
+ * (lib/visitor.ts); without it views are only counted anonymously. null means not asked yet.
+ */
 export type Consent = 'accepted' | 'declined' | null;
 
 const KEY = 'pm-analytics-consent';
@@ -26,6 +30,7 @@ export function getConsent(): Consent {
 
 export function setConsent(value: Consent) {
   current = value;
+  if (value !== 'accepted') forgetVisitor();
   try {
     if (value) window.localStorage.setItem(KEY, value);
     else window.localStorage.removeItem(KEY);
