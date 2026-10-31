@@ -267,3 +267,45 @@ def test_seed_parsing_and_matrix(capsys):
     jobs = json.loads(capsys.readouterr().out.split("=", 1)[1])
     assert [j["tag"] for j in jobs] == ["current-s0", "current-s5", "current-s10", "dc"]
     assert jobs[2]["seeds"] == "10,11" and jobs[3]["seeds"] == "0,1,2"
+
+
+# ----------------------------------------------------------------------------- expected points
+
+def test_picks_are_scored_on_expected_points_too():
+    rows = league()
+    rows["xpts"] = np.where(rows["minutes"] > 0, rows["total_points"] / 2, 0.0)
+    pred = rows["total_points"].to_numpy()
+    t = bt.gw_table(rows, pred)
+    for gw, g in rows.groupby("GW"):
+        r = t[t["GW"] == gw].iloc[0]
+        top = g.assign(pred=pred[g.index]).sort_values("pred", ascending=False, kind="mergesort")
+        assert r["top20_xp"] == pytest.approx(top["xpts"].head(20).mean())
+        assert r["top20_xp"] == pytest.approx(r["top20"] / 2)
+        assert r["capt_fpl_xp"] == pytest.approx(r["capt_fpl"] / 2)
+        assert r["sq_xi_xp"] == pytest.approx(r["sq_xi"] / 2) and r["sq_fpl_xp"] == pytest.approx(r["sq_fpl"] / 2)
+    assert set(bt.XP_METRICS) <= set(bt.summarize(t))
+
+
+def test_a_pick_without_expected_stats_has_no_expected_score():
+    rows = league(gws=(1,))
+    rows["xpts"] = rows["total_points"]
+    pred = rows["total_points"].to_numpy()
+    rows.loc[int(np.argmax(pred)), "xpts"] = np.nan          # the captain
+    t = bt.gw_table(rows, pred, squads=False)
+    assert np.isnan(t.loc[0, "top20_xp"]) and np.isnan(t.loc[0, "capt_fpl_xp"]) and not np.isnan(t.loc[0, "top20"])
+
+
+def test_score_adds_expected_points_to_older_predictions(tmp_path, monkeypatch):
+    rows = league()
+    write_chunk(tmp_path, "chunk_a", {"current": [0, 1]}, rows)      # saved without xpts
+    feats = rows.assign(xpts=rows["total_points"] / 2)
+    feats.to_pickle(tmp_path / "feats.pkl.gz")
+    solves = []
+    real = opt.best_squad
+    monkeypatch.setattr(opt, "best_squad", lambda *a, **k: solves.append(1) or real(*a, **k))
+    args = argparse.Namespace(preds=[str(tmp_path / "chunk_*.preds.parquet")], out=str(tmp_path / "res.json"),
+                              pool=True, reuse=True, no_squads=False, feats=str(tmp_path / "feats.pkl.gz"))
+    bt.cmd_score(args)
+    assert len(solves) == 6                     # the saved tables lack expected points: every table again
+    unit = json.loads((tmp_path / "res.json").read_text())[0]["folds"]["2025-26"]["refit"]
+    assert unit["summary"]["top20_xp"] == pytest.approx(unit["summary"]["top20"] / 2)

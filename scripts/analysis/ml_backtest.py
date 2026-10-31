@@ -27,6 +27,14 @@ The top-20 metrics are unconstrained and mostly midfielders, so position picks (
 10 MID and 6 FWD by prediction) and pred20/pred_capt (the predicted side, for selection bias) are
 reported too.
 
+Expected points (scripts/analysis/xpts.py): every row also has its expected points from realized
+xG, xA and xG conceded, with actual minutes, saves and defensive contributions (calibrated per
+season and position; NaN before 2023-24, which has no expected stats). top20_xp, capt_fpl_xp,
+sq_xi_xp and sq_fpl_xp score the same picks on them. They leave out finishing luck, so a variant's
+difference is less noisy in them than in actual points, at the price of ignoring finishing skill;
+actual points stay the primary metrics. `score --feats` adds them to predictions saved before they
+existed (the workflow's rescore_run input).
+
 `run` writes <out>.json, <out>.gw.parquet (every per-gameweek table, per seed and seed-averaged)
 and <out>.preds.parquet (row-level predictions). `score` rescores prediction files without
 retraining; --pool merges files of the same variant with different seeds (the workflow splits a
@@ -119,6 +127,7 @@ from ml import odds as od  # noqa: E402
 from ml import other_competitions as oc  # noqa: E402
 from ml import points_model as pm  # noqa: E402
 from ml import snapshots as sn  # noqa: E402
+from scripts.analysis import xpts as xpt  # noqa: E402
 from utils.text import normalize_name  # noqa: E402
 
 
@@ -495,6 +504,8 @@ POS_TOPK = {"GK": 4, "DEF": 10, "MID": 10, "FWD": 6}     # position picks: top k
 POS_METRICS = [f"top_{p}" for p in POS_TOPK]             # ... their mean actual points
 PRED_METRICS = ["pred20", "pred_capt"] + [f"pred_{p}" for p in POS_TOPK]   # ... and predicted
 SQ_METRICS = ["sq_xi", "sq_fpl", "sq_pred", "sq_dnp"]
+XP_METRICS = ["top20_xp", "capt_fpl_xp", "sq_xi_xp", "sq_fpl_xp"]     # the same picks on expected points
+XP_PAIRS = [("top20", "top20_xp"), ("capt_fpl", "capt_fpl_xp"), ("sq_xi", "sq_xi_xp"), ("sq_fpl", "sq_fpl_xp")]
 SQ_TOP_PER_POS = 60       # squad pool: each position's best predictions ...
 SQ_CHEAPEST = 15          # ... plus its cheapest players, the same for every variant
 SQ_TIME_LIMIT = 5.0       # seconds per squad solve
@@ -508,7 +519,7 @@ CURRENT_D = [f"{c}__d" for c in CURRENT]     # ... and built from points without
 CODE_COLS = CURRENT_C + CURRENT_D + ["total_points_d", "dc_pts", "dc_hat"]
 V4 = [f"{c}__v4" for c in pm.feature_columns("v4")]   # the production model's columns, built by pm
 KEEP =["season", "GW", "name", "position", "team", "fixture", "kickoff_time", "total_points", "minutes", "xP",
-        "clean_sheets"]
+        "clean_sheets", "xpts"]
 
 
 def cmd_features(args) -> None:
@@ -522,6 +533,7 @@ def cmd_features(args) -> None:
             status_csv = os.path.join("data", "live", meta["files"]["status"])
     history = pm.load_history(live_csv=live_csv, live_season=live_season)
     history["row_id"] = np.arange(len(history))
+    xpts = pd.Series(xpt.expected_points(history).to_numpy(), index=history["row_id"].to_numpy())
     # The production model's inputs, loaded as train_points_v4 loads them (ratings from the full history)
     extras = pm.load_extra_inputs(live_dir=os.path.join("data", "live"), season=live_season, status_csv=status_csv,
                                   ratings_prior=False)
@@ -551,6 +563,12 @@ def cmd_features(args) -> None:
           f"with an element, {(identity != history['name']).mean():.3f} renamed, {(renamed > 1).sum()} players "
           f"whose history had several names", flush=True)
     feats["name"] = identity.reindex(feats["row_id"]).to_numpy()   # one name per player in every table
+    feats["xpts"] = xpts.reindex(feats["row_id"]).to_numpy()
+    played = feats[feats["minutes"] > 0]
+    xp_check = played.groupby("season").apply(lambda g: pd.Series({
+        "actual": round(float(g["total_points"].mean()), 3), "xpts": round(float(g["xpts"].mean()), 3),
+        "corr": round(float(g["total_points"].corr(g["xpts"])), 3), "missing": round(float(g["xpts"].isna().mean()), 3)}))
+    print(f"expected points per played match by season:\n{xp_check.to_string()}", flush=True)
     feats = feats[feats["total_points"].notna()]
     feats = feats[list(dict.fromkeys(KEEP + CURRENT + EXTRA + SUBSETS + CODE_COLS + V4))].copy()
     for c in feats.columns:
@@ -965,12 +983,18 @@ def squad_metrics(g: pd.DataFrame) -> dict:
     """The squad best_squad picks from one gameweek's per-player rows, scored on actual points;
     NaN when no valid squad fits. sq_secs is the solve time."""
     t0 = time.perf_counter()
+    xp = "xpts" in g
     try:
         sel = opt.best_squad(squad_pool(g), time_limit=SQ_TIME_LIMIT)
     except opt.InfeasibleError:
-        return {**{k: np.nan for k in SQ_METRICS}, "sq_secs": time.perf_counter() - t0}
+        failed = SQ_METRICS + (["sq_xi_xp", "sq_fpl_xp"] if xp else [])
+        return {**{k: np.nan for k in failed}, "sq_secs": time.perf_counter() - t0}
     actual = dict(zip(g["name"], zip(g["total_points"], g["minutes"])))
-    return {**score_squad(sel, actual), "sq_secs": time.perf_counter() - t0}
+    out = score_squad(sel, actual)
+    if xp:   # the same squad on expected points (NaN if a picked player has none); subs by actual minutes
+        expected = score_squad(sel, dict(zip(g["name"], zip(g["xpts"], g["minutes"]))))
+        out.update({"sq_xi_xp": expected["sq_xi"], "sq_fpl_xp": expected["sq_fpl"]})
+    return {**out, "sq_secs": time.perf_counter() - t0}
 
 
 def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.DataFrame:
@@ -978,9 +1002,10 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.Da
     picks (top 20/50, captain), position picks and, with `squads`, the optimiser's squad."""
     subsets = [c for c in SUBSETS if c in test.columns]
     extra = ["clean_sheets"] if "clean_sheets" in test.columns else []
+    xp = ["xpts"] if "xpts" in test.columns else []
     info = [c for c in ("position", "team", "price") if c in test.columns]
     squads = squads and len(info) == 3
-    d = test[["season", "GW", "name", "total_points", "minutes"] + info + extra + subsets].copy()
+    d = test[["season", "GW", "name", "total_points", "minutes"] + info + extra + xp + subsets].copy()
     d["pred"] = np.asarray(pred, dtype=float)
     d["err"] = d["pred"] - d["total_points"]
     d["se"] = d["err"] ** 2
@@ -999,10 +1024,15 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.Da
     rows["GW"] = rows["GW"].astype(int)
     picks = [c for c in PICK_SUBSETS if c in subsets]
     d["pred_sq"] = d["pred"].clip(lower=0)   # serving floors each fixture at 0, then sums a double gameweek
+    if xp:
+        d["xpts_na"] = d["xpts"].isna()
     pg = d.groupby(["season", "GW", "name"], as_index=False).agg(
         pred=("pred", "sum"), pred_sq=("pred_sq", "sum"), total_points=("total_points", "sum"),
         minutes=("minutes", "sum"), **{c: (c, "first") for c in info},
-        **{c: (c, "max") for c in picks}, **{c: (c, "sum") for c in extra})
+        **{c: (c, "max") for c in picks}, **{c: (c, "sum") for c in extra + xp},
+        **({"xpts_na": ("xpts_na", "max")} if xp else {}))
+    if xp:   # a player without expected stats in any of his fixtures has none for the gameweek
+        pg["xpts"] = pg["xpts"].mask(pg.pop("xpts_na"))
     out = []
     for (s, gw), g in pg.groupby(["season", "GW"]):
         r = g.sort_values("pred", ascending=False, kind="mergesort")
@@ -1016,6 +1046,9 @@ def gw_table(test: pd.DataFrame, pred: np.ndarray, squads: bool = True) -> pd.Da
                "pred_capt": float(r["pred"].iloc[0]),
                "spear": float(g["pred"].corr(g["total_points"], method="spearman")),
                "dnp20": float((r["minutes"].head(20) == 0).mean())}
+        if xp:
+            row["top20_xp"] = float(r["xpts"].head(20).mean(skipna=False))
+            row["capt_fpl_xp"] = float(r["xpts"].iloc[capt_row])
         for c in picks:
             sub = r[r[c] > 0]
             row[f"top20_{c}"] = float(sub["total_points"].head(20).mean()) if len(sub) >= 40 else np.nan
@@ -1037,7 +1070,7 @@ def summarize(t: pd.DataFrame) -> dict:
     out = {"rmse": float(np.sqrt(t["se"].sum() / t["rows"].sum())), "mae": float(t["ae"].sum() / t["rows"].sum()),
            "top20": float(t["top20"].mean()), "top50": float(t["top50"].mean()), "capt": float(t["capt"].mean()),
            "spear": float(t["spear"].mean()), "gws": int(len(t))}
-    for k in PICK_METRICS + ["capt_fpl"] + PRED_METRICS + POS_METRICS + SQ_METRICS:
+    for k in PICK_METRICS + ["capt_fpl"] + PRED_METRICS + POS_METRICS + SQ_METRICS + XP_METRICS:
         if k in t and t[k].notna().any():
             out[k] = float(t[k].mean())
     for p in opt.POSITIONS:
@@ -1061,7 +1094,7 @@ def position_bias(test, pred) -> dict:
 
 
 ROW_KEY = ["season", "GW", "fixture", "team", "name"]
-ROW_COLUMNS = ROW_KEY + ["position", "price", "total_points", "minutes", "clean_sheets"] + SUBSETS
+ROW_COLUMNS = ROW_KEY + ["position", "price", "total_points", "minutes", "clean_sheets", "xpts"] + SUBSETS
 TABLE_META = ["variant", "proto", "fold", "seed", "seeds"]
 
 
@@ -1418,13 +1451,22 @@ def cmd_score(args) -> None:
     for path, df in files.items():
         for v in dict.fromkeys(c.split("|")[1] for c in df.columns if c.startswith("pred|")):
             by_variant.setdefault(v, []).append(path)
+    lookup = None
+    if getattr(args, "feats", None):
+        lookup = pd.read_pickle(args.feats)[ROW_KEY + ["xpts"]].drop_duplicates(ROW_KEY)
     out, sink = [], Sink(keep_preds=False)
     for variant, vpaths in by_variant.items():
         if len(vpaths) > 1 and not args.pool:
             raise SystemExit(f"{variant} is in {len(vpaths)} files; pass --pool to merge their seeds")
         print(f"== {variant}: {', '.join(vpaths)}", flush=True)
         rows = _merge_preds(variant, [files[p] for p in vpaths])
+        if lookup is not None and "xpts" not in rows:
+            rows = rows.merge(lookup, on=ROW_KEY, how="left")
+            print(f"  expected points from {args.feats}: {rows['xpts'].notna().mean():.3f} of rows", flush=True)
         reuse = _saved_tables(variant, vpaths) if args.reuse else {}
+        if "xpts" in rows and any("top20_xp" not in t for by in reuse.values() for t in by.values()):
+            print("  saved tables predate expected points: scoring every table again", flush=True)
+            reuse = {}
         out.append(score_variant(variant, rows, _training_info(variant, vpaths), reuse, sink))
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(out, f)
@@ -1453,7 +1495,8 @@ def _boot(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
     rng = np.random.default_rng(seed)
     idx = rng.integers(0, len(m), size=(n, len(m)))
     out = {}
-    for k in ("top20", "top50", "capt", "spear", *PICK_METRICS, "capt_fpl", *SQ_METRICS, *POS_METRICS, *PRED_METRICS):
+    for k in ("top20", "top50", "capt", "spear", *PICK_METRICS, "capt_fpl", *SQ_METRICS, *POS_METRICS, *PRED_METRICS,
+              *XP_METRICS):
         if f"{k}_v" not in m or f"{k}_b" not in m:
             continue
         d = (m[f"{k}_v"] - m[f"{k}_b"]).to_numpy(dtype=float)
@@ -1528,7 +1571,7 @@ def _boot2(base: pd.DataFrame, var: pd.DataFrame, n=10000, seed=0) -> dict:
 
     wb, wv = seed_weights(base), seed_weights(var)
     out = {}
-    for k in SINGLE_METRICS + SINGLE_POS_METRICS:
+    for k in SINGLE_METRICS + SINGLE_POS_METRICS + XP_METRICS:
         if k in RATIOS:
             num, den, f = RATIOS[k]
             if num not in base or num not in var:
@@ -1614,6 +1657,8 @@ def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
         lines.append("|---|---|---|---|---|---|---|---|---|")
         lines += rows
 
+    _xp_sections(lines, base, boots)
+
     lines.append("\n#### Bias by position (pred - actual), every variant, seed-averaged: pooled over folds, "
                  "difference from the reference [95% CI], per fold GK/DEF/MID/FWD\n")
     lines.append("| variant | GK | DEF | MID | FWD | ΔGK | ΔDEF | ΔMID | ΔFWD | per fold |")
@@ -1635,7 +1680,7 @@ def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
     tb = tb[tb["proto"] == proto] if tb is not None else None
     if tb is None or tb.empty:
         return
-    main_rows, pos_rows = [], []
+    main_rows, pos_rows, xp_rows = [], [], []
     for name in results:
         tv = tables.get(name)
         if name == ref or tv is None:
@@ -1649,6 +1694,8 @@ def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
         main_rows.append(f"| {name} | {seeds} | " + " | ".join(_fmt(b2[k], _digits(k)) if k in b2 else "-"
                                                              for k in SINGLE_METRICS) + " |")
         pos_rows.append(f"| {name} | " + " | ".join(_fmt(b2[k]) if k in b2 else "-" for k in SINGLE_POS_METRICS) + " |")
+        if any(k in b2 for k in XP_METRICS):
+            xp_rows.append(_xp_row(name, b2))
     if main_rows:
         lines.append("\n#### Single models (what production ships): per-seed metrics, variant minus reference, "
                      "two-level bootstrap (gameweeks and seeds resampled) [95% CI]\n")
@@ -1659,6 +1706,42 @@ def _squad_sections(lines, results, ref, proto, units, boots, tables) -> None:
                      "| Δbias FWD |")
         lines.append("|---|---|---|---|---|---|---|---|---|")
         lines += pos_rows
+    if xp_rows:
+        lines.append("\n#### Single models on expected points: actual | expected, variant minus reference, two-level "
+                     "bootstrap [95% CI]\n")
+        lines += _xp_header() + xp_rows
+
+
+def _xp_header() -> list:
+    names = " | ".join(f"Δ{a} \\| Δ{x}" for a, x in XP_PAIRS)
+    return [f"| variant | {names} |", "|---|" + "---|" * len(XP_PAIRS)]
+
+
+def _xp_row(name: str, b: dict) -> str:
+    cells = [f"{_fmt(b[a], _digits(a)) if a in b else '-'} \\| {_fmt(b[x], _digits(a)) if x in b else '-'}"
+             for a, x in XP_PAIRS]
+    return f"| {name} | " + " | ".join(cells) + " |"
+
+
+def _xp_sections(lines, base: dict, boots: dict) -> None:
+    """Report sections on the picks scored on expected points (xpts.py), next to actual points."""
+    if not any("top20_xp" in u["summary"] for u in base.values()):
+        return
+    lines.append("\n#### The same picks on expected points (from realized xG, xA, xG conceded and minutes; "
+                 "finishing luck removed; '-' before 2023-24): actual | expected\n")
+    lines.append("| fold | " + " | ".join(f"{a} \\| {x}" for a, x in XP_PAIRS) + " |")
+    lines.append("|---|" + "---|" * len(XP_PAIRS))
+    for s, u in base.items():
+        sm = u["summary"]
+        cells = [f"{sm[a]:.{_digits(a)}f} \\| " + (f"{sm[x]:.{_digits(a)}f}" if x in sm else "-") if a in sm else "-"
+                 for a, x in XP_PAIRS]
+        lines.append(f"| {s} | " + " | ".join(cells) + " |")
+    rows = [_xp_row(name, b) for name, b in boots.items() if any(k in b for k in XP_METRICS)]
+    if rows:
+        lines.append("\nVariant minus reference, seed-averaged, gameweek bootstrap [95% CI]. The expected-points "
+                     "difference covers the gameweeks with expected stats only, so compare its CI width with the "
+                     "actual one on the same folds.\n")
+        lines += _xp_header() + rows
 
 
 def _load_results(paths) -> tuple:
@@ -1882,6 +1965,7 @@ def main() -> int:
     sc.add_argument("--reuse", action="store_true",
                     help="keep the tables in the .gw.parquet beside each file whose predictions are unchanged")
     sc.add_argument("--no-squads", action="store_true", help="skip the squad solves")
+    sc.add_argument("--feats", help="features file (from `features`) to add expected points to older predictions")
     mx = sub.add_parser("matrix", help="the workflow's run jobs: variants x chunks of seeds")
     mx.add_argument("--variants", required=True)
     mx.add_argument("--seeds", default="")
