@@ -309,3 +309,46 @@ def test_score_adds_expected_points_to_older_predictions(tmp_path, monkeypatch):
     assert len(solves) == 6                     # the saved tables lack expected points: every table again
     unit = json.loads((tmp_path / "res.json").read_text())[0]["folds"]["2025-26"]["refit"]
     assert unit["summary"]["top20_xp"] == pytest.approx(unit["summary"]["top20"] / 2)
+
+
+# ----------------------------------------------------------------------------- tree counts and seed ensembles
+
+class Staged:
+    """A fitted model stand-in: predict(X, iteration_range=(0, k)) is perfect at the tree counts in
+    `good` and noise at the others."""
+
+    def __init__(self, rows, good):
+        self.rows, self.good = rows, set(good)
+
+    def predict(self, X, iteration_range):
+        k = iteration_range[1]
+        if k in self.good:
+            return self.rows.loc[X.index, "total_points"].to_numpy(dtype=float)
+        return np.random.default_rng(k).normal(0, 3, len(X))
+
+
+def test_stop_trees_keeps_the_rmse_stop_by_default_and_halves_it_on_request():
+    rows = league(gws=(1,))
+    assert bt._stop_trees(None, rows, rows, [], 120, {}) == (120, {})
+    assert bt._stop_trees(None, rows, rows, [], 121, {"tree_frac": 0.5})[0] == 60
+
+
+def test_stop_by_picks_takes_the_count_whose_validation_picks_scored_most():
+    va = league(gws=(1, 2, 3))
+    used, info = bt._stop_trees(Staged(va, good={20, 30, 40}), va, va, [], 95, {"stop": "picks"})
+    assert used == 30                                      # the middle of the plateau after smoothing
+    assert list(info["stop_grid"]) == ["10", "20", "30", "40", "50", "60", "70", "80", "90", "95"]
+
+
+def test_ensemble_gain_is_the_averaged_predictions_minus_the_mean_single_model():
+    gws = pd.DataFrame({"season": "2025-26", "GW": range(1, 31)})
+    ens = gws.assign(top20=5.1, sq_fpl=60.5)
+    seeds = pd.concat([gws.assign(seed=s, top20=5.0 + off, sq_fpl=60.0 + off) for s, off in enumerate((-0.2, 0, 0.2))])
+    g = bt._ens_gain(ens, seeds, n=500)
+    assert g["top20"] == pytest.approx((0.1, 0.1, 0.1)) and g["sq_fpl"] == pytest.approx((0.5, 0.5, 0.5))
+    assert "capt_fpl" not in g
+
+
+def test_tree_count_variants_exist():
+    assert bt.VARIANTS["v4_trees05"]["tree_frac"] == 0.5 and bt.VARIANTS["v4_stop_picks"]["stop"] == "picks"
+    assert bt.VARIANTS["v4_trees05"]["post"] == bt.VARIANTS["v4_prod"]["post"]

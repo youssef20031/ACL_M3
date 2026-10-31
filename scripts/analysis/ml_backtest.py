@@ -101,6 +101,14 @@ relative to unflagged players, shrunk towards the literal factor. Every fold is 
 burn-in); the factors are in the results and the report. Like cop, compare on
 `--folds 2022-23,2023-24,2024-25`.
 
+Round of 2026-10-31 (tree count and seeds): the early-stopping curve's test top 20 was best at 50
+trees in every fold, while validation RMSE stops at 100-120 and the refit scales that up.
+v4_trees05 uses half the early-stopped count (es, refit and the in-season replay); v4_stop_picks
+chooses it by pick quality: among multiples of STOP_GRID trees up to the RMSE stop, the count whose
+validation-season top 20 scored most (smoothed over neighbouring counts). Both take production's
+multiplier (cop_prod), so compare them with v4_prod. The report also shows what averaging the seeds'
+predictions gains over the average single model (production ships one seed).
+
 Round of 2026-10-22: fixture-strength products and opponent-adjusted team ratings
 (ml/fixture_strength.py, variants matchup and ratings), transfer-market ranks and price changes
 (ml/market.py, variant transfers), a Tweedie objective (tweedie) and a two-stage model that
@@ -674,6 +682,11 @@ VARIANTS = {
     # 2026-10-31: production's multiplier since then (ml.snapshots.points_factor: the fitted DOUBT_POINTS
     # table), so v4_prod is what the site serves and v4 the literal chance it replaced
     "v4_prod": {"features": V4, "post": "cop_prod"},
+    # 2026-10-31: fewer trees. The test top 20 peaked at 50 trees in every fold of the early-stopping
+    # curve, below the RMSE stop (and refit_noscale gained +0.05): half the count, or the count whose
+    # validation-season picks scored most (_stop_trees)
+    "v4_trees05": {"features": V4, "post": "cop_prod", "tree_frac": 0.5},
+    "v4_stop_picks": {"features": V4, "post": "cop_prod", "stop": "picks"},
 }
 
 # Columns a post-prediction hook needs values in (cmd_run checks them like a variant's features)
@@ -830,6 +843,30 @@ def _refit_trees(best: int, rows: int, train_rows: int, spec: dict) -> int:
     return int(best)
 
 
+STOP_GRID = 10     # trees between the counts "stop": "picks" tries
+
+
+def _stop_trees(m, va: pd.DataFrame, tr: pd.DataFrame, cols, best: int, spec: dict) -> tuple:
+    """(trees, info): the early-stopped tree count a variant predicts with and refits from. `best`
+    (validation RMSE) unless the variant sets "tree_frac" (that share of it) or "stop": "picks": the
+    multiple of STOP_GRID up to `best` (or `best` itself) whose top 20 on the validation season
+    scored most, each count's score averaged with its neighbours'."""
+    if spec.get("tree_frac"):
+        return max(1, int(round(best * spec["tree_frac"]))), {}
+    if spec.get("stop") != "picks":
+        return best, {}
+    grid = list(range(STOP_GRID, best, STOP_GRID)) + [best]
+    dc = _dc_add(va, tr, spec)[0]
+    scores = []
+    for k in grid:
+        raw = m.predict(va[cols], iteration_range=(0, k)) + dc
+        pred = raw if spec.get("post") == "cop_fit" else _post(va, raw, spec)
+        scores.append(summarize(gw_table(va, pred, squads=False))["top20"])
+    smooth = np.convolve(np.pad(np.asarray(scores), 1, mode="edge"), np.ones(3) / 3, mode="valid")
+    k = grid[int(np.argmax(smooth))]
+    return k, {"stop_grid": {str(g): round(float(v), 4) for g, v in zip(grid, scores)}}
+
+
 def _dc_add(frame: pd.DataFrame, train: pd.DataFrame, spec: dict) -> tuple:
     """(the DC term to add to the model's predictions for `frame`, its scale fitted on `train`)."""
     if not spec.get("dc_term"):
@@ -891,16 +928,17 @@ def _xgb_fold(tr, va, te, both, cols, p, spec, curve: bool, adjust=None) -> tupl
           eval_set=[(va[cols], _eval_target(va, spec))], verbose=False)
     valid = m.evals_result()["validation_0"]["rmse"]
     best = _patience_stop(valid, PATIENCE)
+    used, stop_info = _stop_trees(m, va, tr, cols, best + 1, spec)
     dc_es, alpha_es = _dc_add(te, tr, spec)
-    pe = m.predict(te[cols], iteration_range=(0, best + 1)) + dc_es
-    n_refit = _refit_trees(best + 1, len(both), len(tr), spec)
+    pe = m.predict(te[cols], iteration_range=(0, used)) + dc_es
+    n_refit = _refit_trees(used, len(both), len(tr), spec)
     m2 = xgb.XGBRegressor(n_estimators=n_refit, **p)
     m2.fit(both[cols], _target(both, spec), sample_weight=_weights(both, spec.get("halflife")), verbose=False)
     dc_rf, alpha_rf = _dc_add(te, both, spec)
     pr = m2.predict(te[cols]) + dc_rf
-    info = {"best_iter": best + 1, "trained": len(valid), "n_refit": n_refit,
+    info = {"best_iter": best + 1, "used_trees": used, "trained": len(valid), "n_refit": n_refit,
             "valid_rmse_at_best": float(valid[best]), "valid_rmse_min": float(min(valid)),
-            "argmin_valid": int(np.argmin(valid)) + 1}
+            "argmin_valid": int(np.argmin(valid)) + 1, **stop_info}
     if spec.get("post") == "cop_fit":
         valid_pred = m.predict(va[cols], iteration_range=(0, best + 1)) + _dc_add(va, tr, spec)[0]
         info["cop_fit"] = cop_fit_factors(va, valid_pred)
@@ -1282,7 +1320,7 @@ def run_inseason(feats, spec, season, cols, params, present, name="", sink=None,
         m = xgb.XGBRegressor(n_estimators=NMAX, early_stopping_rounds=PATIENCE, **p)
         m.fit(tr[cols], _target(tr, spec), sample_weight=_weights(tr, spec.get("halflife")),
               eval_set=[(va[cols], _eval_target(va, spec))], verbose=False)
-        best = int(m.best_iteration) + 1
+        best, _ = _stop_trees(m, va, tr, cols, int(m.best_iteration) + 1, spec)
         if spec.get("post") == "cop_fit":
             valid_pred = m.predict(va[cols], iteration_range=(0, best)) + _dc_add(va, tr, spec)[0]
             cop_fits[seed] = cop_fit_factors(va, valid_pred)
@@ -1784,6 +1822,65 @@ def _cop_fit_lines(results: dict) -> list:
     return rows
 
 
+ENS_METRICS = ["top20", "capt_fpl", "sq_xi", "sq_fpl", "top20_xp", "sq_fpl_xp"]
+
+
+def _ens_gain(ens: pd.DataFrame, seeds: pd.DataFrame, n: int = 10000, seed: int = 0) -> dict:
+    """{metric: (mean, CI low, CI high)} of the seed-averaged predictions' per-gameweek table `ens`
+    minus the mean of the per-seed tables `seeds` (NaN gameweeks skipped), over a gameweek bootstrap."""
+    single = seeds.groupby(["season", "GW"]).mean(numeric_only=True)
+    m = ens.merge(single.reset_index(), on=["season", "GW"], suffixes=("", "_single"))
+    if m.empty:
+        return {}
+    idx = np.random.default_rng(seed).integers(0, len(m), size=(n, len(m)))
+    out = {}
+    for k in ENS_METRICS:
+        if k not in m or f"{k}_single" not in m:
+            continue
+        d = (m[k] - m[f"{k}_single"]).to_numpy(dtype=float)
+        if np.isnan(d).all():
+            continue
+        bs = np.nanmean(d[idx], axis=1)
+        out[k] = (float(np.nanmean(d)), float(np.nanpercentile(bs, 2.5)), float(np.nanpercentile(bs, 97.5)))
+    return out
+
+
+def _ensemble_rows(results: dict, tables: dict) -> list:
+    """Report rows of _ens_gain per variant and protocol (needs the per-seed tables)."""
+    rows = []
+    for name, r in results.items():
+        t = tables.get(name)
+        if t is None:
+            continue
+        for proto in ("refit", "es", "inseason"):
+            units = r.get("inseason", {}) if proto == "inseason" else \
+                {s: f[proto] for s, f in r.get("folds", {}).items() if proto in f}
+            tp = t[t["proto"] == proto]
+            if not units or tp["seed"].nunique() < 2:
+                continue
+            ens = pd.concat([pd.DataFrame(u["per_gw"]) for u in units.values()], ignore_index=True)
+            g = _ens_gain(ens, tp)
+            if g:
+                rows.append(f"| {name} | {proto} | {tp['seed'].nunique()} | "
+                            + " | ".join(_fmt(g[k], _digits(k)) if k in g else "-" for k in ENS_METRICS) + " |")
+    return rows
+
+
+def _stop_lines(results: dict) -> list:
+    """Report lines with each fold's RMSE stop and the tree count used, for variants that change it."""
+    lines = []
+    for name, r in results.items():
+        cells = []
+        for s, f in r.get("folds", {}).items():
+            infos = [i for i in f.get("seeds", {}).values() if isinstance(i, dict) and "used_trees" in i]
+            if infos and any(i["used_trees"] != i["best_iter"] for i in infos):
+                cells.append(f"{s[2:]}: {np.mean([i['best_iter'] for i in infos]):.0f} -> "
+                             f"{np.mean([i['used_trees'] for i in infos]):.0f}")
+        if cells:
+            lines.append(f"- **{name}**: " + "; ".join(cells))
+    return lines
+
+
 def _tail_lines(results: dict) -> list:
     """Report rows of the tail-shrink parameters per variant, protocol and fold (seeds pooled)."""
     rows = []
@@ -1895,6 +1992,18 @@ def cmd_report(args) -> None:
         lines.append("| variant | protocol | seeds | " + " | ".join(spread_keys) + " |")
         lines.append("|---|---|---|" + "---|" * len(spread_keys))
         lines += spread_rows
+    ens_rows = _ensemble_rows(results, tables)
+    if ens_rows:
+        lines.append("\n## Seed ensemble: the seeds' averaged predictions minus the average single model, per "
+                     "gameweek, gameweek bootstrap [95% CI]\n")
+        lines.append("Production ships one seed; this is what averaging the variant's seeds would add.\n")
+        lines.append("| variant | protocol | seeds | " + " | ".join(f"Δ{k}" for k in ENS_METRICS) + " |")
+        lines.append("|---|---|---|" + "---|" * len(ENS_METRICS))
+        lines += ens_rows
+    stop_rows = _stop_lines(results)
+    if stop_rows:
+        lines.append("\n## Tree counts: the RMSE early stop and the count used (mean over seeds), per fold\n")
+        lines += stop_rows
     if solves:
         lines.append(f"\n## Squad solves (time limit {SQ_TIME_LIMIT:.0f}s each)\n")
         for name, (secs, failed) in solves.items():

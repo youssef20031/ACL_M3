@@ -107,6 +107,18 @@ VARIANTS: Dict[str, Dict[str, Any]] = {
     "hitm2": {"set": {"HIT_MARGIN": 2.0}},
     "hitm4": {"set": {"HIT_MARGIN": 4.0}},
     "nohits": {"set": {"MAX_HITS_PER_GW": 0}},
+    # 2026-10-31: the chip rules (services/fpl_manager_planner.chip_decision), one threshold at a
+    # time each way; late_only plays a chip only when its window forces it
+    "tc8": {"set": {"TRIPLE_CAPTAIN_MIN_POINTS": 8.0, "TRIPLE_CAPTAIN_DOUBLE_MIN_POINTS": 6.0}},
+    "tc10": {"set": {"TRIPLE_CAPTAIN_MIN_POINTS": 10.0, "TRIPLE_CAPTAIN_DOUBLE_MIN_POINTS": 8.0}},
+    "bb9": {"set": {"BENCH_BOOST_MIN_POINTS": 9.0}},
+    "bb15": {"set": {"BENCH_BOOST_MIN_POINTS": 15.0}},
+    "fh8": {"set": {"FREE_HIT_MIN_GAIN": 8.0}},
+    "fh16": {"set": {"FREE_HIT_MIN_GAIN": 16.0}},
+    "wc10": {"set": {"WILDCARD_MIN_GAIN": 10.0}},
+    "wc25": {"set": {"WILDCARD_MIN_GAIN": 25.0}},
+    "late_only": {"set": {k: 1e6 for k in ("TRIPLE_CAPTAIN_MIN_POINTS", "TRIPLE_CAPTAIN_DOUBLE_MIN_POINTS",
+                                           "BENCH_BOOST_MIN_POINTS", "FREE_HIT_MIN_GAIN", "WILDCARD_MIN_GAIN")}},
 }
 
 
