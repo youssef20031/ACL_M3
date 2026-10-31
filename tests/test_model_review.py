@@ -276,6 +276,40 @@ class TestSaveAndReview(unittest.TestCase):
         self.assertIn("web_name", r["starters"][0])
         self.assertNotIn("element", r["starters"][0])
 
+    def test_live_points_fill_a_gameweek_being_played(self):
+        self.save(datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc))
+        picks = json.load(open(os.path.join(self.tmp.name, "model_picks", "2026-27", "gw08.json"), encoding="utf-8"))
+        first, second = picks["players"][0], picks["players"][1]
+        pd.DataFrame(columns=["element", "GW", "minutes", "total_points"]).to_csv(
+            os.path.join(self.tmp.name, "FPL_2026_2027.csv"), index=False)
+        self.write_meta([{"id": 8, "finished": False}])
+        feed = {"actual": {first["element"]: {"points": 9, "minutes": 90}}, "finished": list(first["fixtures"]),
+                "started": list(first["fixtures"]), "fetched_at": "2026-10-24T15:00:00+00:00"}
+        asked = []
+        with patch.object(mr, "datetime") as dt:
+            dt.now.return_value = datetime(2026, 10, 24, 15, tzinfo=timezone.utc)
+            dt.fromisoformat = datetime.fromisoformat
+            r = mr.get_model_review(live=lambda gw: asked.append(gw) or feed)
+            offline = mr.get_model_review(live=lambda gw: None)
+        self.assertEqual(asked, [8])
+        self.assertEqual(r["live"], {"fetched_at": "2026-10-24T15:00:00+00:00"})
+        rows = {p["name"]: p for p in r["starters"] + r["bench"]}
+        self.assertEqual(rows[first["name"]]["points"], 9)
+        self.assertIsNone(rows[second["name"]]["points"])          # still to play: undecided, not 0
+        self.assertIsNone(offline["live"])
+        self.assertIsNone({p["name"]: p for p in offline["starters"] + offline["bench"]}[first["name"]]["points"])
+
+    def test_finished_gameweek_doesnt_ask_for_live_points(self):
+        self.save(datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc))
+        pd.DataFrame(columns=["element", "GW", "minutes", "total_points"]).to_csv(
+            os.path.join(self.tmp.name, "FPL_2026_2027.csv"), index=False)
+        self.write_meta([{"id": 8, "finished": True}])
+        with patch.object(mr, "datetime") as dt:
+            dt.now.return_value = datetime(2026, 10, 27, tzinfo=timezone.utc)
+            dt.fromisoformat = datetime.fromisoformat
+            r = mr.get_model_review(live=lambda gw: self.fail("asked for live points"))
+        self.assertIsNone(r["live"])
+
     def test_no_review_before_the_deadline(self):
         self.save(datetime(2026, 10, 23, 6, 0, tzinfo=timezone.utc))
         self.write_meta([])

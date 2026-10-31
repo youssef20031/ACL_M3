@@ -26,6 +26,7 @@ import re
 import unicodedata
 import logging
 import io
+import pandas as pd
 from threading import Event as ThreadEvent, Lock, Thread
 from contextlib import asynccontextmanager
 from urllib.parse import quote_plus, urlparse
@@ -43,6 +44,7 @@ from typing import Optional
 from graph.queries import CypherQueries, QueryExecutor
 from graph.data_loader import FPLDataLoader
 from preprocessing.intent_classifier import IntentClassifier, Intent, is_team_squad_question
+from services import fixture_picks
 from preprocessing.entity_extractor import EntityExtractor
 # LAZY IMPORT: EmbeddingManager only when needed to avoid transformer/Keras dependency
 # from embeddings.embedding_manager import EmbeddingManager
@@ -479,8 +481,28 @@ register_ml_routes(app, _lazy_ml)
 # SIMPLE CSV-BASED ML ENDPOINTS (uses precomputed predictions)
 # ============================================================================
 
+def _filter_predictions(df, position: Optional[str], team: Optional[str], max_price: Optional[float],
+                        q: Optional[str]):
+    """The predictions rows for one position, club (any case), highest price (GBP m; the file's
+    value is in tenths) and name search (accents ignored)."""
+    if position:
+        df = df[df['position'] == position.upper()]
+    if team and team.strip():
+        df = df[df['team'].astype(str).str.lower() == team.strip().lower()]
+    if max_price is not None and 'value' in df.columns:
+        df = df[pd.to_numeric(df['value'], errors='coerce') <= max_price * 10 + 1e-9]
+    if q and q.strip():
+        from utils.text import normalize_name
+        wanted = normalize_name(q)
+        df = df[df['name'].astype(str).map(lambda n: wanted in normalize_name(n))]
+    return df
+
+
 @app.get("/api/ml/top-performers")
-async def get_top_performers_csv(position: Optional[str] = None, limit: int = Query(10, ge=1, le=50)):
+async def get_top_performers_csv(position: Optional[str] = None, limit: int = Query(10, ge=1, le=50),
+                                 team: Optional[str] = Query(None, max_length=40),
+                                 max_price: Optional[float] = Query(None, ge=3.0, le=20.0),
+                                 q: Optional[str] = Query(None, max_length=60)):
     """
     Get top performers from precomputed predictions CSV.
     This endpoint provides faster responses by using pre-generated predictions.
@@ -493,10 +515,8 @@ async def get_top_performers_csv(position: Optional[str] = None, limit: int = Qu
         )
     
     try:
-        # Filter by position if specified
-        if position:
-            df = df[df['position'] == position.upper()]
-        
+        df = _filter_predictions(df, position, team, max_price, q)
+
         # Sort by predicted points and get top N
         df = df.nlargest(limit, 'predicted_points')
         
@@ -517,6 +537,7 @@ async def get_top_performers_csv(position: Optional[str] = None, limit: int = Qu
                 "predicted_points": round(float(row['predicted_points']), 2),
                 "team_name": row['team'],
                 "position": row['position'],
+                "cost": round(float(row['value']) / 10.0, 1) if pd.notna(row.get('value')) else None,
                 "model_version": row.get('prediction_method', 'xgboost_v3'),
                 "fixture_context": fixture_context,
                 **_availability_fields(row),
@@ -539,7 +560,10 @@ async def get_top_performers_csv(position: Optional[str] = None, limit: int = Qu
 
 
 @app.get("/api/ml/best-value")
-async def get_best_value_csv(position: Optional[str] = None, limit: int = Query(10, ge=1, le=50)):
+async def get_best_value_csv(position: Optional[str] = None, limit: int = Query(10, ge=1, le=50),
+                             team: Optional[str] = Query(None, max_length=40),
+                             max_price: Optional[float] = Query(None, ge=3.0, le=20.0),
+                             q: Optional[str] = Query(None, max_length=60)):
     """
     Get best value players from precomputed predictions CSV.
     Value is calculated as predicted_points / (value / 10).
@@ -554,10 +578,7 @@ async def get_best_value_csv(position: Optional[str] = None, limit: int = Query(
     try:
         # Calculate value score (points per million)
         df = df.assign(value_score=df['predicted_points'] / (df['value'] / 10.0))
-        
-        # Filter by position if specified
-        if position:
-            df = df[df['position'] == position.upper()]
+        df = _filter_predictions(df, position, team, max_price, q)
         
         # Sort by value score and get top N
         df = df.nlargest(limit, 'value_score')
@@ -771,19 +792,24 @@ def default_required_season(method, params: Dict[str, Any], latest_season: Optio
         params["season"] = latest_season
 
 
+ML_MODEL_LABEL = "Gradient-boosted trees"
+ML_FALLBACK_LABEL = "Backup model"
+
+
 def _ml_model_label() -> Optional[str]:
-    """Which model serves user-facing predictions: the v3 predictions file when present,
-    else the legacy v2 stack (only a fallback)."""
+    """What the site calls the model behind user-facing predictions (shown on /predictions and
+    Settings, so plain words rather than an internal version): the predictions file's model
+    when present, else the legacy v2 stack (only a fallback)."""
     try:
         df = get_predictions_df()
         if df is not None and len(df):
-            return "xgboost v3"
+            return ML_MODEL_LABEL
     except Exception:
         pass
     ml_integration = app_state.get("ml_integration")
     if ml_integration:
         if ml_integration.predictors:
-            return "xgboost v2 (fallback)"
+            return ML_FALLBACK_LABEL
         if ml_integration.predictor:
             return ml_integration.predictor.model_type
     return None
@@ -1080,6 +1106,8 @@ class ModelReviewResponse(BaseModel):
     starters: List[ModelReviewPlayer]
     bench: List[ModelReviewPlayer]
     auto_subs: List[AutoSub]
+    # Set while the gameweek is played and FPL's live points were merged in: {fetched_at}.
+    live: Optional[Dict[str, Any]] = None
 
 
 class PlayerLeader(BaseModel):
@@ -1094,6 +1122,7 @@ class PlayerLeader(BaseModel):
     bonus: int
     total_points: int
     points_per_game: float
+    price: Optional[float] = None
     status: Optional[str] = None
     chance_of_playing_next_round: Optional[int] = None
     news: Optional[str] = None
@@ -1104,6 +1133,8 @@ class PlayerLeadersResponse(BaseModel):
     season: str
     sort: str
     position: Optional[str] = None
+    team: Optional[str] = None
+    max_price: Optional[float] = None
     players: List[PlayerLeader]
 
 
@@ -1588,6 +1619,12 @@ async def _prepare_answer(request: QueryRequest, conn) -> PreparedAnswer:
         # not the top-players fallback (a player intent with no player) or no query at all
         squad = is_team_squad_question(request.question, intent_result.intent, entities.players,
                                        entities.teams, entities.positions)
+        # "Who's expected to score most in each match next gameweek?": predictions grouped by
+        # fixture (services/fixture_picks.py), whatever intent the wording scored highest
+        per_fixture = not entities.players and fixture_picks.is_per_fixture_question(request.question)
+        if per_fixture:
+            intent_result.intent = Intent.PREDICTION
+        squad = squad and not per_fixture
         if squad:
             intent_result.intent = Intent.TEAM_ANALYSIS
             if len(entities.positions) > 1:
@@ -1685,7 +1722,12 @@ async def _prepare_answer(request: QueryRequest, conn) -> PreparedAnswer:
         ))
 
         # Step 5: ML Predictions
-        if intent_result.intent == Intent.PREDICTION:
+        predictions_df = get_predictions_df() if per_fixture else None
+        if per_fixture and predictions_df is not None:
+            per = fixture_picks.requested_count(request.question)
+            ml_context = fixture_picks.context(
+                fixture_picks.top_by_fixture(predictions_df.to_dict("records"), per), per)
+        elif intent_result.intent == Intent.PREDICTION:
             ml_integration = app_state.get("ml_integration")
             if ml_integration and ml_integration.predictor_loaded:
                 try:
@@ -2540,7 +2582,16 @@ def model_review_endpoint(gameweek: Optional[int] = Query(None, ge=1, le=38)):
     """The model's squad saved before a past gameweek's deadline, scored like FPL (auto-subs,
     captain/vice), with FPL's average and highest score. Default: the latest saved pick
     whose deadline has passed. 404 when there's none."""
-    return _season_call(model_review.get_model_review, gameweek, photo_for=_photo_for)
+    return _season_call(model_review.get_model_review, gameweek, photo_for=_photo_for, live=_live_points())
+
+
+def _live_points():
+    """FPL's live points for a gameweek being played (services/live_points.py, cached a
+    minute); LIVE_POINTS=0 turns them off, leaving the pipeline's season CSV."""
+    if os.getenv("LIVE_POINTS", "1").strip() == "0":
+        return None
+    from services import live_points
+    return live_points.gameweek_live
 
 
 @app.get("/api/ml-manager")
@@ -2559,9 +2610,15 @@ def ml_manager_endpoint():
         raise HTTPException(status_code=503, detail="The ML manager isn't available")
     not_found = (season_service.NotFoundError, getattr(fpl_manager, "NotFoundError", season_service.NotFoundError))
     try:
-        return fpl_manager.get_manager_view(photo_for=_photo_for)
+        return fpl_manager.get_manager_view(photo_for=_photo_for, live=_live_points())
     except not_found as exc:
         raise HTTPException(status_code=404, detail=str(exc) or "The ML manager hasn't started yet")
+
+
+@app.get("/api/clubs")
+def clubs(season: str = Query(CURRENT_SEASON, max_length=16), conn=Depends(get_neo4j_conn)):
+    """The clubs with players in a season, A-Z, for the tables' club filters."""
+    return _season_call(season_service.get_clubs, conn, season)
 
 
 @app.get("/api/players/leaders", response_model=PlayerLeadersResponse)
@@ -2570,13 +2627,45 @@ def player_leaders(
     position: Optional[LeaderPosition] = None,
     sort: LeaderSort = "total_points",
     limit: int = Query(50, ge=1, le=100),
+    team: Optional[str] = Query(None, max_length=40),
+    max_price: Optional[float] = Query(None, ge=3.0, le=20.0),
     conn=Depends(get_neo4j_conn),
 ):
     """Season leaders table from SEASON_STATS: one row per player, optionally one
-    position (that season's), sorted by `sort` then total points. Availability
-    (status/news) is only filled for the current season. Unknown season -> 404."""
+    position (that season's), one club and a highest average price (GBP m), sorted by
+    `sort` then total points. Availability (status/news) is only filled for the current
+    season. Unknown season -> 404."""
     return _season_call(season_service.get_player_leaders, conn, season, position, sort, limit,
-                        photo_for=_photo_for)
+                        photo_for=_photo_for, team=team, max_price=max_price)
+
+
+def _predicted_points_for(name: str) -> Optional[float]:
+    """Next gameweek's predicted points from the predictions file (None when he isn't in it)."""
+    df = get_predictions_df()
+    if df is None or not name:
+        return None
+    hit = df[df["name_lower"] == name.lower()]
+    return round(float(hit["predicted_points"].sum()), 2) if len(hit) else None
+
+
+@app.get("/api/players/profile")
+def player_profile(
+    name: str = Query(..., min_length=2, max_length=100),
+    season: Optional[str] = Query(None, max_length=16),
+    conn=Depends(get_neo4j_conn),
+):
+    """One player's season (or career, without `season`) from his PLAYED_IN rows: totals,
+    per-90 rates, where his points came from, and points by gameweek (or by season). Logic in
+    services/player_profile.py. Unknown player or season -> 404."""
+    from services import player_profile as pp
+
+    index = app_state.get("player_index")
+    resolved = (index.resolve(name) if index else None) or name
+    try:
+        return _season_call(pp.get_player_profile, conn, resolved, season, photo_for=_photo_for,
+                            predicted_for=_predicted_points_for)
+    except pp.NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 # ============================================================================

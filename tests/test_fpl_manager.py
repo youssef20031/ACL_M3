@@ -643,6 +643,21 @@ class TestView(unittest.TestCase):
         # Past GW12's deadline the plan counts even before the pipeline locks it
         late = fm.get_manager_view(SEASON, now=after(12))
         self.assertEqual(late["current"]["status"], fm.LOCKED)
+        self.assertIsNone(late["current"].get("result"))
+
+        # While GW12 is played, FPL's live points give a provisional result; the entry stays locked
+        squad = late["current"]["squad"]
+        feed = {"actual": {int(squad[0]["element"]): {"points": 7, "minutes": 90}}, "finished": [], "started": [],
+                "fetched_at": "2026-11-07T15:00:00+00:00"}
+        live = fm.get_manager_view(SEASON, now=after(12), live=lambda gw: feed if gw == 12 else None)
+        result = live["current"]["result"]
+        self.assertEqual(live["current"]["status"], fm.LOCKED)
+        self.assertEqual(result["live"], {"fetched_at": "2026-11-07T15:00:00+00:00"})
+        self.assertEqual(result["total"], 68 + result["points"])
+        scored = {p["element"]: p for p in result["players"]}
+        self.assertEqual(scored[int(squad[0]["element"])]["points"], 7)
+        # Before the deadline nobody asks FPL
+        fm.get_manager_view(SEASON, now=before(12), live=lambda gw: self.fail("asked before the deadline"))
 
 
 if __name__ == "__main__":

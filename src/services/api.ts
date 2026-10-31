@@ -375,7 +375,24 @@ export interface PitchAnswerCard {
   highlights: CardHighlight[];
 }
 
+/** The top predicted players of each next-gameweek match (both sides together). */
+export interface FixturePicksAnswerCard {
+  type: 'fixture_picks';
+  id: string;
+  title: string;
+  gameweek: number | null;
+  deadline: string | null;
+  per_fixture: number;
+  fixtures: {
+    home: string;
+    away: string;
+    kickoff_time: string | null;
+    players: { player: CardPlayer; points: number; /** Two matches this gameweek, points summed. */ double: boolean }[];
+  }[];
+}
+
 export type AnswerCard =
+  | FixturePicksAnswerCard
   | PlayerAnswerCard
   | ComparisonAnswerCard
   | LeaderboardAnswerCard
@@ -601,6 +618,8 @@ export interface ModelReviewResponse {
   gameweeks: number[];
   /** finished = FPL has marked the gameweek finished. */
   status: 'live' | 'finished';
+  /** Set when FPL's live points (fetched at this time) were merged in, during the gameweek. */
+  live?: { fetched_at: string } | null;
   deadline: string | null;
   /** When the pick was saved (ISO). */
   archived_at: string | null;
@@ -722,6 +741,8 @@ export interface MlManagerResult {
   league: MlManagerLeague | null;
   /** Points left on the bench. */
   bench_points?: number;
+  /** Set on a provisional result from FPL's live points while the gameweek is played. */
+  live?: { fetched_at: string } | null;
 }
 
 /** One gameweek of the manager (a saved gwNN.json). */
@@ -1007,6 +1028,8 @@ export interface PlayerLeader {
   total_points: number;
   /** total_points / games, 2 dp. */
   points_per_game: number;
+  /** Average price that season, £m (null when unknown). */
+  price?: number | null;
   /** FPL availability; current season only (null for past seasons). */
   status: string | null;
   chance_of_playing_next_round: number | null;
@@ -1027,6 +1050,53 @@ export interface PlayerLeadersParams {
   sort?: PlayerLeaderSort;
   /** 1–100, default 50. */
   limit?: number;
+  /** One club, as the graph names it (e.g. "Man City"). */
+  team?: string;
+  /** Highest average price, £m. */
+  max_price?: number;
+}
+
+/** Filters shared by the prediction lists. */
+export interface PredictionFilters {
+  team?: string;
+  max_price?: number;
+  /** Part of the player's name. */
+  q?: string;
+}
+
+export interface ProfileOpponent {
+  team: string;
+  home: boolean;
+  /** The player's side first, e.g. "2-0"; null before the match is played. */
+  score: string | null;
+}
+
+/** GET /api/players/profile: one season (or "All seasons") of a player's matches. */
+export interface PlayerProfile {
+  name: string;
+  season: string;
+  position: PositionCode | null;
+  team: string | null;
+  status: string | null;
+  news: string | null;
+  chance_of_playing_next_round: number | null;
+  matches: number;
+  appearances: number;
+  price: number | null;
+  selected: number | null;
+  points_per_game: number | null;
+  minutes_per_game: number | null;
+  /** Sums over the matches; optional stats are null when FPL has no data for them. */
+  totals: Record<string, number | null>;
+  /** Per 90 minutes; null under 90 minutes played. */
+  per90: Record<string, number | null>;
+  breakdown: { key: string; label: string; points: number }[];
+  /** One entry per gameweek (single season only). */
+  gameweeks: { gameweek: number; points: number; minutes: number; goals: number; assists: number; opponents: ProfileOpponent[] }[];
+  /** One entry per season (all seasons only). */
+  seasons: { season: string; team: string | null; points: number; minutes: number; appearances: number; goals: number; assists: number }[];
+  photo: string | null;
+  predicted_points: number | null;
 }
 
 // API functions
@@ -1059,11 +1129,15 @@ export const apiService = {
     return data;
   },
 
-  async predictTopPerformers(position?: string, topK: number = 10): Promise<TopPerformersResponse> {
+  async predictTopPerformers(
+    position?: string,
+    topK: number = 10,
+    filters: PredictionFilters = {},
+  ): Promise<TopPerformersResponse> {
     // Try GET endpoint first (faster, uses CSV), fallback to POST (uses Neo4j + ML)
     try {
       const { data } = await api.get<TopPerformersResponse>('/api/ml/top-performers', {
-        params: { position, limit: topK },
+        params: { position, limit: topK, ...filters },
         timeout: 5000,
       });
       return data;
@@ -1078,11 +1152,15 @@ export const apiService = {
     }
   },
 
-  async predictBestValue(position?: string, topK: number = 10): Promise<BestValueResponse> {
+  async predictBestValue(
+    position?: string,
+    topK: number = 10,
+    filters: PredictionFilters = {},
+  ): Promise<BestValueResponse> {
     // Try GET endpoint first (faster, uses CSV), fallback to POST (uses Neo4j + ML)
     try {
       const { data } = await api.get<BestValueResponse>('/api/ml/best-value', {
-        params: { position, limit: topK },
+        params: { position, limit: topK, ...filters },
         timeout: 5000,
       });
       return data;
@@ -1230,6 +1308,19 @@ export const apiService = {
       player1,
       player2,
       season,
+    });
+    return data;
+  },
+
+  async getClubs(season?: string): Promise<{ season: string; clubs: string[] }> {
+    const { data } = await api.get<{ season: string; clubs: string[] }>('/api/clubs', { params: { season } });
+    return data;
+  },
+
+  async getPlayerProfile(name: string, season?: string, signal?: AbortSignal): Promise<PlayerProfile> {
+    const { data } = await api.get<PlayerProfile>('/api/players/profile', {
+      params: { name, season: season && season !== 'All seasons' ? season : undefined },
+      signal,
     });
     return data;
   },

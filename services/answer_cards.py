@@ -1338,6 +1338,18 @@ def prediction_card(df: Any, *, position: Optional[str], fixtures: List[Dict[str
     }
 
 
+async def build_fixture_picks_card(ctx: CardContext) -> Optional[Dict[str, Any]]:
+    """The top predicted players of each next-gameweek match (services/fixture_picks.py)."""
+    from services import fixture_picks as fp
+    if ctx.predictions is None or not len(ctx.predictions):
+        return None
+    per = fp.requested_count(ctx.question)
+    fixtures = fp.top_by_fixture(ctx.predictions.to_dict("records"), per)
+    gw = next((f["gameweek"] for f in fixtures if f.get("gameweek")), None)
+    deadline = ctx.meta.get("next_deadline") if _int(ctx.meta.get("next_gameweek")) == gw else None
+    return fp.card(fixtures, per, player_ref=player_ref, photo=ctx.photo, codes=ctx.photo_codes, deadline=deadline)
+
+
 async def build_prediction_card(ctx: CardContext) -> Optional[Dict[str, Any]]:
     if ctx.predictions is None:
         return None
@@ -1701,6 +1713,9 @@ def plan(ctx: CardContext) -> List[Awaitable[Any]]:
             return [build_comparison_card(ctx, players[:2], season or ctx.current_season, emphasis="prediction")]
         if players:
             return [build_player_card(ctx, players[0], season, emphasis="prediction")]
+        from services.fixture_picks import is_per_fixture_question
+        if is_per_fixture_question(ctx.question):
+            return [build_fixture_picks_card(ctx)]
         return [build_prediction_card(ctx)]
     if intent == "player_comparison" and len(players) >= 2:
         return [build_comparison_card(ctx, players[:2], season)]

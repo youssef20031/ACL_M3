@@ -26,6 +26,7 @@ import {
   type Column,
 } from '../ui';
 import { SegmentedControl } from '../predictions/SegmentedControl';
+import { PlayerFilters } from './PlayerFilters';
 
 // 25 rows to start (50 made the page ~3,400px tall); "Show more" adds a page up to the API's max.
 const PAGE_SIZE = 25;
@@ -35,6 +36,10 @@ export interface LeadersFilters {
   season: string;
   position: PositionCode | null;
   sort: PlayerLeaderSort;
+  /** One club (graph name), or every club. */
+  team: string | null;
+  /** Highest average price that season, £m. */
+  maxPrice: number | null;
 }
 
 type PositionFilter = 'ALL' | PositionCode;
@@ -72,13 +77,23 @@ interface SeasonLeadersProps {
  * right across every player, not just the rows on screen.
  */
 export function SeasonLeaders({ seasons, filters, onFiltersChange, onSelectPlayer }: SeasonLeadersProps) {
-  const { season, position, sort } = filters;
+  const { season, position, sort, team, maxPrice } = filters;
   const [limit, setLimit] = useState(PAGE_SIZE);
 
   const leadersQuery = useQuery({
-    queryKey: ['player-leaders', season, position, sort, limit],
+    queryKey: ['player-leaders', season, position, sort, limit, team, maxPrice],
     queryFn: ({ signal }) =>
-      apiService.getPlayerLeaders({ season, position: position ?? undefined, sort, limit }, signal),
+      apiService.getPlayerLeaders(
+        {
+          season,
+          position: position ?? undefined,
+          sort,
+          limit,
+          team: team ?? undefined,
+          max_price: maxPrice ?? undefined,
+        },
+        signal,
+      ),
     staleTime: 5 * 60 * 1000,
     // Keep the old rows on screen while a new filter or sort loads.
     placeholderData: keepPreviousData,
@@ -159,16 +174,27 @@ export function SeasonLeaders({ seasons, filters, onFiltersChange, onSelectPlaye
     numberColumn('clean_sheets', 'CS', 'Clean sheets', 'sm'),
     numberColumn('bonus', 'Bonus', 'Bonus points', 'lg'),
     numberColumn('points_per_game', 'Pts/G', 'Points per game', 'md', (r) => r.points_per_game.toFixed(2)),
+    {
+      key: 'price',
+      header: 'Price',
+      description: 'Average price that season',
+      align: 'right',
+      hideBelow: 'lg',
+      render: (r) => <span className="text-fg-muted">{r.price != null ? `£${r.price.toFixed(1)}m` : '–'}</span>,
+    },
   ];
 
   const positionLabel = POSITION_OPTIONS.find((p) => p.value === (position ?? 'ALL'))?.label ?? 'All players';
+  const scope = [positionLabel, team, maxPrice != null ? `up to £${maxPrice.toFixed(1)}m` : null]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <section aria-labelledby="season-leaders-heading">
       <SectionHeading
         id="season-leaders-heading"
         title="Season leaders"
-        subtitle={`${season} · ${positionLabel} · top ${limit} by ${SORT_LABELS[sort].toLowerCase()}${
+        subtitle={`${season} · ${scope} · top ${limit} by ${SORT_LABELS[sort].toLowerCase()}${
           sort === 'points_per_game' ? ' (min. 270 minutes)' : ''
         }`}
         action={
@@ -222,7 +248,15 @@ export function SeasonLeaders({ seasons, filters, onFiltersChange, onSelectPlaye
         </div>
       </div>
 
-      {leadersQuery.isError && !leadersQuery.data ? (
+      <PlayerFilters
+        value={{ team, maxPrice, q: '' }}
+        onChange={(v) => setFilter({ team: v.team, maxPrice: v.maxPrice })}
+        season={season}
+        priceLabel="Max avg price"
+        className="mb-3"
+      />
+
+            {leadersQuery.isError && !leadersQuery.data ? (
         <Card padded={false}>
           <ErrorState
             title="Couldn't load season leaders"
@@ -232,7 +266,7 @@ export function SeasonLeaders({ seasons, filters, onFiltersChange, onSelectPlaye
         </Card>
       ) : (
         <DataTable
-          caption={`${season} season leaders, ${positionLabel.toLowerCase()}, sorted by ${SORT_LABELS[sort].toLowerCase()}`}
+          caption={`${season} season leaders, ${scope.toLowerCase()}, sorted by ${SORT_LABELS[sort].toLowerCase()}`}
           columns={columns}
           rows={rows}
           rowKey={(r) => r.name}
@@ -247,8 +281,8 @@ export function SeasonLeaders({ seasons, filters, onFiltersChange, onSelectPlaye
           empty={
             <EmptyState
               icon={<Trophy className="h-8 w-8" aria-hidden="true" />}
-              title={`No ${season} stats yet`}
-              description="Pick another season or position."
+              title={team || maxPrice != null ? 'No players match these filters' : `No ${season} stats yet`}
+              description="Pick another season, position, club or price."
               className="py-4"
             />
           }

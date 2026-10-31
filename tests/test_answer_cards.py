@@ -1001,3 +1001,33 @@ def test_greeting_suggests_starter_questions():
     request = api_main.QueryRequest(question="hello", is_first_message=True)
     response = asyncio.run(api_main.query_fpl(request, conn=FakeConn()))
     assert response.cards == [] and response.follow_ups == list(ac.STARTER_QUESTIONS)
+
+
+def test_per_match_prediction_question_gets_the_fixture_card():
+    ctx = context("prediction", None, {}, question="Players expected to get the most points for each match next GW")
+    cards, _ = build(ctx)
+    card = cards[0]
+    assert card["type"] == "fixture_picks" and card["gameweek"] == 7 and card["deadline"] == "2026-10-17T10:00:00Z"
+    city = next(f for f in card["fixtures"] if "Man City" in (f["home"], f["away"]))
+    assert city["players"][0]["player"]["name"] == "Erling Haaland"
+    assert city["players"][0]["player"]["photo"] == "https://photos.test/223094.png"
+    united = next(f for f in card["fixtures"] if "Man Utd" in (f["home"], f["away"]))
+    assert united["players"][0]["double"] is True
+
+
+def test_per_match_question_answers_from_predictions_by_fixture():
+    import api_main
+
+    conn = FakeConn()
+    inputs = dict(CARD_INPUTS, predictions=predictions_df(), meta={"next_gameweek": 7})
+    request = api_main.QueryRequest(
+        question="get the players expected to get the most points for each match in the next GW",
+        retrieval_method="Baseline")
+    with patch.dict(api_main.app_state, _app_state(conn), clear=True), \
+            patch.object(api_main, "_answer_card_inputs", return_value=inputs), \
+            patch.object(api_main, "get_predictions_df", return_value=predictions_df()):
+        response = asyncio.run(api_main.query_fpl(request, conn=conn))
+    assert response.intent == "prediction"          # the wording alone scores TOP_POINTS
+    assert "players with the most predicted points in each" in response.ml_context
+    assert "Erling Haaland (FWD, Man City): 8.6 pts" in response.ml_context
+    assert [c["type"] for c in response.cards] == ["fixture_picks"]

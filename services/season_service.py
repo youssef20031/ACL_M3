@@ -566,6 +566,7 @@ def leader_rows(raw: Iterable[Dict[str, Any]], include_availability: bool) -> Li
             "bonus": _int_or_none(r.get("bonus")) or 0,
             "total_points": total_points,
             "points_per_game": round(total_points / games, 2) if games > 0 else 0.0,
+            "price": round(float(r["price"]), 1) if r.get("price") is not None else None,
             "status": _str_or_none(r.get("status")) if include_availability else None,
             "chance_of_playing_next_round":
                 _int_or_none(r.get("chance_of_playing_next_round")) if include_availability else None,
@@ -636,10 +637,14 @@ PPG_MIN_MINUTES = 270
 LEADERS_QUERY = """
 MATCH (p:Player)-[st:SEASON_STATS]->(:Season {id: $season})
 WHERE ($position IS NULL OR st.position = $position) AND coalesce(st.minutes, 0) >= $min_minutes
+  AND ($team IS NULL OR toLower(st.team) = $team)
 // games = matches actually played (minutes > 0), FPL's basis for points per game. st.games
-// counts every gameweek row, including ones on the bench or injured.
-WITH p, st, coalesce(st.appearances, st.games, 0) AS games, coalesce(st.total_points, 0) AS total_points
-RETURN p.name AS name, st.team AS team, st.position AS position, games,
+// counts every gameweek row, including ones on the bench or injured, which is the base of the
+// average price (value is in tenths of a million).
+WITH p, st, coalesce(st.appearances, st.games, 0) AS games, coalesce(st.total_points, 0) AS total_points,
+     CASE WHEN coalesce(st.games, 0) > 0 THEN st.value_sum / 10.0 / st.games END AS price
+WHERE $max_price IS NULL OR (price IS NOT NULL AND price <= $max_price + 1e-9)
+RETURN p.name AS name, st.team AS team, st.position AS position, games, price,
        coalesce(st.minutes, 0) AS minutes, coalesce(st.goals, 0) AS goals,
        coalesce(st.assists, 0) AS assists, coalesce(st.clean_sheets, 0) AS clean_sheets,
        coalesce(st.bonus, 0) AS bonus, total_points,
@@ -652,16 +657,19 @@ LIMIT $limit
 
 
 def leaders_query(sort: str = "total_points", position: Optional[str] = None,
-                  season: str = CURRENT_SEASON, limit: int = 50) -> Tuple[str, Dict[str, Any]]:
-    """(cypher, params) for the season leaders table. Raises ValueError on an unknown
-    sort key or position."""
+                  season: str = CURRENT_SEASON, limit: int = 50, team: Optional[str] = None,
+                  max_price: Optional[float] = None) -> Tuple[str, Dict[str, Any]]:
+    """(cypher, params) for the season leaders table, optionally one club (any case) and a
+    highest average price in millions. Raises ValueError on an unknown sort key or position."""
     if sort not in LEADER_SORTS:
         raise ValueError(f"sort must be one of {', '.join(LEADER_SORTS)}")
     if position is not None and position not in LEADER_POSITIONS:
         raise ValueError(f"position must be one of {', '.join(LEADER_POSITIONS)}")
     query = LEADERS_QUERY.replace("{order_by}", LEADER_SORTS[sort])
     min_minutes = PPG_MIN_MINUTES if sort == "points_per_game" else 0
-    return query, {"season": season, "position": position, "limit": int(limit), "min_minutes": min_minutes}
+    return query, {"season": season, "position": position, "limit": int(limit), "min_minutes": min_minutes,
+                   "team": team.strip().lower() if team and team.strip() else None,
+                   "max_price": float(max_price) if max_price is not None else None}
 
 # ------------------------------------------------------------------ loaders (cached)
 
@@ -708,17 +716,37 @@ def get_injuries(conn, team: Optional[str] = None, photo_for: Optional[PhotoFn] 
 
 def get_player_leaders(conn, season: str = CURRENT_SEASON, position: Optional[str] = None,
                        sort: str = "total_points", limit: int = 50,
-                       photo_for: Optional[PhotoFn] = None) -> Dict[str, Any]:
+                       photo_for: Optional[PhotoFn] = None, team: Optional[str] = None,
+                       max_price: Optional[float] = None) -> Dict[str, Any]:
     """Season leaders: one row per player with SEASON_STATS in `season`, sorted by `sort`
     (desc), then total points and name. Unknown season -> NotFoundError."""
     if season not in SEASONS:
         raise NotFoundError(f"Unknown season {season}; expected one of {', '.join(SEASONS)}")
-    query, params = leaders_query(sort, position, season, limit)
-    rows = _cached(("leaders", season, position, sort, int(limit)),
+    query, params = leaders_query(sort, position, season, limit, team, max_price)
+    rows = _cached(("leaders", season, position, sort, int(limit), params["team"], params["max_price"]),
                    lambda: leader_rows(conn.execute_query(query, params),
                                        include_availability=season == CURRENT_SEASON))
-    return {"season": season, "sort": sort, "position": position,
-            "players": with_photos(rows, photo_for)}
+    return {"season": season, "sort": sort, "position": position, "team": team or None,
+            "max_price": max_price, "players": with_photos(rows, photo_for)}
+
+
+CLUBS_QUERY = """
+MATCH (:Player)-[st:SEASON_STATS]->(:Season {id: $season})
+WHERE st.team IS NOT NULL
+RETURN DISTINCT st.team AS team
+ORDER BY team
+"""
+
+
+def get_clubs(conn, season: str = CURRENT_SEASON) -> Dict[str, Any]:
+    """The clubs with players in `season` (graph names, A-Z), for the tables' club filters.
+    Unknown season -> NotFoundError."""
+    if season not in SEASONS:
+        raise NotFoundError(f"Unknown season {season}; expected one of {', '.join(SEASONS)}")
+    clubs = _cached(("clubs", season),
+                    lambda: [str(r["team"]) for r in conn.execute_query(CLUBS_QUERY, {"season": season})
+                             if r.get("team")])
+    return {"season": season, "clubs": clubs}
 
 
 def get_team_of_the_week(conn, mode: str = "predicted", gameweek: Optional[int] = None,
