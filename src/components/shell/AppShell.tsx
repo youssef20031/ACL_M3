@@ -9,6 +9,7 @@ import { SiteHeader } from './SiteHeader';
 import { DeadlineBar } from './DeadlineBar';
 import { SiteFooter } from './SiteFooter';
 import { PlayerSearchDialog } from './PlayerSearchDialog';
+import { PlayerDialogProvider } from '../players/PlayerDialog';
 import { ConsentBanner } from './ConsentBanner';
 import { MobileAskButton } from './MobileAskButton';
 import { useConsent } from '../../lib/consent';
@@ -96,6 +97,7 @@ export function AppShell() {
   const fullHeight = FULL_HEIGHT_ROUTES.includes(location.pathname);
 
   return (
+    <PlayerDialogProvider>
     <div className={cn('pm-root flex flex-col', fullHeight ? 'h-[100dvh]' : 'min-h-[100dvh]')}>
       <a
         href="#main"
@@ -116,5 +118,6 @@ export function AppShell() {
       <ConsentBanner />
       <PlayerSearchDialog open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
+    </PlayerDialogProvider>
   );
 }

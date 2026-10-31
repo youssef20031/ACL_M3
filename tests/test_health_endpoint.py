@@ -41,10 +41,11 @@ def test_health_reports_ml_and_model_label():
     with patch.object(api_main, "get_predictions_df", return_value=None):
         body = _health(_state(ml_integration=ml))
     assert body["ml_available"] is True
-    assert body["ml_model_type"] == "xgboost v2 (fallback)"
+    assert body["ml_model_type"] == api_main.ML_FALLBACK_LABEL == "Backup model"
 
 
 def test_health_prefers_v3_predictions_file():
     with patch.object(api_main, "get_predictions_df", return_value=[{"name": "x"}]):
         body = _health(_state())
-    assert body["ml_model_type"] == "xgboost v3"
+    assert body["ml_model_type"] == api_main.ML_MODEL_LABEL
+    assert "v3" not in body["ml_model_type"].lower()

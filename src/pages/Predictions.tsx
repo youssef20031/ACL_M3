@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import { Info, Lightbulb, RefreshCw, Sparkles } from 'lucide-react';
 import { apiService, handleApiError, MLPrediction } from '../services/api';
 import { useAppStore } from '../store/appStore';
@@ -29,8 +29,16 @@ import {
 } from '../components/ui';
 import { SegmentedControl } from '../components/predictions/SegmentedControl';
 import { usePageMeta } from '../hooks/usePageMeta';
+import { usePlayerDialog } from '../hooks/usePlayerDialog';
+import { PlayerFilters } from '../components/players/PlayerFilters';
+import { EMPTY_PLAYER_FILTERS, hasPlayerFilters, useDebounced, type PlayerFilterValues } from '../hooks/usePlayerFilters';
+import type { PlayerHint } from '../components/players/PlayerProfileView';
 
 type PositionFilter = 'ALL' | 'GK' | 'DEF' | 'MID' | 'FWD';
+
+// Rows per page, and the API's most (limit is capped at 50).
+const PAGE_SIZE = 20;
+const MAX_ROWS = 50;
 type View = 'top' | 'value';
 
 const POSITIONS: { value: PositionFilter; label: string; shortLabel: string }[] = [
@@ -92,11 +100,42 @@ function Opponent({ fixture }: { fixture: MLPrediction['fixture_context'] }) {
   );
 }
 
-function PlayerCell({ row, avatar }: { row: PredictionRow; avatar: string | null | undefined }) {
+const hintOf = (row: PredictionRow, avatar: string | null | undefined): PlayerHint => ({
+  name: row.player_name,
+  team: row.team_name,
+  position: row.position,
+  photo: avatar,
+  status: row.status,
+  news: row.news,
+  chance: row.chance_of_playing_next_round,
+});
+
+function PlayerCell({
+  row,
+  avatar,
+  onOpen,
+}: {
+  row: PredictionRow;
+  avatar: string | null | undefined;
+  onOpen?: (row: PredictionRow) => void;
+}) {
   const unavailable = row.status && row.status !== 'a';
   return (
     // Narrow on phones so rank + player + xPts fit 390px without hiding the points off-screen
     <span className="block max-w-[11.5rem] sm:max-w-[18rem]">
+      {onOpen && (
+        // The row is clickable with a mouse; this is the keyboard way in (and names the action).
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(row);
+          }}
+          className="sr-only focus:not-sr-only focus:mb-1 focus:inline-block focus:rounded-sm focus:text-micro focus:text-accent"
+        >
+          Show {row.player_name}&apos;s stats
+        </button>
+      )}
       <PlayerWithClub
         playerName={row.player_name}
         teamName={row.team_name}
@@ -203,10 +242,19 @@ function PlayerLookup() {
 }
 
 export function Predictions() {
-  usePageMeta({ title: "Predictions", description: "Expected FPL points for every player next gameweek from a leakage-free XGBoost model, adjusted for availability." });
+  usePageMeta({ title: "Predictions", description: "Expected FPL points for every player next gameweek from a machine-learning model trained on every season since 2020-21, adjusted for availability." });
   const { mlAvailable, mlModelType } = useAppStore();
   const [selectedPosition, setSelectedPosition] = useState<string | undefined>(undefined);
   const [view, setView] = useState<View>('top');
+  const [filters, setFilters] = useState<PlayerFilterValues>(EMPTY_PLAYER_FILTERS);
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const q = useDebounced(filters.q.trim());
+  const apiFilters = { team: filters.team ?? undefined, max_price: filters.maxPrice ?? undefined, q: q || undefined };
+  const dialog = usePlayerDialog();
+  const changeFilters = (next: PlayerFilterValues) => {
+    setFilters(next);
+    setLimit(PAGE_SIZE);
+  };
 
   const {
     data: topPerformers,
@@ -216,8 +264,9 @@ export function Predictions() {
     isFetching: fetchingTop,
     refetch: refetchTop,
   } = useQuery({
-    queryKey: ['ml', 'top-performers', selectedPosition],
-    queryFn: () => apiService.predictTopPerformers(selectedPosition, 12),
+    queryKey: ['ml', 'top-performers', selectedPosition, limit, apiFilters],
+    queryFn: () => apiService.predictTopPerformers(selectedPosition, limit, apiFilters),
+    placeholderData: keepPreviousData,
     enabled: mlAvailable,
     retry: 1,
     staleTime: 15 * 60 * 1000, // precomputed predictions; manual Refresh still refetches
@@ -231,8 +280,9 @@ export function Predictions() {
     isFetching: fetchingValue,
     refetch: refetchValue,
   } = useQuery({
-    queryKey: ['ml', 'best-value', selectedPosition],
-    queryFn: () => apiService.predictBestValue(selectedPosition, 6),
+    queryKey: ['ml', 'best-value', selectedPosition, limit, apiFilters],
+    queryFn: () => apiService.predictBestValue(selectedPosition, limit, apiFilters),
+    placeholderData: keepPreviousData,
     enabled: mlAvailable,
     retry: 1,
     staleTime: 15 * 60 * 1000,
@@ -292,7 +342,13 @@ export function Predictions() {
     header: 'Player',
     sticky: true,
     sortValue: (r) => r.player_name,
-    render: (r) => <PlayerCell row={r} avatar={avatarByName[r.player_name]} />,
+    render: (r) => (
+      <PlayerCell
+        row={r}
+        avatar={avatarByName[r.player_name]}
+        onOpen={dialog ? (row) => dialog.openPlayer(hintOf(row, avatarByName[row.player_name])) : undefined}
+      />
+    ),
   };
   const opponentColumn: Column<PredictionRow> = {
     key: 'opponent',
@@ -330,11 +386,23 @@ export function Predictions() {
     ),
   });
 
+  const priceColumn = (hideBelow?: Column<PredictionRow>['hideBelow']): Column<PredictionRow> => ({
+    key: 'price',
+    header: 'Price',
+    align: 'right',
+    hideBelow,
+    sortValue: (r) => priceOf(r),
+    render: (r) => {
+      const price = priceOf(r);
+      return price != null ? `£${price.toFixed(1)}m` : '–';
+    },
+  });
   const topColumns: Column<PredictionRow>[] = [
     rankColumn,
     playerColumn,
     { ...opponentColumn, hideBelow: 'sm' },
     kickoffColumn,
+    priceColumn('md'),
     pointsColumn(true),
   ];
   const valueColumns: Column<PredictionRow>[] = [
@@ -342,16 +410,7 @@ export function Predictions() {
     playerColumn,
     { ...opponentColumn, hideBelow: 'sm' },
     kickoffColumn,
-    {
-      key: 'price',
-      header: 'Price',
-      align: 'right',
-      sortValue: (r) => priceOf(r),
-      render: (r) => {
-        const price = priceOf(r);
-        return price != null ? `£${price.toFixed(1)}m` : '–';
-      },
-    },
+    priceColumn(),
     { ...pointsColumn(false), hideBelow: 'sm' },
     {
       key: 'value_score',
@@ -384,11 +443,11 @@ export function Predictions() {
           </>
         }
         title="Predictions"
-        description="Expected FPL points for the next gameweek from our leakage-free XGBoost model, adjusted for each player's chance of playing."
+        description="Expected FPL points for the next gameweek from our machine-learning model, trained on every season since 2020-21 and adjusted for each player's chance of playing."
         actions={
           <>
             <Chip tone="brand" icon={<Sparkles className="h-3 w-3 text-accent" aria-hidden="true" />} className="h-8 px-2.5">
-              Model: <span className="uppercase">{mlModelType || 'Linear Reg'}</span>
+              Model: {mlModelType || 'Gradient-boosted trees'}
             </Chip>
             <ButtonLink to="/model" variant="secondary" size="sm" icon={<Lightbulb className="h-4 w-4" aria-hidden="true" />}>
               Why these numbers?
@@ -418,13 +477,18 @@ export function Predictions() {
             ]}
           />
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-4 flex flex-col gap-3">
             <SegmentedControl
               label="Filter by position"
               value={(selectedPosition ?? 'ALL') as PositionFilter}
-              onChange={(v) => setSelectedPosition(v === 'ALL' ? undefined : v)}
+              onChange={(v) => {
+                setSelectedPosition(v === 'ALL' ? undefined : v);
+                setLimit(PAGE_SIZE);
+              }}
               options={POSITIONS}
+              className="self-start"
             />
+            <PlayerFilters value={filters} onChange={changeFilters} search />
           </div>
 
           <TabPanel idPrefix="predictions" value={view} className="mt-4">
@@ -447,7 +511,9 @@ export function Predictions() {
                   loading={loadingTop}
                   skeletonRows={12}
                   initialSort={{ key: 'predicted_points', direction: 'desc' }}
-                  empty="No predictions for this position."
+                  onRowClick={dialog ? (r) => dialog.openPlayer(hintOf(r, avatarByName[r.player_name])) : undefined}
+                  className={cn('transition-opacity', fetchingTop && !loadingTop && 'opacity-60')}
+                  empty={hasPlayerFilters(filters) ? 'No players match these filters.' : 'No predictions for this position.'}
                 />
               )
             ) : errorValue ? (
@@ -465,7 +531,9 @@ export function Predictions() {
                   loading={loadingValue}
                   skeletonRows={6}
                   initialSort={{ key: 'value_score', direction: 'desc' }}
-                  empty="No value picks found."
+                  onRowClick={dialog ? (r) => dialog.openPlayer(hintOf(r, avatarByName[r.player_name])) : undefined}
+                  className={cn('transition-opacity', fetchingValue && !loadingValue && 'opacity-60')}
+                  empty={hasPlayerFilters(filters) ? 'No players match these filters.' : 'No value picks found.'}
                 />
                 <p className="mt-3 text-data text-fg-subtle">
                   Ranked by predicted points per £1m of price: high predicted points at a low cost stretch your budget further.
@@ -473,6 +541,18 @@ export function Predictions() {
               </>
             )}
           </TabPanel>
+          {(view === 'top' ? topRows : valueRows).length >= limit && limit < MAX_ROWS && (
+            <div className="mt-3 flex justify-center">
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={view === 'top' ? fetchingTop : fetchingValue}
+                onClick={() => setLimit((n) => Math.min(n + PAGE_SIZE, MAX_ROWS))}
+              >
+                Show more
+              </Button>
+            </div>
+          )}
         </div>
 
         <aside className="space-y-4">

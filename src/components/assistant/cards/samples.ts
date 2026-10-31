@@ -194,6 +194,34 @@ export const SAMPLE_CARDS: AnswerCard[] = [
     ],
   },
   {
+    type: 'fixture_picks',
+    id: 'sample-fixture-picks',
+    title: 'Top predicted players in each match',
+    gameweek: 7,
+    deadline: null,
+    per_fixture: 2,
+    fixtures: [
+      {
+        home: 'Man City',
+        away: 'Chelsea',
+        kickoff_time: '2026-10-17T11:30:00Z',
+        players: [
+          { player: player('Striker', 'Man City', 'FWD'), points: 8.1, double: false },
+          { player: player('Playmaker', 'Chelsea', 'MID'), points: 6.4, double: false },
+        ],
+      },
+      {
+        home: 'Spurs',
+        away: 'Arsenal',
+        kickoff_time: '2026-10-17T14:00:00Z',
+        players: [
+          { player: player('Winger', 'Arsenal', 'MID'), points: 9.6, double: true },
+          { player: player('Another Forward', 'Spurs', 'FWD'), points: 4.5, double: false },
+        ],
+      },
+    ],
+  },
+  {
     type: 'prediction',
     id: 'sample-prediction',
     title: 'Captain picks',

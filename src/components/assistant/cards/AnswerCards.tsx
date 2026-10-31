@@ -9,6 +9,7 @@ import { AskProvider, ExportProvider, PhotoLookupProvider, type ShareState } fro
 import { PlayerAnswerCard } from './PlayerAnswerCard';
 import { ComparisonAnswerCard } from './ComparisonAnswerCard';
 import { LeaderboardAnswerCard } from './LeaderboardAnswerCard';
+import { FixturePicksAnswerCard } from './FixturePicksAnswerCard';
 import { PredictionAnswerCard } from './PredictionAnswerCard';
 import { TeamAnswerCard } from './TeamAnswerCard';
 import { FixturesAnswerCard } from './FixturesAnswerCard';
@@ -34,6 +35,8 @@ class CardBoundary extends Component<{ children: ReactNode }, { failed: boolean 
 
 function CardView({ card }: { card: AnswerCard }) {
   switch (card.type) {
+    case 'fixture_picks':
+      return <FixturePicksAnswerCard card={card} />;
     case 'player':
       return <PlayerAnswerCard card={card} />;
     case 'comparison':
@@ -58,6 +61,8 @@ function CardView({ card }: { card: AnswerCard }) {
 /** A short name for a card, for screen-reader summaries ("Player: Erling Haaland"). */
 export function cardLabel(card: AnswerCard): string {
   switch (card.type) {
+    case 'fixture_picks':
+      return `${card.title}${card.gameweek ? `, gameweek ${card.gameweek}` : ''}`;
     case 'player':
       return `Player: ${card.player.name}`;
     case 'comparison':

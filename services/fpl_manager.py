@@ -47,9 +47,10 @@ import math
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from config.settings import CURRENT_SEASON, ML_MANAGER_SEASON, ML_MANAGER_START_GW
+from services import live_points as lp
 from services import model_review as mr
 from services import season_service as ss
 from services import team_optimizer as opt
@@ -1021,15 +1022,20 @@ def _cached_entries(live: str, season: str) -> List[Dict[str, Any]]:
 
 
 def get_manager_view(season: str = CURRENT_SEASON, photo_for: Optional[ss.PhotoFn] = None,
-                     now: Optional[datetime] = None) -> Dict[str, Any]:
+                     now: Optional[datetime] = None,
+                     live: Optional[Callable[[int], Optional[Dict[str, Any]]]] = None) -> Dict[str, Any]:
     """The /api/ml-manager payload: the latest entry (the planned next gameweek, or the
     last locked/scored one), chips, history and totals. NotFoundError until the first
-    entry exists. Players get a `photo` like the other team-of-the-week payloads."""
-    live = ss.live_dir()
-    entries = _cached_entries(live, season)
+    entry exists. Players get a `photo` like the other team-of-the-week payloads.
+
+    With `live` (services.live_points.gameweek_live), a locked gameweek being played gets a
+    provisional `result` from FPL's live points (`result.live` says when they were fetched); the
+    entry stays locked, and the pipeline still scores it once FPL has checked the gameweek."""
+    live_dir = ss.live_dir()
+    entries = _cached_entries(live_dir, season)
     if not entries:
         raise ss.NotFoundError("The ML manager hasn't picked its first squad yet")
-    rules = load_rules(live, season)
+    rules = load_rules(live_dir, season)
     start = ML_MANAGER_START_GW if season == ML_MANAGER_SEASON else int(entries[0]["gameweek"])
     state = replay(entries, rules, season, start)
     current = copy.deepcopy(entries[-1])
@@ -1044,6 +1050,15 @@ def get_manager_view(season: str = CURRENT_SEASON, photo_for: Optional[ss.PhotoF
             side["web_name"] = side.get("web_name") or lookup["web_name"].get(side.get("name"))
             side["_code"] = lookup["code"].get(_int(side.get("element")))
     current["team_value"] = team_value(current.get("squad") or [])
+    if live is not None and current.get("status") == LOCKED and not current.get("result"):
+        gw = int(current["gameweek"])
+        event = mr.event_info(gw, season)
+        feed = live(gw) if lp.is_live(event, current.get("deadline"), now) else None
+        if feed:
+            actual = lp.merge(mr.actual_by_element(gw, season), feed)
+            finished = sorted(set(ss.read_meta(season).get("finished_fixtures") or []) | set(feed["finished"]))
+            result = score_entry(current, actual, event, finished, previous_total=int(state["totals"]["points"]))
+            current["result"] = {**result, "live": {"fetched_at": feed["fetched_at"]}}
 
     used = list(state["chips_used"])
     if current.get("status") == PLANNED:

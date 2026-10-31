@@ -73,11 +73,25 @@ def test_games_counts_appearances_not_gameweek_rows():
 
 def test_query_is_parameterised():
     query, params = ss.leaders_query("goals", "MID", "2023-24", 25)
-    assert params == {"season": "2023-24", "position": "MID", "limit": 25, "min_minutes": 0}
+    assert params == {"season": "2023-24", "position": "MID", "limit": 25, "min_minutes": 0,
+                      "team": None, "max_price": None}
     assert "(:Season {id: $season})" in query
     assert "st.position = $position" in query      # the position that season
     assert "LIMIT $limit" in query
     assert "2023-24" not in query and "'MID'" not in query
+
+
+def test_club_and_price_filters_are_parameters():
+    query, params = ss.leaders_query("total_points", team="  Man City ", max_price=7.5)
+    assert params["team"] == "man city" and params["max_price"] == 7.5
+    assert "toLower(st.team) = $team" in query and "price <= $max_price" in query
+    assert "Man City" not in query
+
+
+def test_price_is_the_average_in_millions():
+    row = ss.leader_rows([raw_row(price=7.4999)], include_availability=True)[0]
+    assert row["price"] == 7.5
+    assert ss.leader_rows([raw_row()], include_availability=True)[0]["price"] is None
 
 
 def test_no_position_passes_null():
@@ -130,7 +144,8 @@ def test_get_player_leaders_payload_and_photo():
     assert res["season"] == CURRENT_SEASON and res["sort"] == "goals" and res["position"] == "MID"
     query, params = conn.execute_query.call_args.args
     assert "ORDER BY goals DESC" in query
-    assert params == {"season": CURRENT_SEASON, "position": "MID", "limit": 10, "min_minutes": 0}
+    assert params == {"season": CURRENT_SEASON, "position": "MID", "limit": 10, "min_minutes": 0,
+                      "team": None, "max_price": None}
     player = res["players"][0]
     assert player["photo"] == "https://img/salah.png" and "_code" not in player
     photo_for.assert_called_once_with("Mohamed Salah", "Liverpool", 118748)
@@ -181,26 +196,29 @@ def test_route_defaults(client, conn):
     body = resp.json()
     assert body["season"] == CURRENT_SEASON and body["sort"] == "total_points" and body["position"] is None
     _, params = conn.execute_query.call_args.args
-    assert params == {"season": CURRENT_SEASON, "position": None, "limit": 50, "min_minutes": 0}
+    assert params == {"season": CURRENT_SEASON, "position": None, "limit": 50, "min_minutes": 0,
+                      "team": None, "max_price": None}
     player = body["players"][0]
     assert player["points_per_game"] == 8.3
     assert player["photo"] == api_main.FPL_PHOTO_URL.format(code=118748)   # fpl_code fallback
     assert set(player) == {"name", "team", "position", "games", "minutes", "goals", "assists",
-                           "clean_sheets", "bonus", "total_points", "points_per_game", "status",
+                           "clean_sheets", "bonus", "total_points", "points_per_game", "price", "status",
                            "chance_of_playing_next_round", "news", "photo"}
 
 
 def test_route_passes_filters(client, conn):
-    resp = client.get(f"/api/players/leaders?season={PAST_SEASON}&position=DEF&sort=clean_sheets&limit=5")
+    resp = client.get(f"/api/players/leaders?season={PAST_SEASON}&position=DEF&sort=clean_sheets&limit=5"
+                      "&team=Arsenal&max_price=5.5")
     assert resp.status_code == 200
     query, params = conn.execute_query.call_args.args
-    assert params == {"season": PAST_SEASON, "position": "DEF", "limit": 5, "min_minutes": 0}
+    assert params == {"season": PAST_SEASON, "position": "DEF", "limit": 5, "min_minutes": 0,
+                      "team": "arsenal", "max_price": 5.5}
     assert "ORDER BY clean_sheets DESC" in query
     assert resp.json()["players"][0]["status"] is None
 
 
 @pytest.mark.parametrize("qs", ["sort=name", "sort=total_points%20ASC", "position=GKP", "position=mid",
-                                "limit=0", "limit=101", "limit=abc"])
+                                "limit=0", "limit=101", "limit=abc", "max_price=1", "max_price=x"])
 def test_route_rejects_bad_params(client, conn, qs):
     assert client.get(f"/api/players/leaders?{qs}").status_code == 422
     conn.execute_query.assert_not_called()
@@ -220,3 +238,12 @@ def test_route_neo4j_errors_are_503(client, conn):
 def test_route_without_connection_is_503(client):
     with patch.dict(api_main.app_state, dict(api_main.app_state, neo4j_conn=None)):
         assert client.get("/api/players/leaders").status_code == 503
+
+
+def test_clubs_for_a_season(client, conn):
+    conn.execute_query.return_value = [{"team": "Arsenal"}, {"team": None}, {"team": "Man City"}]
+    resp = client.get(f"/api/clubs?season={PAST_SEASON}")
+    assert resp.status_code == 200 and resp.json() == {"season": PAST_SEASON, "clubs": ["Arsenal", "Man City"]}
+    query, params = conn.execute_query.call_args.args
+    assert params == {"season": PAST_SEASON} and "DISTINCT st.team" in query
+    assert client.get("/api/clubs?season=1999-00").status_code == 404

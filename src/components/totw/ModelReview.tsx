@@ -27,6 +27,8 @@ import {
   type Column,
 } from '../ui';
 import { PITCH_LINES } from './pitchLines';
+import { usePlayerDialog } from '../../hooks/usePlayerDialog';
+import { PlayerNameButton } from '../players/PlayerNameButton';
 
 // "Model vs actual" view of the Team of the Week page: the squad the model picked before a past
 // deadline and what it scored. The backend applies FPL's auto-sub and vice-captain rules; this
@@ -110,6 +112,7 @@ function ArmbandTag({ player }: { player: ModelReviewPlayer }) {
 }
 
 function ReviewPitch({ review, cameOnFor }: { review: ModelReviewResponse; cameOnFor: Record<string, ModelReviewPlayer> }) {
+  const dialog = usePlayerDialog();
   return (
     <Pitch label={`Model's team for gameweek ${review.gameweek}, after automatic substitutions`}>
       {PITCH_LINES.map((line) => (
@@ -132,6 +135,12 @@ function ReviewPitch({ review, cameOnFor }: { review: ModelReviewResponse; cameO
                   opponents={p.opponents}
                   captain={p.captain}
                   viceCaptain={p.vice_captain}
+                  onClick={
+                    dialog
+                      ? () => dialog.openPlayer({ name: p.name, team: p.team, position: p.position, photo: p.photo })
+                      : undefined
+                  }
+                  actionLabel={`${p.name}: show stats`}
                   marker={
                     p.subbed_in ? (
                       <SubMarker
@@ -225,7 +234,10 @@ function Bench({ review, replacedBy }: { review: ModelReviewResponse; replacedBy
               <PlayerAvatar name={p.name} src={p.photo} size={32} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="truncate text-sm font-semibold text-fg">{p.name}</span>
+                  <PlayerNameButton
+                    player={{ name: p.name, team: p.team, position: p.position, photo: p.photo }}
+                    className="text-sm font-semibold text-fg"
+                  />
                   <ArmbandTag player={p} />
                   {p.subbed_out && <SubMarker direction="out" label="Didn’t play" decorative />}
                 </span>
@@ -305,9 +317,10 @@ function ComparisonTable({
           <PlayerAvatar name={p.name} src={p.photo} size={28} />
           <span className="min-w-0">
             <span className="flex items-center gap-1.5">
-              <span title={p.name} className={cn('max-w-[7.5rem] truncate font-semibold sm:max-w-[14rem]', bench && 'text-fg-muted')}>
-                {p.name}
-              </span>
+              <PlayerNameButton
+                player={{ name: p.name, team: p.team, position: p.position, photo: p.photo }}
+                className={cn('max-w-[7.5rem] truncate font-semibold sm:max-w-[14rem]', bench && 'text-fg-muted')}
+              />
               <ArmbandTag player={p} />
               {p.subbed_in && (
                 <SubMarker direction="in" label={cameOnFor[p.name] ? `Came off the bench for ${cameOnFor[p.name].name}` : 'Came off the bench'} />
@@ -493,7 +506,11 @@ export function ModelReview({
           {review?.status === 'live' && (
             <p className="flex items-start gap-2 text-data text-fg-muted">
               <Chip tone="danger">Live</Chip>
-              <span>Points are still coming in, and auto-subs stay provisional until the gameweek is finished.</span>
+              <span>
+                {review.live
+                  ? `FPL's live points, updated ${new Date(review.live.fetched_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} and every minute. Bonus points appear once FPL adds them; auto-subs stay provisional until the gameweek is finished.`
+                  : 'Points are still coming in, and auto-subs stay provisional until the gameweek is finished.'}
+              </span>
             </p>
           )}
 

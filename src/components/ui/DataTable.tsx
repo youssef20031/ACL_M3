@@ -201,7 +201,7 @@ export function DataTable<T>({
                 key={rowKey(row, i)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
-                  'group border-b border-line last:border-0 transition-colors hover:bg-surface-2',
+                  'group border-b border-line last:border-0',
                   onRowClick && 'cursor-pointer',
                   rowClassName?.(row, i),
                 )}
@@ -215,7 +215,9 @@ export function DataTable<T>({
                       key={col.key}
                       className={cn(
                         cellPad,
-                        'whitespace-nowrap text-fg',
+                        // Every cell lights up with its row in the same frame (no per-cell transition,
+                        // so the sticky first cell doesn't change before the rest).
+                        'whitespace-nowrap text-fg group-hover:bg-surface-2',
                         ALIGN[col.align ?? 'left'],
                         col.align === 'right' && 'tabular-nums',
                         col.sticky && cn(stickyCell, 'bg-surface group-hover:bg-surface-2'),

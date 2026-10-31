@@ -32,9 +32,10 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
 from config.settings import CURRENT_SEASON
+from services import live_points as lp
 from services import season_service as ss
 from services import team_optimizer as opt
 
@@ -315,7 +316,11 @@ def shadow_comparison(season: str = CURRENT_SEASON, now: Optional[datetime] = No
 # ------------------------------------------------------------------ endpoint payload
 
 def get_model_review(gameweek: Optional[int] = None, photo_for: Optional[ss.PhotoFn] = None,
-                     season: str = CURRENT_SEASON) -> Dict[str, Any]:
+                     season: str = CURRENT_SEASON,
+                     live: Optional[Callable[[int], Optional[Dict[str, Any]]]] = None) -> Dict[str, Any]:
+    """The review payload. With `live` (services.live_points.gameweek_live), a gameweek being
+    played adds FPL's live points and finished fixtures to the season CSV's, and the payload's
+    `live` says when they were fetched (null otherwise)."""
     gameweeks = reviewable_gameweeks(season)
     if not gameweeks:
         raise ss.NotFoundError("No saved model pick yet")
@@ -325,8 +330,14 @@ def get_model_review(gameweek: Optional[int] = None, photo_for: Optional[ss.Phot
         raise ss.NotFoundError(f"No saved model pick for gameweek {gameweek}")
     picks = load_picks(gameweek, season)
     meta = ss.read_meta(season)
-    payload = score_picks(picks, actual_by_element(gameweek, season), event_info(gameweek, season),
-                          meta.get("finished_fixtures") or [])
+    actual, event = actual_by_element(gameweek, season), event_info(gameweek, season)
+    finished = list(meta.get("finished_fixtures") or [])
+    feed = live(gameweek) if live is not None and lp.is_live(event, picks.get("deadline")) else None
+    if feed:
+        actual = lp.merge(actual, feed)
+        finished = sorted(set(finished) | set(feed["finished"]))
+    payload = score_picks(picks, actual, event, finished)
+    payload["live"] = {"fetched_at": feed["fetched_at"]} if feed else None
     payload["season"] = payload["season"] or season
     payload["gameweeks"] = gameweeks
     payload["budget"] = ss.BUDGET / 10.0

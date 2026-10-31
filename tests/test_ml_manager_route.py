@@ -38,7 +38,7 @@ def fake_engine(view=None, error=None, own_not_found=True):
     module = types.ModuleType("services.fpl_manager")
     calls = []
 
-    def get_manager_view(season=None, photo_for=None):
+    def get_manager_view(season=None, photo_for=None, live=None):
         calls.append({"season": season, "photo_for": photo_for})
         if error is not None:
             raise error

@@ -88,7 +88,7 @@ export function ModelFacts({ summary }: { summary: ExplainSummary }) {
           {METRICS.map((metric) => {
             const items: ImportanceItem[] = methods.map((m) => ({
               key: m.key,
-              label: m.key === model.version ? `${m.label} (${model.version})` : m.label,
+              label: m.label,
               value: model.test_metrics[m.key][metric.key],
               tone: m.key === model.version ? 'accent' : 'baseline',
             }));

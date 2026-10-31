@@ -115,8 +115,8 @@ function Armband({ letter, label, compact = false }: { letter: 'C' | 'V'; label:
   return (
     <span
       className={cn(
-        'absolute -left-1 -top-1 z-[1] flex h-5 w-5 items-center justify-center rounded-full bg-black text-micro font-extrabold leading-none text-white ring-1 ring-white/70',
-        !compact && 'sm:h-6 sm:w-6',
+        'absolute -left-1 -top-1 z-[1] flex h-4 w-4 items-center justify-center rounded-full bg-black text-[0.6rem] font-extrabold leading-none text-white ring-1 ring-white/70',
+        !compact && 'sm:h-5 sm:w-5 sm:text-[0.65rem]',
       )}
     >
       <span aria-hidden="true">{letter}</span>
