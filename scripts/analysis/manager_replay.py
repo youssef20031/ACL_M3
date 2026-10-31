@@ -118,6 +118,9 @@ VARIANTS: Dict[str, Dict[str, Any]] = {
     "wc25": {"set": {"WILDCARD_MIN_GAIN": 25.0}},
     "late_only": {"set": {k: 1e6 for k in ("TRIPLE_CAPTAIN_MIN_POINTS", "TRIPLE_CAPTAIN_DOUBLE_MIN_POINTS",
                                            "BENCH_BOOST_MIN_POINTS", "FREE_HIT_MIN_GAIN", "WILDCARD_MIN_GAIN")}},
+    # 2026-10-31: plans from the projections whose later gameweeks have odds from market ratings
+    # (predict_next_gw.ODDS_AHEAD); the project step builds both
+    "odds_ahead": {"odds_ahead": True},
 }
 
 
@@ -267,8 +270,13 @@ def project_deadline(gameweek: int) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[st
     out = pnp.assemble_output(players, preds, by_team, gameweek, deadline.isoformat(), [])
     next_points = dict(zip(out["element"].astype(int), out["predicted_points"].astype(float)))
     events = [{"id": g} for g in range(gameweek, gameweek + HORIZON) if g in j["deadlines"]]
-    proj, problems = pnp.build_projections(players, history, season, events, j["fixtures"], j["teams"],
-                                           next_points, j["predict_fn"], extras, pnp._snapshot_age(rows))
+    args = (players, history, season, events, j["fixtures"], j["teams"], next_points, j["predict_fn"], extras,
+            pnp._snapshot_age(rows))
+    proj, problems = pnp.build_projections(*args, odds_ahead=pnp.ODDS_AHEAD)
+    proj["odds_ahead"] = pnp.ODDS_AHEAD
+    if extras is not None:     # the other setting too, for the odds_ahead variant and the report
+        other, _ = pnp.build_projections(*args, odds_ahead=not pnp.ODDS_AHEAD)
+        proj = pd.concat([proj, other.assign(odds_ahead=not pnp.ODDS_AHEAD)], ignore_index=True)
     info = {"gameweek": gameweek, "players": len(players), "rows": len(rows),
             "flagged": int((players["status"] != "a").sum()),
             "snapshot": bool(len(j["status"]) and (j["status"]["GW"] == gameweek).any()),
@@ -338,6 +346,16 @@ def planner_constants(overrides: Dict[str, Any]):
             setattr(planner, k, v)
 
 
+def projections_for(proj: pd.DataFrame, odds_ahead: bool) -> pd.DataFrame:
+    """The projections built with or without odds ahead (the project step writes both; files from
+    before it wrote one set, without)."""
+    if "odds_ahead" not in proj.columns:
+        if odds_ahead:
+            raise SystemExit("these projections have no odds_ahead set: project them again")
+        return proj
+    return proj[proj["odds_ahead"] == odds_ahead].drop(columns="odds_ahead").reset_index(drop=True)
+
+
 def load_projected(prefix: str) -> Dict[str, Any]:
     with open(f"{prefix}.json", encoding="utf-8") as f:
         summary = json.load(f)
@@ -364,7 +382,7 @@ def play_season(data: Dict[str, Any], variant: str, start_gw: int = 1, rules: fm
     spec = VARIANTS[variant]
     season = data["season"]
     deadline_of = data["summary"]["deadlines"]
-    proj, preds = data["projections"], data["predictions"]
+    proj, preds = projections_for(data["projections"], spec.get("odds_ahead", pnp.ODDS_AHEAD)), data["predictions"]
     actual = {int(g): {int(e): {"points": int(p), "minutes": int(m)} for e, p, m in
                        zip(d["element"], d["points"], d["minutes"])}
               for g, d in data["actual"].groupby("gameweek")}
@@ -531,12 +549,15 @@ def cmd_report(args) -> None:
         for prefix in sorted(glob.glob(f"{args.proj}.json")):
             prefix = prefix[:-5]
             data = load_projected(prefix)
-            q = projection_quality(data["projections"], data["actual"]).round(3)
             model = data["summary"]["model"]
-            lines += [f"**{data['season']}** (model {model.get('version')}, {model.get('members', 1)} x "
-                      f"{model.get('n_trees')} trees)", "",
-                      "| " + " | ".join(q.columns) + " |", "|" + "---|" * len(q.columns)]
-            lines += ["| " + " | ".join(str(v) for v in row) + " |" for row in q.itertuples(index=False)] + [""]
+            proj = data["projections"]
+            sets = sorted(proj["odds_ahead"].unique()) if "odds_ahead" in proj else [False]
+            for flag in sets:
+                q = projection_quality(projections_for(data["projections"], flag), data["actual"]).round(3)
+                lines += [f"**{data['season']}** (model {model.get('version')}, {model.get('members', 1)} x "
+                          f"{model.get('n_trees')} trees{', odds ahead from market ratings' if flag else ''})", "",
+                          "| " + " | ".join(q.columns) + " |", "|" + "---|" * len(q.columns)]
+                lines += ["| " + " | ".join(str(v) for v in row) + " |" for row in q.itertuples(index=False)] + [""]
     text = "\n".join(lines) + "\n"
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(text)

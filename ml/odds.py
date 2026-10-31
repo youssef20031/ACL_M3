@@ -262,3 +262,78 @@ def odds_features(df: pd.DataFrame, odds: pd.DataFrame) -> pd.DataFrame:
             vals[~in_time] = np.nan
         out[names] = vals
     return out
+
+
+# --------------------------------------------------------------------------- ratings
+
+# Prices exist for the next round only, so the ML manager's later gameweeks (projections.csv) had no
+# odds features. Team ratings fitted to the known prices stand in for them there (market_ratings,
+# rating_features; pipeline/predict_next_gw.ODDS_AHEAD)
+RATING_HALFLIFE_DAYS = 90.0   # a match's weight halves every 90 days before the latest priced match
+RATING_RIDGE = 2.0            # pulls a team with few priced matches toward average (in match weights)
+
+
+def _one_x_two(lam_h: np.ndarray, lam_a: np.ndarray) -> tuple:
+    """(P(home win), P(draw), P(away win)) of independent Poisson scores."""
+    ph, pa = _pmf(lam_h), _pmf(lam_a)
+    cdf_a = np.cumsum(pa, axis=1)
+    home = (ph[:, 1:] * cdf_a[:, :-1]).sum(axis=1)
+    draw = (ph * pa).sum(axis=1)
+    return home, draw, np.clip(1.0 - home - draw, 0.0, 1.0)
+
+
+def market_ratings(odds: pd.DataFrame, halflife_days: float = RATING_HALFLIFE_DAYS,
+                   ridge: float = RATING_RIDGE) -> Optional[dict]:
+    """Ratings that reproduce the market's expected goals (fit_goals of each match's pre-closing
+    prices): log(home goals) = base + home + attack[home] - defence[away] and log(away goals) =
+    base + attack[away] - defence[home], by weighted least squares with recent matches counting
+    more and a ridge on the team terms. `odds` must hold only prices known at the time (the
+    callers pass what was collected before the deadline). Also the draw's scale: the market's
+    draw chance over the Poisson one of the same matches. None without a priced match."""
+    o = odds.dropna(subset=["p_home", "p_away", "p_over", "date"])
+    if o.empty:
+        return None
+    lam_h, lam_a = fit_goals(o["p_home"], o["p_away"], o["p_over"])
+    ok = np.isfinite(lam_h) & np.isfinite(lam_a) & (lam_h > 0) & (lam_a > 0)
+    o, lam_h, lam_a = o[ok], lam_h[ok], lam_a[ok]
+    if o.empty:
+        return None
+    dates = pd.to_datetime(o["date"])
+    w = 0.5 ** ((dates.max() - dates).dt.days.to_numpy(dtype=float) / halflife_days)
+    teams = sorted(set(o["home"]) | set(o["away"]))
+    at = {t: i for i, t in enumerate(teams)}
+    n, m = len(teams), len(o)
+    hi, ai = o["home"].map(at).to_numpy(), o["away"].map(at).to_numpy()
+    x = np.zeros((2 * m, 2 + 2 * n))           # base, home, attack[n], defence[n]
+    rows = np.arange(m)
+    x[rows, 0], x[rows, 1], x[rows, 2 + hi], x[rows, 2 + n + ai] = 1, 1, 1, -1
+    x[m + rows, 0], x[m + rows, 2 + ai], x[m + rows, 2 + n + hi] = 1, 1, -1
+    y = np.concatenate([np.log(lam_h), np.log(lam_a)])
+    ww = np.concatenate([w, w])
+    penalty = np.diag([0.0, 0.0] + [ridge] * (2 * n)) + 1e-9 * np.eye(2 + 2 * n)   # solvable at ridge 0
+    beta = np.linalg.solve(x.T @ (x * ww[:, None]) + penalty, x.T @ (ww * y))
+    _, pois_draw, _ = _one_x_two(lam_h, lam_a)
+    draw = o["p_draw"].to_numpy(dtype=float)
+    seen = np.isfinite(draw)
+    scale = float((w[seen] * draw[seen]).sum() / (w[seen] * pois_draw[seen]).sum()) if seen.any() else 1.0
+    return {"base": float(beta[0]), "home": float(beta[1]), "draw_scale": scale, "matches": int(m),
+            "attack": dict(zip(teams, beta[2:2 + n].tolist())), "defence": dict(zip(teams, beta[2 + n:].tolist()))}
+
+
+def rating_features(df: pd.DataFrame, ratings: dict) -> pd.DataFrame:
+    """FEATURES of `df`'s rows (team, opponent, was_home) from market_ratings, on df's index: the
+    expected goals of the rating model, its win chance and the draw scaled like the market's."""
+    home_side = df["was_home"].astype(bool).to_numpy()
+    home = np.where(home_side, df["team"], df["opponent"])
+    away = np.where(home_side, df["opponent"], df["team"])
+    att = lambda t: np.array([ratings["attack"].get(x, 0.0) for x in t])    # noqa: E731
+    dfn = lambda t: np.array([ratings["defence"].get(x, 0.0) for x in t])   # noqa: E731
+    lam_h = np.exp(ratings["base"] + ratings["home"] + att(home) - dfn(away))
+    lam_a = np.exp(ratings["base"] + att(away) - dfn(home))
+    p_home, p_draw, p_away = _one_x_two(lam_h, lam_a)
+    draw = np.clip(p_draw * ratings["draw_scale"], 0.0, 0.99)
+    rest = (1.0 - draw) / np.maximum(p_home + p_away, 1e-12)
+    p_home, p_away = p_home * rest, p_away * rest
+    gf, ga = np.where(home_side, lam_h, lam_a), np.where(home_side, lam_a, lam_h)
+    return pd.DataFrame({"odds_win": np.where(home_side, p_home, p_away), "odds_draw": draw, "odds_gf": gf,
+                         "odds_ga": ga, "odds_cs": np.exp(-ga)}, index=df.index)[FEATURES]

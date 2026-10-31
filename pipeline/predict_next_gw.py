@@ -71,6 +71,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from ml import odds as od
 from ml import points_model as pm
 from ml import snapshots as sn
 from pipeline.current_season import (
@@ -98,6 +99,9 @@ COVERAGE_COLUMNS = {"odds": "odds_win", "snapshot": "snap_age_days", "transfers"
 # Multi-gameweek projections for the ML manager's planner (services/fpl_manager_planner.py)
 PROJECTIONS_NAME = "projections.csv"
 PROJECTION_HORIZON = 4   # gameweeks, the next one included
+# Later gameweeks have no prices yet: True fills their odds features from team ratings fitted to the
+# known prices (ml.odds.market_ratings). Off until the manager replay's odds_ahead variant shows a gain
+ODDS_AHEAD = False
 PROJECTION_COLUMNS = [
     "element", "name", "web_name", "position", "team", "now_cost", "gameweek", "fixtures", "opponents",
     "predicted_points",
@@ -536,8 +540,8 @@ def rest_days(team: str, kickoff: Any, kickoffs: Dict[str, List[pd.Timestamp]]) 
 def project_points(players: pd.DataFrame, history: pd.DataFrame,
                    fixtures_by_team: Dict[str, List[Dict[str, Any]]], season: str, gameweek: int,
                    predict_fn: PredictFn, extras: Optional[pm.ExtraInputs],
-                   kickoffs: Dict[str, List[pd.Timestamp]], snapshot_age: Optional[float] = None
-                   ) -> Dict[str, float]:
+                   kickoffs: Dict[str, List[pd.Timestamp]], snapshot_age: Optional[float] = None,
+                   odds_ahead: Optional[bool] = None) -> Dict[str, float]:
     """element (str) -> model points for a gameweek after the next one, summed over its fixtures
     (each floored at 0), before any availability multiplier.
 
@@ -548,7 +552,8 @@ def project_points(players: pd.DataFrame, history: pd.DataFrame,
     than the previous deadline. days_rest, which would otherwise count from the player's last
     match in the history (before the next gameweek), is the gap to his team's previous fixture on
     FPL's list (a player without any earlier match keeps NaN for his first, as in training). Odds are whatever fixtures.csv prices before
-    this gameweek's deadline, usually none.
+    this gameweek's deadline, usually none; with `odds_ahead` (default ODDS_AHEAD) the rows without
+    any come from ratings fitted to the prices in `extras` (fill_odds_ahead).
     """
     rows = model_rows(players, history, fixtures_by_team, season, gameweek, extras)
     if rows.empty:
@@ -558,8 +563,25 @@ def project_points(players: pd.DataFrame, history: pd.DataFrame,
     rows["days_rest"] = gap.where(rows["days_rest"].notna() & gap.notna(), rows["days_rest"])
     if snapshot_age is not None and "snap_age_days" in rows.columns:
         rows.loc[rows["snap_age_days"].notna(), "snap_age_days"] = snapshot_age
+    if ODDS_AHEAD if odds_ahead is None else odds_ahead:
+        fill_odds_ahead(rows, extras)
     points = pd.Series(np.clip(np.asarray(predict_fn(rows), dtype=float), 0.0, None), index=rows.index)
     return {str(int(k)): float(v) for k, v in points.groupby(rows["element"]).sum().items()}
+
+
+def fill_odds_ahead(rows: pd.DataFrame, extras: Optional[pm.ExtraInputs]) -> int:
+    """Fill, in place, the odds features of rows with none from ml.odds.market_ratings of the prices
+    in `extras` (all known when the rows are built). Returns how many rows were filled."""
+    if extras is None or extras.odds is None or extras.odds.empty or not set(od.FEATURES) <= set(rows.columns):
+        return 0
+    missing = rows[od.FEATURES].isna().all(axis=1)
+    if not missing.any():
+        return 0
+    ratings = od.market_ratings(extras.odds)
+    if ratings is None:
+        return 0
+    rows.loc[missing, od.FEATURES] = od.rating_features(rows.loc[missing], ratings).to_numpy()
+    return int(missing.sum())
 
 
 def projection_frame(players: pd.DataFrame, gameweek: int, fixtures_by_team: Dict[str, List[Dict[str, Any]]],
@@ -587,8 +609,8 @@ def projection_frame(players: pd.DataFrame, gameweek: int, fixtures_by_team: Dic
 def build_projections(players: pd.DataFrame, history: pd.DataFrame, season: str,
                       events: List[Dict[str, Any]], fixtures: List[Dict[str, Any]], teams: Dict[int, str],
                       next_points: Dict[int, float], predict_fn: PredictFn,
-                      extras: Optional[pm.ExtraInputs] = None, snapshot_age: Optional[float] = None
-                      ) -> Tuple[pd.DataFrame, Dict[int, str]]:
+                      extras: Optional[pm.ExtraInputs] = None, snapshot_age: Optional[float] = None,
+                      odds_ahead: Optional[bool] = None) -> Tuple[pd.DataFrame, Dict[int, str]]:
     """(projections for `events`, {gameweek: why it's missing}). The first event's points are
     `next_points` (element -> the live predicted_points, so it equals next_gw_predictions
     exactly); later ones come from project_points, one gameweek at a time. A gameweek that fails
@@ -604,7 +626,7 @@ def build_projections(players: pd.DataFrame, history: pd.DataFrame, season: str,
                 frame["predicted_points"] = frame["element"].map(next_points).fillna(0.0).astype(float)
             else:
                 points = project_points(players, history, by_team, season, gameweek, predict_fn, extras,
-                                        kickoffs, snapshot_age)
+                                        kickoffs, snapshot_age, odds_ahead)
                 frame = projection_frame(players, gameweek, by_team, points, step)
         except Exception as exc:
             logger.exception("Couldn't project GW%s; it is left out of %s", gameweek, PROJECTIONS_NAME)

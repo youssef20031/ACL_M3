@@ -352,3 +352,45 @@ def test_ensemble_gain_is_the_averaged_predictions_minus_the_mean_single_model()
 def test_tree_count_variants_exist():
     assert bt.VARIANTS["v4_trees05"]["tree_frac"] == 0.5 and bt.VARIANTS["v4_stop_picks"]["stop"] == "picks"
     assert bt.VARIANTS["v4_trees05"]["post"] == bt.VARIANTS["v4_prod"]["post"]
+
+
+# ----------------------------------------------------------------------------- the armband's chance of playing
+
+def test_a_double_gameweek_plays_if_either_fixture_does():
+    rows = league(gws=(1,))
+    extra = rows.iloc[[0]].copy()
+    extra["fixture"] = 999
+    rows = pd.concat([rows, extra], ignore_index=True).assign(p_play=0.9)
+    rows.loc[0, "p_play"], rows.loc[len(rows) - 1, "p_play"] = 0.5, 0.6
+    seen = {}
+    monkey = bt.squad_metrics
+    try:
+        bt.squad_metrics = lambda g: seen.setdefault("g", g) is None or {}
+        bt.gw_table(rows, rows["total_points"].to_numpy())
+    finally:
+        bt.squad_metrics = monkey
+    g = seen["g"].set_index("name")
+    assert g.loc[rows.loc[0, "name"], "p_play"] == pytest.approx(1 - 0.5 * 0.4)
+    pool = {c.id: c for c in bt.squad_pool(seen["g"].assign(pred_sq=seen["g"]["pred"].clip(lower=0)))}
+    assert pool[rows.loc[0, "name"]].p_play == pytest.approx(0.8)
+
+
+def test_the_armband_follows_the_chance_of_playing():
+    rows = league(gws=(1,))
+    pred = rows["total_points"].to_numpy().astype(float)
+    sure = bt.gw_table(rows.assign(p_play=1.0), pred)
+    top = rows.loc[int(np.argmax(pred)), "name"]
+    risky = bt.gw_table(rows.assign(p_play=np.where(rows["name"] == top, 0.3, 1.0)), pred)
+    assert set(sure.columns) == set(risky.columns)
+    assert bt._with_chance(rows.assign(cop_factor=[0.5] + [np.nan] * (len(rows) - 1)), {"p_play": "fpl"}, {},
+                           "es")["p_play"].tolist()[:2] == [0.5, 1.0]
+
+
+def test_play_chance_is_a_probability_per_test_row():
+    rows = league(gws=(1, 2, 3), seed=4)
+    cols = ["price"]
+    tr, va, te = rows[rows["GW"] == 1], rows[rows["GW"] == 2], rows[rows["GW"] == 3]
+    chances, info = bt.play_chance(tr, va, te, pd.concat([tr, va]), cols, {**bt.P, "max_depth": 2})
+    for proto in ("es", "refit"):
+        assert len(chances[proto]) == len(te) and ((chances[proto] >= 0) & (chances[proto] <= 1)).all()
+    assert {"brier_es", "brier_refit", "brier_fpl", "played"} <= set(info)
