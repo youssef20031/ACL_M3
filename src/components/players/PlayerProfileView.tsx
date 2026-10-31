@@ -205,7 +205,8 @@ export function PlayerProfileView({ player, initialSeason, toolbar, compact = fa
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* In the overlay, room on the right for its close button */}
+      <div className={cn('flex flex-wrap items-center justify-between gap-3', compact && 'pr-11')}>
         <div className="min-w-0">{toolbar}</div>
         <label className="flex items-center gap-3">
           <span className="text-micro font-semibold uppercase text-fg-muted">Season</span>

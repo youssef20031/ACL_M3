@@ -268,7 +268,9 @@ function GameweekStats({ gw, phase, maxFreeTransfers, isStart }: { gw: MlManager
           detail={
             result.hit_cost > 0
               ? `${result.gross} before a −${result.hit_cost} hit`
-              : `Average ${result.gw_average ?? '–'} · highest ${result.gw_highest ?? '–'}`
+              : phase === 'live' && result.gw_average == null
+                ? 'Provisional, while matches are on'
+                : `Average ${result.gw_average ?? '–'} · highest ${result.gw_highest ?? '–'}`
           }
           highlight
         />
